@@ -56,8 +56,13 @@ import {
     UserCheck,
     User,
     ArrowRight,
-    ShieldCheck
+    ShieldCheck,
+    Star,
+    History,
+    ExternalLink
 } from 'lucide-react';
+
+
 
 const getStatusLabel = (s: string) => {
     switch (s) {
@@ -175,19 +180,49 @@ export default function OrderLoadingPage() {
         fetchEmailCounts();
     }, [refreshTrigger]);
 
+    const getColombiaTime = () => {
+        const now = new Date();
+        const bogotaStr = now.toLocaleString('en-US', { timeZone: 'America/Bogota' });
+        return new Date(bogotaStr);
+    };
+
+    const getTodayDateStr = () => {
+        const bogota = getColombiaTime();
+        const yyyy = bogota.getFullYear();
+        const mm = String(bogota.getMonth() + 1).padStart(2, '0');
+        const dd = String(bogota.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const getTomorrowDateStr = () => {
+        const bogota = getColombiaTime();
+        bogota.setDate(bogota.getDate() + 1);
+        const yyyy = bogota.getFullYear();
+        const mm = String(bogota.getMonth() + 1).padStart(2, '0');
+        const dd = String(bogota.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const getYesterdayDateStr = () => {
+        const bogota = getColombiaTime();
+        bogota.setDate(bogota.getDate() - 1);
+        const yyyy = bogota.getFullYear();
+        const mm = String(bogota.getMonth() + 1).padStart(2, '0');
+        const dd = String(bogota.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+
     const [selectedDate, setSelectedDate] = useState(() => {
         try {
-            const formatter = new Intl.DateTimeFormat('en-CA', {
-                timeZone: 'America/Bogota',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            });
-            return formatter.format(new Date());
+            return getTomorrowDateStr();
         } catch (e) {
-            return new Date().toISOString().split('T')[0];
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            return d.toISOString().split('T')[0];
         }
     }); 
+
     const [searchTerm, setSearchTerm] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -212,6 +247,11 @@ export default function OrderLoadingPage() {
     const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
     const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
+
+    const dockRef = useRef<HTMLDivElement>(null);
+    const [dockHeight, setDockHeight] = useState(135);
+
+
 
     useEffect(() => {
         const fetchScarcity = async () => {
@@ -272,6 +312,20 @@ export default function OrderLoadingPage() {
     };
 
     const hasActiveFilters = !!(filterStatus || filterGps || filterChannel || selectedChannel || filterClientType || searchTerm);
+
+    useEffect(() => {
+        if (!dockRef.current) return;
+        const updateHeight = () => {
+            if (dockRef.current) {
+                setDockHeight(dockRef.current.offsetHeight);
+            }
+        };
+        updateHeight();
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(dockRef.current);
+        return () => observer.disconnect();
+    }, [activeTab, hasActiveFilters, selectedDate]);
+
 
     // Edit Fields
     const [editStatus, setEditStatus] = useState('');
@@ -969,17 +1023,25 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))');
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data), order_items(id, quantity, unit, nickname, products(name, sku, weight_kg, unit_of_measure))');
 
-                if (selectedDate && selectedDate !== 'all') {
+
+
+                if (selectedDate === 'history15') {
+                    const bogotaEnd = getColombiaTime();
+                    const endStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(bogotaEnd);
+                    const bogotaStart = getColombiaTime();
+                    bogotaStart.setDate(bogotaStart.getDate() - 15);
+                    const startStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(bogotaStart);
+                    query = query.gte('delivery_date', startStr).lte('delivery_date', endStr).limit(100);
+                } else if (selectedDate && selectedDate !== 'all') {
                     query = query.eq('delivery_date', selectedDate);
+                } else {
+                    query = query.limit(50);
                 }
 
                 query = query.order('created_at', { ascending: false });
 
-                if (selectedDate === 'all' || !selectedDate) {
-                    query = query.limit(100);
-                }
 
                 const { data, error } = await query;
 
@@ -1203,41 +1265,75 @@ export default function OrderLoadingPage() {
                 if (filterClientType === 'b2c' && isB2B) return false;
             }
 
-            // 5. Search Term Filter
+            // 5. Super-Buscador Multi-Criterio (ID, Cliente, NIT, Teléfono, Dirección, Ítems/Productos, Notas, Comandos @)
             if (searchTerm) {
-                const term = searchTerm.toLowerCase().trim();
-                if (term.startsWith('@')) {
-                    const command = term.substring(1).replace(/[\s-]+/g, '_');
-                    if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
-                    if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
-                    if (command === 'b2b') return isB2B;
-                    if (command === 'b2c' || command === 'hogar') return !isB2B;
-                    if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
-                    if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
-                    if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
-                    if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
-                    if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
+                const normalize = (text: string) => {
+                    return (text || '')
+                        .toLowerCase()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .trim();
+                };
+
+                const cleanTerm = normalize(searchTerm);
+
+                // A. Comandos @ de Alta Precisión
+                if (cleanTerm.startsWith('@')) {
+                    const command = cleanTerm.substring(1).replace(/[\s-]+/g, '_');
+                    if (['sin_coordenadas', 'sin_coordinadas', 'sin_gps', 'nogps'].includes(command)) return !hasGPS;
+                    if (['con_coordenadas', 'con_coordinadas', 'con_gps', 'gps'].includes(command)) return hasGPS;
+                    if (['b2b', 'empresas', 'horeca', 'institucional'].includes(command)) return isB2B;
+                    if (['b2c', 'hogar', 'hogares', 'personas'].includes(command)) return !isB2B;
+                    if (['pendiente', 'pending', 'por_procesar', 'recibido'].includes(command)) return ['pending_approval', 'pending'].includes(order.status);
+                    if (['para_compra', 'compra', 'compras'].includes(command)) return order.status === 'para_compra';
+                    if (['aprobado', 'approved'].includes(command)) return order.status === 'approved';
+                    if (['enviado', 'shipped', 'en_ruta', 'ruta'].includes(command)) return order.status === 'shipped';
+                    if (['entregado', 'delivered', 'completado'].includes(command)) return ['delivered', 'completed'].includes(order.status);
+                    if (['puerta', 'cobrar_puerta', 'efectivo', 'contraentrega'].includes(command)) {
+                        return paymentMethodStr.includes('puerta') || paymentMethodStr.includes('contraentrega') || paymentMethodStr.includes('efectivo') || notes.includes('cobrar') || notes.includes('puerta');
+                    }
+                    if (['whatsapp'].includes(command)) return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
+                    if (['email', 'correo'].includes(command)) return order.origin_source === 'email' || notes.includes('[origin: email]');
+                    if (['web', 'app'].includes(command)) return order.origin_source?.startsWith('web') || notes.includes('[origin: web');
+                    if (['alerta', 'incompleto', 'sin_completar'].includes(command)) return !order.isComplete;
                 }
 
-                const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
-                const normTerm = term.replace(/[_\s-]/g, '');
-                const rawSeqStr = (order.sequence_id || '').toString();
+                // B. Extracción de productos/SKUs dentro de los ítems del pedido
+                const productText = (order.order_items || [])
+                    .map((item: any) => `${item.nickname || ''} ${item.products?.name || ''} ${item.products?.sku || ''}`)
+                    .join(' ');
 
-                const matchesText = friendlyId.includes(term) ||
-                    normFriendlyId.includes(normTerm) ||
-                    rawSeqStr === term ||
-                    order.id.toLowerCase().includes(term) ||
-                    (order.customer_name || '').toLowerCase().includes(term) ||
-                    (order.customer_nit || '').toLowerCase().includes(term) ||
-                    (order.customer_phone || '').toLowerCase().includes(term) ||
-                    (order.shipping_address || '').toLowerCase().includes(term) ||
-                    (order.status || '').toLowerCase().includes(term) ||
-                    paymentMethodStr.includes(term) ||
-                    (order.admin_notes || '').toLowerCase().includes(term) ||
-                    (order.special_notes || '').toLowerCase().includes(term);
+                // C. Super-Corpus de Texto Consolidado para el Pedido
+                const searchableText = normalize([
+                    friendlyId,
+                    friendlyId.replace(/[_\s-]/g, ''),
+                    (order.sequence_id || '').toString(),
+                    order.id,
+                    order.customer_name,
+                    order.customer_nit,
+                    order.customer_phone,
+                    order.shipping_address,
+                    order.status,
+                    getStatusLabel(order.status),
+                    order.profiles?.company_name,
+                    order.profiles?.contact_name,
+                    order.profiles?.nit,
+                    order.profiles?.email,
+                    order.profiles?.contact_phone,
+                    order.profiles?.address,
+                    order.paymentMethod,
+                    order.admin_notes,
+                    order.special_notes,
+                    productText
+                ].filter(Boolean).join(' '));
 
-                if (!matchesText) return false;
+                // D. Búsqueda Multi-Token: Cada palabra clave ingresada debe coincidir
+                const tokens = cleanTerm.split(/\s+/).filter(Boolean);
+                const matchesAllTokens = tokens.every(token => searchableText.includes(token));
+
+                if (!matchesAllTokens) return false;
             }
+
 
             return true;
         });
@@ -1861,20 +1957,6 @@ export default function OrderLoadingPage() {
         }
     };
 
-    const getColombiaTime = () => {
-        const now = new Date();
-        const bogotaStr = now.toLocaleString('en-US', { timeZone: 'America/Bogota' });
-        return new Date(bogotaStr);
-    };
-
-    const getTomorrowDateStr = () => {
-        const bogota = getColombiaTime();
-        bogota.setDate(bogota.getDate() + 1);
-        const yyyy = bogota.getFullYear();
-        const mm = String(bogota.getMonth() + 1).padStart(2, '0');
-        const dd = String(bogota.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    };
 
     const isWithinCutoffWindow = () => {
         const bogota = getColombiaTime();
@@ -2058,16 +2140,20 @@ export default function OrderLoadingPage() {
                 )}
 
                 {/* UNIFIED STICKY CONTROL DOCK (BELOW 85px NAVBAR - ZERO TRANSPARENT GAPS) */}
-                <div style={{ 
-                    position: 'sticky',
-                    top: '85px',
-                    zIndex: 45,
-                    backgroundColor: '#F8FAFC',
-                    padding: '0.5rem 0.8rem 0.6rem 0.8rem',
-                    marginBottom: '0.5rem',
-                    borderBottom: '1px solid #E2E8F0',
-                    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.04)'
-                }}>
+                <div 
+                    ref={dockRef}
+                    style={{ 
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 45,
+                        backgroundColor: '#F8FAFC',
+                        padding: '0.5rem 0.8rem 0.6rem 0.8rem',
+                        marginBottom: '0.5rem',
+                        borderBottom: '1px solid #E2E8F0',
+                        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.04)'
+                    }}
+                >
+
                     {/* TABS FOR ORDERS VS EMAILS */}
                     <div style={{ 
                         display: 'flex', 
@@ -2136,8 +2222,10 @@ export default function OrderLoadingPage() {
                     </div>
 
                     {activeTab === 'orders' && (
-                        /* UNIFIED SLENDER CONTROL BAR */
+                        <>
+                        {/* UNIFIED SLENDER CONTROL BAR */}
                         <div style={{ 
+
                             display: 'flex', 
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -2152,131 +2240,188 @@ export default function OrderLoadingPage() {
 
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                        {/* Date Selector Segment */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <div style={{ 
+                        {/* Date Selector Segment with Crystal-Clear Storytelling */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            {/* Explicit Badge */}
+                            <div style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '900',
+                                color: '#1E293B',
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                                backgroundColor: '#F1F5F9',
+                                padding: '8px 9px',
+                                borderRadius: '8px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                padding: '0 0.8rem',
+                                gap: '5px',
+                                border: '1px solid #CBD5E1',
+                                whiteSpace: 'nowrap',
+                                height: '38px',
+                                boxSizing: 'border-box'
+                            }}>
+                                <Truck size={14} style={{ color: THEME.colors.primary }} /> Entrega:
+                            </div>
+
+                            {/* Date Picker Input */}
+                            <div style={{ 
+
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '0 0.6rem',
                                 backgroundColor: '#F9FAFB',
-                                borderRadius: '10px',
-                                border: '1px solid #E5E7EB',
+                                borderRadius: '8px',
+                                border: '1px solid #CBD5E1',
                                 cursor: 'pointer',
-                                height: '40px',
+                                height: '38px',
                                 position: 'relative'
                             }} onClick={(e) => {
                                 const input = e.currentTarget.querySelector('input');
                                 if (input) (input as any).showPicker?.();
                             }}>
-                                 <Calendar size={16} strokeWidth={1.5} style={{ marginRight: '6px', color: THEME.colors.textSecondary, flexShrink: 0 }} />
+                                 <Calendar size={14} strokeWidth={1.5} style={{ marginRight: '4px', color: THEME.colors.primary, flexShrink: 0 }} />
                                  <input
                                     type="date"
                                     className="clean-date-input"
-                                    value={selectedDate === 'all' ? '' : selectedDate}
+                                    value={['history15', 'all'].includes(selectedDate) ? '' : selectedDate}
                                     onChange={(e) => setSelectedDate(e.target.value)}
                                     style={{
                                         border: 'none',
                                         background: 'transparent',
-                                        fontSize: '0.82rem',
+                                        fontSize: '0.8rem',
                                         fontWeight: '800',
-                                        color: '#111827',
+                                        color: '#0F172A',
                                         outline: 'none',
                                         cursor: 'pointer',
-                                        width: '115px'
+                                        width: '110px'
                                     }}
                                 />
                             </div>
+
+                            {/* Button: Mañana (Corte Activo) */}
                             <button 
-                                onClick={() => {
-                                    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-                                    setSelectedDate(todayStr);
-                                }}
+                                onClick={() => setSelectedDate(getTomorrowDateStr())}
                                 style={{
-                                    height: '40px',
+                                    height: '38px',
                                     padding: '0 10px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #E5E7EB',
-                                    backgroundColor: '#F8FAFC',
+                                    borderRadius: '8px',
+                                    border: selectedDate === getTomorrowDateStr() ? `2px solid ${THEME.colors.primary}` : '1px solid #E2E8F0',
+                                    backgroundColor: selectedDate === getTomorrowDateStr() ? '#ECFDF5' : '#F8FAFC',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '900',
+                                    color: selectedDate === getTomorrowDateStr() ? '#065F46' : '#475569',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    boxShadow: selectedDate === getTomorrowDateStr() ? '0 2px 4px rgba(16, 185, 129, 0.15)' : 'none',
+                                    transition: 'all 0.15s'
+                                }}
+                                title="Ver pedidos programados para entregar MAÑANA"
+                            >
+                                <Star size={13} fill="currentColor" />
+                                <span>Mañana</span>
+                            </button>
+
+                            {/* Button: Hoy (En Ruta) */}
+                            <button 
+                                onClick={() => setSelectedDate(getTodayDateStr())}
+                                style={{
+                                    height: '38px',
+                                    padding: '0 9px',
+                                    borderRadius: '8px',
+                                    border: selectedDate === getTodayDateStr() ? '2px solid #0284C7' : '1px solid #E2E8F0',
+                                    backgroundColor: selectedDate === getTodayDateStr() ? '#E0F2FE' : '#F8FAFC',
                                     fontSize: '0.75rem',
                                     fontWeight: '800',
-                                    color: THEME.colors.primary,
+                                    color: selectedDate === getTodayDateStr() ? '#0369A1' : '#64748B',
                                     cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.15s'
                                 }}
-                                title="Ver pedidos programados para la fecha de hoy"
+                                title="Ver pedidos programados para entregar HOY (Monitoreo en tiempo real)"
                             >
                                 Hoy
                             </button>
+
+                            {/* Button: Ayer */}
                             <button 
-                                onClick={() => {
-                                    const d = new Date();
-                                    d.setDate(d.getDate() + 1);
-                                    const tomorrowStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-                                    setSelectedDate(tomorrowStr);
-                                }}
+                                onClick={() => setSelectedDate(getYesterdayDateStr())}
                                 style={{
-                                    height: '40px',
-                                    padding: '0 10px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #E5E7EB',
-                                    backgroundColor: '#F8FAFC',
+                                    height: '38px',
+                                    padding: '0 9px',
+                                    borderRadius: '8px',
+                                    border: selectedDate === getYesterdayDateStr() ? '2px solid #D97706' : '1px solid #E2E8F0',
+                                    backgroundColor: selectedDate === getYesterdayDateStr() ? '#FEF3C7' : '#F8FAFC',
                                     fontSize: '0.75rem',
                                     fontWeight: '800',
-                                    color: '#0D7A57',
+                                    color: selectedDate === getYesterdayDateStr() ? '#92400E' : '#64748B',
                                     cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.15s'
                                 }}
-                                title="Ver pedidos programados para entrega mañana"
+                                title="Ver pedidos entregados AYER"
                             >
-                                Mañana
+                                Ayer
                             </button>
+
+                            {/* Button: Historial (15 Días) */}
                             <button 
-                                onClick={() => setSelectedDate('all')}
+                                onClick={() => setSelectedDate('history15')}
                                 style={{
-                                    height: '40px',
-                                    padding: '0 10px',
-                                    borderRadius: '10px',
-                                    border: selectedDate === 'all' ? '1px solid #818CF8' : '1px solid #E5E7EB',
-                                    backgroundColor: selectedDate === 'all' ? '#EEF2FF' : '#F8FAFC',
+                                    height: '38px',
+                                    padding: '0 9px',
+                                    borderRadius: '8px',
+                                    border: selectedDate === 'history15' ? '2px solid #8B5CF6' : '1px solid #E2E8F0',
+                                    backgroundColor: selectedDate === 'history15' ? '#F3E8FF' : '#F8FAFC',
                                     fontSize: '0.75rem',
                                     fontWeight: '800',
-                                    color: selectedDate === 'all' ? '#4F46E5' : '#64748B',
+                                    color: selectedDate === 'history15' ? '#6B21A8' : '#64748B',
                                     cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
+                                    whiteSpace: 'nowrap',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    transition: 'all 0.15s'
                                 }}
-                                title="Ver todos los pedidos recientes sin filtro de fecha"
+                                title="Consultar pedidos procesados en los últimos 15 días"
                             >
-                                Todas
+                                <History size={13} strokeWidth={2} />
+                                <span>Historial</span>
                             </button>
+
                         </div>
 
-                        {/* Search Segment - Flexible & Responsive (MATCHING CLIENTS UI) */}
-                        <div style={{ position: 'relative', flex: 1 }}>
-                            <Search size={16} strokeWidth={1.5} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                        {/* Search Segment - Flexible & Spacious */}
+                        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+                            <Search size={15} strokeWidth={1.5} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                             <input 
                                 placeholder="Buscar por ID, empresa, @estado..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{ 
                                     width: '100%', 
-                                    padding: '0 2.5rem 0 2.5rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #F1F5F9', 
-                                    fontSize: '0.85rem',
+                                    padding: '0 2.2rem 0 2.3rem', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #E2E8F0', 
+                                    fontSize: '0.82rem',
                                     fontWeight: '600',
                                     outline: 'none',
-                                    height: '40px',
+                                    height: '38px',
                                     backgroundColor: '#F8FAFC',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    boxSizing: 'border-box'
                                 }}
                                 onFocus={(e) => {
                                     e.target.style.backgroundColor = 'white';
-                                    e.target.style.borderColor = '#0891B2';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1)';
+                                    e.target.style.borderColor = THEME.colors.primary;
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)';
                                 }}
                                 onBlur={(e) => {
                                     e.target.style.backgroundColor = '#F8FAFC';
                                     e.target.style.borderColor = '#E2E8F0';
+                                    e.target.style.boxShadow = 'none';
                                 }}
                             />
                             {searchTerm && (
@@ -2284,20 +2429,20 @@ export default function OrderLoadingPage() {
                                     onClick={() => setSearchTerm('')}
                                     style={{
                                         position: 'absolute',
-                                        right: '0.8rem',
+                                        right: '0.6rem',
                                         top: '50%',
                                         transform: 'translateY(-50%)',
                                         background: '#E2E8F0',
                                         border: 'none',
                                         color: '#64748B',
-                                        width: '20px',
-                                        height: '20px',
+                                        width: '18px',
+                                        height: '18px',
                                         borderRadius: '50%',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         cursor: 'pointer',
-                                        fontSize: '0.7rem',
+                                        fontSize: '0.65rem',
                                         fontWeight: 'bold'
                                     }}
                                 >✕</button>
@@ -2305,27 +2450,27 @@ export default function OrderLoadingPage() {
                         </div>
 
                         {/* Dropdown Filter by Channel */}
-                        <div style={{ position: 'relative', height: '40px', flexShrink: 0 }}>
+                        <div style={{ position: 'relative', height: '38px', flexShrink: 0 }}>
                             <select
                                 value={selectedChannel}
                                 onChange={(e) => setSelectedChannel(e.target.value)}
                                 style={{
                                     height: '100%',
-                                    padding: '0 2.5rem 0 1rem',
-                                    borderRadius: '10px',
-                                    border: '1px solid #E5E7EB',
-                                    fontSize: '0.8rem',
+                                    padding: '0 2rem 0 0.8rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E2E8F0',
+                                    fontSize: '0.78rem',
                                     fontWeight: '800',
-                                    color: '#111827',
+                                    color: '#334155',
                                     outline: 'none',
                                     backgroundColor: '#F8FAFC',
                                     cursor: 'pointer',
                                     appearance: 'none',
                                     backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
                                     backgroundPosition: 'right 0.5rem center',
-                                    backgroundSize: '1.25rem',
+                                    backgroundSize: '1.1rem',
                                     backgroundRepeat: 'no-repeat',
-                                    width: '180px'
+                                    width: '150px'
                                 }}
                             >
                                 <option value="">Todos los canales</option>
@@ -2339,120 +2484,130 @@ export default function OrderLoadingPage() {
                         </div>
 
                         {/* Info Button for Commands */}
-                            <div 
-                                onMouseEnter={() => setShowHelpTooltip(true)}
-                                onMouseLeave={() => setShowHelpTooltip(false)}
-                                style={{ 
-                                    position: 'relative',
-                                    width: '40px', 
-                                    height: '40px', 
-                                    borderRadius: '10px', 
-                                    backgroundColor: '#EFF6FF', 
-                                    color: '#2563EB', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center',
-                                    cursor: 'help',
-                                    border: '1px solid #DBEAFE',
-                                    fontSize: '1rem',
-                                    fontWeight: '900',
-                                    flexShrink: 0
-                                }}
-                            >
-                                i
-                                {showHelpTooltip && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '40px',
-                                        right: '0',
-                                        width: '280px',
-                                        backgroundColor: '#1E293B',
-                                        color: 'white',
-                                        padding: '1rem',
-                                        borderRadius: '12px',
-                                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                                        zIndex: 1000,
-                                        fontSize: '0.7rem',
-                                        lineHeight: '1.4',
-                                        pointerEvents: 'none',
-                                        animation: 'fadeInUp 0.2s ease-out'
-                                    }}>
-                                        <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <Zap size={13} style={{ color: '#38BDF8' }} /> COMANDOS RÁPIDOS (@)
-                                        </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                            <div>
-                                                <b style={{ color: '#FCD34D' }}>@pendiente</b>: Recibidos<br/>
-                                                <b style={{ color: '#FCD34D' }}>@aprobado</b>: Aprobados<br/>
-                                                <b style={{ color: '#FCD34D' }}>@compra</b>: Compras<br/>
-                                                <b style={{ color: '#FCD34D' }}>@b2b</b>: Corporativos
-                                            </div>
-                                            <div>
-                                                <b style={{ color: '#FCD34D' }}>@b2c</b>: Hogares<br/>
-                                                <b style={{ color: '#FCD34D' }}>@sin_gps</b>: Falta geo<br/>
-                                                <b style={{ color: '#FCD34D' }}>@web</b>: De la App<br/>
-                                                <b style={{ color: '#FCD34D' }}>@pago</b>: Pagados
-                                            </div>
-                                        </div>
-                                        <style>{`
-                                            @keyframes fadeInUp {
-                                                from { opacity: 0; transform: translateY(10px); }
-                                                to { opacity: 1; transform: translateY(0); }
-                                            }
-                                        `}</style>
+                        <div 
+                            onMouseEnter={() => setShowHelpTooltip(true)}
+                            onMouseLeave={() => setShowHelpTooltip(false)}
+                            style={{ 
+                                position: 'relative',
+                                width: '38px', 
+                                height: '38px', 
+                                borderRadius: '8px', 
+                                backgroundColor: '#EFF6FF', 
+                                color: '#2563EB', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                cursor: 'help',
+                                border: '1px solid #DBEAFE',
+                                fontSize: '0.9rem',
+                                fontWeight: '900',
+                                flexShrink: 0
+                            }}
+                        >
+                            i
+                            {showHelpTooltip && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '42px',
+                                    right: '0',
+                                    width: '280px',
+                                    backgroundColor: '#1E293B',
+                                    color: 'white',
+                                    padding: '1rem',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                    zIndex: 1000,
+                                    fontSize: '0.7rem',
+                                    lineHeight: '1.4',
+                                    pointerEvents: 'none',
+                                    animation: 'fadeInUp 0.2s ease-out'
+                                }}>
+                                    <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Zap size={13} style={{ color: '#38BDF8' }} /> COMANDOS RÁPIDOS (@)
                                     </div>
-                                )}
-                            </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                        <div>
+                                            <b style={{ color: '#FCD34D' }}>@pendiente</b>: Recibidos<br/>
+                                            <b style={{ color: '#FCD34D' }}>@aprobado</b>: Aprobados<br/>
+                                            <b style={{ color: '#FCD34D' }}>@compra</b>: Compras<br/>
+                                            <b style={{ color: '#FCD34D' }}>@b2b</b>: Corporativos
+                                        </div>
+                                        <div>
+                                            <b style={{ color: '#FCD34D' }}>@b2c</b>: Hogares<br/>
+                                            <b style={{ color: '#FCD34D' }}>@sin_gps</b>: Falta geo<br/>
+                                            <b style={{ color: '#FCD34D' }}>@web</b>: De la App<br/>
+                                            <b style={{ color: '#FCD34D' }}>@pago</b>: Pagados
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        {/* View Switcher */}
-                        <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F3F4F6', padding: '2px', borderRadius: '8px' }}>
-                            <button onClick={() => setViewMode('table')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'table' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'table' ? '#111827' : '#9CA3AF', display: 'flex', alignItems: 'center' }}><List size={14} strokeWidth={1.5} /></button>
-                            <button onClick={() => setViewMode('cards')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'cards' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'cards' ? '#111827' : '#9CA3AF', display: 'flex', alignItems: 'center' }}><Grid size={14} strokeWidth={1.5} /></button>
-                        </div>
-
-                        <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB' }} />
-
-                        <button onClick={() => setActiveTab('emails')} style={{
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            backgroundColor: pendingEmailCount > 0 ? THEME.colors.primaryLight : '#F3F4F6',
-                            color: pendingEmailCount > 0 ? THEME.colors.primary : '#4B5563',
-                            border: `1px solid ${pendingEmailCount > 0 ? 'rgba(13, 122, 87, 0.2)' : '#E5E7EB'}`,
-                            padding: '0.5rem 1rem',
-                            borderRadius: '8px',
-                            fontWeight: '800',
-                            fontSize: '0.75rem',
-                            transition: 'all 0.2s'
-                        }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? 'rgba(13, 122, 87, 0.15)' : '#E5E7EB'; }}
-                           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? THEME.colors.primaryLight : '#F3F4F6'; }}>
-                            <Mail size={14} />
-                            <span>{pendingEmailCount} Pendientes Email</span>
-                        </button>
-
+                        {/* New Order Button */}
                         <Link href="/admin/orders/create" style={{ 
                             backgroundColor: THEME.colors.primary, 
                             color: 'white', 
-                            padding: '0.5rem 1rem', 
+                            padding: '0 1rem', 
                             borderRadius: '8px', 
                             textDecoration: 'none',
-                            fontWeight: '700', 
-                            fontSize: '0.75rem',
+                            fontWeight: '800', 
+                            fontSize: '0.78rem',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
+                            height: '38px',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                            boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)',
                             transition: 'background-color 0.2s'
                         }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}>
-                            <Plus size={14} strokeWidth={1.5} /> Nuevo Pedido
+                            <Plus size={15} strokeWidth={2} /> Nuevo Pedido
                         </Link>
+
                     </div>
                 </div>
+
+
+
+                {/* Dynamic Context Storytelling */}
+                <div style={{
+                    marginTop: '0.35rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    backgroundColor: selectedDate === getTomorrowDateStr() ? '#F0FDF4' : selectedDate === getTodayDateStr() ? '#F0F9FF' : selectedDate === getYesterdayDateStr() ? '#FEF3C7' : selectedDate === 'history15' ? '#FAF5FF' : '#F8FAFC',
+                    border: `1px solid ${selectedDate === getTomorrowDateStr() ? '#BBF7D0' : selectedDate === getTodayDateStr() ? '#BAE6FD' : selectedDate === getYesterdayDateStr() ? '#FDE68A' : selectedDate === 'history15' ? '#E9D5FF' : '#E2E8F0'}`,
+                    color: selectedDate === getTomorrowDateStr() ? '#166534' : selectedDate === getTodayDateStr() ? '#0369A1' : selectedDate === getYesterdayDateStr() ? '#92400E' : selectedDate === 'history15' ? '#6B21A8' : '#475569'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {selectedDate === getTomorrowDateStr() ? (
+                            <><Sparkles size={13} style={{ color: '#10B981', flexShrink: 0 }} /> <span><strong>Tanda Activa:</strong> Pedidos para entregar <strong>MAÑANA ({getTomorrowDateStr()})</strong> · Corte de Compras hoy a las 10:00 PM</span></>
+                        ) : selectedDate === getTodayDateStr() ? (
+                            <><Truck size={13} style={{ color: '#0284C7', flexShrink: 0 }} /> <span><strong>Despacho de Hoy (En Ruta):</strong> Seguimiento en vivo de entregas programadas para <strong>HOY ({getTodayDateStr()})</strong></span></>
+                        ) : selectedDate === getYesterdayDateStr() ? (
+                            <><History size={13} style={{ color: '#D97706', flexShrink: 0 }} /> <span><strong>Conciliación de Ayer:</strong> Pedidos entregados el día de ayer <strong>({getYesterdayDateStr()})</strong></span></>
+                        ) : selectedDate === 'history15' ? (
+                            <><Clock size={13} style={{ color: '#8B5CF6', flexShrink: 0 }} /> <span><strong>Historial Operativo (Últimos 15 Días):</strong> Consultando pedidos procesados y entregados en las últimas dos semanas</span></>
+                        ) : (
+                            <><Calendar size={13} style={{ color: '#64748B', flexShrink: 0 }} /> <span>Mostrando pedidos para entrega el <strong>{selectedDate}</strong></span></>
+                        )}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                        {filteredOrders.length} pedido(s) listos
+                    </div>
+
+
+                </div>
+                </>
                 )}
                 </div>
+
+
 
                 {activeTab === 'orders' ? (
                     <>
@@ -2467,47 +2622,57 @@ export default function OrderLoadingPage() {
                             bottom: '2rem', 
                             left: '50%', 
                             transform: 'translateX(-50%)', 
-                            backgroundColor: '#1E293B', 
-                            color: 'white', 
-                            padding: '1rem 2rem', 
-                            borderRadius: '50px', 
-                            boxShadow: '0 10px 25px rgba(0,0,0,0.2)', 
+                            backgroundColor: '#FFFFFF', 
+                            color: '#0F172A', 
+                            padding: '0.6rem 1rem 0.6rem 1.3rem', 
+                            borderRadius: '100px', 
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 20px 35px -8px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0,0,0,0.04)', 
                             zIndex: 1000,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '1.5rem',
-                            animation: 'slideUp 0.3s ease-out'
+                            gap: '1rem',
+                            animation: 'slideUp 0.25s ease-out'
                         }}>
-                            <div style={{ fontWeight: '700', borderRight: '1px solid #475569', paddingRight: '1.5rem' }}>
-                                {selectedOrders.size} Seleccionados
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRight: '1px solid #E2E8F0', paddingRight: '1rem' }}>
+                                <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '900', fontSize: '0.85rem', padding: '2px 8px', borderRadius: '100px', border: '1px solid #A7F3D0' }}>
+                                    {selectedOrders.size}
+                                </span>
+                                <span style={{ fontWeight: '800', fontSize: '0.82rem', color: '#0F172A' }}>
+                                    Seleccionados
+                                </span>
                             </div>
-                            <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <button 
                                     onClick={handleOpenLogisticsLaunch}
                                     disabled={updateLoading}
                                     style={{
-                                        backgroundColor: '#10B981',
+                                        backgroundColor: THEME.colors.primary,
                                         color: 'white',
                                         border: 'none',
-                                        borderRadius: '8px',
-                                        padding: '0.5rem 1.1rem',
+                                        borderRadius: '100px',
+                                        padding: '0.55rem 1.25rem',
                                         fontWeight: '800',
+                                        fontSize: '0.82rem',
                                         cursor: updateLoading ? 'wait' : 'pointer',
-                                        boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.35)',
                                         opacity: updateLoading ? 0.7 : 1,
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '8px'
+                                        gap: '6px',
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 >
                                     {updateLoading ? (
                                         <>
-                                            <Loader2 size={16} className="animate-spin" />
+                                            <Loader2 size={15} className="animate-spin" />
                                             <span>Procesando...</span>
                                         </>
                                     ) : (
                                         <>
-                                            <Truck size={16} strokeWidth={2} />
+                                            <Truck size={15} strokeWidth={2.2} />
                                             <span>Enviar a Proceso Logístico</span>
                                         </>
                                     )}
@@ -2517,33 +2682,40 @@ export default function OrderLoadingPage() {
                                         window.open('/admin/orders/print-labels?ids=' + Array.from(selectedOrders).join(','), '_blank');
                                     }}
                                     style={{
-                                        backgroundColor: '#059669',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        padding: '0.5rem 1rem',
-                                        fontWeight: '700',
+                                        backgroundColor: '#EEF2FF',
+                                        color: '#4338CA',
+                                        border: '1px solid #C7D2FE',
+                                        borderRadius: '100px',
+                                        padding: '0.55rem 1rem',
+                                        fontWeight: '800',
+                                        fontSize: '0.82rem',
                                         cursor: 'pointer',
-                                        boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)',
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '6px'
+                                        gap: '5px',
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E0E7FF'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EEF2FF'}
                                 >
-                                    <Printer size={16} strokeWidth={2} />
+                                    <Printer size={15} strokeWidth={2} />
                                     <span>Etiquetas</span>
                                 </button>
                                 <button 
                                     onClick={() => setSelectedOrders(new Set())}
                                     style={{
-                                        backgroundColor: 'transparent',
-                                        color: '#94A3B8',
-                                        border: '1px solid #475569',
-                                        borderRadius: '8px',
-                                        padding: '0.5rem 1rem',
-                                        fontWeight: '600',
-                                        cursor: 'pointer'
+                                        backgroundColor: '#F8FAFC',
+                                        color: '#64748B',
+                                        border: '1px solid #E2E8F0',
+                                        borderRadius: '100px',
+                                        padding: '0.55rem 0.9rem',
+                                        fontWeight: '700',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.color = '#0F172A'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#64748B'; }}
                                 >
                                     Cancelar
                                 </button>
@@ -2674,8 +2846,9 @@ export default function OrderLoadingPage() {
                         {viewMode === 'table' ? (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead style={{ position: 'sticky', top: '193px', zIndex: 35, backgroundColor: '#F8FAFB' }}>
-                                        <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: 35, backgroundColor: '#F8FAFB' }}>
+                                        <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '2px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
+
 
 
 
@@ -2704,8 +2877,8 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '22%', textAlign: 'left', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                                            <th style={{ padding: '1rem', width: '24%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '1rem', width: '23%', textAlign: 'left', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                                            <th style={{ padding: '1rem', width: '25%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>DIRECCIÓN / GPS</span>
                                                     <button 
@@ -2730,9 +2903,9 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '15%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <span>ASUNTO / ORIGEN</span>
+                                                    <span>CANAL</span>
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'channel' ? null : 'channel'); }}
                                                         style={{ background: (filterChannel || selectedChannel) ? THEME.colors.primary : '#E2E8F0', color: (filterChannel || selectedChannel) ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -2767,9 +2940,9 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                                            <th style={{ padding: '1rem', width: '9%', textAlign: 'center', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
                                             <th style={{ padding: '1rem', width: '10%', textAlign: 'right', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>VALOR</th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '1rem', width: '11%', textAlign: 'center', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>ESTADO</span>
                                                     <button 
@@ -2813,7 +2986,7 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '7%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
+                                            <th style={{ padding: '1rem', width: '5%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
                                                 <input 
                                                     type="checkbox" 
                                                     checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
@@ -2821,6 +2994,7 @@ export default function OrderLoadingPage() {
                                                     style={{ cursor: 'pointer' }}
                                                 />
                                             </th>
+
 
                                         </tr>
                                     </thead>
@@ -2847,10 +3021,13 @@ export default function OrderLoadingPage() {
                                                             {friendlyId}
                                                         </div>
                                                         {order.created_at && (
-                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap' }}>
-                                                                {formatCreatedAt(order.created_at)}
+                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }} title="Fecha y hora en que se recibió el pedido">
+                                                                <Clock size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                                <span>Recibido: {formatCreatedAt(order.created_at)}</span>
                                                             </div>
                                                         )}
+
+
                                                         <div style={{ marginTop: '4px' }}>
                                                             {isB2B ? (
                                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '4px' }}>
@@ -2892,36 +3069,78 @@ export default function OrderLoadingPage() {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
-                                                        {formatMoney(order.total)}
-                                                    </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                                                        <div style={{
-                                                            padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
-                                                            backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : order.status === 'approved' ? '#DCFCE7' : '#F3F4F6',
-                                                            color: order.status === 'pending_approval' ? '#92400E' : order.status === 'approved' ? '#15803D' : '#4B5563'
-                                                        }}>
-                                                            {getStatusLabel(order.status)}
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }}>
+                                                        <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem' }}>
+                                                            {formatMoney(order.total)}
                                                         </div>
-                                                        {!isB2B && (order.payment_method === 'contra_entrega' || order.paymentMethod?.toLowerCase().includes('contra') || order.paymentMethod?.toLowerCase().includes('puerta')) && order.payment_status !== 'Pagado' && (
+                                                        {isB2B ? (
+                                                            <div 
+                                                                title={order.profiles?.payment_days ? `Acuerdo Institucional de Precios Vigente · Cartera: ${order.profiles.payment_days} días` : 'Acuerdo Institucional de Precios Vigente'}
+                                                                style={{
+                                                                    marginTop: '3px',
+                                                                    fontSize: '0.62rem',
+                                                                    fontWeight: '800',
+                                                                    color: '#4338CA',
+                                                                    backgroundColor: '#EEF2FF',
+                                                                    border: '1px solid #C7D2FE',
+                                                                    padding: '1px 6px',
+                                                                    borderRadius: '4px',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '3px',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}
+                                                            >
+                                                                <FileText size={10} strokeWidth={2} /> Acuerdo Institucional
+                                                            </div>
+                                                        ) : (order.payment_status === 'Pagado' || order.paymentMethod?.toLowerCase().includes('pagado') || order.payment_method === 'wompi') ? (
+
                                                             <div style={{
-                                                                marginTop: '4px',
+                                                                marginTop: '3px',
+                                                                fontSize: '0.62rem',
+                                                                fontWeight: '800',
+                                                                color: '#059669',
+                                                                backgroundColor: '#ECFDF5',
+                                                                border: '1px solid #A7F3D0',
                                                                 padding: '1px 6px',
                                                                 borderRadius: '4px',
-                                                                fontSize: '0.58rem',
-                                                                fontWeight: '800',
-                                                                backgroundColor: '#FFFBEB',
-                                                                color: '#B45309',
-                                                                border: '1px solid #FDE68A',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
                                                                 gap: '3px',
                                                                 whiteSpace: 'nowrap'
                                                             }}>
-                                                                <Coins size={10} strokeWidth={1.5} /> Cobrar en puerta
+                                                                <CheckCircle2 size={10} strokeWidth={2} /> Pagado (Wompi)
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{
+                                                                marginTop: '3px',
+                                                                fontSize: '0.62rem',
+                                                                fontWeight: '800',
+                                                                color: '#B45309',
+                                                                backgroundColor: '#FEF3C7',
+                                                                border: '1px solid #FDE68A',
+                                                                padding: '1px 6px',
+                                                                borderRadius: '4px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                <Coins size={10} strokeWidth={2} /> Por Cobrar
                                                             </div>
                                                         )}
                                                     </td>
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                                                        <div style={{
+                                                            padding: '3px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                                                            backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : order.status === 'approved' ? '#DCFCE7' : order.status === 'delivered' ? '#ECFDF5' : '#F3F4F6',
+                                                            color: order.status === 'pending_approval' ? '#92400E' : order.status === 'approved' ? '#15803D' : order.status === 'delivered' ? '#059669' : '#4B5563'
+                                                        }}>
+                                                            {getStatusLabel(order.status)}
+                                                        </div>
+                                                    </td>
+
+
                                                     <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                                                         <input 
                                                             type="checkbox" 
@@ -2956,11 +3175,12 @@ export default function OrderLoadingPage() {
                     {filteredOrders.length} pedido(s) encontrado(s) en {viewMode === 'table' ? 'vista lista' : 'vista cuadrícula'}
                 </div>
 
-                {/* Bulk Confirm Modal */}
+                {/* Bulk Confirm Modal - FruFresco Light Design Manual System */}
                 {showConfirmModal && (() => {
                     const selectedOrdersList = filteredOrders.filter(o => selectedOrders.has(o.id));
                     const unselectedOrdersCount = filteredOrders.length - selectedOrders.size;
-                    const uniqueClients = new Set(selectedOrdersList.map(o => o.customer_name)).size;
+                    const uniqueClients = new Set(selectedOrdersList.map(o => (o.customer_name || o.profiles?.company_name || o.profiles?.contact_name || o.id).trim())).size;
+
                     const b2bCount = selectedOrdersList.filter(o => o.type?.startsWith('b2b') || o.profiles?.role === 'b2b_client').length;
                     const b2cCount = selectedOrdersList.length - b2bCount;
                     const totalWeight = selectedOrdersList.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
@@ -2969,110 +3189,222 @@ export default function OrderLoadingPage() {
                     return (
                         <div style={{
                             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.55)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            zIndex: 2000, backdropFilter: 'blur(12px)', padding: '1rem'
+                            zIndex: 2000, backdropFilter: 'blur(8px)', padding: '1.5rem'
                         }} onClick={() => setShowConfirmModal(false)}>
                             <div style={{
-                                backgroundColor: '#0F172A',
-                                borderRadius: '32px',
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: '24px',
                                 width: '95%',
-                                maxWidth: '950px',
-                                padding: '3.5rem',
-                                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1) inset',
-                                display: 'flex', flexDirection: 'column', gap: '2rem',
-                                color: 'white',
-                                position: 'relative',
-                                overflow: 'hidden'
+                                maxWidth: '980px',
+                                maxHeight: '90vh',
+                                overflowY: 'auto',
+                                padding: '2.5rem',
+                                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.05)',
+                                display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                                color: '#0F172A',
+                                position: 'relative'
                             }} onClick={e => e.stopPropagation()}>
-                                {/* Background glow effect */}
-                                <div style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', background: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15), transparent 50%)', pointerEvents: 'none' }} />
 
-                                <div style={{ textAlign: 'center', zIndex: 1 }}>
-                                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1rem' }}>
-                                         <Sparkles size={32} strokeWidth={1.5} style={{ color: '#10B981' }} />
-                                     </div>
-                                    <h2 style={{ margin: 0, fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.03em', background: 'linear-gradient(to right, #FFFFFF, #94A3B8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                         Lanzamiento a Proceso Logístico
-                                     </h2>
-                                    <p style={{ color: '#94A3B8', marginTop: '0.8rem', fontSize: '1rem', lineHeight: '1.5', maxWidth: '85%', margin: '0.8rem auto 0' }}>
-                                         Revisa los indicadores críticos antes de sincronizar esta carga con las áreas de Compras (Abastecimiento), Alistamiento y Ruteo para entrega <strong style={{ color: '#38BDF8' }}>MAÑANA ({getTomorrowDateStr()})</strong>.
-                                     </p>
-                                </div>
-                                
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', zIndex: 1 }}>
-                                     {/* Left Column: Logistics & Finances */}
-                                     <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                         <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>MÉTRICAS DE LA TANDA (MAÑANA)</div>
-                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Package size={14} strokeWidth={1.5} /> Pedidos a enviar</span>
-                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: 'white' }}>{selectedOrders.size}</span>
-                                         </div>
-                                         <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2 size={14} strokeWidth={1.5} /> Clientes Únicos</span>
-                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#38BDF8' }}>{uniqueClients}</span>
-                                         </div>
-                                         <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Scale size={14} strokeWidth={1.5} /> Peso Logístico Estimado</span>
-                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#FBBF24' }}>
-                                                 {formatNumber(totalWeight, 1)} <span style={{fontSize:'0.8rem', color:'#94A3B8'}}>kg</span>
-                                             </span>
-                                         </div>
-                                         <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Coins size={14} strokeWidth={1.5} /> Valor Bruto</span>
-                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#10B981' }}>
-                                                 {formatMoney(totalValue)}
-                                             </span>
-                                         </div>
-                                     </div>
-
-                                    {/* Right Column: Breakdown & Alerts */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                        <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', flex: 1 }}>
-                                            <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em', marginBottom: '1.2rem' }}>SEGMENTACIÓN</div>
-                                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                                <div style={{ flex: 1, backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '12px', padding: '1rem', textAlign: 'center' }}>
-                                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#38BDF8' }}>{b2bCount}</div>
-                                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#BAE6FD', marginTop: '4px' }}>B2B Institucional</div>
-                                                </div>
-                                                <div style={{ flex: 1, backgroundColor: 'rgba(167, 139, 250, 0.1)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '12px', padding: '1rem', textAlign: 'center' }}>
-                                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#A78BFA' }}>{b2cCount}</div>
-                                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#DDD6FE', marginTop: '4px' }}>B2C Hogar</div>
-                                                </div>
-                                            </div>
+                                {/* Header */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '1.2rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', color: THEME.colors.primary }}>
+                                            <Sparkles size={28} strokeWidth={2} />
                                         </div>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                                    Lanzamiento a Proceso Logístico
+                                                </h2>
+                                                <span style={{ fontSize: '0.72rem', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', padding: '2px 8px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                                                    TANDA MAÑANA ({getTomorrowDateStr()})
+                                                </span>
+                                            </div>
+                                            <p style={{ color: '#64748B', margin: '4px 0 0', fontSize: '0.85rem' }}>
+                                                Sincroniza los pedidos seleccionados con Abastecimiento (Corabastos), Picking y Ruteo de Despacho.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setShowConfirmModal(false)}
+                                        style={{ background: '#F1F5F9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center' }}
+                                        title="Cerrar ventana"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
 
-                                        {unselectedOrdersCount > 0 ? (
-                                             <div style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                                                 <div style={{ color: '#FDA4AF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AlertTriangle size={24} strokeWidth={1.5} /></div>
-                                                 <div>
-                                                     <div style={{ fontWeight: '900', color: '#FDA4AF', fontSize: '0.9rem' }}>Dejaste {unselectedOrdersCount} pedido(s) por fuera</div>
-                                                     <div style={{ fontSize: '0.75rem', color: '#FECDD3', marginTop: '4px', lineHeight: '1.4' }}>Hay pedidos en pantalla que no seleccionaste. Se quedarán congelados sin pasar a Logística.</div>
+                                {/* Metrics Summary Cards (Top Grid) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '1.2rem' }}>
+                                     {/* Left: Tanda Metrics */}
+                                     <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                         <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Indicadores de Carga</div>
+                                         
+                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.8rem' }}>
+                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                     <Package size={13} style={{ color: THEME.colors.primary }} /> Pedidos a Enviar
+                                                 </div>
+                                                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>{selectedOrders.size}</div>
+                                             </div>
+                                             
+                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                     <Building2 size={13} style={{ color: '#4F46E5' }} /> Destinos Únicos
+                                                 </div>
+                                                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#4338CA', marginTop: '2px' }}>{uniqueClients}</div>
+                                             </div>
+
+                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                     <Scale size={13} style={{ color: '#D97706' }} /> Peso Estimado
+                                                 </div>
+                                                 <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#B45309', marginTop: '2px' }}>
+                                                     {formatNumber(totalWeight, 1)} <span style={{ fontSize: '0.75rem', color: '#64748B' }}>kg</span>
+                                                 </div>
+                                             </div>
+
+                                             <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                     <Coins size={13} style={{ color: '#10B981' }} /> Facturación Bruta
+                                                 </div>
+                                                 <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#059669', marginTop: '2px' }}>
+                                                     {formatMoney(totalValue)}
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     </div>
+
+                                     {/* Right: Segmentation & Coverage */}
+                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                         <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.2rem', flex: 1 }}>
+                                             <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Segmentación de Canales</div>
+                                             <div style={{ display: 'flex', gap: '0.8rem' }}>
+                                                 <div style={{ flex: 1, backgroundColor: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: '10px', padding: '0.8rem', textAlign: 'center' }}>
+                                                     <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#4338CA' }}>{b2bCount}</div>
+                                                     <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#4F46E5', marginTop: '2px' }}>B2B Institucional</div>
+                                                 </div>
+                                                 <div style={{ flex: 1, backgroundColor: '#FCE7F3', border: '1px solid #FBCFE8', borderRadius: '10px', padding: '0.8rem', textAlign: 'center' }}>
+                                                     <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#BE185D' }}>{b2cCount}</div>
+                                                     <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#9D174D', marginTop: '2px' }}>B2C Hogar</div>
+                                                 </div>
+                                             </div>
+                                         </div>
+
+                                         {unselectedOrdersCount > 0 ? (
+                                             <div style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                 <AlertTriangle size={20} style={{ color: '#E11D48', flexShrink: 0 }} />
+                                                 <div style={{ fontSize: '0.75rem', color: '#9F1239', fontWeight: '700' }}>
+                                                     Hay <strong>{unselectedOrdersCount} pedido(s)</strong> sin seleccionar que quedarán en espera.
                                                  </div>
                                              </div>
                                          ) : (
-                                             <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                                                 <div style={{ color: '#6EE7B7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={24} strokeWidth={1.5} /></div>
-                                                 <div>
-                                                     <div style={{ fontWeight: '900', color: '#6EE7B7', fontSize: '0.9rem' }}>Cobertura Total</div>
-                                                     <div style={{ fontSize: '0.75rem', color: '#A7F3D0', marginTop: '4px', lineHeight: '1.4' }}>Seleccionaste el 100% de la lista. Toda la operación está cubierta.</div>
+                                             <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                 <CheckCircle2 size={20} style={{ color: '#16A34A', flexShrink: 0 }} />
+                                                 <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: '700' }}>
+                                                     <strong>Cobertura 100%:</strong> Todos los pedidos disponibles en pantalla están incluidos.
                                                  </div>
                                              </div>
                                          )}
+                                     </div>
+                                </div>
+
+                                {/* Section: Document Printing Projection */}
+                                <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.2rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Printer size={16} style={{ color: THEME.colors.primary }} />
+                                            <span style={{ fontSize: '0.78rem', fontWeight: '900', color: '#0F172A', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                                Documentación & Planillas Logísticas
+                                            </span>
+                                        </div>
+                                        <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                            Proyección para impresión y despacho
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+                                        {/* Doc 1: Planilla Compras */}
+                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <FileText size={15} style={{ color: '#0D7A57' }} />
+                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Compras</span>
+                                                </div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Consolidado Corabastos</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Demanda neta por kilos y mermas</div>
+                                            </div>
+                                            <Link 
+                                                href="/ops/compras" 
+                                                target="_blank"
+                                                style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                            >
+                                                <span>Ver Módulo</span> <ExternalLink size={10} />
+                                            </Link>
+                                        </div>
+
+                                        {/* Doc 2: Etiquetas Térmicas */}
+                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Tag size={15} style={{ color: '#4F46E5' }} />
+                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#EEF2FF', color: '#4338CA', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Bodega</span>
+                                                </div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Rótulos Térmicos</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Etiquetas QR de canastilla</div>
+                                            </div>
+                                            <Link 
+                                                href="/admin/orders/print-labels" 
+                                                target="_blank"
+                                                style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#4F46E5', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                            >
+                                                <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
+                                            </Link>
+                                        </div>
+
+                                        {/* Doc 3: Hojas Picking */}
+                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Package size={15} style={{ color: '#D97706' }} />
+                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Alistamiento</span>
+                                                </div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Hojas de Picking</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Por zonas: Fruver / Abarrotes</div>
+                                            </div>
+                                            <span style={{ marginTop: '8px', fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8' }}>
+                                                Auto al confirmar
+                                            </span>
+                                        </div>
+
+                                        {/* Doc 4: Remisiones */}
+                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Truck size={15} style={{ color: '#0284C7' }} />
+                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Ruta</span>
+                                                </div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Remisiones & Guías</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Manifiestos y remisiones B2B</div>
+                                            </div>
+                                            <span style={{ marginTop: '8px', fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8' }}>
+                                                En módulo Transporte
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', zIndex: 1 }}>
+                                {/* Footer Action Buttons */}
+                                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                                     <button 
                                         onClick={() => setShowConfirmModal(false)}
                                         style={{
-                                            flex: 1, padding: '1.2rem', backgroundColor: 'transparent', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s', fontSize: '1rem'
+                                            flex: 1, padding: '0.9rem', backgroundColor: '#F8FAFC', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.15s', fontSize: '0.9rem'
                                         }}
-                                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'white'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94A3B8'; }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                     >
                                         Revisar de nuevo
                                     </button>
@@ -3083,15 +3415,15 @@ export default function OrderLoadingPage() {
                                         }}
                                         disabled={updateLoading}
                                         style={{
-                                            flex: 2, padding: '1.2rem', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '900', cursor: updateLoading ? 'wait' : 'pointer', boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', fontSize: '1.1rem', letterSpacing: '0.02em', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                            flex: 2, padding: '0.9rem', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: updateLoading ? 'wait' : 'pointer', boxShadow: '0 4px 14px rgba(13, 122, 87, 0.35)', transition: 'all 0.15s', fontSize: '0.95rem', letterSpacing: '0.01em', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                         }}
-                                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                                        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                     >
                                         {updateLoading ? (
                                             <>
                                                 <Loader2 size={18} className="animate-spin" />
-                                                <span>Procesando...</span>
+                                                <span>Procesando Despacho...</span>
                                             </>
                                         ) : (
                                             <>
@@ -3101,10 +3433,12 @@ export default function OrderLoadingPage() {
                                         )}
                                     </button>
                                 </div>
+
                             </div>
                         </div>
                     );
                 })()}
+
 
                 {/* Order Details Modal */}
                 {selectedOrder && (
