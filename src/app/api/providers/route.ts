@@ -50,6 +50,43 @@ export async function GET(request: Request) {
     }
 }
 
+const VALID_PROVIDER_COLUMNS = new Set([
+    'name', 'is_specialized_credit', 'category', 'is_active',
+    'world_office_id', 'credit_terms_days', 'is_credit_line', 'tax_id',
+    'email', 'phone', 'address', 'city', 'type', 'is_archived', 'is_deleted',
+    'bank_name', 'bank_account_number', 'bank_account_type', 'payment_terms_days',
+    'product', 'payment_condition', 'billing_type', 'observations', 'rut_url',
+    'additional_docs_url', 'contact_name', 'document_type', 'location',
+    'contact_phone', 'warehouse_location', 'puesto'
+]);
+
+function sanitizeProviderData(raw: any) {
+    if (!raw || typeof raw !== 'object') return {};
+    const clean: Record<string, any> = {};
+    for (const [k, v] of Object.entries(raw)) {
+        if (VALID_PROVIDER_COLUMNS.has(k)) {
+            clean[k] = v;
+        }
+    }
+
+    // Pack or preserve documents in additional_docs_url
+    const bankDoc = raw.bank_certificate_url;
+    const qualDoc = raw.quality_certifications_url;
+    const addDoc = raw.additional_docs_url;
+
+    if (bankDoc || qualDoc) {
+        clean.additional_docs_url = JSON.stringify({
+            bank: bankDoc || null,
+            quality: qualDoc || null,
+            docs: addDoc || null
+        });
+    } else if (addDoc !== undefined) {
+        clean.additional_docs_url = addDoc;
+    }
+
+    return clean;
+}
+
 export async function POST(request: Request) {
     try {
         const auth = await verifySessionAndPermission(request, 'admin.procurement');
@@ -61,7 +98,8 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { action, providerData, providerId, is_archived } = body;
+        const { action, providerData: rawProviderData, providerId, is_archived } = body;
+        const providerData = sanitizeProviderData(rawProviderData);
 
         const adminSupabase = createAdminClient();
 

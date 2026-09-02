@@ -570,21 +570,56 @@ export default function ProvidersPage() {
             return;
         }
         try {
-            const providerData = {
-                ...newProvider,
+            // Build base provider data
+            const baseData: any = {
+                name: newProvider.name,
+                tax_id: newProvider.tax_id || null,
+                document_type: newProvider.document_type || 'NIT',
                 category: (newProvider.product && newProvider.product.trim() !== '') ? 'PRODUCTOS' : 'GENERAL',
-                warehouse_location: newProvider.warehouse_location ? parseInt(newProvider.warehouse_location, 10) : null,
-                puesto: newProvider.puesto || null,
+                type: newProvider.type || 'contado',
+                product: newProvider.product || null,
+                contact_name: newProvider.contact_name || null,
+                phone: newProvider.phone || null,
                 contact_phone: newProvider.phone || null,
+                email: newProvider.email || null,
                 city: newProvider.city || null,
                 world_office_id: newProvider.world_office_id || null,
+                payment_terms_days: newProvider.payment_terms_days ? Number(newProvider.payment_terms_days) : 0,
+                address: newProvider.address || null,
+                bank_name: newProvider.bank_name || null,
+                bank_account_number: newProvider.bank_account_number || null,
+                bank_account_type: newProvider.bank_account_type || 'Ahorros',
+                billing_type: newProvider.billing_type || 'soporte',
+                payment_condition: newProvider.payment_condition || null,
+                observations: newProvider.observations || null,
+                rut_url: newProvider.rut_url || null,
+                warehouse_location: newProvider.warehouse_location ? parseInt(newProvider.warehouse_location, 10) : null,
+                puesto: newProvider.puesto || null,
                 location: [
                     newProvider.warehouse_location ? `Bodega: ${newProvider.warehouse_location}` : '',
                     newProvider.puesto ? `Puesto: ${newProvider.puesto}` : ''
-                ].filter(Boolean).join(', ') || null
+                ].filter(Boolean).join(', ') || null,
+                is_active: newProvider.is_active ?? true,
+                is_archived: newProvider.is_archived ?? false
             };
+
+            // Pack attached documents into additional_docs_url
+            if (newProvider.bank_certificate_url || newProvider.quality_certifications_url) {
+                baseData.additional_docs_url = JSON.stringify({
+                    bank: newProvider.bank_certificate_url || null,
+                    quality: newProvider.quality_certifications_url || null,
+                    docs: newProvider.additional_docs_url || null
+                });
+            } else if (newProvider.additional_docs_url) {
+                baseData.additional_docs_url = newProvider.additional_docs_url;
+            } else {
+                baseData.additional_docs_url = null;
+            }
+
+            const providerData = baseData;
             
             let saved = false;
+            let apiErrorMessage = '';
             try {
                 const apiRes = await fetch('/api/providers', {
                     method: 'POST',
@@ -592,11 +627,21 @@ export default function ProvidersPage() {
                     body: JSON.stringify({
                         action: editingId ? 'update' : 'create',
                         providerId: editingId,
-                        providerData
+                        providerData: {
+                            ...providerData,
+                            bank_certificate_url: newProvider.bank_certificate_url,
+                            quality_certifications_url: newProvider.quality_certifications_url
+                        }
                     })
                 });
-                if (apiRes.ok) saved = true;
-            } catch (e) {
+                const resData = await apiRes.json();
+                if (apiRes.ok) {
+                    saved = true;
+                } else {
+                    apiErrorMessage = resData.error || '';
+                }
+            } catch (e: any) {
+                apiErrorMessage = e.message;
                 console.warn('API save provider failed, falling back to direct supabase:', e);
             }
 
@@ -614,7 +659,9 @@ export default function ProvidersPage() {
                         .insert([providerData]);
                     error = err;
                 }
-                if (error) throw error;
+                if (error) {
+                    throw new Error(apiErrorMessage || error.message);
+                }
             }
             
             setShowCreateModal(false);
@@ -631,9 +678,9 @@ export default function ProvidersPage() {
                 is_active: true, is_archived: false
             });
             fetchProviders();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error saving provider:', err);
-            alert('Error al guardar el proveedor. Verifica el NIT/CC único.');
+            alert(`Error al guardar el proveedor: ${err.message || 'Verifica los campos obligatorios e intenta nuevamente.'}`);
         }
     };
 
@@ -1781,6 +1828,22 @@ export default function ProvidersPage() {
                                         {canEdit && (
                                             <button 
                                                 onClick={() => {
+                                                    let bankDoc = selectedProvider.bank_certificate_url || '';
+                                                    let qualityDoc = selectedProvider.quality_certifications_url || '';
+                                                    let otherDocs = selectedProvider.additional_docs_url || '';
+
+                                                    if (selectedProvider.additional_docs_url && selectedProvider.additional_docs_url.startsWith('{')) {
+                                                        try {
+                                                            const parsed = JSON.parse(selectedProvider.additional_docs_url);
+                                                            bankDoc = parsed.bank || '';
+                                                            qualityDoc = parsed.quality || '';
+                                                            otherDocs = parsed.docs || '';
+                                                        } catch {}
+                                                    } else if (selectedProvider.additional_docs_url && selectedProvider.additional_docs_url.includes('bank_certificate')) {
+                                                        bankDoc = selectedProvider.additional_docs_url;
+                                                        otherDocs = '';
+                                                    }
+
                                                     setEditingId(selectedProvider.id);
                                                     setNewProvider({
                                                         name: selectedProvider.name || '',
@@ -1806,9 +1869,9 @@ export default function ProvidersPage() {
                                                         payment_condition: selectedProvider.payment_condition || '',
                                                         observations: selectedProvider.observations || selectedProvider.notes || '',
                                                         rut_url: selectedProvider.rut_url || '',
-                                                        additional_docs_url: selectedProvider.additional_docs_url || '',
-                                                        quality_certifications_url: selectedProvider.quality_certifications_url || '',
-                                                        bank_certificate_url: selectedProvider.bank_certificate_url || '',
+                                                        additional_docs_url: otherDocs,
+                                                        quality_certifications_url: qualityDoc,
+                                                        bank_certificate_url: bankDoc,
                                                         warehouse_location: selectedProvider.warehouse_location !== null && selectedProvider.warehouse_location !== undefined ? selectedProvider.warehouse_location.toString() : '',
                                                         puesto: selectedProvider.puesto || '',
                                                         is_active: selectedProvider.is_active ?? true,
