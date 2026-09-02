@@ -910,88 +910,88 @@ export default function BillingDashboard() {
                     </div>
                 </header>
 
-                {/* Submodule Main Tabs */}
-                <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #E2E8F0', marginBottom: '1.75rem' }}>
-                    {hasInvoicingAccess && (
-                        <button
-                            onClick={() => setActiveTab('invoicing')}
-                            style={{ 
-                                padding: '0.85rem 1.25rem', 
-                                border: 'none', 
-                                background: 'none', 
-                                fontWeight: '800', 
-                                fontSize: '0.92rem', 
-                                cursor: 'pointer', 
-                                borderBottom: activeTab === 'invoicing' ? '3px solid #0D7A57' : '3px solid transparent', 
-                                color: activeTab === 'invoicing' ? '#0D7A57' : '#64748B', 
-                                transition: 'all 0.15s',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                            }}
-                        >
-                            <Receipt size={17} /> Submódulo Facturación
-                        </button>
-                    )}
-                    {hasPortfolioAccess && (
-                        <button
-                            onClick={() => setActiveTab('portfolio')}
-                            style={{ 
-                                padding: '0.85rem 1.25rem', 
-                                border: 'none', 
-                                background: 'none', 
-                                fontWeight: '800', 
-                                fontSize: '0.92rem', 
-                                cursor: 'pointer', 
-                                borderBottom: activeTab === 'portfolio' ? '3px solid #0D7A57' : '3px solid transparent', 
-                                color: activeTab === 'portfolio' ? '#0D7A57' : '#64748B', 
-                                transition: 'all 0.15s',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                            }}
-                        >
-                            <Wallet size={17} /> Submódulo Cartera
-                        </button>
-                    )}
-                    {hasConfigAccess && (
-                        <button
-                            onClick={() => setActiveTab('configuration')}
-                            style={{ 
-                                padding: '0.85rem 1.25rem', 
-                                border: 'none', 
-                                background: 'none', 
-                                fontWeight: '800', 
-                                fontSize: '0.92rem', 
-                                cursor: 'pointer', 
-                                borderBottom: activeTab === 'configuration' ? '3px solid #0D7A57' : '3px solid transparent', 
-                                color: activeTab === 'configuration' ? '#0D7A57' : '#64748B', 
-                                transition: 'all 0.15s',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                            }}
-                        >
-                            <Settings size={17} /> Configuración
-                        </button>
-                    )}
-                </div>
+                {/* Submodule Main Tabs Bar with Integrated Right Sub-Menu */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    {/* Left: Main Submodule Tabs */}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {hasInvoicingAccess && (
+                            <button
+                                onClick={() => setActiveTab('invoicing')}
+                                style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    border: 'none', 
+                                    background: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.92rem', 
+                                    cursor: 'pointer', 
+                                    borderBottom: activeTab === 'invoicing' ? '3px solid #0D7A57' : '3px solid transparent', 
+                                    color: activeTab === 'invoicing' ? '#0D7A57' : '#64748B', 
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                <Receipt size={17} /> Submódulo Facturación
+                            </button>
+                        )}
+                        {hasPortfolioAccess && (
+                            <button
+                                onClick={() => setActiveTab('portfolio')}
+                                style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    border: 'none', 
+                                    background: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.92rem', 
+                                    cursor: 'pointer', 
+                                    borderBottom: activeTab === 'portfolio' ? '3px solid #0D7A57' : '3px solid transparent', 
+                                    color: activeTab === 'portfolio' ? '#0D7A57' : '#64748B', 
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                <Wallet size={17} /> Submódulo Cartera
+                            </button>
+                        )}
+                        {hasConfigAccess && (
+                            <button
+                                onClick={() => setActiveTab('configuration')}
+                                style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    border: 'none', 
+                                    background: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.92rem', 
+                                    cursor: 'pointer', 
+                                    borderBottom: activeTab === 'configuration' ? '3px solid #0D7A57' : '3px solid transparent', 
+                                    color: activeTab === 'configuration' ? '#0D7A57' : '#64748B', 
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                <Settings size={17} /> Configuración
+                            </button>
+                        )}
+                    </div>
 
-                {/* INVOICING SUBMODULE */}
-                {activeTab === 'invoicing' && (
-                    <div>
-                        {/* Sub-tabs cuts / returns */}
-                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
+                    {/* Right: Active Submodule Filter Pills */}
+                    {activeTab === 'invoicing' && (
+                        <div style={{ display: 'flex', gap: '0.35rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px', marginBottom: '6px' }}>
                             <button
                                 onClick={() => setSubTab('cuts')}
                                 style={{ 
                                     backgroundColor: subTab === 'cuts' ? 'white' : 'transparent', 
                                     color: subTab === 'cuts' ? '#0F172A' : '#64748B', 
-                                    padding: '0.55rem 1.1rem', 
-                                    borderRadius: '9px', 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: '8px', 
                                     border: 'none', 
                                     fontWeight: '800', 
-                                    fontSize: '0.82rem', 
+                                    fontSize: '0.8rem', 
                                     cursor: 'pointer',
                                     boxShadow: subTab === 'cuts' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                                     transition: 'all 0.15s',
@@ -1007,11 +1007,11 @@ export default function BillingDashboard() {
                                 style={{ 
                                     backgroundColor: subTab === 'returns' ? 'white' : 'transparent', 
                                     color: subTab === 'returns' ? '#0F172A' : '#64748B', 
-                                    padding: '0.55rem 1.1rem', 
-                                    borderRadius: '9px', 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: '8px', 
                                     border: 'none', 
                                     fontWeight: '800', 
-                                    fontSize: '0.82rem', 
+                                    fontSize: '0.8rem', 
                                     cursor: 'pointer',
                                     boxShadow: subTab === 'returns' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                                     transition: 'all 0.15s',
@@ -1023,6 +1023,57 @@ export default function BillingDashboard() {
                                 <AlertCircle size={14} style={{ color: subTab === 'returns' ? '#DC2626' : '#64748B' }} /> Devoluciones Pendientes ({returns.length})
                             </button>
                         </div>
+                    )}
+
+                    {activeTab === 'portfolio' && (
+                        <div style={{ display: 'flex', gap: '0.35rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px', marginBottom: '6px' }}>
+                            <button
+                                onClick={() => setPortfolioSubTab('invoices')}
+                                style={{ 
+                                    padding: '0.5rem 1rem', 
+                                    border: 'none', 
+                                    backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.8rem', 
+                                    cursor: 'pointer', 
+                                    borderRadius: '8px',
+                                    color: portfolioSubTab === 'invoices' ? '#0F172A' : '#64748B', 
+                                    boxShadow: portfolioSubTab === 'invoices' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <FileText size={14} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Cuentas por Cobrar
+                            </button>
+                            <button
+                                onClick={() => setPortfolioSubTab('dossiers')}
+                                style={{ 
+                                    padding: '0.5rem 1rem', 
+                                    border: 'none', 
+                                    backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.8rem', 
+                                    cursor: 'pointer', 
+                                    borderRadius: '8px',
+                                    color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
+                                    boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <FileSignature size={14} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Solicitudes de Crédito y Pagarés
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* INVOICING SUBMODULE */}
+                {activeTab === 'invoicing' && (
+                    <div>
 
                         {subTab === 'cuts' && (
                             <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)' }}>
@@ -1135,50 +1186,6 @@ export default function BillingDashboard() {
                 {/* PORTFOLIO SUBMODULE */}
                 {activeTab === 'portfolio' && (
                     <div>
-                        {/* Sub-tab selection bar */}
-                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
-                            <button
-                                onClick={() => setPortfolioSubTab('invoices')}
-                                style={{ 
-                                    padding: '0.6rem 1.25rem', 
-                                    border: 'none', 
-                                    backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.85rem', 
-                                    cursor: 'pointer', 
-                                    borderRadius: '9px',
-                                    color: portfolioSubTab === 'invoices' ? '#0F172A' : '#64748B', 
-                                    boxShadow: portfolioSubTab === 'invoices' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                    transition: 'all 0.15s',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                <FileText size={15} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Cuentas por Cobrar
-                            </button>
-                            <button
-                                onClick={() => setPortfolioSubTab('dossiers')}
-                                style={{ 
-                                    padding: '0.6rem 1.25rem', 
-                                    border: 'none', 
-                                    backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.85rem', 
-                                    cursor: 'pointer', 
-                                    borderRadius: '9px',
-                                    color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
-                                    boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                    transition: 'all 0.15s',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                <FileSignature size={15} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Solicitudes de Crédito y Pagarés
-                            </button>
-                        </div>
-
                         {portfolioSubTab === 'invoices' ? (
                             <>
                                 {/* Ageing Portfolio Widgets */}

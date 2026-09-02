@@ -2057,82 +2057,100 @@ export default function OrderLoadingPage() {
                     </div>
                 )}
 
-                {/* TABS FOR ORDERS VS EMAILS */}
-                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.2rem', borderBottom: '1px solid #E5E7EB', paddingBottom: '2px' }}>
-                    <button 
-                        onClick={() => setActiveTab('orders')}
-                        style={{
-                            padding: '0.6rem 0.2rem',
-                            border: 'none',
-                            background: 'transparent',
-                            color: activeTab === 'orders' ? THEME.colors.primary : '#64748B',
-                            fontWeight: '700',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            borderBottom: activeTab === 'orders' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        <Package size={16} /> Pedidos del Día
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('emails')}
-                        style={{
-                            padding: '0.6rem 0.2rem',
-                            border: 'none',
-                            background: 'transparent',
-                            color: activeTab === 'emails' ? THEME.colors.primary : '#64748B',
-                            fontWeight: '700',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            borderBottom: activeTab === 'emails' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('outbox')}
-                        style={{
-                            padding: '0.6rem 0.2rem',
-                            border: 'none',
-                            background: 'transparent',
-                            color: activeTab === 'outbox' ? THEME.colors.primary : '#64748B',
-                            fontWeight: '700',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            borderBottom: activeTab === 'outbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
-                    </button>
-                </div>
-
-                {activeTab === 'orders' ? (
-                    <>
-                        {/* UNIFIED SLENDER CONTROL BAR */}
+                {/* UNIFIED STICKY CONTROL DOCK (BELOW 85px NAVBAR - ZERO TRANSPARENT GAPS) */}
                 <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '1rem', 
-                    marginBottom: '1rem', 
-                    backgroundColor: 'white', 
-                    padding: '0.4rem 0.6rem', 
-                    borderRadius: '12px', 
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                    border: '1px solid #E5E7EB'
+                    position: 'sticky',
+                    top: '85px',
+                    zIndex: 45,
+                    backgroundColor: '#F8FAFC',
+                    padding: '0.5rem 0.8rem 0.6rem 0.8rem',
+                    marginBottom: '0.5rem',
+                    borderBottom: '1px solid #E2E8F0',
+                    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.04)'
                 }}>
+                    {/* TABS FOR ORDERS VS EMAILS */}
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '1.5rem', 
+                        marginBottom: activeTab === 'orders' ? '0.6rem' : '0', 
+                        borderBottom: '1px solid #E5E7EB', 
+                        paddingBottom: '2px' 
+                    }}>
+                        <button 
+                            onClick={() => setActiveTab('orders')}
+                            style={{
+                                padding: '0.5rem 0.2rem',
+                                border: 'none',
+                                background: 'transparent',
+                                color: activeTab === 'orders' ? THEME.colors.primary : '#64748B',
+                                fontWeight: '700',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                borderBottom: activeTab === 'orders' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <Package size={16} /> Pedidos del Día
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('emails')}
+                            style={{
+                                padding: '0.5rem 0.2rem',
+                                border: 'none',
+                                background: 'transparent',
+                                color: activeTab === 'emails' ? THEME.colors.primary : '#64748B',
+                                fontWeight: '700',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                borderBottom: activeTab === 'emails' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('outbox')}
+                            style={{
+                                padding: '0.5rem 0.2rem',
+                                border: 'none',
+                                background: 'transparent',
+                                color: activeTab === 'outbox' ? THEME.colors.primary : '#64748B',
+                                fontWeight: '700',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                borderBottom: activeTab === 'outbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
+                        </button>
+                    </div>
+
+                    {activeTab === 'orders' && (
+                        /* UNIFIED SLENDER CONTROL BAR */
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '1rem', 
+                            backgroundColor: 'white', 
+                            padding: '0.4rem 0.6rem', 
+                            borderRadius: '10px', 
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                            border: '1px solid #E5E7EB'
+                        }}>
+
+
+
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                         {/* Date Selector Segment */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2433,6 +2451,14 @@ export default function OrderLoadingPage() {
                         </Link>
                     </div>
                 </div>
+                )}
+                </div>
+
+                {activeTab === 'orders' ? (
+                    <>
+
+
+
                     
                     {/* Bulk Action Floating Bar (Placeholder for now) */}
                     {selectedOrders.size > 0 && (
@@ -2648,9 +2674,12 @@ export default function OrderLoadingPage() {
                         {viewMode === 'table' ? (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                            <th style={{ padding: '1rem', width: '12%', textAlign: 'left', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                    <thead style={{ position: 'sticky', top: '193px', zIndex: 35, backgroundColor: '#F8FAFB' }}>
+                                        <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+
+
+
+                                            <th style={{ padding: '1rem', width: '12%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>ID / TIPO</span>
                                                     <button 
@@ -2675,8 +2704,8 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                                            <th style={{ padding: '1rem', width: '24%', textAlign: 'left', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '1rem', width: '22%', textAlign: 'left', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                                            <th style={{ padding: '1rem', width: '24%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>DIRECCIÓN / GPS</span>
                                                     <button 
@@ -2701,7 +2730,7 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '15%', textAlign: 'left', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '1rem', width: '15%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>ASUNTO / ORIGEN</span>
                                                     <button 
@@ -2738,9 +2767,9 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'right', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>VALOR</th>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>ESTADO</span>
                                                     <button 
@@ -2784,7 +2813,7 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '7%', textAlign: 'center' }}>
+                                            <th style={{ padding: '1rem', width: '7%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
                                                 <input 
                                                     type="checkbox" 
                                                     checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
@@ -2792,6 +2821,7 @@ export default function OrderLoadingPage() {
                                                     style={{ cursor: 'pointer' }}
                                                 />
                                             </th>
+
                                         </tr>
                                     </thead>
                                     <tbody>

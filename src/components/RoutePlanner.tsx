@@ -86,8 +86,10 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         warehouse_time_per_10_crates_load: 5
     });
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
+    const [routeStartTimes, setRouteStartTimes] = useState<Record<string, string>>({});
     const [confirmedManifest, setConfirmedManifest] = useState<any[] | null>(null);
     const [showPreConfirm, setShowPreConfirm] = useState(false);
+
     const isMounted = useRef(true);
 
     useEffect(() => {
@@ -343,10 +345,14 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             if (result.routes) {
                 setAssignments(result.routes);
                 setIsOptimized(true);
+                if (result.route_start_times) {
+                    setRouteStartTimes(result.route_start_times);
+                }
                 if (result.theoretical_metrics) {
                     setTheoreticalMetrics(result.theoretical_metrics);
                 }
             }
+
 
             if (result.explanation) {
                 setAiReportText(result.explanation);
@@ -410,10 +416,10 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         if (readOnly) return;
         try {
             setLoading(true);
-            // Construir un mapeo de vehículo -> hora de salida
-            const routeStartTimes: Record<string, string> = {};
+            // Construir un mapeo de vehículo -> hora de salida (dinámica calculada o default)
+            const dynamicStartTimes: Record<string, string> = {};
             Object.keys(assignments).forEach(vehicleId => {
-                routeStartTimes[vehicleId] = params.fleet_start_time || '04:30';
+                dynamicStartTimes[vehicleId] = routeStartTimes[vehicleId] || params.fleet_start_time || '04:30';
             });
 
             const response = await fetch('/api/transport/confirm', {
@@ -425,9 +431,10 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     isOptimized,
                     theoreticalMetrics,
                     params,
-                    routeStartTimes // Pasar las horas de salida estimadas
+                    routeStartTimes: dynamicStartTimes // Pasar las horas de salida estimadas dinámicas
                 })
             });
+
 
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
@@ -566,10 +573,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     };
 
     const getEstimatedTimesForVehicle = (vehicleId: string, totalCrates: number) => {
-        // Departure time
-        const departureTimeStr = params.fleet_start_time || '04:30';
+        // Departure time (dynamic per vehicle from optimization, or default fleet start)
+        const departureTimeStr = routeStartTimes[vehicleId] || params.fleet_start_time || '04:30';
         const [h, m] = departureTimeStr.split(':').map(Number);
         const totalMinutes = h * 60 + m;
+
 
         // Calculate load time in minutes: base_load + (crates * (time_per_10_crates / 10))
         const baseLoad = parseFloat(params.warehouse_base_load_time) || 15;
@@ -1128,25 +1136,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', flex: 1 }}>
                                 <div>
-                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>B2B Eficiencia (kg/min)</label>
-                                    <input 
-                                        type="number" 
-                                        value={params.b2b_kg_min ?? ''} 
-                                        onChange={(e) => updateParameter('b2b_kg_min', e.target.value)}
-                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>B2C Eficiencia (kg/min)</label>
-                                    <input 
-                                        type="number" 
-                                        value={params.b2c_kg_min ?? ''} 
-                                        onChange={(e) => updateParameter('b2c_kg_min', e.target.value)}
-                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                    />
-                                </div>
-                                <div>
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Tiempo base de alistamiento (min)</label>
+
                                     <input 
                                         type="number" 
                                         value={params.base_setup_time ?? ''} 
