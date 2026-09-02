@@ -67,6 +67,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
+import { normalizeCityName, CANONICAL_CITIES } from '@/lib/locationNorm';
 
 declare global {
     interface Window {
@@ -262,11 +263,9 @@ export default function ClientsModule() {
         const currentList = activeTab === 'b2b' ? clientsB2B : activeTab === 'b2c' ? clientsB2C : leads;
         const locs = new Set<string>();
         currentList.forEach((c: any) => {
-            if (c.city && typeof c.city === 'string' && c.city.trim() && c.city !== '---') {
-                locs.add(c.city.trim());
-            }
-            if (c.municipality && typeof c.municipality === 'string' && c.municipality.trim() && c.municipality !== '---') {
-                locs.add(c.municipality.trim());
+            const raw = c.municipality || c.city;
+            if (raw && typeof raw === 'string' && raw.trim() && raw !== '---') {
+                locs.add(normalizeCityName(raw));
             }
         });
         return Array.from(locs).sort((a, b) => a.localeCompare(b));
@@ -1373,8 +1372,8 @@ export default function ClientsModule() {
                         notify_email_3: !!row.Email_Notificacion_3,
                         address: (row.Direccion || '').toString().trim(),
                         address_complement: (row.Complemento_Direccion || '').toString().trim() || null,
-                        city: (row.Ciudad || 'Bogotá').toString().trim(),
-                        municipality: (row.Municipio || row.Ciudad || 'Bogotá').toString().trim(),
+                        city: normalizeCityName(row.Ciudad || 'Bogotá'),
+                        municipality: normalizeCityName(row.Municipio || row.Ciudad || 'Bogotá'),
                         department: (row.Departamento || 'Cundinamarca').toString().trim(),
                         role: type_client === 'HOGAR' ? 'b2c_client' : 'b2b_client',
                         pricing_model_id: matchedModel ? matchedModel.id : (row.pricing_model_id || null),
@@ -9457,7 +9456,7 @@ function LeadFormModal({ onClose, onRefresh }: LeadFormModalProps) {
                     email: email || null,
                     nit: nit ? parseInt(nit.replace(/[^0-9]/g, '')) : null,
                     address: address || null,
-                    municipality: municipality || null,
+                    municipality: normalizeCityName(municipality) || null,
                     business_type: businessType,
                     business_size: businessSize,
                     notes: notes || null,
@@ -9535,7 +9534,19 @@ function LeadFormModal({ onClose, onRefresh }: LeadFormModalProps) {
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Municipio / Ciudad</label>
-                            <input type="text" value={municipality} onChange={e => setMunicipality(e.target.value)} placeholder="Ej: Bogotá" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                            <input 
+                                type="text" 
+                                list="canonical-cities-list"
+                                value={municipality} 
+                                onChange={e => setMunicipality(e.target.value)} 
+                                placeholder="Ej: Bogotá" 
+                                style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} 
+                            />
+                            <datalist id="canonical-cities-list">
+                                {CANONICAL_CITIES.map(c => (
+                                    <option key={c} value={c} />
+                                ))}
+                            </datalist>
                         </div>
                     </div>
 

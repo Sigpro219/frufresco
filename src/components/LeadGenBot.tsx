@@ -8,6 +8,7 @@ import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
 import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket, Sparkles, FileText, Bot, Check, Plus, LayoutGrid, TrendingUp, Circle, ShoppingBag, Download, MessageSquare } from 'lucide-react';
 import { translations, Locale } from '../lib/translations';
 import { Polygon } from './admin/GeofencingManager';
+import { normalizeCityName } from '../lib/locationNorm';
 
 const mapMinimalistStyles = [
   {
@@ -237,7 +238,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     c.types.includes('locality') || 
                     c.types.includes('administrative_area_level_2')
                 );
-                const mun = city ? city.long_name : 'Bogotá';
+                const rawMun = city ? city.long_name : 'Bogotá';
+                const mun = normalizeCityName(rawMun);
 
                 const updatedData = {
                     ...leadDataRef.current,
