@@ -5440,7 +5440,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         document_type: editData?.document_type || 'invoice',
         remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true,
         print_invoice: (editData as any)?.print_invoice || false,
-        is_corporate_parent: editData?.is_corporate_parent || false,
+        is_corporate_parent: isB2C ? false : (editData?.is_corporate_parent || false),
         parent_id: editData?.parent_id || '',
         branch_id: editData?.branch_id || '',
         corporate_role: editData?.corporate_role || '',
@@ -5527,6 +5527,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         const raw = (editData as any)?.beneficiaries || (editData as any)?.logistics_data?.beneficiaries || [];
         return Array.isArray(raw) ? raw : [];
     });
+
+    useEffect(() => {
+        const raw = (editData as any)?.beneficiaries || (editData as any)?.logistics_data?.beneficiaries || [];
+        if (Array.isArray(raw) && raw.length > 0) {
+            setBeneficiariesList(raw);
+        }
+    }, [editData?.id, editData?.logistics_data]);
 
     useEffect(() => {
         async function loadPastBeneficiaries() {
