@@ -6034,6 +6034,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 parent_id: !formData.parent_id || formData.parent_id === '' ? null : formData.parent_id
             };
 
+            if (isB2C) {
+                payload.is_corporate_parent = false;
+            }
+
             console.log('--- INTENTO DE GUARDADO (Payload Sanitized) ---');
             console.log('Payload:', JSON.stringify(payload, null, 2));
 
@@ -7192,8 +7196,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             </section>
                         )}
 
-                        {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ) */}
-                        {formData.is_corporate_parent && (
+                        {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ INSTITUCIONAL - NO APLICA A HOGAR) */}
+                        {isB2B && formData.is_corporate_parent && (
                             <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '24px', border: '1px solid #BAE6FD' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                     <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Scale size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
@@ -8027,8 +8031,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </section>
                             )}
 
-                            {/* BLOQUE: INFORMACIÓN FISCAL (SOLO MATRIZ) */}
-                            {formData.is_corporate_parent && (
+                            {/* BLOQUE: INFORMACIÓN FISCAL (SOLO MATRIZ INSTITUCIONAL - NO APLICA A HOGAR) */}
+                            {isB2B && formData.is_corporate_parent && (
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                         <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
@@ -8085,8 +8089,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </section>
                             )}
 
-                            {/* BLOQUE: EXPEDIENTE DIGITAL (SOLO MATRIZ) */}
-                            {formData.is_corporate_parent && (
+                            {/* BLOQUE: EXPEDIENTE DIGITAL (SOLO MATRIZ INSTITUCIONAL - NO APLICA A HOGAR) */}
+                            {isB2B && formData.is_corporate_parent && (
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                         <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Folder size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
@@ -8115,7 +8119,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                         <Loader2 size={16} className="animate-spin" /> GUARDANDO...
                                     </div>
-                                ) : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : 'SUCURSAL'}`}
+                                ) : isB2C ? 'GUARDAR CLIENTE HOGAR' : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : 'SUCURSAL'}`}
                             </button>
                         )}
                     </div>
