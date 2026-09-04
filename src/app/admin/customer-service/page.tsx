@@ -6,7 +6,7 @@ import { THEME, formatMoney } from '@/lib/adminTheme';
 import { 
     MessageSquare, AlertTriangle, CheckCircle2, Clock, Search, 
     Building2, User, Calendar, Plus, Trash2, Loader2, ArrowRight,
-    Play, Eye, CornerDownRight, FileText, Camera
+    Play, Eye, CornerDownRight, FileText, Camera, Truck
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -413,6 +413,34 @@ export default function CustomerServicePage() {
         }
     };
 
+    // Keyboard-First shortcuts for industrial efficiency
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement;
+            const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT';
+
+            // Ctrl+Enter or Cmd+Enter to quickly resolve
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedPqr && selectedPqr.status === 'pending' && !actionLoading) {
+                    handleResolvePqr('resolved');
+                }
+                return;
+            }
+
+            // Number keys 1, 2, 3, 4 to switch resolution option when not typing in an input
+            if (!isTyping && selectedPqr && selectedPqr.status === 'pending') {
+                if (e.key === '1') setResolutionOption('opt1');
+                else if (e.key === '2') setResolutionOption('opt2');
+                else if (e.key === '3') setResolutionOption('opt3');
+                else if (e.key === '4') setResolutionOption('opt4');
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedPqr, resolutionNotes, resolutionOption, actionLoading]);
+
     // Add novelty that affects order totals & billing_returns
     const handleCreateNovelty = async () => {
         if (!selectedPqr?.order_id || !selectedItemId || noveltyQty <= 0) {
@@ -714,17 +742,29 @@ export default function CustomerServicePage() {
                                                 onMouseLeave={e => { if(!isSelected) e.currentTarget.style.borderColor = '#E2E8F0'; }}
                                             >
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                                                    <span style={{ 
-                                                        fontSize: '0.6rem', 
-                                                        fontWeight: '800', 
-                                                        padding: '2px 6px', 
-                                                        borderRadius: '4px',
-                                                        textTransform: 'uppercase',
-                                                        backgroundColor: p.priority === 'urgent' || p.priority === 'high' ? '#FEE2E2' : '#F1F5F9',
-                                                        color: p.priority === 'urgent' || p.priority === 'high' ? '#EF4444' : '#64748B'
-                                                    }}>
-                                                        {p.type}
-                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                        <span style={{ 
+                                                            fontSize: '0.6rem', 
+                                                            fontWeight: '800', 
+                                                            padding: '2px 6px', 
+                                                            borderRadius: '4px',
+                                                            textTransform: 'uppercase',
+                                                            backgroundColor: p.priority === 'urgent' || p.priority === 'high' ? '#FEE2E2' : '#F1F5F9',
+                                                            color: p.priority === 'urgent' || p.priority === 'high' ? '#EF4444' : '#64748B'
+                                                        }}>
+                                                            {p.type}
+                                                        </span>
+                                                        {p.subject.startsWith('[Conductor]') && (
+                                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#EFF6FF', color: '#1D4ED8', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <Truck size={10} /> Conductor
+                                                            </span>
+                                                        )}
+                                                        {p.subject.startsWith('[Portal B2B]') && (
+                                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#ECFDF5', color: '#047857', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <Building2 size={10} /> Portal B2B
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '500' }}>
                                                         {new Date(p.created_at).toLocaleDateString()}
                                                     </span>
@@ -975,9 +1015,14 @@ export default function CustomerServicePage() {
                                             <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Notas de resolución comercial</h4>
                                             
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                                    Concepto de Resolución Comercial
-                                                </label>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                                                        Concepto de Resolución Comercial
+                                                    </label>
+                                                    <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '600' }}>
+                                                        Atajos: <kbd style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 4px', fontSize: '0.6rem' }}>1-4</kbd> | <kbd style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 4px', fontSize: '0.6rem' }}>Ctrl+Enter</kbd>
+                                                    </span>
+                                                </div>
                                                 <select
                                                     value={resolutionOption}
                                                     onChange={e => setResolutionOption(e.target.value as any)}

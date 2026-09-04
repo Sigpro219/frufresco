@@ -100,7 +100,7 @@ export default function DeliveryConfirmationPage() {
                 .select(`
                     id, route_id, status,
                     orders:order_id (
-                        id, shipping_address, payment_method, payment_status, total,
+                        id, sequence_id, shipping_address, payment_method, payment_status, total,
                         profiles:profile_id (
                             id, company_name, contact_name, role
                         ),
@@ -310,6 +310,35 @@ export default function DeliveryConfirmationPage() {
                     description: novedadReason,
                     evidence_url: evidenceUrl
                 });
+
+                // Automatic insertion into billing_returns for all items
+                if (items && items.length > 0) {
+                    const billingInserts = items.map(item => ({
+                        order_id: stop.orders.id,
+                        product_id: item.product_id,
+                        quantity_returned: item.picked_quantity || item.quantity,
+                        reason: `Cancelación Total en Entrega: ${novedadReason}`,
+                        photo_url: evidenceUrl,
+                        status: 'pending_review'
+                    }));
+                    await supabase.from('billing_returns').insert(billingInserts);
+                }
+
+                // Automatic insertion into customer_service_pqrs
+                const clientId = stop.orders?.profiles?.id;
+                if (clientId) {
+                    await supabase.from('customer_service_pqrs').insert({
+                        client_id: clientId,
+                        order_id: stop.orders.id,
+                        type: 'reclamo',
+                        category: 'entrega',
+                        priority: 'urgent',
+                        subject: `[Conductor] Cancelación Total en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`,
+                        description: `El conductor reportó cancelación total de la entrega en sitio.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}`,
+                        primary_photo_url: evidenceUrl,
+                        status: 'pending'
+                    });
+                }
             } else if (hasNovedad) {
                 // Multiple events for partial returns
                 const partialReturns = items.filter(i => i.returned_qty > 0);
@@ -321,6 +350,42 @@ export default function DeliveryConfirmationPage() {
                         description: `PRODUCTO: ${item.product_name} | MOTIVO: ${item.return_reason || 'No especificado'} | CANT: ${item.returned_qty}`,
                         evidence_url: item.return_evidence_url || evidenceUrl // Use item photo or fall back to order photo
                     });
+                }
+
+                // Automatic insertion into billing_returns
+                if (partialReturns.length > 0) {
+                    const returnInserts = partialReturns.map(item => ({
+                        order_id: stop.orders.id,
+                        product_id: item.product_id,
+                        quantity_returned: item.returned_qty,
+                        reason: item.return_reason || `Novedad de entrega reportada por conductor`,
+                        photo_url: item.return_evidence_url || evidenceUrl,
+                        status: 'pending_review'
+                    }));
+                    await supabase.from('billing_returns').insert(returnInserts);
+
+                    // Automatic insertion into customer_service_pqrs
+                    const clientId = stop.orders?.profiles?.id;
+                    if (clientId) {
+                        const itemsSummary = partialReturns.map(i => `• ${i.product_name}: ${i.returned_qty} ${i.unit} devueltos (Motivo: ${i.return_reason || 'No especificado'})`).join('\n');
+                        const firstPhoto = partialReturns.find(i => i.return_evidence_url)?.return_evidence_url || evidenceUrl;
+                        const additionalPhotos = partialReturns
+                            .filter(i => i.return_evidence_url && i.return_evidence_url !== firstPhoto)
+                            .map(i => i.return_evidence_url as string);
+
+                        await supabase.from('customer_service_pqrs').insert({
+                            client_id: clientId,
+                            order_id: stop.orders.id,
+                            type: 'reclamo',
+                            category: 'producto',
+                            priority: 'high',
+                            subject: `[Conductor] Rechazo Parcial en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`,
+                            description: `El conductor registró devolución de producto(s) en sitio:\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}`,
+                            primary_photo_url: firstPhoto,
+                            additional_photos: additionalPhotos.length > 0 ? additionalPhotos : null,
+                            status: 'pending'
+                        });
+                    }
                 }
             }
 

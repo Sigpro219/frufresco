@@ -12,6 +12,7 @@ import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
 import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
 import AgreementDocumentModal from '@/components/AgreementDocumentModal';
+import B2BReportNoveltyModal from '@/components/B2BReportNoveltyModal';
 import { ShieldCheck, ExternalLink, ArrowRight, Percent, Award } from 'lucide-react';
 import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
 
@@ -104,6 +105,8 @@ export default function B2BDashboard() {
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
     const [selectedAgreementForModal, setSelectedAgreementForModal] = useState<any | null>(null);
     const [isAgreementModalOpen, setIsAgreementModalOpen] = useState<boolean>(false);
+    const [selectedOrderForNovelty, setSelectedOrderForNovelty] = useState<any | null>(null);
+    const [isReportNoveltyOpen, setIsReportNoveltyOpen] = useState<boolean>(false);
     const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
     const [agreementSearchTerm, setAgreementSearchTerm] = useState<string>('');
     const [activeHoverPoint, setActiveHoverPoint] = useState<any | null>(null);
@@ -2449,6 +2452,32 @@ export default function B2BDashboard() {
 
                                                     <button 
                                                         onClick={() => {
+                                                            setSelectedOrderForNovelty(inv);
+                                                            setIsReportNoveltyOpen(true);
+                                                        }}
+                                                        style={{
+                                                            padding: '0.4rem 0.85rem',
+                                                            borderRadius: THEME.radius.md,
+                                                            border: '1px solid #FDE68A',
+                                                            backgroundColor: '#FFFBEB',
+                                                            color: '#B45309',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.78rem',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            marginRight: '0.5rem',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: '0 1px 3px rgba(217, 119, 6, 0.1)'
+                                                        }}
+                                                        title="Reportar avería, producto en mal estado o faltante de entrega"
+                                                    >
+                                                        <AlertTriangle size={14} strokeWidth={2.2} /> Reportar Novedad
+                                                    </button>
+
+                                                    <button 
+                                                        onClick={() => {
                                                             applyHistoricalOrderToCart(inv);
                                                             setActiveTab('order');
                                                         }}
@@ -4268,6 +4297,19 @@ export default function B2BDashboard() {
                 }}
                 order={selectedInvoiceOrder}
                 clientProfile={activeProfile}
+            />
+
+            <B2BReportNoveltyModal
+                isOpen={isReportNoveltyOpen}
+                onClose={() => {
+                    setIsReportNoveltyOpen(false);
+                    setSelectedOrderForNovelty(null);
+                }}
+                order={selectedOrderForNovelty}
+                clientProfile={activeProfile}
+                onSuccess={() => {
+                    window.showToast?.('Tu reporte de novedad ha sido recibido por Calidad FruFresco', 'success');
+                }}
             />
 
             <style jsx global>{`

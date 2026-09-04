@@ -59,6 +59,9 @@ import {
     PackageX,
     Clock,
     ShieldAlert,
+    ShieldCheck,
+    Truck,
+    Wallet,
     Unlock,
     Gift,
     Zap,
@@ -5435,6 +5438,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         longitude: editData?.longitude || '',
         geocoding_status: editData?.geocoding_status || 'manual',
         needs_crates: editData?.needs_crates || false,
+        preferred_payment_method: (editData as any)?.preferred_payment_method || (editData as any)?.logistics_data?.preferred_payment_method || 'wompi',
         allow_off_agreement_purchases: (editData as any)?.allow_off_agreement_purchases !== undefined ? (editData as any).allow_off_agreement_purchases : true,
         override_parent_off_agreement: (editData as any)?.override_parent_off_agreement || false,
         document_type: editData?.document_type || 'invoice',
@@ -5585,6 +5589,98 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             }
         }
         loadPastBeneficiaries();
+    }, [isB2C, editData?.id]);
+
+    // Historial y Medios de Pago (B2C Hogar)
+    const [clientPayments, setClientPayments] = useState<any[]>([]);
+    const [loadingPayments, setLoadingPayments] = useState(false);
+    const [paymentFilter, setPaymentFilter] = useState<'all' | 'wompi' | 'contra_entrega'>('all');
+
+    useEffect(() => {
+        async function loadPaymentHistory() {
+            if (!isB2C || !editData?.id) return;
+            setLoadingPayments(true);
+            try {
+                // 1. Obtener órdenes del cliente con montos y métodos de pago
+                const { data: orders } = await supabase
+                    .from('orders')
+                    .select('id, sequence_id, total, payment_method, payment_status, status, created_at, delivery_date, admin_notes')
+                    .eq('profile_id', editData.id)
+                    .order('created_at', { ascending: false });
+
+                // 2. Obtener pagos directos si la tabla client_payments existe
+                let directPayments: any[] = [];
+                try {
+                    const { data: directData } = await supabase
+                        .from('client_payments')
+                        .select('*')
+                        .eq('profile_id', editData.id)
+                        .order('created_at', { ascending: false });
+                    if (directData) directPayments = directData;
+                } catch {
+                    // Fallback si la tabla no está creada aún
+                }
+
+                const unified: any[] = [];
+                const seenOrderIds = new Set<string>();
+
+                if (directPayments && directPayments.length > 0) {
+                    directPayments.forEach(p => {
+                        if (p.order_id) seenOrderIds.add(p.order_id);
+                        unified.push({
+                            id: p.id,
+                            order_id: p.order_id,
+                            sequence_id: p.order_id ? (orders?.find(o => o.id === p.order_id)?.sequence_id || null) : null,
+                            amount: Number(p.amount) || 0,
+                            payment_method: p.payment_method || 'wompi',
+                            payment_status: p.payment_status || 'approved',
+                            transaction_id: p.transaction_id || '',
+                            payment_channel: p.payment_channel || '',
+                            created_at: p.created_at,
+                            notes: p.notes || ''
+                        });
+                    });
+                }
+
+                if (orders && orders.length > 0) {
+                    orders.forEach(o => {
+                        if (!seenOrderIds.has(o.id)) {
+                            const rawMethod = (o.payment_method || '').toLowerCase();
+                            const isWompi = rawMethod.includes('wompi') || (o.admin_notes || '').includes('Wompi');
+                            const isContraEntrega = rawMethod.includes('contra') || rawMethod.includes('entrega');
+                            const method = isWompi ? 'wompi' : (isContraEntrega ? 'contra_entrega' : (rawMethod || 'contra_entrega'));
+
+                            const rawStatus = (o.payment_status || '').toLowerCase();
+                            const isPaid = rawStatus.includes('paga') || rawStatus.includes('app') || rawStatus.includes('aprob') || o.status === 'completed';
+                            const status = isPaid ? 'approved' : 'pending';
+
+                            const wompiIdMatch = (o.admin_notes || '').match(/ID:\s*([^\s\]|]+)/i);
+
+                            unified.push({
+                                id: `order_${o.id}`,
+                                order_id: o.id,
+                                sequence_id: o.sequence_id,
+                                amount: Number(o.total) || 0,
+                                payment_method: method,
+                                payment_status: status,
+                                transaction_id: wompiIdMatch ? wompiIdMatch[1] : '',
+                                payment_channel: isWompi ? 'Pasarela Wompi' : 'Pago Contra Entrega',
+                                created_at: o.created_at,
+                                notes: o.admin_notes || ''
+                            });
+                        }
+                    });
+                }
+
+                unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                setClientPayments(unified);
+            } catch (e) {
+                console.warn('Error loading payment history for client:', e);
+            } finally {
+                setLoadingPayments(false);
+            }
+        }
+        loadPaymentHistory();
     }, [isB2C, editData?.id]);
 
     // B2B access credentials states
@@ -6019,13 +6115,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             } = formData;
             
             const finalContactName = `${contactFirstName.trim()} ${contactLastName.trim()}`.trim() || formData.contact_name;
-            const updatedLogistics = { ...(formData.logistics_data || {}), beneficiaries: beneficiariesList };
+            const updatedLogistics = { 
+                ...(formData.logistics_data || {}), 
+                beneficiaries: beneficiariesList,
+                preferred_payment_method: formData.preferred_payment_method 
+            };
             const payload: any = {
                 ...coreData,
                 contact_name: finalContactName,
                 contact_phone: formData.phone,
                 latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
                 longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null,
+                preferred_payment_method: formData.preferred_payment_method,
                 logistics_data: updatedLogistics,
                 geocoding_status: formData.geocoding_status,
                 address_complement: formData.address_complement,
@@ -6054,9 +6155,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 }
 
                 if (error) {
+                    const fallbackPayload = { ...payload };
+                    delete fallbackPayload.preferred_payment_method;
                     const resFb = await supabase
                         .from('profiles')
-                        .update(payload)
+                        .update(fallbackPayload)
                         .eq('id', (editData as Profile).id);
                     error = resFb.error;
                 }
@@ -7640,6 +7743,315 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 )}
                             </div>
                         </section>
+
+                        {/* BLOQUE: HISTORIAL Y MEDIOS DE PAGO (EXCLUSIVO CLIENTE HOGAR / B2C) */}
+                        {isB2C && (
+                            <section style={{ backgroundColor: 'white', padding: '1.75rem', borderRadius: '24px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                                {/* Header con Icono y Título */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ width: '38px', height: '38px', backgroundColor: '#EDE9FE', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <CreditCard size={20} style={{ color: '#7C3AED' }} />
+                                        </div>
+                                        <div>
+                                            <h4 style={{ fontSize: '0.98rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>HISTORIAL Y MEDIOS DE PAGO (HOGAR)</h4>
+                                            <p style={{ fontSize: '0.74rem', color: '#64748B', margin: 0 }}>Registro de transacciones pasarela Wompi, pagos contra entrega y método habitual</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Filtro Rápido */}
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPaymentFilter('all')}
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                border: `1px solid ${paymentFilter === 'all' ? '#7C3AED' : '#E2E8F0'}`,
+                                                backgroundColor: paymentFilter === 'all' ? '#EDE9FE' : 'white',
+                                                color: paymentFilter === 'all' ? '#6D28D9' : '#64748B',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Todos ({clientPayments.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPaymentFilter('wompi')}
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                border: `1px solid ${paymentFilter === 'wompi' ? '#7C3AED' : '#E2E8F0'}`,
+                                                backgroundColor: paymentFilter === 'wompi' ? '#EDE9FE' : 'white',
+                                                color: paymentFilter === 'wompi' ? '#6D28D9' : '#64748B',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                        >
+                                            <ShieldCheck size={12} /> Wompi ({clientPayments.filter(p => p.payment_method === 'wompi').length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPaymentFilter('contra_entrega')}
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                border: `1px solid ${paymentFilter === 'contra_entrega' ? '#0D7A57' : '#E2E8F0'}`,
+                                                backgroundColor: paymentFilter === 'contra_entrega' ? '#EAEFEA' : 'white',
+                                                color: paymentFilter === 'contra_entrega' ? '#0D7A57' : '#64748B',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                        >
+                                            <Truck size={12} /> Contra Entrega ({clientPayments.filter(p => p.payment_method === 'contra_entrega').length})
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* 1. Selector de Medio de Pago Habitual / Preferido */}
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#475569', display: 'block', textTransform: 'uppercase', letterSpacing: '0.03rem', marginBottom: '0.8rem' }}>
+                                        ⭐ Medio de Pago Habitual / Preferido para este Cliente
+                                    </span>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                                        {/* Wompi Card */}
+                                        <div 
+                                            onClick={() => !isReadOnly && setFormData({ ...formData, preferred_payment_method: 'wompi' })}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px',
+                                                padding: '1rem',
+                                                borderRadius: '12px',
+                                                border: `2px solid ${formData.preferred_payment_method === 'wompi' ? '#7C3AED' : '#E2E8F0'}`,
+                                                backgroundColor: formData.preferred_payment_method === 'wompi' ? '#F5F3FF' : 'white',
+                                                cursor: isReadOnly ? 'default' : 'pointer',
+                                                transition: 'all 0.2s',
+                                                boxShadow: formData.preferred_payment_method === 'wompi' ? '0 2px 8px rgba(124, 58, 237, 0.12)' : 'none'
+                                            }}
+                                        >
+                                            <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: formData.preferred_payment_method === 'wompi' ? '#7C3AED' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <ShieldCheck size={18} style={{ color: formData.preferred_payment_method === 'wompi' ? 'white' : '#64748B' }} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.84rem', color: formData.preferred_payment_method === 'wompi' ? '#5B21B6' : '#1E293B' }}>
+                                                    Pasarela Wompi
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                                    PSE, Tarjetas de Crédito/Débito, Nequi, Bancolombia
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Contra Entrega Card */}
+                                        <div 
+                                            onClick={() => !isReadOnly && setFormData({ ...formData, preferred_payment_method: 'contra_entrega' })}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px',
+                                                padding: '1rem',
+                                                borderRadius: '12px',
+                                                border: `2px solid ${formData.preferred_payment_method === 'contra_entrega' ? '#0D7A57' : '#E2E8F0'}`,
+                                                backgroundColor: formData.preferred_payment_method === 'contra_entrega' ? '#EAEFEA' : 'white',
+                                                cursor: isReadOnly ? 'default' : 'pointer',
+                                                transition: 'all 0.2s',
+                                                boxShadow: formData.preferred_payment_method === 'contra_entrega' ? '0 2px 8px rgba(13, 122, 87, 0.12)' : 'none'
+                                            }}
+                                        >
+                                            <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: formData.preferred_payment_method === 'contra_entrega' ? '#0D7A57' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Truck size={18} style={{ color: formData.preferred_payment_method === 'contra_entrega' ? 'white' : '#64748B' }} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.84rem', color: formData.preferred_payment_method === 'contra_entrega' ? '#065F46' : '#1E293B' }}>
+                                                    Pago Contra Entrega
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                                    Efectivo o Datáfono físico al momento de la entrega en puerta
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. Tarjetas KPI de Resumen */}
+                                {(() => {
+                                    const totalPaid = clientPayments
+                                        .filter(p => p.payment_status === 'approved' || p.payment_status === 'Pagado')
+                                        .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+                                    const wompiCount = clientPayments.filter(p => p.payment_method === 'wompi').length;
+                                    const contraEntregaCount = clientPayments.filter(p => p.payment_method === 'contra_entrega').length;
+                                    const totalCount = clientPayments.length;
+                                    const pctWompi = totalCount > 0 ? Math.round((wompiCount / totalCount) * 100) : 0;
+                                    const pctContra = totalCount > 0 ? Math.round((contraEntregaCount / totalCount) * 100) : 0;
+
+                                    return (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Total Pagado Histórico</span>
+                                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#0F172A', marginTop: '0.2rem' }}>
+                                                    {formatMoney(totalPaid)}
+                                                </div>
+                                                <span style={{ fontSize: '0.68rem', color: '#10B981', fontWeight: '700' }}>
+                                                    {clientPayments.filter(p => p.payment_status === 'approved' || p.payment_status === 'Pagado').length} pagos confirmados
+                                                </span>
+                                            </div>
+
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Distribución de Medios</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '0.4rem' }}>
+                                                    <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#EDE9FE', color: '#6D28D9', fontSize: '0.75rem', fontWeight: '800' }}>
+                                                        Wompi: {pctWompi}%
+                                                    </span>
+                                                    <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#EAEFEA', color: '#0D7A57', fontSize: '0.75rem', fontWeight: '800' }}>
+                                                        Contra Entrega: {pctContra}%
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '4px', display: 'block' }}>
+                                                    {totalCount} transacciones en total
+                                                </span>
+                                            </div>
+
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Estado de Pagos</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '0.4rem' }}>
+                                                    <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#15803D', fontSize: '0.75rem', fontWeight: '800' }}>
+                                                        {clientPayments.filter(p => p.payment_status === 'approved' || p.payment_status === 'Pagado').length} Pagados
+                                                    </span>
+                                                    <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF3C7', color: '#92400E', fontSize: '0.75rem', fontWeight: '800' }}>
+                                                        {clientPayments.filter(p => p.payment_status === 'pending' || p.payment_status === 'Pendiente').length} Pendientes
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '4px', display: 'block' }}>
+                                                    Monitoreo en tiempo real
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* 3. Tabla de Transacciones */}
+                                {loadingPayments ? (
+                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
+                                        <Loader2 size={20} className="animate-spin" style={{ margin: '0 auto 8px' }} />
+                                        Cargando historial de pagos...
+                                    </div>
+                                ) : (() => {
+                                    const filtered = clientPayments.filter(p => {
+                                        if (paymentFilter === 'all') return true;
+                                        return p.payment_method === paymentFilter;
+                                    });
+
+                                    if (filtered.length === 0) {
+                                        return (
+                                            <div style={{ padding: '2rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                                <CreditCard size={24} style={{ color: '#94A3B8', margin: '0 auto 6px', display: 'block' }} />
+                                                <span>No hay transacciones registradas con el filtro seleccionado.</span>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '16px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                <thead>
+                                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontWeight: '800' }}>
+                                                        <th style={{ padding: '0.75rem 1rem' }}>Fecha / Hora</th>
+                                                        <th style={{ padding: '0.75rem 1rem' }}>Pedido</th>
+                                                        <th style={{ padding: '0.75rem 1rem' }}>Medio de Pago</th>
+                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Monto</th>
+                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Estado</th>
+                                                        <th style={{ padding: '0.75rem 1rem' }}>Comprobante / Detalle</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filtered.map((item, idx) => {
+                                                        const isWompi = item.payment_method === 'wompi';
+                                                        const isApproved = item.payment_status === 'approved' || item.payment_status === 'Pagado';
+                                                        
+                                                        return (
+                                                            <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                                {/* Fecha */}
+                                                                <td style={{ padding: '0.75rem 1rem', color: '#334155', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                                                    {item.created_at ? new Date(item.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '---'}
+                                                                </td>
+
+                                                                {/* Pedido */}
+                                                                <td style={{ padding: '0.75rem 1rem' }}>
+                                                                    {item.sequence_id ? (
+                                                                        <span style={{ padding: '3px 8px', borderRadius: '6px', backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', fontSize: '0.74rem' }}>
+                                                                            #{item.sequence_id}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Directo</span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* Medio de Pago */}
+                                                                <td style={{ padding: '0.75rem 1rem' }}>
+                                                                    {isWompi ? (
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px', borderRadius: '6px', backgroundColor: '#EDE9FE', color: '#6D28D9', fontWeight: '800', fontSize: '0.72rem' }}>
+                                                                            <ShieldCheck size={13} /> Wompi (Pasarela)
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px', borderRadius: '6px', backgroundColor: '#EAEFEA', color: '#0D7A57', fontWeight: '800', fontSize: '0.72rem' }}>
+                                                                            <Truck size={13} /> Contra Entrega
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* Monto */}
+                                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontSize: '0.84rem', whiteSpace: 'nowrap' }}>
+                                                                    {formatMoney(item.amount)}
+                                                                </td>
+
+                                                                {/* Estado */}
+                                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                                                    {isApproved ? (
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800', fontSize: '0.7rem' }}>
+                                                                            <CheckCircle2 size={12} /> Aprobado
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF3C7', color: '#92400E', fontWeight: '800', fontSize: '0.7rem' }}>
+                                                                            <Clock size={12} /> Pendiente
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* Comprobante / Detalle */}
+                                                                <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontSize: '0.72rem' }}>
+                                                                    {item.transaction_id ? (
+                                                                        <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#475569' }}>
+                                                                            ID: {item.transaction_id}
+                                                                        </span>
+                                                                    ) : item.notes ? (
+                                                                        <span title={item.notes} style={{ maxWidth: '220px', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {item.notes.replace(/\[PEDIDO CORREO\][\s\S]*/, 'Pedido cargado por correo')}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span>Pago en entrega en domicilio</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
+                            </section>
+                        )}
 
                         {/* BLOQUE: CONTACTO OPERATIVO (COMMON) */}
                         {!isB2C && (
