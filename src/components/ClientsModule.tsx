@@ -284,6 +284,20 @@ export default function ClientsModule() {
 
     useEffect(() => {
         fetchData();
+
+        const channel = supabase
+            .channel('clients-agreements-live-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, () => {
+                fetchData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     const [scarcityFocusedIndex, setScarcityFocusedIndex] = useState(-1);
@@ -1727,7 +1741,10 @@ export default function ClientsModule() {
             {isFormModalOpen && (
                 <ClientFormModal 
                     key={editTarget?.id || 'new'}
-                    onClose={() => setIsFormModalOpen(false)} 
+                    onClose={() => {
+                        setIsFormModalOpen(false);
+                        fetchData();
+                    }} 
                     onRefresh={fetchData}
                     pricingModels={pricingModels}
                     editData={editTarget}
