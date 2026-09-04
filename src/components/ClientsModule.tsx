@@ -5242,7 +5242,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '850px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid #E2E8F0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '900px', height: '85vh', maxHeight: '850px', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid #E2E8F0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
                 {/* Header con Ícono Lucide */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.2rem 2rem', borderBottom: '1px solid #F1F5F9', background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -5262,7 +5262,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                 </div>
 
                 {/* Content */}
-                <div style={{ padding: '1.5rem 2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <div style={{ padding: '1.25rem 2rem', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}>
                     {/* Vigencia & Metadatos */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', backgroundColor: '#F8FAFC', padding: '0.85rem 1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', fontSize: '0.8rem', color: '#475569' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -5347,10 +5347,10 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                             <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B' }}>No hay ningún producto con el nombre o código "{searchQuery}".</p>
                         </div>
                     ) : (
-                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflowY: 'auto', flex: 1, minHeight: 0, position: 'relative', scrollbarWidth: 'thin' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: '800' }}>
+                                <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F8FAFC' }}>
+                                    <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: '800' }}>
                                         <th style={{ padding: '0.75rem 1rem' }}>Producto</th>
                                         <th style={{ padding: '0.75rem 1rem' }}>UoM</th>
                                         <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Base</th>
@@ -5366,7 +5366,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                                         const totalPrice = basePrice + ivaAmount;
 
                                         return (
-                                            <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
+                                            <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155', transition: 'background-color 0.15s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                 <td style={{ padding: '0.75rem 1rem', fontWeight: '700' }}>
                                                     {item.products?.name || 'Producto Desconocido'}
                                                     {item.products?.accounting_id && (
