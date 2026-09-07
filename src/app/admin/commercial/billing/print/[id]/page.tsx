@@ -1,8 +1,7 @@
-import { Printer } from 'lucide-react';
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Printer } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';

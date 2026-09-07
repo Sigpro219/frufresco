@@ -70,7 +70,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
-import { normalizeCityName, CANONICAL_CITIES } from '@/lib/locationNorm';
+import { normalizeCityName, CANONICAL_CITIES, normalizeSearchText, searchIncludes } from '@/lib/locationNorm';
 
 declare global {
     interface Window {
@@ -1547,12 +1547,8 @@ export default function ClientsModule() {
                     const noAddr = !item.address || item.address === '---';
                     return noCity && noMuni && noAddr;
                 }
-                const locTerm = filterLocationHeader.toLowerCase();
-                const city = String(item.city || '').toLowerCase();
-                const muni = String(item.municipality || '').toLowerCase();
-                const dept = String(item.department || '').toLowerCase();
-                const addr = String(item.address || '').toLowerCase();
-                return city.includes(locTerm) || muni.includes(locTerm) || dept.includes(locTerm) || addr.includes(locTerm);
+                const locTerm = filterLocationHeader;
+                return searchIncludes(item.city, locTerm) || searchIncludes(item.municipality, locTerm) || searchIncludes(item.department, locTerm) || searchIncludes(item.address, locTerm);
             });
         }
 
@@ -1608,14 +1604,14 @@ export default function ClientsModule() {
 
         // 5. Text Search (and @commands)
         if (searchTerm) {
-            const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
+            const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
             if (searchTerms.length > 0) {
                 result = result.filter(item => {
                     const record = item as Record<string, unknown>;
-                    return searchTerms.every(term => {
+                    return searchTerms.every(rawTerm => {
                         // Special command handlers starting with @
-                        if (term.startsWith('@')) {
-                            const cleanCmd = term.slice(1).trim().toLowerCase();
+                        if (rawTerm.startsWith('@')) {
+                            const cleanCmd = normalizeSearchText(rawTerm.slice(1));
                             if (!cleanCmd) return true;
 
                             if (cleanCmd === 'branch' || cleanCmd === 'sucursal' || cleanCmd === 'sucursales') {
@@ -1653,24 +1649,19 @@ export default function ClientsModule() {
                                 if (!valuePart) {
                                     return !!record.nit;
                                 }
-                                return String(record.nit || '').toLowerCase().includes(valuePart);
+                                return searchIncludes(record.nit, valuePart);
                             }
 
                             // Dinámico para cualquier ciudad / ubicación
-                            const cityVal = String(record.city || '').toLowerCase();
-                            const muniVal = String(record.municipality || '').toLowerCase();
-                            const deptVal = String(record.department || '').toLowerCase();
-                            const addrVal = String(record.address || '').toLowerCase();
-                            const compVal = String(record.company_name || '').toLowerCase();
-
-                            return cityVal.includes(cleanCmd) || muniVal.includes(cleanCmd) || deptVal.includes(cleanCmd) || addrVal.includes(cleanCmd) || compVal.includes(cleanCmd);
+                            return searchIncludes(record.city, cleanCmd) || 
+                                   searchIncludes(record.municipality, cleanCmd) || 
+                                   searchIncludes(record.department, cleanCmd) || 
+                                   searchIncludes(record.address, cleanCmd) || 
+                                   searchIncludes(record.company_name, cleanCmd);
                         }
 
-                        // Default field searching
-                        return fields.some(field => {
-                            const value = record[field];
-                            return String(value || '').toLowerCase().includes(term);
-                        });
+                        // Default field searching con normalización universal ñ/n y acentos
+                        return fields.some(field => searchIncludes(record[field], rawTerm));
                     });
                 });
             }

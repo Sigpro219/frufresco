@@ -71,3 +71,30 @@ export function normalizeCityName(raw?: string | null): string {
         .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
         .join(' ');
 }
+
+/**
+ * Normaliza texto para búsqueda en español con tolerancia total a:
+ * - Acentos y tildes (á, é, í, ó, ú, ü)
+ * - Letra 'ñ' y 'n' (ej: 'peñalisa' <-> 'penalisa', 'niño' <-> 'nino')
+ * - Mayúsculas y minúsculas
+ * - Espacios redundantes
+ */
+export function normalizeSearchText(text?: unknown): string {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+}
+
+/**
+ * Comprueba si `target` contiene `query` de forma tolerante a acentos y 'ñ' / 'n'.
+ */
+export function searchIncludes(target?: unknown, query?: unknown): boolean {
+    const normTarget = normalizeSearchText(target);
+    const normQuery = normalizeSearchText(query);
+    if (!normQuery) return true;
+    return normTarget.includes(normQuery);
+}
+
