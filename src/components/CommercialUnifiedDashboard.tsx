@@ -227,9 +227,25 @@ const formatCompactMoney = (num: number): string => {
     const sign = num < 0 ? '-' : '';
     if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}B`;
     if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-    if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
+    if (abs >= 1e6) {
+        const val = abs / 1e6;
+        return `${sign}$${val.toFixed(val >= 10 ? 1 : 2)}M`;
+    }
     if (abs >= 1e4) return `${sign}$${Math.round(abs / 1e3)}K`;
     return formatMoney(num);
+};
+
+// Formatter for logistics volume in Tons (e.g., "0,53 Ton", "25,77 Ton", "62,61 Ton")
+const formatVolumeTon = (kg: number): string => {
+    if (!kg || isNaN(kg) || kg <= 0) return '0 Ton';
+    const tons = kg / 1000;
+    if (tons >= 100) {
+        return `${tons.toLocaleString('es-CO', { maximumFractionDigits: 1 })} Ton`;
+    }
+    if (tons >= 1) {
+        return `${tons.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} Ton`;
+    }
+    return `${tons.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ton`;
 };
 
 // Compact growth percentage formatter to prevent visual overflows
@@ -1988,8 +2004,8 @@ export default function CommercialUnifiedDashboard() {
                         <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#F1F5F9', color: '#475569', padding: '4px 10px', borderRadius: '12px' }}>
                             {geoZones.length} Localidades Monitoreadas
                         </span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '4px 10px', borderRadius: '12px', border: '1px solid #BFDBFE' }}>
-                            📍 {clientPins.length} Clientes Georreferenciados (GPS)
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '4px 10px', borderRadius: '12px', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <MapPin size={13} color="#1E40AF" /> {clientPins.length} Clientes Georreferenciados (GPS)
                         </span>
                         {geoZones[0] && (
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: '#DCFCE7', color: '#15803D', padding: '4px 10px', borderRadius: '12px' }}>
@@ -2051,8 +2067,12 @@ export default function CommercialUnifiedDashboard() {
                                     >
                                         <div style={{ padding: '6px 4px', maxWidth: '240px', color: '#09090B' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
-                                                <span style={{ fontSize: '0.67rem', fontWeight: '800', padding: '2px 6px', borderRadius: '6px', backgroundColor: selectedPin.type === 'Institucional' ? '#EFF6FF' : '#ECFDF5', color: selectedPin.type === 'Institucional' ? '#1E40AF' : '#047857' }}>
-                                                    {selectedPin.type === 'Institucional' ? '🏢 Institucional' : '🏠 Hogar'}
+                                                <span style={{ fontSize: '0.67rem', fontWeight: '800', padding: '2px 6px', borderRadius: '6px', backgroundColor: selectedPin.type === 'Institucional' ? '#EFF6FF' : '#ECFDF5', color: selectedPin.type === 'Institucional' ? '#1E40AF' : '#047857', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    {selectedPin.type === 'Institucional' ? (
+                                                        <><Building2 size={11} color="#1E40AF" /> Institucional</>
+                                                    ) : (
+                                                        <><Home size={11} color="#047857" /> Hogar</>
+                                                    )}
                                                 </span>
                                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B' }}>
                                                     {selectedPin.zone}
@@ -2065,13 +2085,13 @@ export default function CommercialUnifiedDashboard() {
                                                 {selectedPin.address}
                                             </div>
                                             <div style={{ paddingTop: '5px', borderTop: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary, display: 'flex', justifyContent: 'space-between' }}>
+                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary, display: 'flex', justifyContent: 'space-between' }} title={`${formatMoney(selectedPin.amount)} COP exactos`}>
                                                     <span>Facturación:</span>
-                                                    <span>{formatMoney(selectedPin.amount)}</span>
+                                                    <span>{formatCompactMoney(selectedPin.amount)}</span>
                                                 </div>
-                                                <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#1E40AF', display: 'flex', justifyContent: 'space-between' }}>
+                                                <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#1E40AF', display: 'flex', justifyContent: 'space-between' }} title={`${formatNumber(selectedPin.volumeKg, 1)} Kg exactos`}>
                                                     <span>Volumen:</span>
-                                                    <span>{formatNumber(selectedPin.volumeKg, 1)} Kg</span>
+                                                    <span>{formatVolumeTon(selectedPin.volumeKg)}</span>
                                                 </div>
                                                 <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
                                                     <span>Despachos:</span>
@@ -2093,10 +2113,10 @@ export default function CommercialUnifiedDashboard() {
                                                 {selectedZone.zone}
                                             </div>
                                             <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#09090B', marginBottom: '3px' }}>
-                                                Facturado: {formatMoney(selectedZone.salesAmount)}
+                                                Facturado: <span style={{ color: THEME.colors.primary }} title={`${formatMoney(selectedZone.salesAmount)} COP exactos`}>{formatCompactMoney(selectedZone.salesAmount)}</span>
                                             </div>
-                                            <div style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: '700', marginBottom: '3px' }}>
-                                                Volumen: {formatNumber(selectedZone.volumeKg, 1)} Kg
+                                            <div style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: '700', marginBottom: '3px' }} title={`${formatNumber(selectedZone.volumeKg, 1)} Kg exactos`}>
+                                                Volumen: <strong>{formatVolumeTon(selectedZone.volumeKg)}</strong>
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: '#64748B', marginBottom: '6px' }}>
                                                 {selectedZone.clientCount} cliente(s) &bull; {selectedZone.orderCount} pedido(s)
@@ -2117,18 +2137,21 @@ export default function CommercialUnifiedDashboard() {
                             </GoogleMap>
 
                             {/* Floating Legend HUD over map */}
-                            <div style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(4px)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textMain, pointerEvents: 'none', flexWrap: 'wrap' }}>
+                            <div style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(4px)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textMain, pointerEvents: 'none', flexWrap: 'wrap' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#9333EA', display: 'inline-block' }} />
+                                    <Navigation size={12} color="#9333EA" />
                                     <span>Hub Corabastos</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
-                                    <span>🏢 Institucional ({clientPins.filter(p => p.type === 'Institucional').length})</span>
+                                    <Building2 size={12} color="#2563EB" />
+                                    <span>Institucional ({clientPins.filter(p => p.type === 'Institucional').length})</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} />
-                                    <span>🏠 Hogar ({clientPins.filter(p => p.type === 'Hogar').length})</span>
+                                    <Home size={12} color="#10B981" />
+                                    <span>Hogar ({clientPins.filter(p => p.type === 'Hogar').length})</span>
                                 </div>
                             </div>
                         </div>
@@ -2200,8 +2223,8 @@ export default function CommercialUnifiedDashboard() {
                                                     <strong style={{ color: '#059669', marginLeft: '6px' }}>({z.orderSharePct}%)</strong>
                                                 </span>
                                                 {z.volumeKg > 0 && (
-                                                    <span style={{ fontWeight: '700', color: '#1E40AF' }}>
-                                                        {formatNumber(z.volumeKg, 1)} Kg
+                                                    <span title={`${formatNumber(z.volumeKg, 1)} Kg exactos`} style={{ fontWeight: '700', color: '#1E40AF' }}>
+                                                        {formatVolumeTon(z.volumeKg)}
                                                     </span>
                                                 )}
                                             </div>
@@ -2249,7 +2272,7 @@ export default function CommercialUnifiedDashboard() {
                                                 </span>
                                             </div>
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                                <span title={formatMoney(z.salesAmount)} style={{ fontWeight: '900', color: THEME.colors.primary, fontSize: '0.92rem', whiteSpace: 'nowrap' }}>
+                                                <span title={`${formatMoney(z.salesAmount)} COP exactos`} style={{ fontWeight: '900', color: THEME.colors.primary, fontSize: '0.92rem', whiteSpace: 'nowrap' }}>
                                                     {formatCompactMoney(z.salesAmount)}
                                                 </span>
                                             </div>
@@ -2261,8 +2284,8 @@ export default function CommercialUnifiedDashboard() {
                                                 <strong style={{ color: '#059669', marginLeft: '6px' }}>({z.orderSharePct}%)</strong>
                                             </span>
                                             {z.volumeKg > 0 && (
-                                                <span style={{ fontWeight: '700', color: '#1E40AF' }}>
-                                                    {formatNumber(z.volumeKg, 1)} Kg
+                                                <span title={`${formatNumber(z.volumeKg, 1)} Kg exactos`} style={{ fontWeight: '700', color: '#1E40AF' }}>
+                                                    {formatVolumeTon(z.volumeKg)}
                                                 </span>
                                             )}
                                         </div>
@@ -2319,11 +2342,11 @@ export default function CommercialUnifiedDashboard() {
                                             </span>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
-                                            <span style={{ fontWeight: '800', color: THEME.colors.primary, fontSize: '0.88rem' }}>
-                                                {formatNumber(p.quantity, 1)} {p.unit}
+                                            <span title={`${formatNumber(p.quantity, 1)} ${p.unit} exactos`} style={{ fontWeight: '800', color: THEME.colors.primary, fontSize: '0.88rem' }}>
+                                                {p.unit?.toLowerCase().includes('kg') ? formatVolumeTon(p.quantity) : `${formatNumber(p.quantity, 1)} ${p.unit}`}
                                             </span>
-                                            <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '8px' }}>
-                                                ({formatMoney(p.revenue)})
+                                            <span title={`${formatMoney(p.revenue)} COP exactos`} style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '8px' }}>
+                                                ({formatCompactMoney(p.revenue)})
                                             </span>
                                         </div>
                                     </div>
