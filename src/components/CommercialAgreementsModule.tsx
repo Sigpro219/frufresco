@@ -33,6 +33,7 @@ import {
     Edit3
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { searchIncludes } from '@/lib/locationNorm';
 
 interface Agreement {
     id: string;
@@ -1020,9 +1021,9 @@ export default function CommercialAgreementsModule() {
     // Filter and Sort logic
     const filteredAgreements = agreements
         .filter(agreement => {
-            const matchSearch = agreement.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                agreement.profiles?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                String(agreement.quote_number).includes(searchTerm);
+            const matchSearch = searchIncludes(agreement.client_name, searchTerm) || 
+                                searchIncludes(agreement.profiles?.company_name, searchTerm) ||
+                                searchIncludes(agreement.quote_number, searchTerm);
             
             if (!matchSearch) return false;
 
