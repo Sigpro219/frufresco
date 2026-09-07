@@ -47,18 +47,18 @@ type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month' | 'all';
 
 // Known coordinates for localities in Bogotá and municipalities in Cundinamarca
 const ZONE_COORDINATES: Record<string, { lat: number; lng: number }> = {
-    'puente aranda': { lat: 4.6289, lng: -74.1135 },
     'usaquén': { lat: 4.7016, lng: -74.0305 },
     'usaquen': { lat: 4.7016, lng: -74.0305 },
-    'kennedy': { lat: 4.6291, lng: -74.1535 },
     'suba': { lat: 4.7483, lng: -74.0886 },
     'chapinero': { lat: 4.6542, lng: -74.0608 },
-    'teusaquillo': { lat: 4.6404, lng: -74.0850 },
     'barrios unidos': { lat: 4.6680, lng: -74.0750 },
+    'teusaquillo': { lat: 4.6404, lng: -74.0850 },
     'engativá': { lat: 4.7000, lng: -74.1150 },
     'engativa': { lat: 4.7000, lng: -74.1150 },
     'fontibón': { lat: 4.6750, lng: -74.1450 },
     'fontibon': { lat: 4.6750, lng: -74.1450 },
+    'puente aranda': { lat: 4.6289, lng: -74.1135 },
+    'kennedy': { lat: 4.6291, lng: -74.1535 },
     'bosa': { lat: 4.6050, lng: -74.1850 },
     'ciudad bolívar': { lat: 4.5450, lng: -74.1550 },
     'ciudad bolivar': { lat: 4.5450, lng: -74.1550 },
@@ -67,30 +67,147 @@ const ZONE_COORDINATES: Record<string, { lat: number; lng: number }> = {
     'san cristobal': { lat: 4.5650, lng: -74.0850 },
     'santa fe': { lat: 4.6000, lng: -74.0720 },
     'la candelaria': { lat: 4.5960, lng: -74.0730 },
-    'centro': { lat: 4.6030, lng: -74.0750 },
+    'santa fe / la candelaria': { lat: 4.5980, lng: -74.0725 },
     'los mártires': { lat: 4.6080, lng: -74.0890 },
     'los martires': { lat: 4.6080, lng: -74.0890 },
     'antonio nariño': { lat: 4.5880, lng: -74.0980 },
     'antonio narino': { lat: 4.5880, lng: -74.0980 },
+    'antonio nariño / san cristóbal': { lat: 4.5750, lng: -74.0900 },
     'tunjuelito': { lat: 4.5750, lng: -74.1350 },
     'rafael uribe uribe': { lat: 4.5700, lng: -74.1100 },
+    'tunjuelito / rafael uribe': { lat: 4.5720, lng: -74.1220 },
     'chía': { lat: 4.8620, lng: -74.0550 },
     'chia': { lat: 4.8620, lng: -74.0550 },
     'cota': { lat: 4.8100, lng: -74.1000 },
+    'chía / cota': { lat: 4.8360, lng: -74.0770 },
     'funza': { lat: 4.7170, lng: -74.2120 },
     'mosquera': { lat: 4.7060, lng: -74.2300 },
-    'soacha': { lat: 4.5800, lng: -74.2200 }
+    'funza / mosquera': { lat: 4.7110, lng: -74.2210 },
+    'soacha': { lat: 4.5800, lng: -74.2200 },
+    'bogotá d.c. (otras zonas)': { lat: 4.6500, lng: -74.0800 }
 };
 
 const CORABASTOS_HUB = { lat: 4.6280, lng: -74.1534, name: 'Bodega Central FruFresco (Corabastos)' };
+
+const NEIGHBORHOOD_TO_LOCALITY: Record<string, string> = {
+    // Usaquén
+    'cedritos': 'Usaquén', 'santa bárbara': 'Usaquén', 'santa barbara': 'Usaquén', 'unillanos': 'Usaquén',
+    'san patricio': 'Usaquén', 'country': 'Usaquén', 'santa ana': 'Usaquén', 'pepe sierra': 'Usaquén',
+    'toberín': 'Usaquén', 'toberin': 'Usaquén', 'la carolina': 'Usaquén', 'unicentro': 'Usaquén',
+
+    // Chapinero
+    'chicó': 'Chapinero', 'chico': 'Chapinero', 'rosales': 'Chapinero', 'zona g': 'Chapinero',
+    'lourdes': 'Chapinero', 'antiguo country': 'Chapinero', 'el retiro': 'Chapinero', 'nogal': 'Chapinero',
+    'porciúncula': 'Chapinero', 'quinta camacho': 'Chapinero',
+
+    // Suba
+    'pontevedra': 'Suba', 'floresta': 'Suba', 'niza': 'Suba', 'colina': 'Suba', 'alhambra': 'Suba',
+    'paso ancho': 'Suba', 'san josé de bavaria': 'Suba', 'prado veraniego': 'Suba', 'mazurén': 'Suba',
+    'gratamira': 'Suba',
+
+    // Teusaquillo
+    'salitre': 'Teusaquillo', 'galerías': 'Teusaquillo', 'galerias': 'Teusaquillo', 'palermo': 'Teusaquillo',
+    'la soledad': 'Teusaquillo', 'santa sofía': 'Teusaquillo',
+
+    // Kennedy
+    'castilla': 'Kennedy', 'tintal': 'Kennedy', 'américas': 'Kennedy', 'americas': 'Kennedy', 'corabastos': 'Kennedy',
+    'plaza de las américas': 'Kennedy', 'banderas': 'Kennedy', 'timiza': 'Kennedy',
+
+    // Engativá
+    'álamos': 'Engativá', 'alamos': 'Engativá', 'normandía': 'Engativá', 'normandia': 'Engativá',
+    'villas de granada': 'Engativá', 'minuto de dios': 'Engativá', 'quirigua': 'Engativá',
+
+    // Fontibón
+    'modelia': 'Fontibón', 'hayuelos': 'Fontibón', 'zona franca': 'Fontibón', 'capellanía': 'Fontibón',
+
+    // Puente Aranda
+    'centenario': 'Puente Aranda', 'industrial': 'Puente Aranda', 'ciudad montes': 'Puente Aranda',
+
+    // Barrios Unidos
+    'polo': 'Barrios Unidos', 'alcázares': 'Barrios Unidos', 'alcazares': 'Barrios Unidos', 'rio negro': 'Barrios Unidos'
+};
+
+const getLocalityFromCoords = (lat: number | null | undefined, lng: number | null | undefined, profile?: any): string => {
+    if (lat && lng && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        // Sabana Norte / Cundinamarca
+        if (lat > 4.83) return 'Chía / Cota';
+        if (lng < -74.19 && lat > 4.68) return 'Funza / Mosquera';
+        if (lng < -74.18 && lat < 4.62) return 'Soacha';
+
+        // Bogotá Norte
+        if (lat >= 4.695) {
+            return lng > -74.055 ? 'Usaquén' : 'Suba';
+        }
+        // Bogotá Nororiente / Chapinero
+        if (lat >= 4.635 && lat < 4.695 && lng > -74.065) {
+            return 'Chapinero';
+        }
+        // Bogotá Noroccidente / Centro-Occidente
+        if (lat >= 4.65 && lat < 4.695) {
+            if (lng > -74.09) return 'Barrios Unidos';
+            if (lng > -74.13) return 'Engativá';
+            return 'Fontibón';
+        }
+        // Bogotá Centro
+        if (lat >= 4.615 && lat < 4.65) {
+            if (lng > -74.09) return 'Teusaquillo';
+            if (lng > -74.13) return 'Puente Aranda';
+            return 'Fontibón';
+        }
+        if (lat >= 4.585 && lat < 4.615) {
+            if (lng > -74.08) return 'Santa Fe / La Candelaria';
+            if (lng > -74.11) return 'Los Mártires';
+            if (lng > -74.14) return 'Puente Aranda';
+            return 'Kennedy';
+        }
+        // Bogotá Sur
+        if (lat >= 4.55 && lat < 4.585) {
+            if (lng > -74.10) return 'Antonio Nariño / San Cristóbal';
+            if (lng > -74.15) return 'Tunjuelito / Rafael Uribe';
+            return 'Bosa';
+        }
+        if (lat < 4.55) {
+            if (lng > -74.12) return 'Usme';
+            return 'Ciudad Bolívar';
+        }
+    }
+
+    // Fallback: Si no hay coordenadas GPS válidas, clasificar por barrio o texto
+    if (profile) {
+        const addr = (profile.address || '').toLowerCase();
+        for (const [neigh, loc] of Object.entries(NEIGHBORHOOD_TO_LOCALITY)) {
+            if (addr.includes(neigh)) return loc;
+        }
+        const localities = [
+            'usaquén', 'chapinero', 'santa fe', 'san cristóbal', 'usme', 'tunjuelito',
+            'bosa', 'kennedy', 'fontibón', 'engativá', 'suba', 'barrios unidos',
+            'teusaquillo', 'los mártires', 'antonio nariño', 'puente aranda',
+            'la candelaria', 'rafael uribe', 'ciudad bolívar', 'chía', 'cota',
+            'mosquera', 'funza', 'soacha'
+        ];
+        for (const loc of localities) {
+            if (addr.includes(loc)) {
+                return loc.charAt(0).toUpperCase() + loc.slice(1);
+            }
+        }
+        if (profile.municipality && profile.municipality.toLowerCase() !== 'bogotá') {
+            return profile.municipality;
+        }
+        if (profile.city && profile.city.toLowerCase() !== 'bogotá') {
+            return profile.city;
+        }
+    }
+
+    return 'Bogotá D.C. (Otras Zonas)';
+};
 
 const getZoneCoord = (zoneName: string): { lat: number; lng: number } | null => {
     if (!zoneName) return null;
     const clean = zoneName.toLowerCase().trim();
     for (const [key, coord] of Object.entries(ZONE_COORDINATES)) {
-        if (clean.includes(key)) return coord;
+        if (clean === key || clean.includes(key) || key.includes(clean)) return coord;
     }
-    return null;
+    return { lat: 4.6500, lng: -74.0800 };
 };
 
 function MapFocusController({ target }: { target: { lat: number; lng: number } | null }) {
@@ -233,6 +350,19 @@ interface GeoZoneItem {
     salesSharePct: number;
 }
 
+export interface ClientMapPin {
+    id: string;
+    name: string;
+    type: 'Institucional' | 'Hogar';
+    address: string;
+    zone: string;
+    amount: number;
+    volumeKg: number;
+    orderCount: number;
+    lat: number;
+    lng: number;
+}
+
 interface FunnelMetrics {
     leadsCount: number;
     quotesCount: number;
@@ -299,10 +429,12 @@ export default function CommercialUnifiedDashboard() {
     const [alertsList, setAlertsList] = useState<CommercialAlertItem[]>([]);
     const [alertFilter, setAlertFilter] = useState<'all' | 'critical' | 'quotes' | 'leads'>('all');
 
-    // Geographic Zones state
+    // Geographic Zones & Client Pins state
     const [geoZones, setGeoZones] = useState<GeoZoneItem[]>([]);
+    const [clientPins, setClientPins] = useState<ClientMapPin[]>([]);
     const [geoViewMode, setGeoViewMode] = useState<'map' | 'grid'>('map');
     const [selectedZone, setSelectedZone] = useState<GeoZoneItem | null>(null);
+    const [selectedPin, setSelectedPin] = useState<ClientMapPin | null>(null);
     const [focusTarget, setFocusTarget] = useState<{ lat: number; lng: number } | null>(null);
 
     // Calculate dates based on timeRange
@@ -358,10 +490,10 @@ export default function CommercialUnifiedDashboard() {
         try {
             const { startIso, prevStartIso, prevEndIso } = getDateRanges(timeRange);
 
-            // 1. Fetch Profiles
+            // 1. Fetch Profiles (con georreferenciación GPS real)
             const { data: profilesData } = await supabase
                 .from('profiles')
-                .select('id, role, company_name, contact_name, nit, phone, city, address, municipality, department');
+                .select('id, role, company_name, contact_name, nit, phone, city, address, municipality, department, latitude, longitude');
 
             const profileMap = new Map<string, any>();
             (profilesData || []).forEach(p => profileMap.set(p.id, p));
@@ -424,15 +556,15 @@ export default function CommercialUnifiedDashboard() {
             }
             setScarcityLockedMap(currentScarcityMap);
 
-            // 3. Fetch Orders in current period and previous period
+            // 3. Fetch Orders in current period and previous period (con coordenadas de despacho)
             const [currentOrdersRes, prevOrdersRes] = await Promise.all([
                 supabase
                     .from('orders')
-                    .select('id, profile_id, total, status, delivery_date, created_at')
+                    .select('id, profile_id, total, status, delivery_date, created_at, latitude, longitude')
                     .gte('created_at', startIso),
                 supabase
                     .from('orders')
-                    .select('id, profile_id, total, status, delivery_date, created_at')
+                    .select('id, profile_id, total, status, delivery_date, created_at, latitude, longitude')
                     .gte('created_at', prevStartIso)
                     .lte('created_at', prevEndIso)
             ]);
@@ -895,32 +1027,7 @@ export default function CommercialUnifiedDashboard() {
             generatedAlerts.sort((a, b) => severityWeight[a.severity] - severityWeight[b.severity]);
             setAlertsList(generatedAlerts);
 
-            // --- GEOGRAPHIC CLIENT DISTRIBUTION (ZONAS Y DENSIDAD) ---
-            const localities = [
-                'usaquén', 'chapinero', 'santa fe', 'san cristóbal', 'usme', 'tunjuelito',
-                'bosa', 'kennedy', 'fontibón', 'engativá', 'suba', 'barrios unidos',
-                'teusaquillo', 'los mártires', 'antonio nariño', 'puente aranda',
-                'la candelaria', 'rafael uribe', 'ciudad bolívar', 'chía', 'cota',
-                'mosquera', 'funza', 'anapoima', 'cajicá', 'zipaquirá', 'soacha', 'madrid', 'facatativá'
-            ];
-
-            const getZoneName = (p: any): string => {
-                if (!p) return 'Bogotá D.C. (General)';
-                const addr = (p.address || '').toLowerCase();
-                for (const loc of localities) {
-                    if (addr.includes(loc)) {
-                        return loc.charAt(0).toUpperCase() + loc.slice(1);
-                    }
-                }
-                if (p.municipality && p.municipality.toLowerCase() !== 'bogotá') {
-                    return p.municipality;
-                }
-                if (p.city && p.city.toLowerCase() !== 'bogotá') {
-                    return p.city;
-                }
-                return 'Bogotá D.C. (Centro / Corabastos)';
-            };
-
+            // --- GEOGRAPHIC CLIENT DISTRIBUTION & GPS MAPPING ---
             const zoneMap = new Map<string, {
                 clientSet: Set<string>;
                 orderCount: number;
@@ -928,21 +1035,57 @@ export default function CommercialUnifiedDashboard() {
                 volumeKg: number;
             }>();
 
+            const clientPinMap = new Map<string, ClientMapPin>();
+
             currentOrders.forEach(o => {
                 const prof = profileMap.get(o.profile_id);
-                const zName = getZoneName(prof);
+                const isB2B = prof?.role === 'b2b_client' || (prof?.company_name && prof?.role !== 'b2c_client');
+                const amt = Number(o.total || 0);
+
+                // Priority: order GPS -> profile GPS
+                const lat = Number(o.latitude || prof?.latitude || 0);
+                const lng = Number(o.longitude || prof?.longitude || 0);
+                const hasValidGps = lat !== 0 && lng !== 0 && !isNaN(lat) && !isNaN(lng);
+
+                const zName = getLocalityFromCoords(lat, lng, prof);
+
                 if (!zoneMap.has(zName)) {
                     zoneMap.set(zName, { clientSet: new Set(), orderCount: 0, salesAmount: 0, volumeKg: 0 });
                 }
                 const rec = zoneMap.get(zName)!;
                 rec.orderCount += 1;
-                rec.salesAmount += Number(o.total || 0);
+                rec.salesAmount += amt;
                 if (o.profile_id) rec.clientSet.add(o.profile_id);
 
+                let orderVol = 0;
                 const oItems = currentItemsByOrder.get(o.id) || [];
                 oItems.forEach(it => {
-                    rec.volumeKg += Number(it.quantity || 0);
+                    const q = Number(it.quantity || 0);
+                    rec.volumeKg += q;
+                    orderVol += q;
                 });
+
+                // Client Map Pin aggregation
+                if (o.profile_id && hasValidGps) {
+                    if (!clientPinMap.has(o.profile_id)) {
+                        clientPinMap.set(o.profile_id, {
+                            id: o.profile_id,
+                            name: prof?.company_name || prof?.contact_name || 'Cliente sin nombre',
+                            type: isB2B ? 'Institucional' : 'Hogar',
+                            address: prof?.address || 'Dirección no registrada',
+                            zone: zName,
+                            amount: 0,
+                            volumeKg: 0,
+                            orderCount: 0,
+                            lat,
+                            lng
+                        });
+                    }
+                    const pin = clientPinMap.get(o.profile_id)!;
+                    pin.amount += amt;
+                    pin.volumeKg += orderVol;
+                    pin.orderCount += 1;
+                }
             });
 
             const calculatedZones: GeoZoneItem[] = [];
@@ -977,7 +1120,9 @@ export default function CommercialUnifiedDashboard() {
             if (calculatedZones.length === 0) {
                 const profZoneMap = new Map<string, number>();
                 profileMap.forEach(p => {
-                    const z = getZoneName(p);
+                    const lat = Number(p.latitude || 0);
+                    const lng = Number(p.longitude || 0);
+                    const z = getLocalityFromCoords(lat, lng, p);
                     profZoneMap.set(z, (profZoneMap.get(z) || 0) + 1);
                 });
                 const totalProf = profileMap.size || 1;
@@ -997,10 +1142,12 @@ export default function CommercialUnifiedDashboard() {
                 });
                 calculatedZones.sort((a, b) => b.clientCount - a.clientCount);
             } else {
-                calculatedZones.sort((a, b) => b.salesAmount - a.salesAmount);
+                // Sort by logistics frequency (orderCount) descending, then by sales
+                calculatedZones.sort((a, b) => b.orderCount !== a.orderCount ? b.orderCount - a.orderCount : b.salesAmount - a.salesAmount);
             }
 
-            setGeoZones(calculatedZones.slice(0, 8));
+            setGeoZones(calculatedZones);
+            setClientPins(Array.from(clientPinMap.values()));
 
         } catch (err) {
             console.error('Error in CommercialUnifiedDashboard fetchAllData:', err);
@@ -1839,11 +1986,14 @@ export default function CommercialUnifiedDashboard() {
                         </div>
 
                         <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#F1F5F9', color: '#475569', padding: '4px 10px', borderRadius: '12px' }}>
-                            {geoZones.length} Zonas Monitoreadas
+                            {geoZones.length} Localidades Monitoreadas
+                        </span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '4px 10px', borderRadius: '12px', border: '1px solid #BFDBFE' }}>
+                            📍 {clientPins.length} Clientes Georreferenciados (GPS)
                         </span>
                         {geoZones[0] && (
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: '#DCFCE7', color: '#15803D', padding: '4px 10px', borderRadius: '12px' }}>
-                                Zona Líder: {geoZones[0].zone}
+                                Zona Líder: {geoZones[0].zone} ({geoZones[0].orderSharePct}%)
                             </span>
                         )}
                     </div>
@@ -1856,7 +2006,7 @@ export default function CommercialUnifiedDashboard() {
                         {/* COLUMNA 1: GOOGLE MAPS INTERACTIVO */}
                         <div style={{ position: 'relative', height: '440px', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                             <GoogleMap
-                                defaultCenter={{ lat: 4.635, lng: -74.110 }}
+                                defaultCenter={{ lat: 4.655, lng: -74.090 }}
                                 defaultZoom={11.5}
                                 disableDefaultUI={true}
                                 zoomControl={true}
@@ -1867,28 +2017,73 @@ export default function CommercialUnifiedDashboard() {
                                 {/* Hub Bodega Corabastos Marker */}
                                 <Marker
                                     position={{ lat: CORABASTOS_HUB.lat, lng: CORABASTOS_HUB.lng }}
-                                    title="Bodega Central FruFresco (Corabastos)"
+                                    title="Hub Logístico Central: Bodega Corabastos FruFresco"
+                                    icon={{ url: 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png' }}
                                 />
 
-                                {/* Destination Zone Markers */}
-                                {geoZones.map((z, idx) => {
-                                    const coord = getZoneCoord(z.zone);
-                                    if (!coord) return null;
+                                {/* Destination Client Delivery Pins (GPS Reales) */}
+                                {clientPins.map(pin => {
+                                    const isInst = pin.type === 'Institucional';
                                     return (
                                         <Marker
-                                            key={z.zone || idx}
-                                            position={coord}
-                                            title={`${z.zone}: ${formatMoney(z.salesAmount)}`}
+                                            key={pin.id}
+                                            position={{ lat: pin.lat, lng: pin.lng }}
+                                            title={`${pin.name} (${pin.type} • ${pin.zone})`}
+                                            icon={{
+                                                url: isInst
+                                                    ? 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+                                                    : 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
+                                            }}
                                             onClick={() => {
-                                                setSelectedZone(z);
-                                                setFocusTarget(coord);
+                                                setSelectedPin(pin);
+                                                setSelectedZone(null);
+                                                setFocusTarget({ lat: pin.lat, lng: pin.lng });
                                             }}
                                         />
                                     );
                                 })}
 
-                                {/* InfoWindow for Selected Zone */}
-                                {selectedZone && getZoneCoord(selectedZone.zone) && (
+                                {/* InfoWindow for Selected Individual Client Pin */}
+                                {selectedPin && (
+                                    <InfoWindow
+                                        position={{ lat: selectedPin.lat, lng: selectedPin.lng }}
+                                        onCloseClick={() => setSelectedPin(null)}
+                                    >
+                                        <div style={{ padding: '6px 4px', maxWidth: '240px', color: '#09090B' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
+                                                <span style={{ fontSize: '0.67rem', fontWeight: '800', padding: '2px 6px', borderRadius: '6px', backgroundColor: selectedPin.type === 'Institucional' ? '#EFF6FF' : '#ECFDF5', color: selectedPin.type === 'Institucional' ? '#1E40AF' : '#047857' }}>
+                                                    {selectedPin.type === 'Institucional' ? '🏢 Institucional' : '🏠 Hogar'}
+                                                </span>
+                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B' }}>
+                                                    {selectedPin.zone}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontWeight: '900', fontSize: '0.88rem', color: THEME.colors.textMain, marginBottom: '4px', lineHeight: 1.2 }}>
+                                                {selectedPin.name}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {selectedPin.address}
+                                            </div>
+                                            <div style={{ paddingTop: '5px', borderTop: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary, display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Facturación:</span>
+                                                    <span>{formatMoney(selectedPin.amount)}</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#1E40AF', display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Volumen:</span>
+                                                    <span>{formatNumber(selectedPin.volumeKg, 1)} Kg</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Despachos:</span>
+                                                    <span>{selectedPin.orderCount} pedidos</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </InfoWindow>
+                                )}
+
+                                {/* InfoWindow for Selected Zone (from sidebar) */}
+                                {selectedZone && getZoneCoord(selectedZone.zone) && !selectedPin && (
                                     <InfoWindow
                                         position={getZoneCoord(selectedZone.zone)!}
                                         onCloseClick={() => setSelectedZone(null)}
@@ -1921,10 +2116,20 @@ export default function CommercialUnifiedDashboard() {
                                 )}
                             </GoogleMap>
 
-                            {/* Floating HUD over map */}
-                            <div style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(4px)', padding: '5px 10px', borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textMain, pointerEvents: 'none' }}>
-                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} />
-                                Hub Logístico Central: Corabastos FruFresco
+                            {/* Floating Legend HUD over map */}
+                            <div style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(4px)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textMain, pointerEvents: 'none', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#9333EA', display: 'inline-block' }} />
+                                    <span>Hub Corabastos</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
+                                    <span>🏢 Institucional ({clientPins.filter(p => p.type === 'Institucional').length})</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} />
+                                    <span>🏠 Hogar ({clientPins.filter(p => p.type === 'Hogar').length})</span>
+                                </div>
                             </div>
                         </div>
 
@@ -1946,17 +2151,19 @@ export default function CommercialUnifiedDashboard() {
                             ) : (
                                 geoZones.map((z, idx) => {
                                     const coord = getZoneCoord(z.zone);
-                                    const isSelected = selectedZone?.zone === z.zone;
+                                    const isSelected = selectedZone?.zone === z.zone && !selectedPin;
                                     return (
                                         <div
                                             key={z.zone || idx}
                                             onClick={() => {
                                                 setSelectedZone(z);
+                                                setSelectedPin(null);
                                                 if (coord) setFocusTarget(coord);
                                             }}
                                             onMouseEnter={() => {
                                                 if (coord) setFocusTarget(coord);
                                                 setSelectedZone(z);
+                                                setSelectedPin(null);
                                             }}
                                             style={{
                                                 padding: '0.75rem 0.95rem',
