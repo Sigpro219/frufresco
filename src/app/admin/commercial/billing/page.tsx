@@ -674,7 +674,7 @@ export default function BillingDashboard() {
                 // Update status of return
                 await supabase.from('billing_returns').update({ status: 'approved' }).eq('id', ret.id);
             }
-            alert(`✅ Novedad procesada: ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'}`);
+            alert(`Novedad procesada: ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'}`);
             fetchData();
         } catch (err: any) {
             console.error('Error processing return:', err);
@@ -698,7 +698,7 @@ export default function BillingDashboard() {
                 .eq('id', selectedInvoice.id);
 
             if (error) throw error;
-            alert('✅ Pago registrado exitosamente.');
+            alert('Pago registrado exitosamente.');
             setIsPaymentModalOpen(false);
             setSelectedInvoice(null);
             fetchData();

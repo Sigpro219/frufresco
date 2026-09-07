@@ -7,6 +7,21 @@ import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { THEME } from '@/lib/adminTheme';
+import { 
+    Sparkles, 
+    Search, 
+    CircleDot, 
+    Printer, 
+    Save, 
+    Package, 
+    AlertTriangle, 
+    Plus, 
+    Trash2, 
+    ChevronRight, 
+    ArrowLeft, 
+    Building2, 
+    Check 
+} from 'lucide-react';
 
 function CreateQuotePageContent() {
     const formatPrice = (value: number) => {
@@ -51,6 +66,7 @@ function CreateQuotePageContent() {
     const [searchTerm, setSearchTerm] = useState('');
     const [nicknames, setNicknames] = useState<any[]>([]);
     const [conversions, setConversions] = useState<any[]>([]);
+    const [matrixCosts, setMatrixCosts] = useState<Record<string, number>>({});
     const [saving, setSaving] = useState(false);
     const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
     const [originalQuoteVersion, setOriginalQuoteVersion] = useState<number>(1);
@@ -191,6 +207,22 @@ function CreateQuotePageContent() {
             const { data: convData, error: convErr } = await supabase.from('product_conversions').select('*');
             if (convErr) console.warn('Error fetching product_conversions:', convErr);
             if (convData) setConversions(convData || []);
+
+            // Fetch active commercial cost matrix as Single Source of Truth
+            const { data: matrixRows, error: mtxErr } = await supabase
+                .from('commercial_cost_matrix')
+                .select('product_id, manual_cost')
+                .eq('is_active', true);
+            if (mtxErr) console.warn('Error fetching commercial_cost_matrix:', mtxErr);
+            if (matrixRows) {
+                const mMap: Record<string, number> = {};
+                matrixRows.forEach((r: any) => {
+                    if (r.manual_cost && Number(r.manual_cost) > 0) {
+                        mMap[r.product_id] = Number(r.manual_cost);
+                    }
+                });
+                setMatrixCosts(mMap);
+            }
 
             // Fetch next sequential quote number
             const { data: latestQuotes, error: qErr } = await supabase
@@ -336,28 +368,32 @@ function CreateQuotePageContent() {
             // Calculate costs and margins
             const loadedItems = [];
             for (const p of products || []) {
-                // Calculate average cost locally using purchasesMap
-                const prodPurchases = purchasesMap.get(p.id) || [];
-                let cost = 0;
-                if (prodPurchases.length > 0) {
-                    let totalNormalizedCost = 0;
-                    let count = 0;
-                    prodPurchases.forEach((pur: any) => {
-                        let purCost = pur.unit_price;
-                        if (pur.purchase_unit && pur.purchase_unit !== p.unit_of_measure) {
-                            const conv = conversions.find((c: any) =>
-                                c.product_id === p.id &&
-                                c.from_unit === pur.purchase_unit &&
-                                c.to_unit === p.unit_of_measure
-                            );
-                            if (conv && conv.conversion_factor) {
-                                purCost = purCost / conv.conversion_factor;
+                // Priority 1: Commercial Cost Matrix (SSOT)
+                let cost = matrixCosts[p.id] || 0;
+
+                // Priority 2: Fallback to normalized purchases average if not in matrix
+                if (!cost) {
+                    const prodPurchases = purchasesMap.get(p.id) || [];
+                    if (prodPurchases.length > 0) {
+                        let totalNormalizedCost = 0;
+                        let count = 0;
+                        prodPurchases.forEach((pur: any) => {
+                            let purCost = pur.unit_price;
+                            if (pur.purchase_unit && pur.purchase_unit !== p.unit_of_measure) {
+                                const conv = conversions.find((c: any) =>
+                                    c.product_id === p.id &&
+                                    c.from_unit === pur.purchase_unit &&
+                                    c.to_unit === p.unit_of_measure
+                                );
+                                if (conv && conv.conversion_factor) {
+                                    purCost = purCost / conv.conversion_factor;
+                                }
                             }
-                        }
-                        totalNormalizedCost += purCost;
-                        count++;
-                    });
-                    cost = totalNormalizedCost / count;
+                            totalNormalizedCost += purCost;
+                            count++;
+                        });
+                        cost = count > 0 ? totalNormalizedCost / count : 0;
+                    }
                 }
 
                 const baseMargin = getMarginForProduct(p.id, selectedModelId, rules);
@@ -425,10 +461,35 @@ function CreateQuotePageContent() {
     };
 
     const calculateFinalPrice = (cost: number, marginPercent: number) => {
-        return cost * (1 + (marginPercent / 100));
+        if (cost <= 0) return 0;
+        if (marginPercent >= 100) return cost * 2;
+        const marginFraction = marginPercent / 100;
+        if (marginFraction >= 0.99) return cost * 2;
+        return Math.round(cost / (1 - marginFraction));
     };
 
     const calculateSmartAverageCost = async (productId: string, salesUnit: string) => {
+        // Priority 1: Commercial Cost Matrix from state
+        if (matrixCosts[productId] && matrixCosts[productId] > 0) {
+            return matrixCosts[productId];
+        }
+
+        // Priority 2: Direct DB query in case state wasn't populated yet
+        try {
+            const { data: matrixRow } = await supabase
+                .from('commercial_cost_matrix')
+                .select('manual_cost')
+                .eq('product_id', productId)
+                .eq('is_active', true)
+                .maybeSingle();
+            if (matrixRow?.manual_cost && Number(matrixRow.manual_cost) > 0) {
+                return Number(matrixRow.manual_cost);
+            }
+        } catch (mErr) {
+            console.warn('Could not fetch commercial_cost_matrix row:', mErr);
+        }
+
+        // Priority 3: Fallback to normalized purchases
         const { data: purchases } = await supabase
             .from('purchases')
             .select('unit_price, purchase_unit')
@@ -574,7 +635,7 @@ function CreateQuotePageContent() {
         newItems[index].margin = newMargin;
         const numMargin = parseFloat(newMargin);
         if (!isNaN(numMargin)) {
-            const calcPrice = newItems[index].cost * (1 + (numMargin / 100));
+            const calcPrice = calculateFinalPrice(newItems[index].cost, numMargin);
             newItems[index].price = Math.max(0, calcPrice);
         } else {
             newItems[index].price = 0;
@@ -591,8 +652,11 @@ function CreateQuotePageContent() {
             const numPrice = parseFloat(newPrice);
             const validPrice = isNaN(numPrice) ? 0 : Math.max(0, numPrice);
             newItems[index].price = validPrice;
-            if (newItems[index].cost > 0) {
-                newItems[index].margin = ((validPrice / newItems[index].cost) - 1) * 100;
+            if (validPrice > 0 && newItems[index].cost > 0) {
+                // Margen Bruto sobre Ventas: (Precio - Costo) / Precio * 100
+                newItems[index].margin = Math.round(((validPrice - newItems[index].cost) / validPrice) * 1000) / 10;
+            } else if (validPrice > 0 && newItems[index].cost <= 0) {
+                newItems[index].margin = 100;
             } else {
                 newItems[index].margin = 0;
             }
@@ -741,7 +805,7 @@ function CreateQuotePageContent() {
         ...filteredClients.map(c => ({ type: 'client' as const, id: c.id, label: c.company_name || c.contact_name, c })),
         ...filteredLeads.map(l => ({ type: 'lead' as const, id: l.id, label: l.company_name || l.contact_name, l })),
         { type: 'manual' as const, label: `+ Usar "${clientSearch}" como cliente manual` },
-        { type: 'new_client' as const, label: '✨ Registrar cliente nuevo oficial' }
+        { type: 'new_client' as const, label: 'Registrar cliente nuevo oficial' }
     ];
 
     useEffect(() => {
@@ -766,7 +830,7 @@ function CreateQuotePageContent() {
                                 <div style={{ position: 'relative' }}>
                                     <input 
                                         type="text"
-                                        placeholder="🔍 Buscar cliente o lead (Nombre, NIT, Contacto...)"
+                                        placeholder="Buscar cliente o lead (Nombre, NIT, Contacto...)"
                                         value={clientSearch}
                                         onChange={(e) => {
                                             setClientSearch(e.target.value);
@@ -944,7 +1008,10 @@ function CreateQuotePageContent() {
                                                                 setActiveDropdownIndex(idx);
                                                             }}
                                                         >
-                                                            ✨ Registrar cliente nuevo oficial
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                                <Sparkles size={15} color="#2563EB" />
+                                                                <span>Registrar cliente nuevo oficial</span>
+                                                            </div>
                                                         </div>
                                                     );
                                                 }
@@ -988,11 +1055,11 @@ function CreateQuotePageContent() {
                                                     const bSize = lead.business_size;
                                                     let sizeBg = '#F3F4F6';
                                                     let sizeTextCol = '#374151';
-                                                    let sizeDot = '🔴 ';
+                                                    let sizeDotColor = '#94A3B8';
                                                     if (bSize) {
-                                                        if (bSize.includes('Grande') || bSize.includes('30M')) { sizeBg = '#DCFCE7'; sizeTextCol = '#15803D'; sizeDot = '🟢 '; }
-                                                        else if (bSize.includes('Mediano') || bSize.includes('10M')) { sizeBg = '#FEF3C7'; sizeTextCol = '#B45309'; sizeDot = '🟡 '; }
-                                                        else if (bSize.includes('Pequeño') || bSize.includes('< 10M') || bSize.includes('Peq')) { sizeBg = '#FEE2E2'; sizeTextCol = '#B91C1C'; sizeDot = '🔴 '; }
+                                                        if (bSize.includes('Grande') || bSize.includes('30M')) { sizeBg = '#DCFCE7'; sizeTextCol = '#15803D'; sizeDotColor = '#15803D'; }
+                                                        else if (bSize.includes('Mediano') || bSize.includes('10M')) { sizeBg = '#FEF3C7'; sizeTextCol = '#B45309'; sizeDotColor = '#D97706'; }
+                                                        else if (bSize.includes('Pequeño') || bSize.includes('< 10M') || bSize.includes('Peq')) { sizeBg = '#FEE2E2'; sizeTextCol = '#B91C1C'; sizeDotColor = '#DC2626'; }
                                                     }
                                                     return (
                                                         <div style={{ fontSize: '0.85rem', color: '#4B5563', lineHeight: '1.4', marginTop: '4px' }}>
@@ -1010,8 +1077,9 @@ function CreateQuotePageContent() {
                                                                     </span>
                                                                 )}
                                                                 {bSize && (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                                                        {sizeDot}{bSize}
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <CircleDot size={9} style={{ color: sizeDotColor }} />
+                                                                        {bSize}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -1103,7 +1171,7 @@ function CreateQuotePageContent() {
                                     onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                                     onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                                 >
-                                    🖨️ Guardar e Imprimir
+                                    <Printer size={16} /> Guardar e Imprimir
                                 </button>
                                 <button
                                     onClick={() => saveQuote(true)}
@@ -1126,7 +1194,7 @@ function CreateQuotePageContent() {
                                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
                                 >
-                                    {saving ? '...' : '💾 Solo Guardar'}
+                                    <Save size={16} /> {saving ? 'Guardando...' : 'Solo Guardar'}
                                 </button>
                             </div>
                         </div>
@@ -1265,8 +1333,9 @@ function CreateQuotePageContent() {
                                                 <input 
                                                     type="number" 
                                                     min="0.01" 
-                                                    step="any"
+                                                    step="any" 
                                                     value={item.quantity === undefined || item.quantity === null ? '' : item.quantity} 
+                                                    onFocus={(e) => (e.target as HTMLInputElement).select()}
                                                     onChange={e => {
                                                         const raw = e.target.value;
                                                         updateQuantity(index, raw === '' ? '' : parseFloat(raw));
@@ -1283,12 +1352,13 @@ function CreateQuotePageContent() {
                                             {item.iva_rate || 0}%
                                         </td>
                                         
-                                        {/* Margin (No-print) */}
+                                        {/* Margin (No-print) with Poka-Yoke Warning */}
                                         <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                 <input 
                                                     type="number" 
                                                     value={item.margin === undefined || item.margin === null ? '' : item.margin} 
+                                                    onFocus={(e) => (e.target as HTMLInputElement).select()}
                                                     onChange={e => {
                                                         const raw = e.target.value;
                                                         if (raw === '') {
@@ -1304,9 +1374,24 @@ function CreateQuotePageContent() {
                                                             handleMarginChange(index, val);
                                                         }
                                                     }} 
-                                                    style={{ width: '45px', padding: '0.25rem', textAlign: 'center', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold', fontSize: '0.8rem' }} 
+                                                    style={{ 
+                                                        width: '45px', 
+                                                        padding: '0.25rem', 
+                                                        textAlign: 'center', 
+                                                        borderRadius: '4px', 
+                                                        border: `1px solid ${typeof item.margin === 'number' && item.margin < 15 ? '#FCA5A5' : '#CBD5E1'}`, 
+                                                        backgroundColor: typeof item.margin === 'number' && item.margin < 15 ? '#FEF2F2' : '#F8FAFC', 
+                                                        color: typeof item.margin === 'number' && item.margin < 15 ? '#B91C1C' : '#0F172A',
+                                                        fontWeight: 'bold', 
+                                                        fontSize: '0.8rem' 
+                                                    }} 
                                                 />
                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
+                                                {typeof item.margin === 'number' && item.margin < 15 && (
+                                                    <span title={`Alerta Poka-Yoke: Margen (${item.margin}%) inferior al umbral mínimo recomendado (15%)`} style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help' }}>
+                                                        <AlertTriangle size={13} color="#DC2626" strokeWidth={2.5} />
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         
@@ -1318,6 +1403,7 @@ function CreateQuotePageContent() {
                                                     min="0"
                                                     step="any"
                                                     value={item.price === undefined || item.price === null ? '' : item.price} 
+                                                    onFocus={(e) => (e.target as HTMLInputElement).select()}
                                                     onChange={e => {
                                                         const raw = e.target.value;
                                                         if (raw === '') {
@@ -1344,11 +1430,12 @@ function CreateQuotePageContent() {
                                         <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
                                             <button 
                                                 onClick={() => removeItem(index)} 
-                                                style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s', fontSize: '0.8rem' }}
+                                                title="Eliminar producto de la cotización"
+                                                style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '22px', height: '22px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
                                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCA5A5'}
                                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
                                             >
-                                                ×
+                                                <Trash2 size={12} />
                                             </button>
                                         </td>
                                     </tr>
@@ -1402,7 +1489,9 @@ function CreateQuotePageContent() {
                                                 onClick={() => addProduct(p)} 
                                                 style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', backgroundColor: '#F9FAFB', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}
                                             >
-                                                <span>📦 {p.name} (Maestro)</span>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Package size={14} color="#0D7A57" /> {p.name} (Maestro)
+                                                </span>
                                                 <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>Precio Base</span>
                                             </div>
                                             {p.product_variants?.map((v: any) => (

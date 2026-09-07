@@ -1,4 +1,5 @@
 'use client';
+import { BookOpen, Plus, Folder, FolderOpen, RefreshCw, User, AlertTriangle, Truck, Calendar, FileText, Package, Upload, X, Trash2, LayoutList } from 'lucide-react';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -180,7 +181,7 @@ export default function KanbanTasksPage() {
                 }
             }
         } catch (err: any) {
-            console.error('❌ Error fetching Kanban data:', err?.message || 'Unknown error', err);
+            console.error('Error fetching Kanban data:', err?.message || 'Unknown error', err);
         } finally {
             setLoading(false);
         }
@@ -305,7 +306,7 @@ export default function KanbanTasksPage() {
                                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
                                 }}
                             >
-                                <span>📚</span> Catálogo Maestro
+                                <BookOpen size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Catálogo Maestro
                             </button>
                         </Link>
                         <button 
@@ -316,7 +317,7 @@ export default function KanbanTasksPage() {
                                 display: 'flex', alignItems: 'center', gap: '0.5rem'
                             }}
                         >
-                            <span>✚</span> Nueva Tarea
+                            <Plus size={16} style={{ marginRight: "4px", verticalAlign: "middle" }} /> Nueva Tarea
                         </button>
                     </div>
                 </div>
@@ -339,13 +340,13 @@ export default function KanbanTasksPage() {
                             color: showArchived ? '#2563EB' : '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
                         }}
                     >
-                        {showArchived ? '📁 Ocultar Archivadas' : '📂 Ver Archivadas'}
+                        {showArchived ? <><Folder size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Ocultar Archivadas</> : <><FolderOpen size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Ver Archivadas</>}
                     </button>
                 </div>
 
                 {/* Kanban Board */}
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '5rem', color: '#64748B' }}>🔄 Cargando tablero...</div>
+                    <div style={{ textAlign: 'center', padding: '5rem', color: '#64748B' }}>Cargando tablero...</div>
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
                         {columns.map(col => (
@@ -366,7 +367,7 @@ export default function KanbanTasksPage() {
                                             <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: '#0EA5E9' }}></div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                 <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#E0F2FE', color: '#0369A1' }}>RESUMEN PERSONAL</span>
-                                                <span style={{ fontSize: '1.1rem' }}>👤</span>
+                                                <User size={16} style={{ verticalAlign: "middle" }} />
                                             </div>
                                             <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#0369A1' }}>Mis Tareas</h4>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -376,7 +377,7 @@ export default function KanbanTasksPage() {
                                                 </div>
                                                 {myOverdueTasks.length > 0 && (
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '4px 8px', borderRadius: '8px' }}>
-                                                        <span style={{ fontSize: '0.85rem', color: '#991B1B', fontWeight: '700' }}>🚨 VENCIDAS:</span>
+                                                        <span style={{ fontSize: '0.85rem', color: '#991B1B', fontWeight: '700' }}>VENCIDAS:</span>
                                                         <span style={{ fontWeight: '950', color: '#EF4444' }}>{myOverdueTasks.length}</span>
                                                     </div>
                                                 )}
@@ -393,13 +394,13 @@ export default function KanbanTasksPage() {
                                             <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: '#F43F5E' }}></div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                 <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#FFE4E6', color: '#9F1239' }}>SISTEMA / FLOTA</span>
-                                                <span style={{ fontSize: '1.1rem' }}>🚛</span>
+                                                <Truck size={16} style={{ verticalAlign: "middle" }} />
                                             </div>
                                             <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#9F1239' }}>Resumen de Flota</h4>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                                 {maintenanceStats.urgent > 0 && (
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '4px 8px', borderRadius: '8px' }}>
-                                                        <span style={{ fontSize: '0.85rem', color: '#991B1B', fontWeight: '700' }}>🚨 VENCIDAS:</span>
+                                                        <span style={{ fontSize: '0.85rem', color: '#991B1B', fontWeight: '700' }}>VENCIDAS:</span>
                                                         <span style={{ fontWeight: '950', color: '#EF4444' }}>{maintenanceStats.urgent}</span>
                                                     </div>
                                                 )}
@@ -431,7 +432,7 @@ export default function KanbanTasksPage() {
                                                 <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#FFEDD5', color: '#9A3412' }}>SISTEMA / FACTURACIÓN</span>
                                                 <span style={{ fontSize: '0.7rem', color: '#C2410C', fontWeight: 'bold' }}>Hoy</span>
                                             </div>
-                                            <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#9A3412' }}>🚨 Proveedores Incompletos</h4>
+                                            <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#9A3412' }}>Proveedores Incompletos</h4>
                                             <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#7C2D12', lineHeight: '1.4' }}>
                                                 Se han detectado <strong>{incompleteCount}</strong> proveedores sin información bancaria completa. 
                                             </p>
@@ -473,7 +474,7 @@ export default function KanbanTasksPage() {
                                                         border: `1px solid ${isOverdue ? '#FEE2E2' : '#E2E8F0'}`,
                                                         boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                                                     }}>
-                                                        <span style={{ fontSize: '0.9rem' }}>{isOverdue ? '⚠️' : '📅'}</span>
+                                                        <span style={{ fontSize: '0.9rem' }}>{isOverdue ? <AlertTriangle size={13} color='#EF4444' /> : <Calendar size={13} />}</span>
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
                                                             <span style={{ fontSize: '0.6rem', fontWeight: '800', color: isOverdue ? '#EF4444' : '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: '1' }}>
                                                                 Cronograma
@@ -509,7 +510,7 @@ export default function KanbanTasksPage() {
                                                                 {url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                                                     <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                                 ) : (
-                                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>📄</div>
+                                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={18} color="#64748B" /></div>
                                                                 )}
                                                             </a>
                                                         ))}
@@ -549,7 +550,7 @@ export default function KanbanTasksPage() {
                                                                 title="Archivar tarea"
                                                                 style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
                                                             >
-                                                                📦
+                                                                <Package size={16} style={{ display: "inline" }} />
                                                             </button>
                                                         )}
                                                         {task.status === 'archived' && (
@@ -558,7 +559,7 @@ export default function KanbanTasksPage() {
                                                                 title="Desarchivar"
                                                                 style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
                                                             >
-                                                                📤
+                                                                <Upload size={16} style={{ display: "inline" }} />
                                                             </button>
                                                         )}
                                                     </div>
@@ -578,7 +579,7 @@ export default function KanbanTasksPage() {
                         <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                 <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A' }}>Nueva Tarea</h2>
-                                <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}>✕</button>
+                                <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}><X size={18} /></button>
                             </div>
                             
                             <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -633,9 +634,9 @@ export default function KanbanTasksPage() {
                                                 {file.type.startsWith('image/') ? (
                                                     <img src={URL.createObjectURL(file)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 ) : (
-                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>📄</div>
+                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={20} color="#64748B" /></div>
                                                 )}
-                                                <button type="button" onClick={() => removeFile(i)} style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '50%', width: '16px', height: '16px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                                                <button type="button" onClick={() => removeFile(i)} style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '50%', width: '16px', height: '16px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={12} /></button>
                                             </div>
                                         ))}
                                         <label style={{ width: '50px', height: '50px', borderRadius: '10px', border: '2px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#94A3B8', fontSize: '1.2rem' }}>

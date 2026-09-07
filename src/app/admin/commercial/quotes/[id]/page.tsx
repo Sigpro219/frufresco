@@ -5,7 +5,21 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME } from '@/lib/adminTheme';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Edit3, Rocket, FileSpreadsheet, MessageCircle, Printer, CheckCircle, Handshake } from 'lucide-react';
+import { 
+    ArrowLeft, 
+    Edit3, 
+    Rocket, 
+    FileSpreadsheet, 
+    MessageCircle, 
+    Printer, 
+    CheckCircle, 
+    Handshake,
+    AlertTriangle,
+    Flame,
+    Sparkles,
+    ShoppingBag,
+    FileText
+} from 'lucide-react';
 
 const formatCategoryTitle = (cat?: string) => {
     if (!cat) return 'Otros Productos';
@@ -247,7 +261,7 @@ export default function QuoteDetailPage() {
             setShowClientModal(false);
             setShowConversionModal(true);
             
-            alert('🎉 Se ha creado el perfil comercial B2B para: ' + (newProfile.company_name || newProfile.contact_name));
+            alert('Se ha creado el perfil comercial B2B para: ' + (newProfile.company_name || newProfile.contact_name));
         } catch (err: any) {
             console.error('Error converting lead to profile:', err);
             alert('Error al crear perfil de cliente: ' + err.message);
@@ -310,7 +324,7 @@ export default function QuoteDetailPage() {
                         .eq('id', quote.id);
                     if (qErr) throw qErr;
 
-                    alert('✅ ¡Pedido Creado Exitosamente!');
+                    alert('¡Pedido Creado Exitosamente!');
                     router.push(`/admin/orders/${order.id}`); 
                 } catch (innerErr) {
                     console.error('Error during order items creation, rolling back order:', innerErr);
@@ -332,7 +346,7 @@ export default function QuoteDetailPage() {
                 
                 if (agreementErr) throw agreementErr;
                 
-                alert('✅ ¡Acuerdo Comercial Registrado!');
+                alert('¡Acuerdo Comercial Registrado!');
                 setShowConversionModal(false);
                 fetchQuoteDetails();
             }
@@ -377,7 +391,7 @@ export default function QuoteDetailPage() {
                                 alignItems: 'center', 
                                 gap: '12px' 
                             }}>
-                                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                                <AlertTriangle size={20} color={days < 0 ? '#DC2626' : '#D97706'} strokeWidth={2} />
                                 <div>
                                     <div style={{ fontWeight: '800', color: days < 0 ? '#991B1B' : '#92400E', fontSize: '0.9rem' }}>
                                         {days < 0 ? 'Este Acuerdo Comercial ha expirado' : `Este Acuerdo Comercial expira en ${days} días`}
@@ -549,8 +563,8 @@ export default function QuoteDetailPage() {
                                     const excelUrl = `${origin}/api/quotes/${quote.id}/excel`;
                                     const text = encodeURIComponent(
                                         `Hola *${quote.client_name || 'Cliente'}*, te compartimos tu propuesta comercial FruFresco:\n\n` +
-                                        `📄 *Documento PDF:* ${pdfUrl}\n` +
-                                        `📊 *Archivo Excel Editable:* ${excelUrl}\n\n` +
+                                        `• *Documento PDF:* ${pdfUrl}\n` +
+                                        `• *Archivo Excel Editable:* ${excelUrl}\n\n` +
                                         `Quedamos atentos a tus comentarios.`
                                     );
                                     const phone = (lead?.phone || selectedClient?.phone || '').replace(/\D/g, '');
@@ -606,8 +620,8 @@ export default function QuoteDetailPage() {
 
                 {lead && (
                     <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '1rem 1.5rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#16A34A', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
-                            🔥 Prospecto Vinculado (CRM Lead #{lead.id})
+                        <div style={{ fontSize: '0.7rem', color: '#16A34A', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Flame size={13} color="#EA580C" /> Prospecto Vinculado (CRM Lead #{lead.id})
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem', color: '#374151', marginTop: '6px' }}>
                             <div><strong>Contacto:</strong> {lead.contact_name || lead.company_name}</div>
@@ -752,7 +766,9 @@ export default function QuoteDetailPage() {
                                 padding: '1rem', 
                                 marginBottom: '1.5rem' 
                             }}>
-                                <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 'bold', marginBottom: '4px' }}>✨ Prospecto Asociado Detectado</div>
+                                <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 'bold', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Sparkles size={14} color="#16A34A" /> Prospecto Asociado Detectado
+                                </div>
                                 <div style={{ fontWeight: '900', color: '#14532D', fontSize: '1rem' }}>{lead.company_name || lead.contact_name}</div>
                                 <div style={{ fontSize: '0.8rem', color: '#15803D', marginBottom: '10px' }}>
                                     Tel: {lead.phone || 'Sin teléfono'} • Contacto: {lead.contact_name}
@@ -876,7 +892,15 @@ export default function QuoteDetailPage() {
                                 disabled={converting}
                                 style={{ padding: '0.8rem 1.5rem', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
                             >
-                                {converting ? 'Procesando...' : (conversionType === 'order' ? '🚀 Crear Pedido' : '🤝 Activar Acuerdo')}
+                                {converting ? 'Procesando...' : (conversionType === 'order' ? (
+                                    <>
+                                        <ShoppingBag size={16} /> Crear Pedido
+                                    </>
+                                ) : (
+                                    <>
+                                        <Handshake size={16} /> Activar Acuerdo
+                                    </>
+                                ))}
                             </button>
                         </div>
                     </div>

@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText, Search, X, Filter } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
-export default function QuotesListPage() {
+export default function QuotesListPage({ embedded = false }: { embedded?: boolean } = {}) {
     const [quotes, setQuotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState<string>('all');
 
     const fetchQuotes = async (showSpinner = false) => {
         if (showSpinner) setLoading(true);
@@ -177,49 +179,161 @@ export default function QuotesListPage() {
         }
     };
 
+    const filteredQuotes = quotes.filter(q => {
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = !term || 
+            (q.client_name && q.client_name.toLowerCase().includes(term)) ||
+            (q.quote_number && q.quote_number.toLowerCase().includes(term)) ||
+            (q.model_snapshot_name && q.model_snapshot_name.toLowerCase().includes(term));
+        const matchesStatus = filterStatus === 'all' || q.status === filterStatus;
+        return matchesSearch && matchesStatus;
+    });
+
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-                <div style={{ marginBottom: '1rem' }}>
-                    <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem' }}>
-                        ← Volver al Panel
-                    </Link>
+        <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '1.5rem 2rem 3rem 2rem' : '2rem' }}>
+                {!embedded && (
+                    <div style={{ marginBottom: '1rem' }}>
+                        <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem' }}>
+                            ← Volver al Panel
+                        </Link>
+                    </div>
+                )}
+
+                {/* HEADER TITLE */}
+                <div style={{ marginBottom: '1.25rem' }}>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.025em' }}>Historial de Cotizaciones</h1>
+                    <p style={{ margin: '0.3rem 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.9rem' }}>
+                        Gestiona, edita e imprime las propuestas comerciales y acuerdos vigentes.
+                    </p>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.025em' }}>Historial de Cotizaciones</h1>
-                    <Link href="/admin/commercial/quotes/create">
+                {/* BARRA FLOTANTE STICKY DE ACCIONES Y BÚSQUEDA (ESTÁNDAR CLIENTSMODULE) */}
+                <div style={{ 
+                    display: 'flex', 
+                    gap: '0.8rem', 
+                    alignItems: 'center', 
+                    marginBottom: '1.2rem',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(12px)',
+                    padding: '0.65rem 1.2rem',
+                    borderRadius: '20px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                    border: '1px solid #E2E8F0',
+                    position: 'sticky',
+                    top: embedded ? '142px' : '85px',
+                    zIndex: 70,
+                    transition: 'all 0.2s ease-in-out',
+                    flexWrap: 'wrap'
+                }}>
+                    {/* BOTÓN NUEVA COTIZACIÓN */}
+                    <Link href="/admin/commercial/quotes/create" style={{ textDecoration: 'none' }}>
                         <button 
                             style={{ 
-                                padding: '0.75rem 1.5rem', 
                                 backgroundColor: THEME.colors.primary, 
                                 color: 'white', 
+                                padding: '0 1.2rem', 
+                                borderRadius: '10px', 
                                 border: 'none', 
-                                borderRadius: THEME.radius.md, 
-                                fontWeight: '700', 
+                                fontWeight: '800', 
                                 cursor: 'pointer', 
-                                fontSize: '0.9rem',
-                                display: 'inline-flex',
+                                boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
+                                display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s',
-                                boxShadow: THEME.shadow.sm
+                                gap: '8px',
+                                whiteSpace: 'nowrap',
+                                height: '40px',
+                                fontSize: '0.85rem',
+                                transition: 'all 0.2s'
                             }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
-                                e.currentTarget.style.transform = 'translateY(-1px)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = THEME.colors.primary;
-                                e.currentTarget.style.transform = 'translateY(0)';
-                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                         >
-                            <Plus size={16} strokeWidth={1.5} /> Nueva Cotización
+                            <Plus size={16} strokeWidth={2} /> Nueva Cotización
                         </button>
                     </Link>
+
+                    {/* BUSCADOR */}
+                    <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
+                        <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                        <input 
+                            type="text"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            placeholder="Buscar por cliente, ID o modelo..."
+                            style={{ 
+                                width: '100%', 
+                                height: '40px', 
+                                paddingLeft: '38px', 
+                                paddingRight: searchTerm ? '32px' : '12px', 
+                                borderRadius: '10px', 
+                                border: '1px solid #E2E8F0',
+                                backgroundColor: '#F8FAFC',
+                                fontSize: '0.85rem',
+                                color: THEME.colors.textMain,
+                                outline: 'none',
+                                transition: 'all 0.2s'
+                            }}
+                            onFocus={e => {
+                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                e.currentTarget.style.backgroundColor = 'white';
+                            }}
+                            onBlur={e => {
+                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                            }}
+                        />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')} 
+                                style={{ 
+                                    position: 'absolute', 
+                                    right: '10px', 
+                                    top: '50%', 
+                                    transform: 'translateY(-50%)', 
+                                    background: 'none', 
+                                    border: 'none', 
+                                    cursor: 'pointer', 
+                                    color: '#94A3B8' 
+                                }}
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* FILTROS RÁPIDOS DE ESTADO */}
+                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', height: '40px', alignItems: 'center' }}>
+                        {[
+                            { id: 'all', label: 'Todas' },
+                            { id: 'draft', label: 'Borrador' },
+                            { id: 'sent', label: 'Enviadas' },
+                            { id: 'approved', label: 'Aprobadas' },
+                            { id: 'rejected', label: 'Rechazadas' }
+                        ].map(f => (
+                            <button
+                                key={f.id}
+                                onClick={() => setFilterStatus(f.id)}
+                                style={{
+                                    padding: '0.35rem 0.75rem',
+                                    borderRadius: '7px',
+                                    border: 'none',
+                                    backgroundColor: filterStatus === f.id ? 'white' : 'transparent',
+                                    color: filterStatus === f.id ? THEME.colors.primary : '#64748B',
+                                    fontWeight: filterStatus === f.id ? '800' : '600',
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer',
+                                    boxShadow: filterStatus === f.id ? '0 2px 4px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s'
+                                }}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, overflow: 'hidden' }}>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, position: 'relative' }}>
                     {loading ? (
                         <div style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: '500' }}>Cargando...</div>
                     ) : quotes.length === 0 ? (
@@ -232,36 +346,62 @@ export default function QuotesListPage() {
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
-                                color: THEME.colors.primary,
-                                marginBottom: '1.5rem'
+                                margin: '0 auto 1rem',
+                                color: THEME.colors.primary
                             }}>
-                                <Inbox size={32} strokeWidth={1.5} />
+                                <FileText size={32} />
                             </div>
-                            <h3 style={{ color: THEME.colors.textMain, margin: '0 0 0.5rem 0', fontWeight: '700' }}>No hay cotizaciones registradas</h3>
-                            <p style={{ color: THEME.colors.textSecondary, margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>Crea la primera para empezar a vender.</p>
+                            <h3 style={{ margin: '0 0 0.5rem 0', color: THEME.colors.textMain, fontSize: '1.2rem', fontWeight: '800' }}>No hay cotizaciones aún</h3>
+                            <p style={{ color: THEME.colors.textSecondary, margin: '0 0 1.5rem 0', fontSize: '0.9rem', maxWidth: '400px', lineHeight: '1.5' }}>
+                                Crea tu primera cotización institucional para empezar a generar acuerdos de precios con tus clientes.
+                            </p>
+                            <Link href="/admin/commercial/quotes/create" style={{ textDecoration: 'none' }}>
+                                <button style={{
+                                    backgroundColor: THEME.colors.primary,
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '0.65rem 1.25rem',
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: THEME.shadow.sm
+                                }}>
+                                    <Plus size={16} strokeWidth={2.5} /> Crear Primera Cotización
+                                </button>
+                            </Link>
+                        </div>
+                    ) : filteredQuotes.length === 0 ? (
+                        <div style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                            <Filter size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                            <p style={{ fontWeight: 'bold', margin: '0 0 4px 0', color: THEME.colors.textMain }}>No se encontraron cotizaciones</p>
+                            <p style={{ fontSize: '0.85rem', margin: 0 }}>Prueba con otros términos de búsqueda o cambia el filtro de estado.</p>
                         </div>
                     ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>
-                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>ID</th>
-                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Fecha</th>
-                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Cliente</th>
-                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Modelo</th>
-                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Total</th>
-                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Estado</th>
-                                    <th style={{ padding: '0.65rem 1.25rem' }}></th>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                            <thead style={{ backgroundColor: '#F9FAFB' }}>
+                                <tr style={{ backgroundColor: '#F9FAFB' }}>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, borderTopLeftRadius: THEME.radius.lg, ...THEME.typography?.tableHeader }}>ID</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Fecha</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Cliente</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Modelo</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', textAlign: 'right', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Total</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Estado</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', textAlign: 'right', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, borderTopRightRadius: THEME.radius.lg }}></th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {quotes.map(quote => (
+                                <tbody>
+                                {filteredQuotes.map(quote => (
                                     <tr 
                                         key={quote.id} 
                                         style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s ease' }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                             <span style={{ 
                                                 fontFamily: 'monospace', 
                                                 fontSize: '0.75rem', 
@@ -275,25 +415,25 @@ export default function QuotesListPage() {
                                                 {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.status, quote.created_at) : '---'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                             {formatDate(quote.created_at)}
                                         </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                              <div style={{ fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
                                                  {quote.client_name}
                                              </div>
                                              {renderClientTypeBadge(quote)}
                                          </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', verticalAlign: 'middle' }}>
+                                         <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                              {quote.model_snapshot_name || '---'}
                                          </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.9rem', verticalAlign: 'middle' }}>
-                                             {formatMoney(quote.total_amount || 0)}
+                                         <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.92rem', verticalAlign: 'middle', textAlign: 'right', fontFamily: 'monospace', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                             {formatMoney(quote.total_amount || quote.total || 0)}
                                          </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle' }}>
+                                         <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                              {getStatusBadge(quote.status)}
                                          </td>
-                                         <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', verticalAlign: 'middle' }}>
+                                         <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
                                                  <Link href={`/admin/commercial/quotes/${quote.id}/print`} target="_blank" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                                                      <button 

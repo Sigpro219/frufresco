@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
 import { THEME, formatMoney } from '@/lib/adminTheme';
+import { Printer, FileText, Scale } from 'lucide-react';
 
 export default function CreditPrintPage() {
     const { id } = useParams();
@@ -324,19 +325,19 @@ export default function CreditPrintPage() {
                             onClick={() => setPrintDoc('all')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'all' ? '#0D7A57' : 'transparent', color: printDoc === 'all' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            📄 Todo (6 Págs)
+                            <FileText size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Todo (6 Págs)
                         </button>
                         <button 
                             onClick={() => setPrintDoc('solicitud')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'solicitud' ? '#0D7A57' : 'transparent', color: printDoc === 'solicitud' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            📝 Solicitud (4 Págs)
+                            <FileText size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Solicitud (4 Págs)
                         </button>
                         <button 
                             onClick={() => setPrintDoc('pagare')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'pagare' ? '#0D7A57' : 'transparent', color: printDoc === 'pagare' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            ⚖️ Pagaré (2 Págs)
+                            <Scale size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Pagaré (2 Págs)
                         </button>
                     </div>
 
@@ -362,7 +363,7 @@ export default function CreditPrintPage() {
                     onClick={() => window.print()} 
                     style={{ padding: '8px 16px', background: '#0D7A57', color: '#fff', borderRadius: '6px', cursor: 'pointer', border: 'none', fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 4px rgba(13,122,87,0.3)' }}
                 >
-                    🖨️ Imprimir Selección
+                    <Printer size={14} style={{ marginRight: '5px' }} /> Imprimir Selección
                 </button>
             </div>
 

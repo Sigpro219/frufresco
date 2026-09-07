@@ -1,3 +1,4 @@
+import { Printer } from 'lucide-react';
 
 'use client';
 
@@ -56,8 +57,8 @@ export default function BillingPrintPage() {
 
             <div className="no-print" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
                 <h2 style={{ margin: 0 }}>Vista de Impresión - Corte #{cut?.cut_number}</h2>
-                <button onClick={() => window.print()} style={{ padding: '10px 20px', background: '#000', color: '#fff', borderRadius: '5px', cursor: 'pointer', border: 'none', fontWeight: 'bold' }}>
-                    🖨️ Imprimir Todo
+                <button onClick={() => window.print()} style={{ padding: '10px 20px', background: '#000', color: '#fff', borderRadius: '5px', cursor: 'pointer', border: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center' }}>
+                    <Printer size={16} style={{ marginRight: '6px' }} /> Imprimir Todo
                 </button>
             </div>
 

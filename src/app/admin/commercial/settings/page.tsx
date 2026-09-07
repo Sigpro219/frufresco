@@ -25,12 +25,17 @@ import {
     Search,
     Check,
     FileUp,
-    FileDown
+    FileDown,
+    CircleDot,
+    Pause,
+    ClipboardList,
+    BarChart2,
+    ArrowLeftCircle
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
 
-export default function PricingSettingsPage() {
+export default function PricingSettingsPage({ embedded = false }: { embedded?: boolean } = {}) {
     // Data
     const [models, setModels] = useState<any[]>([]);
     const [selectedModel, setSelectedModel] = useState<any>(null);
@@ -615,7 +620,7 @@ export default function PricingSettingsPage() {
 
             // 3. Si se seleccionó un modelo para clonar, copiar sus reglas
             if (cloneFromModelId && newModel) {
-                console.log('🔄 Clonando reglas desde:', cloneFromModelId);
+                console.log('Clonando reglas desde:', cloneFromModelId);
                 const { data: sourceRules } = await supabase
                     .from('pricing_rules')
                     .select('product_id, margin_adjustment')
@@ -1071,7 +1076,7 @@ export default function PricingSettingsPage() {
 
         setIsSyncing(true);
         try {
-            console.log('🚀 Iniciando sincronización maestra de precios...');
+            console.log('Iniciando sincronización maestra de precios...');
 
             // 1. Obtener todos los productos activos
             const { data: allProducts, error: pError } = await supabase
@@ -1164,7 +1169,7 @@ export default function PricingSettingsPage() {
                 return;
             }
 
-            console.log(`📊 Procesando ${updates.length} actualizaciones de precio...`);
+            console.log(`Procesando ${updates.length} actualizaciones de precio...`);
 
             // 5. Ejecutar actualizaciones (usamos update individual en paralelo para evitar errores de restricción NOT NULL en upsert)
             for (let i = 0; i < updates.length; i += 15) {
@@ -1179,10 +1184,10 @@ export default function PricingSettingsPage() {
                 }));
             }
 
-            alert(`✅ ¡Éxito! Se han actualizado ${updates.length} precios en el catálogo público conforme al modelo B2C.`);
+            alert(`¡Éxito! Se han actualizado ${updates.length} precios en el catálogo público conforme al modelo B2C.`);
             
         } catch (err: any) {
-            console.error('❌ Error en Sync:', err);
+            console.error('Error en Sync:', err);
             alert('Error durante la sincronización: ' + err.message);
         } finally {
             setIsSyncing(false);
@@ -1217,12 +1222,14 @@ export default function PricingSettingsPage() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilyMain }}>
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
+        <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilyMain }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '1.5rem 2rem 3rem 2rem' : '2rem' }}>
                 <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.75rem' }}>
-                    <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-                        <ArrowLeft size={16} /> Volver a Comercial
-                    </Link>
+                    {!embedded ? (
+                        <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                            <ArrowLeft size={16} /> Volver a Comercial
+                        </Link>
+                    ) : <div />}
 
                     {/* Tab Navigation */}
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -1237,10 +1244,13 @@ export default function PricingSettingsPage() {
                                 cursor: 'pointer',
                                 color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
                                 borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.15s'
+                                transition: 'all 0.15s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem'
                             }}
                         >
-                            📈 Modelos de Precios
+                            <TrendingUp size={16} /> Modelos de Precios
                         </button>
                         <button
                             onClick={() => setActiveTab('templates')}
@@ -1253,10 +1263,13 @@ export default function PricingSettingsPage() {
                                 cursor: 'pointer',
                                 color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
                                 borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.15s'
+                                transition: 'all 0.15s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem'
                             }}
                         >
-                            📋 Listas de Cotización
+                            <ClipboardList size={16} /> Listas de Cotización
                         </button>
                     </div>
                 </div>
@@ -1347,9 +1360,9 @@ export default function PricingSettingsPage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <div style={{ flex: 1, paddingRight: '1rem' }}>
                                             <div style={{ fontWeight: '800', fontSize: '1.05rem', color: THEME.colors.textMain, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ fontSize: '0.9rem' }}>🟢</span>}
-                                                {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ fontSize: '0.9rem' }}>🟡</span>}
-                                                {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ fontSize: '0.9rem' }}>🔴</span>}
+                                                {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={14} color="#10B981" /></span>}
+                                                {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={14} color="#F59E0B" /></span>}
+                                                {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={14} color="#EF4444" /></span>}
                                                 <div>
                                                     {(() => {
                                                         const parts = m.name.split(/(\d+\s*días)/i);
@@ -1445,7 +1458,7 @@ export default function PricingSettingsPage() {
                                                      transition: 'all 0.15s'
                                                  }}
                                              >
-                                                 🟢 Verde (Grande)
+                                                 <CircleDot size={14} color="#10B981" /> Verde (Grande)
                                              </button>
                                              <button 
                                                  type="button"
@@ -1461,11 +1474,11 @@ export default function PricingSettingsPage() {
                                                      cursor: 'pointer',
                                                      display: 'flex',
                                                      alignItems: 'center',
-                                                     gap: '4px',
+                                                     gap: '6px',
                                                      transition: 'all 0.15s'
                                                  }}
                                              >
-                                                 🟡 Amarillo (Mediano)
+                                                 <CircleDot size={14} color="#F59E0B" /> Amarillo (Mediano)
                                              </button>
                                              <button 
                                                  type="button"
@@ -1481,11 +1494,8 @@ export default function PricingSettingsPage() {
                                                      cursor: 'pointer',
                                                      display: 'flex',
                                                      alignItems: 'center',
-                                                     gap: '4px',
-                                                     transition: 'all 0.15s'
-                                                 }}
-                                             >
-                                                 🔴 Rojo (Pequeño)
+                                                  }} >
+                                                 <CircleDot size={14} color="#EF4444" /> Rojo (Pequeño)
                                              </button>
                                          </div>
                                      </div>
@@ -1560,10 +1570,10 @@ export default function PricingSettingsPage() {
                                             {/* Badges Block */}
                                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                                 <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.3rem 0.6rem', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                    📈 Margen Base: {selectedModel.base_margin_percent}%
+                                                    <TrendingUp size={12} /> Margen Base: {selectedModel.base_margin_percent}%
                                                 </span>
                                                 <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '0.3rem 0.6rem', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                    📊 Promedio: {formatNumber(avgMargin, 1)}%
+                                                    <BarChart2 size={12} /> Promedio: {formatNumber(avgMargin, 1)}%
                                                 </span>
                                                 <span style={{ 
                                                     fontSize: '0.75rem', 
@@ -1593,8 +1603,7 @@ export default function PricingSettingsPage() {
                                                     alignItems: 'center',
                                                     gap: '0.2rem'
                                                 }}>
-                                                    <Activity size={12} />
-                                                    {selectedModel.b2c_autosync_enabled ? '🔄 Auto-recálculo Activo' : '⏸️ Recálculo Manual'}
+                                                    {selectedModel.b2c_autosync_enabled ? (<><RefreshCw size={12} /> Auto-recálculo Activo</>) : (<><Pause size={12} /> Recálculo Manual</>)}
                                                 </span>
                                             </div>
                                         </div>
@@ -1797,18 +1806,19 @@ export default function PricingSettingsPage() {
                                 borderRadius: THEME.radius.lg, 
                                 boxShadow: THEME.shadow.md, 
                                 border: `1px solid ${THEME.colors.border}`,
-                                overflow: 'visible',
-                                position: 'sticky',
-                                top: '105px',
-                                zIndex: 4
+                                overflow: 'hidden',
+                                position: 'relative'
                             }}>
                                 
-                                {/* Search and count header */}
+                                {/* Search and count header (Sticky Frosted Toolbar) */}
                                 <div style={{ 
-                                    padding: '1.5rem', 
+                                    padding: '1.2rem 1.5rem', 
                                     borderBottom: `1px solid ${THEME.colors.border}`,
-                                    backgroundColor: 'white',
-                                    borderRadius: '12px 12px 0 0'
+                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                    backdropFilter: 'blur(12px)',
+                                    position: 'sticky',
+                                    top: embedded ? '142px' : '85px',
+                                    zIndex: 20
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
                                         <div style={{ flex: 1, minWidth: '280px' }}>
@@ -1840,50 +1850,48 @@ export default function PricingSettingsPage() {
                                                         outline: 'none',
                                                         transition: 'border-color 0.2s'
                                                     }}
-                                                    onFocus={e => e.target.style.borderColor = THEME.colors.borderActive}
+                                                    onFocus={e => e.target.style.borderColor = THEME.colors.primary}
                                                     onBlur={e => e.target.style.borderColor = THEME.colors.border}
                                                 />
                                                 {matrixSearch && (
                                                     <button 
-                                                        onClick={() => { setMatrixSearch(''); setMatrixPage(1); }}
-                                                        style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0 }}
+                                                        onClick={() => {
+                                                            setMatrixSearch('');
+                                                            setMatrixPage(1);
+                                                        }}
+                                                        style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: THEME.colors.textSecondary, padding: 0 }}
                                                     >
-                                                        <X size={16} />
+                                                        <X size={14} />
                                                     </button>
                                                 )}
                                             </div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#F1F5F9', color: '#475569', padding: '0.4rem 0.75rem', borderRadius: '12px', whiteSpace: 'nowrap' }}>
-                                                {filteredProducts.length} ítems
-                                            </span>
+                                            
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textSecondary, whiteSpace: 'nowrap' }}>
+                                                {filteredProducts.length} items
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 {filteredProducts.length === 0 ? (
                                     <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
-                                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔍</div>
+                                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}><Search size={40} color="#94A3B8" /></div>
                                         <p style={{ fontWeight: 'bold', margin: 0 }}>No se encontraron productos</p>
                                         <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Prueba con otros términos de búsqueda.</p>
                                     </div>
                                 ) : (
-                                    <div style={{ maxHeight: 'calc(100vh - 365px)', overflowY: 'auto', overflowX: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                            <thead style={{ 
-                                                position: 'sticky', 
-                                                top: 0, 
-                                                backgroundColor: '#F8FAFC', 
-                                                zIndex: 5, 
-                                                borderBottom: `1px solid ${THEME.colors.border}` 
-                                            }}>
+                                    <div style={{ overflowX: 'auto', width: '100%', position: 'relative' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                            <thead style={{ backgroundColor: '#F8FAFC' }}>
                                                 <tr>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>ID ERP</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>Producto</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>Categoría</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>Costo Base</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>Utilidad</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>Sug. sin IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 5 }}>Precio Final</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>ID ERP</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Producto</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Categoría</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Costo Base</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>IVA</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Utilidad</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Sug. sin IVA</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Precio Final</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2112,7 +2120,7 @@ export default function PricingSettingsPage() {
                         </div>
                     ) : (
                         <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
-                            <div style={{ fontSize: '3.5rem', marginBottom: '1.25rem' }}>👈</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}><ArrowLeftCircle size={44} color="#94A3B8" /></div>
                             <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona un modelo</h3>
                             <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige un modelo de precios de la lista de la izquierda para ver y gestionar su matriz.</p>
                         </div>
@@ -2371,7 +2379,7 @@ export default function PricingSettingsPage() {
                                                 <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                                                 <input
                                                     type="text"
-                                                    placeholder="🔍 Buscar y agregar producto..."
+                                                    placeholder="Buscar y agregar producto..."
                                                     value={templateProductSearch}
                                                     onChange={e => {
                                                         setTemplateProductSearch(e.target.value);
@@ -2508,7 +2516,7 @@ export default function PricingSettingsPage() {
                                 </div>
                             ) : (
                                 <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
-                                    <div style={{ fontSize: '3.5rem', marginBottom: '1.25rem' }}>👈</div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}><ArrowLeftCircle size={44} color="#94A3B8" /></div>
                                     <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una lista</h3>
                                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige una lista de cotización de la izquierda para editar su catálogo de productos.</p>
                                 </div>

@@ -29,13 +29,15 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { THEME } from '@/lib/adminTheme';
 
-export default function CampaignsPage() {
+export default function CampaignsPage({ embedded = false }: { embedded?: boolean } = {}) {
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
     const [step, setStep] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
+    const [campaignSearch, setCampaignSearch] = useState('');
+    const [campaignFilter, setCampaignFilter] = useState<'all' | 'active' | 'scheduled' | 'expired'>('all');
     
     // Step 1: Basic Info
     const [name, setName] = useState('');
@@ -230,43 +232,60 @@ export default function CampaignsPage() {
         activeCampaigns.flatMap(c => (c.campaign_items || []).map((i: any) => i.product_id))
     ).size;
 
+    const filteredCampaigns = campaigns.filter(c => {
+        const term = campaignSearch.toLowerCase();
+        const matchesSearch = !term || (c.name && c.name.toLowerCase().includes(term));
+        if (!matchesSearch) return false;
+        
+        if (campaignFilter === 'all') return true;
+        const now = new Date();
+        const start = new Date(c.start_date);
+        const end = new Date(c.end_date);
+        if (campaignFilter === 'active') return now >= start && now <= end;
+        if (campaignFilter === 'scheduled') return now < start;
+        if (campaignFilter === 'expired') return now > end;
+        return true;
+    });
+
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-            <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '2rem 1.5rem 4rem 1.5rem' }}>
+        <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '1.5rem 2rem 3rem 2rem' : '2rem 1.5rem 4rem 1.5rem' }}>
                 
                 {/* BACK LINK & HEADER */}
                 <div style={{ marginBottom: '1.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <Link 
-                            href="/admin/commercial" 
-                            style={{ 
-                                textDecoration: 'none', 
-                                color: '#64748B', 
-                                fontWeight: '700', 
-                                fontSize: '0.85rem', 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '6px',
-                                marginBottom: '0.6rem',
-                                transition: 'color 0.15s'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#0D7A57'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#64748B'}
-                        >
-                            <ArrowLeft size={16} /> Volver al Dashboard Comercial
-                        </Link>
+                        {!embedded && (
+                            <Link 
+                                href="/admin/commercial" 
+                                style={{ 
+                                    textDecoration: 'none', 
+                                    color: THEME.colors.textSecondary, 
+                                    fontWeight: '700', 
+                                    fontSize: '0.85rem', 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '6px',
+                                    marginBottom: '0.6rem',
+                                    transition: 'color 0.15s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.color = THEME.colors.primary}
+                                onMouseLeave={e => e.currentTarget.style.color = THEME.colors.textSecondary}
+                            >
+                                <ArrowLeft size={16} /> Volver al Dashboard Comercial
+                            </Link>
+                        )}
                         
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <h1 style={{ fontSize: '2.1rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03em' }}>
+                            <h1 style={{ fontSize: '2.1rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.03em' }}>
                                 Campañas Temporales
                             </h1>
                             <button 
                                 onClick={() => setShowGuide(!showGuide)}
                                 title="¿Cómo funciona?"
                                 style={{ 
-                                    background: showGuide ? '#EAEFEA' : '#F1F5F9', 
-                                    border: `1px solid ${showGuide ? '#A7F3D0' : '#E2E8F0'}`, 
-                                    color: showGuide ? '#065F46' : '#64748B', 
+                                    background: showGuide ? THEME.colors.primaryLight : '#F1F5F9', 
+                                    border: `1px solid ${showGuide ? '#A7F3D0' : THEME.colors.border}`, 
+                                    color: showGuide ? THEME.colors.primary : THEME.colors.textSecondary, 
                                     borderRadius: '10px', 
                                     padding: '6px 10px',
                                     cursor: 'pointer', 
@@ -282,7 +301,7 @@ export default function CampaignsPage() {
                                 <HelpCircle size={15} /> ¿Cómo funciona?
                             </button>
                         </div>
-                        <p style={{ color: '#64748B', fontSize: '0.95rem', marginTop: '0.35rem', marginBottom: 0 }}>
+                        <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', marginTop: '0.35rem', marginBottom: 0 }}>
                             Estrategias de precios, liquidación de cosecha y descuentos flash por tiempo limitado para clientes B2B.
                         </p>
                     </div>
@@ -294,10 +313,10 @@ export default function CampaignsPage() {
                         }}
                         style={{ 
                             padding: '0.75rem 1.4rem', 
-                            backgroundColor: '#0D7A57', 
+                            backgroundColor: THEME.colors.primary, 
                             color: 'white', 
                             border: 'none', 
-                            borderRadius: '12px', 
+                            borderRadius: THEME.radius.lg, 
                             fontWeight: '800', 
                             fontSize: '0.88rem',
                             cursor: 'pointer',
@@ -307,8 +326,8 @@ export default function CampaignsPage() {
                             boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
                             transition: 'all 0.2s'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#065F46'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0D7A57'}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                     >
                         <Plus size={18} strokeWidth={2.5} /> Nueva Campaña
                     </button>
@@ -413,8 +432,134 @@ export default function CampaignsPage() {
                     </div>
                 </div>
 
+                {/* BARRA FLOTANTE STICKY DE ACCIONES Y BÚSQUEDA (ESTÁNDAR CLIENTSMODULE) */}
+                <div style={{ 
+                    display: 'flex', 
+                    gap: '0.8rem', 
+                    alignItems: 'center', 
+                    marginBottom: '1.2rem',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(12px)',
+                    padding: '0.65rem 1.2rem',
+                    borderRadius: '20px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                    border: '1px solid #E2E8F0',
+                    position: 'sticky',
+                    top: embedded ? '142px' : '85px',
+                    zIndex: 70,
+                    transition: 'all 0.2s ease-in-out',
+                    flexWrap: 'wrap'
+                }}>
+                    {/* BOTÓN NUEVA CAMPAÑA */}
+                    <button 
+                        onClick={() => {
+                            resetForm();
+                            setIsCreating(true);
+                        }}
+                        style={{ 
+                            backgroundColor: THEME.colors.primary, 
+                            color: 'white', 
+                            padding: '0 1.2rem', 
+                            borderRadius: '10px', 
+                            border: 'none', 
+                            fontWeight: '800', 
+                            cursor: 'pointer', 
+                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            whiteSpace: 'nowrap',
+                            height: '40px',
+                            fontSize: '0.85rem',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                    >
+                        <Plus size={16} strokeWidth={2} /> Nueva Campaña
+                    </button>
+
+                    {/* BUSCADOR */}
+                    <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
+                        <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                        <input 
+                            type="text"
+                            value={campaignSearch}
+                            onChange={e => setCampaignSearch(e.target.value)}
+                            placeholder="Buscar estrategia o campaña por nombre..."
+                            style={{ 
+                                width: '100%', 
+                                height: '40px', 
+                                paddingLeft: '38px', 
+                                paddingRight: campaignSearch ? '32px' : '12px', 
+                                borderRadius: '10px', 
+                                border: '1px solid #E2E8F0',
+                                backgroundColor: '#F8FAFC',
+                                fontSize: '0.85rem',
+                                color: THEME.colors.textMain,
+                                outline: 'none',
+                                transition: 'all 0.2s'
+                            }}
+                            onFocus={e => {
+                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                e.currentTarget.style.backgroundColor = 'white';
+                            }}
+                            onBlur={e => {
+                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                            }}
+                        />
+                        {campaignSearch && (
+                            <button 
+                                onClick={() => setCampaignSearch('')} 
+                                style={{ 
+                                    position: 'absolute', 
+                                    right: '10px', 
+                                    top: '50%', 
+                                    transform: 'translateY(-50%)', 
+                                    background: 'none', 
+                                    border: 'none', 
+                                    cursor: 'pointer', 
+                                    color: '#94A3B8' 
+                                }}
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* FILTROS RÁPIDOS DE ESTADO */}
+                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', height: '40px', alignItems: 'center' }}>
+                        {[
+                            { id: 'all', label: 'Todas' },
+                            { id: 'active', label: 'Vigentes' },
+                            { id: 'scheduled', label: 'Programadas' },
+                            { id: 'expired', label: 'Finalizadas' }
+                        ].map(f => (
+                            <button
+                                key={f.id}
+                                onClick={() => setCampaignFilter(f.id as any)}
+                                style={{
+                                    padding: '0.35rem 0.75rem',
+                                    borderRadius: '7px',
+                                    border: 'none',
+                                    backgroundColor: campaignFilter === f.id ? 'white' : 'transparent',
+                                    color: campaignFilter === f.id ? THEME.colors.primary : '#64748B',
+                                    fontWeight: campaignFilter === f.id ? '800' : '600',
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer',
+                                    boxShadow: campaignFilter === f.id ? '0 2px 4px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s'
+                                }}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* MAIN CAMPAIGNS CARD */}
-                <div style={{ backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                <div style={{ backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)', border: '1px solid #E2E8F0', position: 'relative' }}>
                     <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <h2 style={{ fontSize: '1.15rem', fontWeight: '900', margin: 0, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -512,31 +657,36 @@ export default function CampaignsPage() {
                                 <Plus size={18} strokeWidth={2.5} /> Crear Primera Campaña
                             </button>
                         </div>
+                    ) : filteredCampaigns.length === 0 ? (
+                        <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
+                            <Search size={32} color="#94A3B8" style={{ margin: '0 auto 8px', display: 'block' }} />
+                            <p style={{ fontWeight: 'bold', margin: '0 0 4px 0', color: '#0F172A' }}>No se encontraron campañas</p>
+                            <p style={{ fontSize: '0.85rem', margin: 0 }}>Prueba con otros términos de búsqueda o cambia el filtro de estado.</p>
+                        </div>
                     ) : (
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                        <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estrategia / Vigencia</th>
-                                        <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estado</th>
-                                        <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Alcance</th>
-                                        <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Modalidad</th>
-                                        <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
-                                    </tr>
-                                </thead>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                            <thead style={{ backgroundColor: '#F9FAFB' }}>
+                                <tr style={{ backgroundColor: '#F9FAFB' }}>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Estrategia / Vigencia</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Estado</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Alcance</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Modalidad</th>
+                                    <th style={{ backgroundColor: '#F9FAFB', borderBottom: `1.5px solid ${THEME.colors.border}`, padding: '0.85rem 1.25rem', textAlign: 'right', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, ...THEME.typography?.tableHeader }}>Acciones</th>
+                                </tr>
+                            </thead>
                                 <tbody>
-                                    {campaigns.map(c => {
+                                    {filteredCampaigns.map(c => {
                                         const status = getStatusStyle(c.start_date, c.end_date);
                                         return (
-                                            <tr key={c.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                <td style={{ padding: '1rem 1.25rem' }}>
-                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.92rem' }}>{c.name}</div>
+                                            <tr key={c.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                <td style={{ padding: '1rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.92rem' }}>{c.name}</div>
                                                     <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
                                                         <Calendar size={12} style={{ color: '#0D7A57' }} />
                                                         {format(new Date(c.start_date), 'dd MMM', { locale: es })} — {format(new Date(c.end_date), 'dd MMM yyyy', { locale: es })}
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '1rem 1.25rem' }}>
+                                                <td style={{ padding: '1rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <span style={{ 
                                                         padding: '0.3rem 0.65rem', 
                                                         borderRadius: '99px', 
@@ -552,17 +702,17 @@ export default function CampaignsPage() {
                                                         {status.icon} {status.label}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '1rem 1.25rem' }}>
+                                                <td style={{ padding: '1rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
                                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: '700', color: '#334155' }} title="Clientes Institucionales">
-                                                            <Users size={14} style={{ color: '#0D7A57' }} /> {c.campaign_targets?.length || 0}
+                                                             <Users size={14} style={{ color: '#0D7A57' }} /> {c.campaign_targets?.length || 0}
                                                         </span>
                                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: '700', color: '#334155' }} title="Productos en Oferta">
                                                             <Package size={14} style={{ color: '#0D7A57' }} /> {c.campaign_items?.length || 0}
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '1rem 1.25rem' }}>
+                                                <td style={{ padding: '1rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <span style={{ 
                                                         padding: '0.3rem 0.6rem', 
                                                         borderRadius: '8px', 
@@ -576,13 +726,13 @@ export default function CampaignsPage() {
                                                         gap: '4px'
                                                     }}>
                                                         {c.type === 'margin_adjustment' ? (
-                                                            <><BadgePercent size={12} /> Var. Utilidad (%)</>
+                                                             <><BadgePercent size={12} /> Var. Utilidad (%)</>
                                                         ) : (
                                                             <><DollarSign size={12} /> Precio Fijo ($)</>
                                                         )}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
+                                                <td style={{ padding: '1rem 1.25rem', textAlign: 'right', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <button 
                                                         onClick={async () => {
                                                             if (confirm(`¿Eliminar la campaña "${c.name}"? Esta acción removerá las reglas de precio asociadas.`)) {
@@ -614,7 +764,6 @@ export default function CampaignsPage() {
                                     })}
                                 </tbody>
                             </table>
-                        </div>
                     )}
                 </div>
             </div>

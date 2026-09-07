@@ -9,6 +9,7 @@ import {
     Clock, 
     AlertCircle, 
     AlertTriangle,
+    CircleDot,
     CheckCircle2,
     ArrowRight,
     ArrowLeft,
@@ -229,7 +230,8 @@ export default function CommercialAgreementsModule() {
         // 1. Fetch official active costs from commercial_cost_matrix
         const { data: costMatrixData, error: matrixErr } = await supabase
             .from('commercial_cost_matrix')
-            .select('product_id, manual_cost');
+            .select('product_id, manual_cost')
+            .eq('is_active', true);
 
         if (matrixErr) {
             console.error('Error fetching commercial_cost_matrix:', matrixErr);
@@ -237,8 +239,23 @@ export default function CommercialAgreementsModule() {
 
         const costMatrixMap: Record<string, number> = {};
         (costMatrixData || []).forEach(r => {
-            if (r.manual_cost !== null && r.manual_cost !== undefined) {
-                costMatrixMap[r.product_id] = r.manual_cost;
+            if (r.manual_cost !== null && r.manual_cost !== undefined && Number(r.manual_cost) > 0) {
+                costMatrixMap[r.product_id] = Number(r.manual_cost);
+            }
+        });
+
+        // 1.1 Fallback to recent purchases for SKUs not yet configured in matrix
+        const { data: recentPurchases } = await supabase
+            .from('purchases')
+            .select('product_id, unit_price')
+            .gt('unit_price', 0)
+            .order('created_at', { ascending: false })
+            .limit(2000);
+
+        const purchaseFallbackMap: Record<string, number> = {};
+        (recentPurchases || []).forEach(pur => {
+            if (!purchaseFallbackMap[pur.product_id] && pur.unit_price > 0) {
+                purchaseFallbackMap[pur.product_id] = Number(pur.unit_price);
             }
         });
 
@@ -262,8 +279,8 @@ export default function CommercialAgreementsModule() {
 
             if (data && data.length > 0) {
                 data.forEach(p => {
-                    // Use official Costo Base FruFresco from commercial_cost_matrix if defined
-                    const officialCost = costMatrixMap[p.id] ?? p.base_price ?? 0;
+                    // Use official Costo Base FruFresco from commercial_cost_matrix or purchases fallback
+                    const officialCost = costMatrixMap[p.id] || purchaseFallbackMap[p.id] || p.base_price || 0;
                     p.base_price = officialCost;
                     p.cost_basis = officialCost;
 
@@ -1140,13 +1157,13 @@ export default function CommercialAgreementsModule() {
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                             <span style={{ color: '#0D7A57', fontWeight: 'bold' }}>
-                                🟢 <strong>{activeCount}</strong> Acuerdos Vigentes
+                                <CircleDot size={12} color="#10B981" /> <strong>{activeCount}</strong> Acuerdos Vigentes
                             </span>
                             <span style={{ color: '#D97706', fontWeight: 'bold' }}>
-                                🟡 <strong>{warningCount}</strong> Próximos a Vencer
+                                <CircleDot size={12} color="#F59E0B" /> <strong>{warningCount}</strong> Próximos a Vencer
                             </span>
                             <span style={{ color: expiredCount > 0 ? '#EF4444' : '#64748B', fontWeight: 'bold' }}>
-                                🔴 <strong>{expiredCount}</strong> Vencidos
+                                <CircleDot size={12} color="#EF4444" /> <strong>{expiredCount}</strong> Vencidos
                             </span>
                         </div>
                         <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
@@ -2544,9 +2561,9 @@ export default function CommercialAgreementsModule() {
                                                 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                                         <span><strong>{excelPreviewData.items.length}</strong> Filas</span>
-                                                        <span style={{ color: '#166534', fontWeight: 'bold' }}>✓ {excelPreviewData.matchedCount} En Catálogo</span>
+                                                        <span style={{ color: '#166534', fontWeight: 'bold' }}>{excelPreviewData.matchedCount} En Catálogo</span>
                                                         {excelPreviewData.unmatchedCount > 0 ? (
-                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}>⚠️ {excelPreviewData.unmatchedCount} No Reconocidos</span>
+                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}><AlertTriangle size={13} color="#DC2626" /> {excelPreviewData.unmatchedCount} No Reconocidos</span>
                                                         ) : (
                                                             <span style={{ color: '#64748B' }}>0 No reconocidos</span>
                                                         )}
@@ -3265,9 +3282,9 @@ export default function CommercialAgreementsModule() {
                                                 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                                         <span><strong>{editExcelPreviewData.items.length}</strong> Filas</span>
-                                                        <span style={{ color: '#166534', fontWeight: 'bold' }}>✓ {editExcelPreviewData.matchedCount} En Catálogo</span>
+                                                        <span style={{ color: '#166534', fontWeight: 'bold' }}>{editExcelPreviewData.matchedCount} En Catálogo</span>
                                                         {editExcelPreviewData.unmatchedCount > 0 ? (
-                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}>⚠️ {editExcelPreviewData.unmatchedCount} No Reconocidos</span>
+                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}><AlertTriangle size={13} color="#DC2626" /> {editExcelPreviewData.unmatchedCount} No Reconocidos</span>
                                                         ) : (
                                                             <span style={{ color: '#64748B' }}>0 No reconocidos</span>
                                                         )}

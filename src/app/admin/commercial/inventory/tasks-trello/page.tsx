@@ -1,4 +1,5 @@
 'use client';
+import { BookOpen, Plus, Folder, FolderOpen, RefreshCw, User, AlertTriangle, Truck, Calendar, FileText, Package, Upload, X, Trash2, LayoutList } from 'lucide-react';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -291,7 +292,7 @@ export default function KanbanTrelloPage() {
                 }
             }
         } catch (err: any) {
-            console.error('❌ Error fetching Kanban data:', err?.message || 'Unknown error', err);
+            console.error('Error fetching Kanban data:', err?.message || 'Unknown error', err);
         } finally {
             setLoading(false);
         }
@@ -418,7 +419,7 @@ export default function KanbanTrelloPage() {
                                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
                                 }}
                             >
-                                <span>📋</span> Vista Clásica
+                                <LayoutList size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Vista Clásica
                             </button>
                         </Link>
                         <button 
@@ -432,7 +433,7 @@ export default function KanbanTrelloPage() {
                                 display: 'flex', alignItems: 'center', gap: '0.5rem'
                             }}
                         >
-                            <span>✚</span> Nueva Tarjeta
+                            <Plus size={16} style={{ marginRight: "4px", verticalAlign: "middle" }} /> Nueva Tarjeta
                         </button>
                     </div>
                 </div>
@@ -455,13 +456,13 @@ export default function KanbanTrelloPage() {
                             color: showArchived ? '#2563EB' : '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
                         }}
                     >
-                        {showArchived ? '📁 Ocultar Archivadas' : '📂 Ver Archivadas'}
+                        {showArchived ? <><Folder size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Ocultar Archivadas</> : <><FolderOpen size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Ver Archivadas</>}
                     </button>
                 </div>
 
                 {/* Trello Kanban Board */}
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '5rem', color: '#64748B' }}>🔄 Cargando tablero...</div>
+                    <div style={{ textAlign: 'center', padding: '5rem', color: '#64748B' }}>Cargando tablero...</div>
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
                         {columns.map(col => {
@@ -562,7 +563,7 @@ export default function KanbanTrelloPage() {
                                                             padding: '2px 6px', borderRadius: '8px', 
                                                             border: `1px solid ${isOverdue ? '#FEE2E2' : '#E2E8F0'}`
                                                         }}>
-                                                            <span style={{ fontSize: '0.8rem' }}>{isOverdue ? '⚠️' : '📅'}</span>
+                                                            <span style={{ fontSize: '0.8rem' }}>{isOverdue ? <AlertTriangle size={13} color='#EF4444' /> : <Calendar size={13} />}</span>
                                                             <span style={{ fontSize: '0.68rem', fontWeight: '700', color: isOverdue ? '#991B1B' : '#475569' }}>
                                                                 {task.due_date ? new Date(task.due_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Sin fecha'}
                                                             </span>
@@ -579,7 +580,7 @@ export default function KanbanTrelloPage() {
                                                                     {url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                                                         <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                                     ) : (
-                                                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>📄</div>
+                                                                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={16} color="#64748B" /></div>
                                                                     )}
                                                                 </a>
                                                             ))}
@@ -602,7 +603,7 @@ export default function KanbanTrelloPage() {
                                                                     title="Archivar"
                                                                     style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
                                                                 >
-                                                                    📦
+                                                                    <Package size={16} style={{ display: "inline" }} />
                                                                 </button>
                                                             )}
                                                             {task.status === 'archived' && (
@@ -611,7 +612,7 @@ export default function KanbanTrelloPage() {
                                                                     title="Desarchivar"
                                                                     style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
                                                                 >
-                                                                    📤
+                                                                    <Upload size={16} style={{ display: "inline" }} />
                                                                 </button>
                                                             )}
                                                         </div>
@@ -652,7 +653,7 @@ export default function KanbanTrelloPage() {
                                                 e.currentTarget.style.color = '#64748B';
                                             }}
                                         >
-                                            <span>➕</span> Añadir una tarjeta
+                                            <Plus size={16} style={{ marginRight: "4px", verticalAlign: "middle" }} /> Añadir una tarjeta
                                         </button>
                                     </div>
                                 </div>
@@ -672,7 +673,7 @@ export default function KanbanTrelloPage() {
                                         En columna: <span style={{ color: '#2563EB' }}>{columns.find(c => c.id === newTaskStatus)?.title}</span>
                                     </span>
                                 </div>
-                                <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}>✕</button>
+                                <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}><X size={18} /></button>
                             </div>
                             
                             <form onSubmit={editingTask ? handleUpdateTask : handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -726,9 +727,9 @@ export default function KanbanTrelloPage() {
                                                 {file.type.startsWith('image/') ? (
                                                     <img src={URL.createObjectURL(file)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 ) : (
-                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>📄</div>
+                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={20} color="#64748B" /></div>
                                                 )}
-                                                <button type="button" onClick={() => removeFile(i)} style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '50%', width: '16px', height: '16px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                                                <button type="button" onClick={() => removeFile(i)} style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '50%', width: '16px', height: '16px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={12} /></button>
                                             </div>
                                         ))}
                                         <label style={{ width: '50px', height: '50px', borderRadius: '10px', border: '2px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#94A3B8', fontSize: '1.2rem' }}>
@@ -792,7 +793,7 @@ export default function KanbanTrelloPage() {
                                             style={{ padding: '0.8rem 1.2rem', borderRadius: '12px', border: '1px solid #FEE2E2', backgroundColor: '#FEF2F2', color: '#EF4444', fontWeight: '700', cursor: 'pointer' }}
                                             title="Eliminar tarea permanentemente"
                                         >
-                                            🗑️
+                                            <Trash2 size={16} />
                                         </button>
                                     )}
                                     <button 

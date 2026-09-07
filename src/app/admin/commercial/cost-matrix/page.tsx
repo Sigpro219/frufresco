@@ -509,7 +509,7 @@ function ManualCostInput({ productId, onSave, savingId, currentManual, cellState
     );
 }
 
-export default function CostMatrixPage() {
+export default function CostMatrixPage({ embedded = false }: { embedded?: boolean } = {}) {
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Purchase[]>>({});
@@ -1195,8 +1195,8 @@ export default function CostMatrixPage() {
     stats.avgTrend = trendCount > 0 ? totalTrendPercent / trendCount : 0;
 
     return (
-        <div style={{ backgroundColor: THEME.colors.background, minHeight: '100vh', padding: '1.75rem 2rem', fontFamily: THEME.typography.fontFamilySecondary }}>
-            <div style={{ maxWidth: '1680px', margin: '0 auto' }}>
+        <div style={{ backgroundColor: THEME.colors.background, minHeight: embedded ? 'auto' : '100vh', padding: embedded ? '1.5rem 2rem 3rem 2rem' : '1.75rem 2rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
                 
                 {/* --- HEADER --- */}
                 <div style={{ 
@@ -1208,24 +1208,26 @@ export default function CostMatrixPage() {
                     gap: '1rem' 
                 }}>
                     <div>
-                        <Link 
-                            href="/admin/commercial" 
-                            style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '6px', 
-                                color: THEME.colors.textSecondary, 
-                                fontSize: '0.82rem', 
-                                fontWeight: '700', 
-                                textDecoration: 'none', 
-                                marginBottom: '0.4rem',
-                                transition: 'color 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = THEME.colors.primary}
-                            onMouseLeave={(e) => e.currentTarget.style.color = THEME.colors.textSecondary}
-                        >
-                            <ArrowLeft size={14} /> Volver a Comercial
-                        </Link>
+                        {!embedded && (
+                            <Link 
+                                href="/admin/commercial" 
+                                style={{ 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '6px', 
+                                    color: THEME.colors.textSecondary, 
+                                    fontSize: '0.82rem', 
+                                    fontWeight: '700', 
+                                    textDecoration: 'none', 
+                                    marginBottom: '0.4rem',
+                                    transition: 'color 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = THEME.colors.primary}
+                                onMouseLeave={(e) => e.currentTarget.style.color = THEME.colors.textSecondary}
+                            >
+                                <ArrowLeft size={14} /> Volver a Comercial
+                            </Link>
+                        )}
                         <h1 style={{ 
                             fontSize: '2rem', 
                             fontWeight: '900', 
@@ -1467,27 +1469,25 @@ export default function CostMatrixPage() {
                         </p>
                     </div>
                 ) : (
-                    /* --- ENTERPRISE DATA GRID CARD WITH INNER SCROLL & PINNED STICKY HEADERS --- */
-                    <div style={{ 
-                        backgroundColor: THEME.colors.surface, 
-                        borderRadius: THEME.radius.xl, 
-                        boxShadow: THEME.shadow.md, 
-                        border: `1px solid ${THEME.colors.border}`,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden'
-                    }}>
-                        {/* STICKY TOOLBAR (Search & Quick Filters) */}
+                    <>
+                        {/* BARRA FLOTANTE STICKY DE ACCIONES Y BÚSQUEDA (ESTÁNDAR CLIENTSMODULE) */}
                         <div style={{ 
-                            padding: '0.9rem 1.25rem', 
-                            borderBottom: `1px solid ${THEME.colors.border}`, 
-                            backgroundColor: '#FFFFFF',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            flexWrap: 'wrap',
-                            zIndex: 10
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            gap: '0.8rem', 
+                            marginBottom: '1.2rem',
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            backdropFilter: 'blur(12px)',
+                            padding: '0.65rem 1.2rem',
+                            borderRadius: '20px',
+                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                            border: '1px solid #E2E8F0',
+                            position: 'sticky',
+                            top: embedded ? '142px' : '85px',
+                            zIndex: 70,
+                            transition: 'all 0.2s ease-in-out',
+                            flexWrap: 'wrap'
                         }}>
                             {/* Search & Quick Lifecycle Chips */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: '1 1 500px', flexWrap: 'wrap' }}>
@@ -1497,7 +1497,7 @@ export default function CostMatrixPage() {
                                     display: 'flex', 
                                     alignItems: 'center', 
                                     backgroundColor: '#F8FAFC', 
-                                    borderRadius: THEME.radius.md, 
+                                    borderRadius: '10px', 
                                     border: `1px solid ${THEME.colors.border}`, 
                                     padding: '0 0.8rem', 
                                     gap: '0.5rem',
@@ -1537,7 +1537,7 @@ export default function CostMatrixPage() {
                                         onClick={() => setLifecycleFilter('all')}
                                         style={{
                                             padding: '0.4rem 0.75rem',
-                                            borderRadius: THEME.radius.md,
+                                            borderRadius: '8px',
                                             border: lifecycleFilter === 'all' ? `1.5px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
                                             backgroundColor: lifecycleFilter === 'all' ? '#ECFDF5' : 'white',
                                             color: lifecycleFilter === 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
@@ -1554,7 +1554,7 @@ export default function CostMatrixPage() {
                                         onClick={() => setLifecycleFilter('vigente')}
                                         style={{
                                             padding: '0.4rem 0.75rem',
-                                            borderRadius: THEME.radius.md,
+                                            borderRadius: '8px',
                                             border: lifecycleFilter === 'vigente' ? `1.5px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
                                             backgroundColor: lifecycleFilter === 'vigente' ? '#ECFDF5' : 'white',
                                             color: lifecycleFilter === 'vigente' ? THEME.colors.primary : THEME.colors.textSecondary,
@@ -1574,7 +1574,7 @@ export default function CostMatrixPage() {
                                         onClick={() => setLifecycleFilter('por_vencer')}
                                         style={{
                                             padding: '0.4rem 0.75rem',
-                                            borderRadius: THEME.radius.md,
+                                            borderRadius: '8px',
                                             border: lifecycleFilter === 'por_vencer' ? '1.5px solid #D97706' : `1px solid ${THEME.colors.border}`,
                                             backgroundColor: lifecycleFilter === 'por_vencer' ? '#FFFBEB' : 'white',
                                             color: lifecycleFilter === 'por_vencer' ? '#92400E' : THEME.colors.textSecondary,
@@ -1594,7 +1594,7 @@ export default function CostMatrixPage() {
                                         onClick={() => setLifecycleFilter('vencido')}
                                         style={{
                                             padding: '0.4rem 0.75rem',
-                                            borderRadius: THEME.radius.md,
+                                            borderRadius: '8px',
                                             border: lifecycleFilter === 'vencido' ? '1.5px solid #DC2626' : `1px solid ${THEME.colors.border}`,
                                             backgroundColor: lifecycleFilter === 'vencido' ? '#FEF2F2' : 'white',
                                             color: lifecycleFilter === 'vencido' ? '#991B1B' : THEME.colors.textSecondary,
@@ -1621,7 +1621,7 @@ export default function CostMatrixPage() {
                                     gap: '0.4rem', 
                                     backgroundColor: '#F8FAFC', 
                                     padding: '0 0.75rem', 
-                                    borderRadius: THEME.radius.md, 
+                                    borderRadius: '10px', 
                                     border: `1px solid ${THEME.colors.border}`, 
                                     height: '38px' 
                                 }}>
@@ -1660,7 +1660,7 @@ export default function CostMatrixPage() {
                                         style={{ 
                                             height: '38px',
                                             padding: '0 0.8rem', 
-                                            borderRadius: THEME.radius.md, 
+                                            borderRadius: '10px', 
                                             border: `1px solid ${THEME.colors.border}`, 
                                             backgroundColor: THEME.colors.primaryLight, 
                                             color: THEME.colors.primary, 
@@ -1683,7 +1683,7 @@ export default function CostMatrixPage() {
                                     style={{ 
                                         width: '38px',
                                         height: '38px',
-                                        borderRadius: THEME.radius.md, 
+                                        borderRadius: '10px', 
                                         border: `1px solid ${THEME.colors.border}`, 
                                         backgroundColor: '#F8FAFC', 
                                         color: THEME.colors.textSecondary, 
@@ -1699,18 +1699,16 @@ export default function CostMatrixPage() {
                             </div>
                         </div>
 
-                        {/* DATA TABLE CONTAINER (Inner scroll with pinned sticky header) */}
+                        {/* --- ENTERPRISE DATA GRID CARD WITH NATURAL SCROLL & STICKY COLUMN HEADERS --- */}
                         <div style={{ 
-                            maxHeight: 'calc(100vh - 280px)', 
-                            minHeight: '450px',
-                            overflowY: 'auto', 
-                            overflowX: 'auto', 
-                            width: '100%', 
-                            WebkitOverflowScrolling: 'touch',
+                            backgroundColor: THEME.colors.surface, 
+                            borderRadius: THEME.radius.xl, 
+                            boxShadow: THEME.shadow.md, 
+                            border: `1px solid ${THEME.colors.border}`,
                             position: 'relative'
                         }}>
                             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', minWidth: '1120px' }}>
-                                <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+                                <thead style={{ backgroundColor: '#F8FAFC' }}>
                                     <tr style={{ 
                                         backgroundColor: '#F8FAFC', 
                                         color: THEME.colors.textSecondary,
@@ -1726,14 +1724,15 @@ export default function CostMatrixPage() {
                                                 padding: '0.85rem 1.25rem', 
                                                 width: '280px', 
                                                 position: 'sticky', 
-                                                top: 0,
+                                                top: embedded ? '203px' : '146px',
                                                 left: 0, 
                                                 backgroundColor: '#F8FAFC', 
-                                                zIndex: 25,
+                                                zIndex: 65,
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
                                                 borderBottom: `1.5px solid ${THEME.colors.border}`,
-                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.04)'
+                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.04)',
+                                                borderTopLeftRadius: THEME.radius.xl
                                             }}
                                         >
                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: sortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary }}>
@@ -1753,6 +1752,9 @@ export default function CostMatrixPage() {
                                                 padding: '0.85rem 0.8rem', 
                                                 textAlign: 'center', 
                                                 width: '100px', 
+                                                position: 'sticky',
+                                                top: embedded ? '203px' : '146px',
+                                                zIndex: 60,
                                                 cursor: 'pointer', 
                                                 userSelect: 'none',
                                                 backgroundColor: '#F8FAFC',
@@ -1769,13 +1771,13 @@ export default function CostMatrixPage() {
                                             </div>
                                         </th>
 
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 2</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 3</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 4</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 5</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 6</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 7</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 8</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 2</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 3</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 4</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 5</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 6</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 7</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 8</th>
 
                                         {/* Sortable: Costo Base FruFresco */}
                                         <th 
@@ -1784,6 +1786,9 @@ export default function CostMatrixPage() {
                                                 padding: '0.85rem 1rem', 
                                                 textAlign: 'center', 
                                                 width: '160px', 
+                                                position: 'sticky',
+                                                top: embedded ? '203px' : '146px',
+                                                zIndex: 60,
                                                 backgroundColor: '#F1F5F9',
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
@@ -1807,10 +1812,14 @@ export default function CostMatrixPage() {
                                                 padding: '0.85rem 1rem', 
                                                 textAlign: 'center', 
                                                 width: '150px', 
+                                                position: 'sticky',
+                                                top: embedded ? '203px' : '146px',
+                                                zIndex: 60,
                                                 cursor: 'pointer', 
                                                 userSelect: 'none',
                                                 backgroundColor: '#F8FAFC',
-                                                borderBottom: `1.5px solid ${THEME.colors.border}`
+                                                borderBottom: `1.5px solid ${THEME.colors.border}`,
+                                                borderTopRightRadius: THEME.radius.xl
                                             }}
                                         >
                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color: sortField === 'trend' ? THEME.colors.primary : THEME.colors.textSecondary }}>
@@ -2001,7 +2010,7 @@ export default function CostMatrixPage() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                    </>
                 )}
 
                 {/* --- FOOTER EXPLANATION BANNER --- */}

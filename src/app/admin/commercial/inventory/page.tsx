@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
@@ -403,7 +403,7 @@ export default function InventoryAdminPage() {
 
             // Precise diagnostic for table missing
             if (pgError.code === 'PGRST205') {
-                console.error('🚨 ERROR: La tabla de inventario "inventory_stocks" no existe.');
+                console.error('ERROR: La tabla de inventario "inventory_stocks" no existe.');
                 console.error('Sugerencia: Ejecuta el script REPAIR_INVENTORY_SYSTEM.sql en el dashboard de Supabase.');
             }
 
@@ -942,9 +942,7 @@ export default function InventoryAdminPage() {
                                     borderRadius: '50%',
                                     backgroundColor: '#EAEFEA'
                                 }}
-                            >
-                                ✕
-                            </button>
+                            ><X size={14} /></button>
                         )}
                         
                         <button 

@@ -200,7 +200,7 @@ export default function ClientsModule() {
                checkUserPermission(profile, 'admin.commercial', roles);
     };
 
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const [activeTab, setActiveTab] = useState('b2b');
     const [hoveredTab, setHoveredTab] = useState<string | null>(null);
     const [clientsB2B, setClientsB2B] = useState<Profile[]>([]);
     const [clientsB2C, setClientsB2C] = useState<Profile[]>([]);
@@ -1513,9 +1513,8 @@ export default function ClientsModule() {
     };
 
     const tabs = [
-        { id: 'dashboard', label: 'Resumen', icon: <BarChart3 size={16} /> },
-        { id: 'leads', label: 'Prospectos', icon: <Mail size={16} /> },
         { id: 'b2b', label: 'Institucionales', icon: <Building2 size={16} /> },
+        { id: 'leads', label: 'Prospectos', icon: <Mail size={16} /> },
         { id: 'agreements', label: 'Acuerdos Institucionales', icon: <FileText size={16} /> },
         { id: 'b2c', label: 'Hogar', icon: <Users size={16} /> },
     ];

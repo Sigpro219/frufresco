@@ -475,7 +475,7 @@ export default function PrintQuotePage() {
                         textAlign: 'center'
                     }}>
                         <div style={{ fontWeight: '800', fontSize: '8.2pt', color: '#166534', marginBottom: '0.2rem' }}>
-                            💡 ¿Quieres recibir una oferta personalizada?
+                            ¿Quieres recibir una oferta personalizada?
                         </div>
                         <div style={{ fontSize: '7.5pt', color: '#15803D', lineHeight: '1.3' }}>
                             Esta es una pre-cotización estimada con precios estándar de tu categoría. 
