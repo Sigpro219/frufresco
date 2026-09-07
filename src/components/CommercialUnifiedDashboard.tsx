@@ -248,6 +248,26 @@ const formatVolumeTon = (kg: number): string => {
     return `${tons.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ton`;
 };
 
+// Category name formatter (translates codes like "VE", "TU", "FR" to proper Spanish names)
+const formatCategoryName = (cat?: string | null): string => {
+    if (!cat) return 'General';
+    const key = cat.trim().toUpperCase();
+    const map: Record<string, string> = {
+        'VE': 'Verdura',
+        'TU': 'Tubérculo',
+        'FR': 'Fruta',
+        'HO': 'Hortaliza',
+        'LA': 'Lácteo',
+        'DE': 'Despensa',
+        'CO': 'Congelado',
+        'PR': 'Procesado',
+        'AB': 'Abarrotes',
+        'HI': 'Hierba',
+        'NO': 'General'
+    };
+    return map[key] || cat;
+};
+
 // Compact growth percentage formatter to prevent visual overflows
 const formatGrowthPct = (pct: number): string => {
     if (pct === null || pct === undefined || isNaN(pct)) return '0%';
@@ -323,6 +343,7 @@ interface ProductRotItem {
     id: string;
     name: string;
     sku: string;
+    accountingId?: string | number | null;
     category: string;
     unit: string;
     quantity: number;
@@ -336,6 +357,7 @@ interface CostTrendItem {
     id: string;
     name: string;
     sku: string;
+    accountingId?: string | number | null;
     purchaseCost: number;
     matrixCost: number;
     variancePct: number;
@@ -518,7 +540,7 @@ export default function CommercialUnifiedDashboard() {
             const [productsRes, matrixRes, appSettingsRes, purchasesRes, leadsRes, quotesRes] = await Promise.all([
                 supabase
                     .from('products')
-                    .select('id, name, sku, category, unit_of_measure, is_active, base_price')
+                    .select('id, name, sku, accounting_id, category, unit_of_measure, is_active, base_price')
                     .eq('is_active', true),
                 supabase
                     .from('commercial_cost_matrix')
@@ -807,7 +829,8 @@ export default function CommercialUnifiedDashboard() {
                     id: pId,
                     name: prod?.name || 'Producto sin nombre',
                     sku: prod?.sku || 'N/A',
-                    category: prod?.category || 'General',
+                    accountingId: prod?.accounting_id ?? prod?.sku ?? 'N/A',
+                    category: formatCategoryName(prod?.category),
                     unit: prod?.unit_of_measure || 'Kg',
                     quantity: Math.round(val.quantity * 10) / 10,
                     revenue: Math.round(val.revenue),
@@ -836,7 +859,8 @@ export default function CommercialUnifiedDashboard() {
                         id: prod.id,
                         name: prod.name,
                         sku: prod.sku,
-                        category: prod.category || 'General',
+                        accountingId: prod.accounting_id ?? prod.sku ?? 'N/A',
+                        category: formatCategoryName(prod.category),
                         unit: prod.unit_of_measure || 'Kg',
                         quantity: qty,
                         revenue: agg ? agg.revenue : 0,
@@ -2368,7 +2392,7 @@ export default function CommercialUnifiedDashboard() {
                                 <Clock size={18} color="#EF4444" /> Productos de Baja Rotación (Slow Movers)
                             </h3>
                             <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary }}>
-                                SKUs activos con salida nula o mínima (&lt;5 Kg). Alerta preventiva para compras.
+                                Productos activos con salida nula o mínima (&lt;5 Kg). Alerta preventiva para compras.
                             </p>
                         </div>
                         <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '3px 8px', borderRadius: '12px' }}>
@@ -2388,10 +2412,10 @@ export default function CommercialUnifiedDashboard() {
                                         <div style={{ fontWeight: '800', color: '#9B1C1C', fontSize: '0.85rem' }}>
                                             {p.name}
                                         </div>
-                                        <div style={{ fontSize: '0.7rem', color: '#742A2A', display: 'flex', gap: '8px', marginTop: '2px' }}>
-                                            <span>SKU: {p.sku}</span>
-                                            <span>•</span>
-                                            <span>Cat: {p.category}</span>
+                                        <div style={{ fontSize: '0.7rem', color: '#742A2A', display: 'flex', gap: '8px', marginTop: '2px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <span>ID Contable: <strong>{p.accountingId ?? p.sku ?? 'N/A'}</strong></span>
+                                            <span>&bull;</span>
+                                            <span>Categoría: <strong>{p.category}</strong></span>
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
