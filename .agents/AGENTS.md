@@ -32,8 +32,11 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 
 ## 3. Reglas de Git y Despliegue
 * **Push a Remoto:** Queda estrictamente prohibido realizar `git push` a cualquier rama remota a menos que el usuario lo solicite expresamente. Las tareas deben completarse únicamente con commits locales.
+* **Invariante 'use client':** En cualquier componente cliente, `'use client';` debe ser estrictamente la primera línea del archivo antes de cualquier import para evitar abortos silenciosos en el build de Vercel.
+* **Verificación de Despliegues Vercel:** Ante reportes de versiones congeladas en producción, auditar de inmediato la compilación con `npm run build` para detectar bloqueos de Turbopack y verificar que el hash del commit en el Navbar coincida con el último commit de `main`.
 
 ---
 
-## 4. Gestión de Excepciones y Planillas de Importación/Exportación
-* **Campos SKU en Excel:** Queda estrictamente prohibido incluir, generar o procesar el campo `SKU` o `SKU_MAESTRO` en las planillas de Excel (.xlsx) utilizadas para importación o exportación de datos (ej. excepciones de clientes, catálogo, etc.). En su lugar, se debe utilizar únicamente el identificador lógico **`CODIGO_CONTABLE`** (accounting_id) para asociar los registros de productos de manera inequívoca.
+## 4. Identificadores de Producto y Denominación de Categorías
+* **Campos SKU en Excel e Interfaz:** Queda estrictamente prohibido mostrar o requerir el campo `SKU` en interfaces de usuario, modales, ranking de productos y planillas Excel (.xlsx). En su lugar, se debe utilizar únicamente la columna **`accounting_id`** (ID Contable) para asociar los registros de productos de manera inequívoca.
+* **Nombres Completos de Categoría:** En toda la interfaz de usuario queda prohibido mostrar códigos abreviados de categoría (`VE`, `TU`, `FR`, `HO`, `DE`, `LA`, `CO`, `PR`). Se deben mapear siempre a sus nombres completos en español: **Verdura**, **Tubérculo**, **Fruta**, **Hortaliza**, **Despensa**, **Lácteo**, **Congelado**, **Procesado**.
