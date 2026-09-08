@@ -41,7 +41,15 @@ import {
     Scale,
     ArrowUpDown,
     ArrowLeft,
-    RefreshCw
+    RefreshCw,
+    Camera,
+    CameraOff,
+    Package,
+    Tag,
+    Leaf,
+    CheckCircle2,
+    XCircle,
+    Clock
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
@@ -95,7 +103,7 @@ export default function MasterProductsPage() {
                 .eq('id', product.id);
 
             if (error) throw error;
-            showToast(newStatus ? `🔍 SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `⏳ SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
+            showToast(newStatus ? `SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
         } catch (e: any) {
             setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: isCurrentlyVerified } : p));
             showToast('Error actualizando revisión DEV: ' + e.message, 'error');
@@ -501,7 +509,7 @@ export default function MasterProductsPage() {
             return;
         }
 
-        if (!confirm(`🚀 Sincronización Web:\n\n• Se ocultarán ${toHide} productos sin foto.\n• Se activarán ${toShow} productos con foto activa.\n\n¿Deseas aplicar estos cambios masivamente?`)) return;
+        if (!confirm(`Sincronización Web:\n\n• Se ocultarán ${toHide} productos sin foto.\n• Se activarán ${toShow} productos con foto activa.\n\n¿Deseas aplicar estos cambios masivamente?`)) return;
 
         try {
             setLoading(true);
@@ -734,7 +742,7 @@ export default function MasterProductsPage() {
             }
 
             if (wipeExistingData) {
-                const confirmed = confirm('⚠️ ATENCIÓN: Se eliminarán TODOS los productos actuales antes de cargar los nuevos. ¿Estás absolutamente seguro?');
+                const confirmed = confirm('ATENCIÓN: Se eliminarán TODOS los productos actuales antes de cargar los nuevos. ¿Estás absolutamente seguro?');
                 if (!confirmed) return;
             }
 
@@ -752,7 +760,7 @@ export default function MasterProductsPage() {
                     const { error: purgeError } = await supabase.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
                     
                     if (purgeError) {
-                        console.warn('⚠️ No se pudo realizar el borrado físico directo por restricciones de FK en la BD. Ejecutando deshabilitación inteligente de productos no presentes en el Excel...', purgeError.message);
+                        console.warn('No se pudo realizar el borrado físico directo por restricciones de FK en la BD. Ejecutando deshabilitación inteligente de productos no presentes en el Excel...', purgeError.message);
                         
                         // Intento 2: Deshabilitación de productos descontinuados que no vienen en el nuevo Excel
                         const { data: existingProds } = await supabase.from('products').select('id, sku');
@@ -1732,7 +1740,7 @@ export default function MasterProductsPage() {
                                     ))}
                                 </div>
                                 <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
-                                    💡 Tip: Filtra por campos combinados separando con comas (,). Ejemplo: <code>Papa, @web, @activo</code>
+                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: <code>Papa, @web, @activo</code>
                                 </div>
                             </div>
                         )}
@@ -1769,10 +1777,10 @@ export default function MasterProductsPage() {
                                                 <Filter size={13} style={{ color: '#64748B' }} /> Todas
                                             </div>
                                             <div onClick={() => { setFilterPhotoHeader('con_foto'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterPhotoHeader === 'con_foto' ? 'bold' : 'normal', backgroundColor: filterPhotoHeader === 'con_foto' ? '#F1F5F9' : 'transparent' }}>
-                                                📷 Con Foto
+                                                <Camera size={13} style={{ color: '#059669' }} /> Con Foto
                                             </div>
                                             <div onClick={() => { setFilterPhotoHeader('sin_foto'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterPhotoHeader === 'sin_foto' ? 'bold' : 'normal', backgroundColor: filterPhotoHeader === 'sin_foto' ? '#F1F5F9' : 'transparent' }}>
-                                                🚫 Sin Foto
+                                                <CameraOff size={13} style={{ color: '#DC2626' }} /> Sin Foto
                                             </div>
                                         </div>
                                     )}
@@ -1800,14 +1808,14 @@ export default function MasterProductsPage() {
                                                 <Filter size={13} style={{ color: '#64748B' }} /> Todas las categorías
                                             </div>
                                             {[
-                                                { code: 'FR', label: '🍎 Frutas' },
-                                                { code: 'VE', label: '🥦 Verduras' },
-                                                { code: 'HO', label: '🌿 Hortalizas' },
-                                                { code: 'TU', label: '🥔 Tubérculos' },
-                                                { code: 'LA', label: '🥛 Lácteos' },
-                                                { code: 'DP', label: '🥫 Despensa' },
-                                                { code: 'CG', label: '❄️ Congelados' },
-                                                { code: 'PR', label: '⚙️ Procesados' }
+                                                { code: 'FR', label: 'Frutas' },
+                                                { code: 'VE', label: 'Verduras' },
+                                                { code: 'HO', label: 'Hortalizas' },
+                                                { code: 'TU', label: 'Tubérculos' },
+                                                { code: 'LA', label: 'Lácteos' },
+                                                { code: 'DP', label: 'Despensa' },
+                                                { code: 'CG', label: 'Congelados' },
+                                                { code: 'PR', label: 'Procesados' }
                                             ].map(cat => (
                                                 <div key={cat.code} onClick={() => { setFilterCategoryHeader(cat.code); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterCategoryHeader === cat.code ? 'bold' : 'normal', backgroundColor: filterCategoryHeader === cat.code ? '#F1F5F9' : 'transparent' }}>
                                                     {cat.label}
@@ -1839,7 +1847,7 @@ export default function MasterProductsPage() {
                                             </div>
                                             {availableUnits.map(unit => (
                                                 <div key={unit} onClick={() => { setFilterUnitHeader(unit); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterUnitHeader.toLowerCase() === unit.toLowerCase() ? 'bold' : 'normal', backgroundColor: filterUnitHeader.toLowerCase() === unit.toLowerCase() ? '#F1F5F9' : 'transparent' }}>
-                                                    📦 {unit}
+                                                    <Package size={13} style={{ color: '#475569' }} /> {unit}
                                                 </div>
                                             ))}
                                         </div>
@@ -1865,13 +1873,13 @@ export default function MasterProductsPage() {
                                                 <Filter size={13} style={{ color: '#64748B' }} /> Todos los IVA
                                             </div>
                                             <div onClick={() => { setFilterIvaHeader('19'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === '19' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === '19' ? '#F1F5F9' : 'transparent' }}>
-                                                🏷️ IVA 19%
+                                                <Tag size={13} style={{ color: '#475569' }} /> IVA 19%
                                             </div>
                                             <div onClick={() => { setFilterIvaHeader('5'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === '5' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === '5' ? '#F1F5F9' : 'transparent' }}>
-                                                🏷️ IVA 5%
+                                                <Tag size={13} style={{ color: '#475569' }} /> IVA 5%
                                             </div>
                                             <div onClick={() => { setFilterIvaHeader('0'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === '0' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === '0' ? '#F1F5F9' : 'transparent' }}>
-                                                🌱 Exento 0%
+                                                <Leaf size={13} style={{ color: '#16A34A' }} /> Exento 0%
                                             </div>
                                         </div>
                                     )}
@@ -1900,10 +1908,10 @@ export default function MasterProductsPage() {
                                                 <Filter size={13} style={{ color: '#64748B' }} /> Todos
                                             </div>
                                             <div onClick={() => { setFilterWebHeader('web'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterWebHeader === 'web' ? 'bold' : 'normal', backgroundColor: filterWebHeader === 'web' ? '#F1F5F9' : 'transparent' }}>
-                                                🌐 En Tienda Web
+                                                <Globe size={13} style={{ color: '#2563EB' }} /> En Tienda Web
                                             </div>
                                             <div onClick={() => { setFilterWebHeader('oculto'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterWebHeader === 'oculto' ? 'bold' : 'normal', backgroundColor: filterWebHeader === 'oculto' ? '#F1F5F9' : 'transparent' }}>
-                                                🙈 Ocultos
+                                                <EyeOff size={13} style={{ color: '#94A3B8' }} /> Ocultos
                                             </div>
                                         </div>
                                     )}
@@ -1928,10 +1936,10 @@ export default function MasterProductsPage() {
                                                 <Filter size={13} style={{ color: '#64748B' }} /> Todos
                                             </div>
                                             <div onClick={() => { setFilterStatusHeader('activo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'activo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'activo' ? '#F1F5F9' : 'transparent' }}>
-                                                ✅ Habilitados
+                                                <CheckCircle2 size={13} style={{ color: '#16A34A' }} /> Habilitados
                                             </div>
                                             <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
-                                                ❌ Deshabilitados
+                                                <XCircle size={13} style={{ color: '#DC2626' }} /> Deshabilitados
                                             </div>
                                         </div>
                                     )}
@@ -1956,10 +1964,10 @@ export default function MasterProductsPage() {
                                                 <Filter size={13} style={{ color: '#64748B' }} /> Todos
                                             </div>
                                             <div onClick={() => { setFilterDevHeader('revisado'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'revisado' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'revisado' ? '#F1F5F9' : 'transparent' }}>
-                                                🔍 Revisados
+                                                <CheckCircle2 size={13} style={{ color: '#10B981' }} /> Revisados
                                             </div>
                                             <div onClick={() => { setFilterDevHeader('pendiente'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pendiente' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pendiente' ? '#F1F5F9' : 'transparent' }}>
-                                                ⏳ Pendientes
+                                                <Clock size={13} style={{ color: '#F59E0B' }} /> Pendientes
                                             </div>
                                         </div>
                                     )}
@@ -2357,8 +2365,16 @@ export default function MasterProductsPage() {
                                                     title={canEdit ? (isVerified ? "Dev: SKU Revisado (Click para marcar pendiente)" : "Dev: Pendiente (Click para marcar revisado)") : "Modo Vista"}
                                                 >
                                                     <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }}></div>
-                                                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: isVerified ? '#065F46' : '#92400E', whiteSpace: 'nowrap' }}>
-                                                        {isVerified ? '🔍 REVISADO' : '⏳ PENDIENTE'}
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: isVerified ? '#065F46' : '#92400E', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        {isVerified ? (
+                                                            <>
+                                                                <CheckCircle2 size={11} strokeWidth={2.2} /> REVISADO
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Clock size={11} strokeWidth={2.2} /> PENDIENTE
+                                                            </>
+                                                        )}
                                                     </span>
                                                 </div>
                                             );
@@ -2465,7 +2481,7 @@ export default function MasterProductsPage() {
                                 </h2>
                                 <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>{conversionProduct.name}</span>
                             </div>
-                            <button onClick={() => setConversionProduct(null)} style={{ border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer', color: THEME.colors.textSecondary }}>✕</button>
+                            <button onClick={() => setConversionProduct(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Cerrar"><X size={18} strokeWidth={2} /></button>
                         </header>
 
                         {!canEdit && (
@@ -2656,7 +2672,7 @@ export default function MasterProductsPage() {
                                 </div>
                                 <h2 style={{ fontSize: '0.95rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0 }}>Cargue Masivo (Productos)</h2>
                             </div>
-                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: THEME.colors.textSecondary, cursor: 'pointer', fontSize: '1.25rem', fontWeight: '300' }}>✕</button>
+                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: THEME.colors.textSecondary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Cerrar"><X size={18} strokeWidth={2} /></button>
                         </div>
 
                         <div style={{ padding: '1.5rem' }}>

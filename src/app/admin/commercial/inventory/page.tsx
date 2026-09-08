@@ -163,16 +163,16 @@ const styles = {
         borderRadius: THEME.radius.lg, 
         border: `1px solid ${THEME.colors.border}`, 
         boxShadow: THEME.shadow.md, 
-        overflow: 'hidden',
+        overflow: 'visible' as const,
         position: 'relative' as const
     },
     table: { width: '100%', borderCollapse: 'collapse' as const },
     stickyHeader: { 
         position: 'sticky' as const, 
-        top: '-1px', 
-        backgroundColor: '#F9FAFB', 
-        zIndex: 10,
-        borderBottom: `1px solid #E5E7EB`
+        top: '143px', 
+        backgroundColor: '#F8FAFC', 
+        zIndex: 40,
+        borderBottom: `1.5px solid #CBD5E1`
     },
     th: { 
         padding: '0.65rem 1.25rem', 
@@ -247,6 +247,45 @@ export default function InventoryAdminPage() {
             [parentId]: !prev[parentId]
         }));
     };
+
+    // Sticky Control Dock & Table Headers synchronization
+    const dockRef = useRef<HTMLDivElement>(null);
+    const [dockHeight, setDockHeight] = useState(58);
+
+    useEffect(() => {
+        if (!dockRef.current) return;
+        const updateHeight = () => {
+            if (dockRef.current) {
+                setDockHeight(dockRef.current.offsetHeight);
+            }
+        };
+        updateHeight();
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(dockRef.current);
+        window.addEventListener('resize', updateHeight);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', updateHeight);
+        };
+    }, []);
+
+    const dynamicHeaderStyle = useMemo(() => ({
+        position: 'sticky' as const,
+        top: `${85 + dockHeight - 1}px`,
+        backgroundColor: '#F8FAFC',
+        zIndex: 40,
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.04)'
+    }), [dockHeight]);
+
+    const dynamicThStyle = useMemo(() => ({
+        ...styles.th,
+        position: 'sticky' as const,
+        top: `${85 + dockHeight - 1}px`,
+        backgroundColor: '#F8FAFC',
+        zIndex: 40,
+        borderBottom: '1.5px solid #CBD5E1'
+    }), [dockHeight]);
+
     interface ScoredItem {
         item: any;
         score: number;
@@ -259,8 +298,8 @@ export default function InventoryAdminPage() {
         prioritizePerishables: true,
         prioritizeCriticalStock: true,
         excludeAuditedRecently: true,
-        autoEnabled: true,
-        generationTime: '09:30' // Cut-off at 09:30 AM
+        autoEnabled: false,
+        generationTime: '09:30' // Cut-off at 09:30 AM (manual)
     });
     const [generatingAudit, setGeneratingAudit] = useState(false);
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
@@ -374,15 +413,15 @@ export default function InventoryAdminPage() {
                 }
                 setAvgCosts(costsMap);
                 setStocks(flattenedStocks);
-            } else if (activeTab === 'movements') {
+            } else if (activeTab === 'movements' || activeTab === 'novedades') {
                 const { data, error } = await supabase
                     .from('inventory_movements')
                     .select(`
                         *,
-                        products (name)
+                        products (name, sku, accounting_id)
                     `)
                     .order('created_at', { ascending: false })
-                    .limit(100)
+                    .limit(200)
                     .abortSignal(signal as any);
 
                 if (!isMounted.current) return;
@@ -524,21 +563,7 @@ export default function InventoryAdminPage() {
         }
     }, [auditPolicy, fetchData]);
 
-    // Effect for Automatic Generation
-    useEffect(() => {
-        if (!auditPolicy.autoEnabled) return;
 
-        const timer = setInterval(() => {
-            const now = new Date();
-            const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-            
-            if (currentTime === auditPolicy.generationTime) {
-                handleGenerateAudit(true);
-            }
-        }, 60000); // Check every minute
-
-        return () => clearInterval(timer);
-    }, [auditPolicy.autoEnabled, auditPolicy.generationTime, handleGenerateAudit]);
 
     useEffect(() => {
         isMounted.current = true;
@@ -611,7 +636,6 @@ export default function InventoryAdminPage() {
 
         const matchesText = searchTerms.every(term => 
             p.name?.toLowerCase().includes(term) ||
-            p.sku?.toLowerCase().includes(term) ||
             p.accounting_id?.toString()?.includes(term)
         );
 
@@ -695,11 +719,11 @@ export default function InventoryAdminPage() {
             if (segments.length === 0) {
                 const childrenQty = family.children.reduce((sum, ch) => sum + (ch.quantity || 0), 0);
                 const ownQty = family.parent.quantity || 0;
-                const totalQuantity = family.isParent ? (childrenQty + ownQty) : ownQty;
+                const totalQuantity = family.isParent ? childrenQty : ownQty;
 
                 const childrenVal = family.children.reduce((sum, ch) => sum + ((avgCosts[ch.product_id] || 0) * (ch.quantity || 0)), 0);
                 const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
-                const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
+                const totalValue = family.isParent ? childrenVal : ownVal;
 
                 result.push({
                     ...family,
@@ -719,11 +743,11 @@ export default function InventoryAdminPage() {
 
                 const childrenQty = activeChildren.reduce((sum, ch) => sum + (ch.quantity || 0), 0);
                 const ownQty = family.parent.quantity || 0;
-                const totalQuantity = family.isParent ? (childrenQty + ownQty) : ownQty;
+                const totalQuantity = family.isParent ? childrenQty : ownQty;
 
                 const childrenVal = activeChildren.reduce((sum, ch) => sum + ((avgCosts[ch.product_id] || 0) * (ch.quantity || 0)), 0);
                 const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
-                const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
+                const totalValue = family.isParent ? childrenVal : ownVal;
 
                 result.push({
                     ...family,
@@ -952,18 +976,27 @@ export default function InventoryAdminPage() {
                     <KPICard title="Tareas Pendientes" value={formatNumber(stats.pendingTasks, 0)} color="#FEF3C7" subtitle="Auditoría de piso" />
                 </div>
 
-                <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    marginBottom: '1.5rem', 
-                    backgroundColor: 'rgba(255, 255, 255, 0.85)', 
-                    padding: '0.5rem 1rem', 
-                    borderRadius: '16px', 
-                    border: `1px solid ${THEME.colors.border}`, 
-                    gap: '1rem',
-                    boxShadow: THEME.shadow.sm
-                }}>
+                <div 
+                    ref={dockRef}
+                    style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        marginBottom: '0.75rem', 
+                        backgroundColor: 'rgba(255, 255, 255, 0.96)', 
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        padding: '0.65rem 1.2rem', 
+                        borderRadius: '16px', 
+                        border: `1px solid ${THEME.colors.border}`, 
+                        gap: '1rem',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 50,
+                        transition: 'all 0.2s ease-in-out'
+                    }}
+                >
                     <div style={{ 
                         display: 'flex', 
                         gap: '0.25rem', 
@@ -985,7 +1018,7 @@ export default function InventoryAdminPage() {
                         </div>
                         <input 
                             type="text" 
-                            placeholder="Buscar por nombre, SKU o categoría..." 
+                            placeholder="Buscar por nombre o ID Contable..." 
                             value={searchQuery}
                             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                             style={{ 
@@ -1196,18 +1229,17 @@ export default function InventoryAdminPage() {
                     ) : (
                         <>
                             {activeTab === 'stock' && (
-                                <div style={{ overflowX: 'auto' }}>
+                                <div style={{ overflow: 'visible' }}>
                                     <table style={styles.table}>
-                                        <thead style={styles.stickyHeader}>
+                                        <thead style={dynamicHeaderStyle}>
                                             <tr>
-                                                <th style={styles.th}>Producto</th>
-                                                <th style={styles.th}>Estado</th>
-                                                <th style={{ ...styles.th, textAlign: 'center' }}>Stock Mín.</th>
-                                                <th style={{ ...styles.th, textAlign: 'center' }}>Costo Prom.</th>
-                                                <th style={{ ...styles.th, textAlign: 'center' }}>Valor Inv.</th>
-                                                <th style={styles.th}>Unidad</th>
-                                                <th style={styles.th}>Cantidad</th>
-                                                <th style={{ ...styles.th, textAlign: 'right' }}>Acciones</th>
+                                                <th style={{ ...dynamicThStyle, borderTopLeftRadius: '12px' }}>Producto</th>
+                                                <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Stock Mín.</th>
+                                                <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Costo Prom.</th>
+                                                <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Valor Inv.</th>
+                                                <th style={dynamicThStyle}>Unidad</th>
+                                                <th style={dynamicThStyle}>Cantidad</th>
+                                                <th style={{ ...dynamicThStyle, textAlign: 'right', borderTopRightRadius: '12px' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1265,13 +1297,23 @@ export default function InventoryAdminPage() {
                                                                                 <span>{parent.products?.name || 'Desconocido'}</span>
                                                                             </div>
                                                                             <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem', alignItems: 'center' }}>
-                                                                                <code style={{ fontSize: '0.7rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.03em' }}>
-                                                                                    {parent.products?.sku || 'S/N'}
+                                                                                <code style={{ fontSize: '0.75rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 8px', borderRadius: '5px', fontWeight: '800', border: '1px solid #C6E7D9', letterSpacing: '0.02em' }}>
+                                                                                    ID: {parent.products?.accounting_id ?? '—'}
                                                                                 </code>
-                                                                                {parent.products?.accounting_id && (
-                                                                                    <code style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, backgroundColor: '#EDF1EE', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
-                                                                                        ID: {parent.products.accounting_id}
-                                                                                    </code>
+                                                                                {parent.products?.is_active === false && (
+                                                                                    <span style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        backgroundColor: '#FEF2F2',
+                                                                                        color: '#991B1B',
+                                                                                        padding: '2px 6px',
+                                                                                        borderRadius: '4px',
+                                                                                        fontWeight: '800',
+                                                                                        border: '1px solid #FECACA',
+                                                                                        textAlign: 'center',
+                                                                                        letterSpacing: '0.04em'
+                                                                                    }}>
+                                                                                        MASTER OFF
+                                                                                    </span>
                                                                                 )}
                                                                                 <span style={{
                                                                                     fontSize: '0.62rem',
@@ -1298,32 +1340,6 @@ export default function InventoryAdminPage() {
                                                                                 </span>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td style={styles.td}>
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                                        <span style={styles.badge(
-                                                                            parent.status === 'available' ? THEME.colors.successBg : parent.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
-                                                                            parent.status === 'available' ? THEME.colors.successText : parent.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
-                                                                        )}>
-                                                                            {parent.status.toUpperCase()}
-                                                                        </span>
-                                                                        {parent.products?.is_active === false && (
-                                                                            <span style={{
-                                                                                fontSize: '0.6rem',
-                                                                                backgroundColor: '#FEF2F2',
-                                                                                color: '#991B1B',
-                                                                                padding: '2px 6px',
-                                                                                borderRadius: '4px',
-                                                                                fontWeight: '700',
-                                                                                border: '1px solid #FECACA',
-                                                                                textAlign: 'center',
-                                                                                letterSpacing: '0.04em',
-                                                                                width: 'fit-content'
-                                                                            }}>
-                                                                                MASTER OFF
-                                                                            </span>
-                                                                        )}
                                                                     </div>
                                                                 </td>
                                                                 <td style={{ 
@@ -1450,13 +1466,13 @@ export default function InventoryAdminPage() {
                                                                                     {child.products?.name || 'Desconocido'}
                                                                                 </div>
                                                                                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem' }}>
-                                                                                    <code style={{ fontSize: '0.68rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '1.5px 5px', borderRadius: '4px', fontWeight: '700' }}>
-                                                                                        {child.products?.sku || 'S/N'}
+                                                                                    <code style={{ fontSize: '0.72rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '2px 7px', borderRadius: '5px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
+                                                                                        ID: {child.products?.accounting_id ?? '—'}
                                                                                     </code>
-                                                                                    {child.products?.accounting_id && (
-                                                                                        <code style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1.5px 5px', borderRadius: '4px', fontWeight: '700' }}>
-                                                                                            ID: {child.products.accounting_id}
-                                                                                        </code>
+                                                                                    {child.products?.is_active === false && (
+                                                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF2F2', color: '#991B1B', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', border: '1px solid #FECACA' }}>
+                                                                                            MASTER OFF
+                                                                                        </span>
                                                                                     )}
                                                                                     <span style={{
                                                                                         fontSize: '0.62rem',
@@ -1473,14 +1489,6 @@ export default function InventoryAdminPage() {
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                    </td>
-                                                                    <td style={styles.td}>
-                                                                        <span style={styles.badge(
-                                                                            child.status === 'available' ? THEME.colors.successBg : child.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
-                                                                            child.status === 'available' ? THEME.colors.successText : child.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
-                                                                        )}>
-                                                                            {child.status.toUpperCase()}
-                                                                        </span>
                                                                     </td>
                                                                     <td style={{ 
                                                                         ...styles.td, 
@@ -1583,43 +1591,27 @@ export default function InventoryAdminPage() {
                                                                 </div>
                                                                 <div>
                                                                     <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>{parent.products?.name || 'Desconocido'}</div>
-                                                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
-                                                                        <code style={{ fontSize: '0.7rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.03em' }}>
-                                                                            {parent.products?.sku || 'S/N'}
+                                                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', alignItems: 'center' }}>
+                                                                        <code style={{ fontSize: '0.75rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 8px', borderRadius: '5px', fontWeight: '800', border: '1px solid #C6E7D9', letterSpacing: '0.02em' }}>
+                                                                            ID: {parent.products?.accounting_id ?? '—'}
                                                                         </code>
-                                                                        {parent.products?.accounting_id && (
-                                                                            <code style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, backgroundColor: '#EDF1EE', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700' }}>
-                                                                                ID: {parent.products.accounting_id}
-                                                                            </code>
+                                                                        {parent.products?.is_active === false && (
+                                                                            <span style={{
+                                                                                fontSize: '0.62rem',
+                                                                                backgroundColor: '#FEF2F2',
+                                                                                color: '#991B1B',
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '4px',
+                                                                                fontWeight: '800',
+                                                                                border: '1px solid #FECACA',
+                                                                                textAlign: 'center',
+                                                                                letterSpacing: '0.04em'
+                                                                            }}>
+                                                                                MASTER OFF
+                                                                            </span>
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        </td>
-                                                        <td style={styles.td}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                                <span style={styles.badge(
-                                                                    parent.status === 'available' ? THEME.colors.successBg : parent.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
-                                                                    parent.status === 'available' ? THEME.colors.successText : parent.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
-                                                                )}>
-                                                                    {parent.status.toUpperCase()}
-                                                                </span>
-                                                                {parent.products?.is_active === false && (
-                                                                    <span style={{
-                                                                        fontSize: '0.6rem',
-                                                                        backgroundColor: '#FEF2F2',
-                                                                        color: '#991B1B',
-                                                                        padding: '2px 6px',
-                                                                        borderRadius: '4px',
-                                                                        fontWeight: '700',
-                                                                        border: '1px solid #FECACA',
-                                                                        textAlign: 'center',
-                                                                        letterSpacing: '0.04em',
-                                                                        width: 'fit-content'
-                                                                    }}>
-                                                                        MASTER OFF
-                                                                    </span>
-                                                                )}
                                                             </div>
                                                         </td>
                                                         <td style={{ 
@@ -1703,16 +1695,16 @@ export default function InventoryAdminPage() {
                             )}
 
                             {activeTab === 'movements' && (
-                                <div style={{ overflowX: 'auto' }}>
+                                <div style={{ overflow: 'visible' }}>
                                     <table style={styles.table}>
-                                        <thead style={styles.stickyHeader}>
+                                        <thead style={dynamicHeaderStyle}>
                                             <tr>
-                                                <th style={styles.th}>Fecha</th>
-                                                <th style={styles.th}>Producto</th>
-                                                <th style={styles.th}>Tipo</th>
-                                                <th style={styles.th}>Estado Destino</th>
-                                                <th style={styles.th}>Cantidad</th>
-                                                <th style={styles.th}>Notas</th>
+                                                <th style={{ ...dynamicThStyle, borderTopLeftRadius: '12px' }}>Fecha</th>
+                                                <th style={dynamicThStyle}>Producto</th>
+                                                <th style={dynamicThStyle}>Tipo</th>
+                                                <th style={dynamicThStyle}>Estado Destino</th>
+                                                <th style={dynamicThStyle}>Cantidad</th>
+                                                <th style={{ ...dynamicThStyle, borderTopRightRadius: '12px' }}>Notas</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -2054,16 +2046,16 @@ export default function InventoryAdminPage() {
                             )}
 
                             {activeTab === 'novedades' && (
-                                <div style={{ overflowX: 'auto' }}>
+                                <div style={{ overflow: 'visible' }}>
                                      <table style={styles.table}>
-                                         <thead style={styles.stickyHeader}>
+                                         <thead style={dynamicHeaderStyle}>
                                              <tr>
-                                                 <th style={styles.th}>Fecha</th>
-                                                 <th style={styles.th}>Producto / SKU</th>
-                                                 <th style={styles.th}>Evidencia (Ruta)</th>
-                                                 <th style={styles.th}>Decisión Bodega</th>
-                                                 <th style={{ ...styles.th, textAlign: 'center' }}>Cant.</th>
-                                                 <th style={styles.th}>Notas</th>
+                                                 <th style={{ ...dynamicThStyle, borderTopLeftRadius: '12px' }}>Fecha</th>
+                                                 <th style={dynamicThStyle}>Producto / SKU</th>
+                                                 <th style={dynamicThStyle}>Evidencia (Ruta)</th>
+                                                 <th style={dynamicThStyle}>Decisión Bodega</th>
+                                                 <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Cant.</th>
+                                                 <th style={{ ...dynamicThStyle, borderTopRightRadius: '12px' }}>Notas</th>
                                              </tr>
                                          </thead>
                                          <tbody>

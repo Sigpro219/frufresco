@@ -4,7 +4,13 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
-import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, HelpCircle, Info, Scale, Package, Truck, X, BookOpen, ChefHat, Soup, UtensilsCrossed, Wheat, Drumstick, GitFork, Edit3, Search } from 'lucide-react';
+import { 
+    Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, 
+    HelpCircle, Info, Scale, Package, Truck, X, BookOpen, ChefHat, Soup, 
+    UtensilsCrossed, Wheat, Drumstick, GitFork, Edit3, Search, Sliders, Settings, 
+    Camera, CheckCircle2, Clock, Layers, RefreshCw, Trash2, EyeOff, Globe, 
+    ShoppingCart, FileEdit, AlertTriangle 
+} from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 
@@ -395,7 +401,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
         if (activeOptions.length === 0) {
             setVariants([]);
-            setVariantNotice('⚠️ No hay opciones seleccionadas en ningún atributo. Se limpiaron las combinaciones.');
+            setVariantNotice('No hay opciones seleccionadas en ningún atributo. Se limpiaron las combinaciones.');
             return;
         }
 
@@ -451,7 +457,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
         setVariants(newVariants);
         const summaryStr = activeOptions.map(o => `${o.name} (${o.values.length})`).join(' + ');
-        setVariantNotice(`✅ ¡Combinaciones recalculadas! ${newVariants.length} combinaciones generadas con [ ${summaryStr} ]`);
+        setVariantNotice(`¡Combinaciones recalculadas! ${newVariants.length} combinaciones generadas con [ ${summaryStr} ]`);
     };
 
     const updateVariantPrice = (id: string, price: number) => {
@@ -609,7 +615,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
             // Si falla por columna faltante, reintentar sin inherit_price
             if (error && error.message?.includes('column "inherit_price" does not exist')) {
-                console.warn('⚠️ Column inherit_price missing in DB. Retrying without it...');
+                console.warn('Column inherit_price missing in DB. Retrying without it...');
                 delete updatePayload.inherit_price;
                 const retry = await supabase
                     .from('products')
@@ -618,7 +624,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 error = retry.error;
                 
                 if (!error) {
-                    alert('⚠️ El producto se guardó, pero la opción "Heredar Precio" requiere una actualización de la base de datos (Columna inherit_price faltante).');
+                    alert('El producto se guardó, pero la opción "Heredar Precio" requiere una actualización de la base de datos (Columna inherit_price faltante).');
                 }
             }
 
@@ -677,7 +683,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             }
 
 
-            console.info('✅ Producto y variantes actualizados correctamente');
+            console.info('Producto y variantes actualizados correctamente');
             triggerProductRevalidation();
             onSave();
             onClose();
@@ -717,7 +723,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.2rem', borderBottom: '1px solid #eee', paddingBottom: '0.8rem', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
                         <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '0.8rem', margin: 0 }}>
-                            <span>⚙️ Editar Maestro</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <Settings size={22} strokeWidth={2} style={{ color: '#475569' }} /> Editar Maestro
+                            </span>
                             <span style={{ color: '#2563EB', fontWeight: '900' }}>
                                 ID Contable: #{product.accounting_id || 'S/N'}
                             </span>
@@ -751,10 +759,22 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             title="Haz clic para cambiar el estado de revisión en etapa de desarrollo"
                         >
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: (formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '#10B981' : '#F59E0B' }}></div>
-                            <span>{(formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '🔍 REVISADO (DEV)' : '⏳ PENDIENTE (DEV)'}</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                {(formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? (
+                                    <>
+                                        <CheckCircle2 size={13} strokeWidth={2.2} /> REVISADO (DEV)
+                                    </>
+                                ) : (
+                                    <>
+                                        <Clock size={13} strokeWidth={2.2} /> PENDIENTE (DEV)
+                                    </>
+                                )}
+                            </span>
                         </button>
                     </div>
-                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '2rem', cursor: 'pointer', color: '#6B7280' }}>✕</button>
+                    <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }} title="Cerrar modal">
+                        <X size={24} strokeWidth={2} />
+                    </button>
                 </header>
 
                 {readOnly && (
@@ -794,7 +814,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     sizes="100px"
                                 />
                             ) : (
-                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>📷</div>
+                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6' }}>
+                                    <Camera size={28} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                                </div>
                             )}
                             <input type="file" accept="image/*" onChange={handleFileChange} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
                             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', fontSize: '0.6rem', padding: '4px', textAlign: 'center' }}>CAMBIAR</div>
@@ -1006,7 +1028,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             }}
                                             title={filterOnlyActiveChildren ? 'Clic para ver también SKUs inactivos' : 'Clic para filtrar únicamente activos'}
                                         >
-                                            <span>{filterOnlyActiveChildren ? `Ver Todos (${localChildren.length})` : '✓ Solo Activos'}</span>
+                                            {filterOnlyActiveChildren ? (
+                                                <span>Ver Todos ({localChildren.length})</span>
+                                            ) : (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                    <Check size={11} strokeWidth={2.5} /> Solo Activos
+                                                </span>
+                                            )}
                                         </button>
                                     )}
                                 </div>
@@ -1095,8 +1123,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     border: '1px solid #E2E8F0',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    fontSize: '0.75rem'
+                                                    justifyContent: 'center'
                                                 }}>
                                                     {child.image_url ? (
                                                         <img 
@@ -1105,7 +1132,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                         />
                                                     ) : (
-                                                        <span>📦</span>
+                                                        <Package size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
                                                     )}
                                                 </div>
                                                 <div style={{ minWidth: 0, flex: 1 }}>
@@ -1136,8 +1163,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', fontSize: '0.68rem', color: '#64748B' }}>
                                                         <span>Unidad: <strong>{child.unit_of_measure || 'Kg'}</strong></span>
                                                         {(child as any).inherit_price ? (
-                                                            <span style={{ color: '#2563EB', fontWeight: '700' }}>
-                                                                ⚡ Hereda costo {child.utility_deviation_pct ? `(+${child.utility_deviation_pct}%)` : ''}
+                                                            <span style={{ color: '#2563EB', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <Zap size={11} strokeWidth={2} /> Hereda costo {child.utility_deviation_pct ? `(+${child.utility_deviation_pct}%)` : ''}
                                                             </span>
                                                         ) : (
                                                             <span>Base: <strong>${(child.base_price || 0).toLocaleString('es-CO')}</strong></span>
@@ -1371,8 +1398,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 }}
                             />
                             {hasChildren && (
-                                <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '4px', fontWeight: 'bold' }}>
-                                    ⚠️ Este producto ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
+                                <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <AlertTriangle size={12} strokeWidth={2} /> Este producto ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
                                 </p>
                             )}
                             {showParentResults && (
@@ -1383,9 +1410,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             setParentSearch('');
                                             setShowParentResults(false);
                                         }}
-                                        style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '700' }}
+                                        style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}
                                     >
-                                        ❌ Desvincular Padre
+                                        <X size={14} strokeWidth={2.2} /> Desvincular Padre
                                     </div>
                                     {allProducts
                                         .filter(p => 
@@ -1421,7 +1448,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <div style={{ padding: '1.2rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: '800', fontSize: '0.85rem' }}>
-                                    <span>📊 CONFIGURACIÓN DE HIJO (FRACCIONADO)</span>
+                                    <Sliders size={16} strokeWidth={2} />
+                                    <span>CONFIGURACIÓN DE HIJO (FRACCIONADO)</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <span style={{ fontSize: '0.7rem', fontWeight: '800', color: (formData as any).inherit_price ? '#2563EB' : '#6B7280' }}>
@@ -1932,7 +1960,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     {/* SECCIÓN COMERCIAL / VIDAS PARALELAS */}
                     <div style={{ padding: '1.5rem', backgroundColor: '#FFF7ED', borderRadius: '20px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                         <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#9A3412', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            🏷️ Configuración Comercial (Web)
+                            <Tag size={18} strokeWidth={2} /> Configuración Comercial (Web)
                         </h3>
                         <p style={{ fontSize: '0.8rem', color: '#7C2D12', margin: 0 }}>
                             Personaliza cómo se ve este producto en la página web, independiente del nombre técnico.
@@ -1997,8 +2025,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 </div>
                             </div>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px' }}>
-                            💡 <strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.
+                        <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Sparkles size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
+                            <span><strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.</span>
                         </div>
 
                         {/* SECCIÓN RECETAS TÍPICAS & KEYWORDS */}
@@ -2247,8 +2276,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             type="button"
                                             onClick={() => setFormData({ ...formData, tags: (formData.tags || []).filter((_, i) => i !== idx) })}
                                             style={{ background: 'none', border: 'none', color: '#EA580C', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                                            title="Eliminar tag"
                                         >
-                                            ✕
+                                            <X size={12} strokeWidth={2.5} />
                                         </button>
                                     </div>
                                 ))}
@@ -2289,13 +2319,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                         {/* COLUMNA DERECHA: VARIANTES */}
                         <div style={{ borderLeft: '1px solid #eee', paddingLeft: '3rem' }}>
-                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>🧬 Variantes del Producto (ID: #{formData.accounting_id || 'S/N'})</h3>
+                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Layers size={20} strokeWidth={2} style={{ color: '#4F46E5' }} />
+                                <span>Variantes del Producto (ID: #{formData.accounting_id || 'S/N'})</span>
+                            </h3>
 
                             {/* BLOQUE DE VARIANTES */}
                         <div style={{ backgroundColor: '#F9FAFB', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                 <div>
-                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#374151' }}>🛠️ VARIANTES (CANAL HOGAR)</h3>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Sliders size={16} strokeWidth={2} /> VARIANTES (CANAL HOGAR)
+                                    </h3>
                                     <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#6B7280' }}>
                                         Exclusivo B2C. Define atributos (Madurez, Tamaño) para crear sub-SKUs comerciales.
                                     </p>
@@ -2317,8 +2352,11 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                         <button
                                             type="button"
                                             onClick={() => removeOption(idx)}
-                                            style={{ position: 'absolute', right: '10px', top: '10px', border: 'none', background: 'none', color: '#EF4444', fontWeight: '800', cursor: 'pointer' }}
-                                        >✕</button>
+                                            style={{ position: 'absolute', right: '10px', top: '10px', border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            title="Eliminar opción"
+                                        >
+                                            <X size={15} strokeWidth={2.2} />
+                                        </button>
 
                                         <div style={{ marginBottom: '1rem' }}>
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', marginBottom: '6px' }}>
@@ -2379,10 +2417,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                                 const newVals = opt.values.filter((v: string) => v !== cVal);
                                                                                 updateOptionValues(idx, newVals);
                                                                             }}
-                                                                            style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontWeight: '900', padding: 0, fontSize: '0.85rem' }}
+                                                                            style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
                                                                             title="Eliminar este valor"
                                                                         >
-                                                                            ✕
+                                                                            <X size={12} strokeWidth={2.5} />
                                                                         </button>
                                                                     </span>
                                                                 ))}
@@ -2395,7 +2433,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                         const webFactorKg = formData.web_conversion_factor ?? (formData.unit_of_measure?.toLowerCase() === 'kg' ? 0.5 : 1);
                                                         const webWeightText = webFactorKg >= 1 ? `${webFactorKg} kg` : `${Math.round(webFactorKg * 1000)} gr`;
                                                         const displayLabel = isWebUnit 
-                                                            ? `🏷️ Unidad Web (${webUnitName} - ${webWeightText})`
+                                                            ? `Unidad Web (${webUnitName} - ${webWeightText})`
                                                             : (val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` : val);
 
                                                         return (
@@ -2415,7 +2453,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     color: opt.values.includes(val) ? (isWebUnit ? '#065F46' : '#1E40AF') : (isWebUnit ? '#047857' : '#4B5563'), 
                                                                     fontWeight: opt.values.includes(val) ? '800' : '500' 
                                                                 }} 
-                                                                title={isWebUnit ? `🌐 EXCLUSIVO PARA TIENDA WEB / E-COMMERCE: Al marcar esta casilla, el producto mostrará "${webUnitName} (${webWeightText})" como opción de compra para los clientes en la página web. Esto SOLO afecta la web y no altera pedidos ni operaciones institucionales B2B.` : undefined}
+                                                                title={isWebUnit ? `EXCLUSIVO PARA TIENDA WEB / E-COMMERCE: Al marcar esta casilla, el producto mostrará "${webUnitName} (${webWeightText})" como opción de compra para los clientes en la página web. Esto SOLO afecta la web y no altera pedidos ni operaciones institucionales B2B.` : undefined}
                                                             >
                                                                 <input
                                                                     type="checkbox"
@@ -2458,29 +2496,32 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     <button
                                         type="button"
                                         onClick={() => generateVariants()}
-                                        style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem', transition: 'all 0.2s' }}
+                                        style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                                     >
-                                        🔄 Regenerar Combinaciones
+                                        <RefreshCw size={16} strokeWidth={2} /> Regenerar Combinaciones
                                     </button>
                                 ) : variants.length > 0 && (
                                     <button
                                         type="button"
                                         onClick={() => generateVariants()}
-                                        style={{ padding: '1rem', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
+                                        style={{ padding: '1rem', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                                     >
-                                        🗑️ Borrar Combinaciones
+                                        <Trash2 size={16} strokeWidth={2} /> Borrar Combinaciones
                                     </button>
                                 )}
 
                                 {variantNotice && (
-                                    <div style={{ marginTop: '0.6rem', padding: '0.8rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', backgroundColor: variantNotice.includes('⚠️') ? '#FEF3C7' : '#ECFDF5', color: variantNotice.includes('⚠️') ? '#92400E' : '#065F46', border: `1px solid ${variantNotice.includes('⚠️') ? '#FCD34D' : '#6EE7B7'}` }}>
-                                        {variantNotice}
+                                    <div style={{ marginTop: '0.6rem', padding: '0.8rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', backgroundColor: variantNotice.includes('No hay opciones') ? '#FEF3C7' : '#ECFDF5', color: variantNotice.includes('No hay opciones') ? '#92400E' : '#065F46', border: `1px solid ${variantNotice.includes('No hay opciones') ? '#FCD34D' : '#6EE7B7'}`, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        {variantNotice.includes('No hay opciones') ? <AlertTriangle size={15} strokeWidth={2} /> : <CheckCircle2 size={15} strokeWidth={2} />}
+                                        <span>{variantNotice}</span>
                                     </div>
                                 )}
 
                                 {variants.length > 0 && (
                                     <div style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
-                                        <p style={{ fontWeight: '700', marginBottom: '1rem', color: '#059669' }}>✅ {variants.length} Combinaciones listas</p>
+                                        <p style={{ fontWeight: '700', marginBottom: '1rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <CheckCircle2 size={16} strokeWidth={2.2} /> {variants.length} Combinaciones listas
+                                        </p>
                                         <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '12px', marginTop: '0.5rem' }}>
                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                                 <thead style={{ backgroundColor: '#F9FAFB', position: 'sticky', top: 0, zIndex: 5 }}>
@@ -2522,7 +2563,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                             sizes="40px"
                                                                         />
                                                                     ) : (
-                                                                        <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>{variantUploading === v.id ? '...' : '📷'}</span>
+                                                                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                                                                            {variantUploading === v.id ? <Loader2 size={14} className="animate-spin" style={{ color: '#94A3B8' }} /> : <Camera size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />}
+                                                                        </span>
                                                                     )}
                                                                     <input 
                                                                         id={`file-${v.id}`}
@@ -2567,14 +2610,20 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     style={{
                                                                         border: 'none',
                                                                         background: 'none',
-                                                                        fontSize: '1.2rem',
                                                                         cursor: 'pointer',
-                                                                        opacity: v.show_on_web === false ? 0.3 : 1,
-                                                                        filter: v.show_on_web === false ? 'grayscale(1)' : 'none'
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        padding: '2px',
+                                                                        opacity: v.show_on_web === false ? 0.4 : 1
                                                                     }}
                                                                     title={v.show_on_web === false ? 'Oculto en Web' : 'Visible en Web'}
                                                                 >
-                                                                    {v.show_on_web === false ? '📵' : '🌐'}
+                                                                    {v.show_on_web === false ? (
+                                                                        <EyeOff size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                                                                    ) : (
+                                                                        <Globe size={16} strokeWidth={1.5} style={{ color: '#2563EB' }} />
+                                                                    )}
                                                                 </button>
                                                             </td>
                                                         </tr>
@@ -2716,15 +2765,21 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                                 <div style={{ fontSize: '0.82rem', color: '#78350F', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: '1.45' }}>
                                     <div>
-                                        <strong>🛒 Compras / Proveedor:</strong>
+                                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <ShoppingCart size={13} strokeWidth={2} /> Compras / Proveedor:
+                                        </strong>
                                         <div style={{ color: '#92400E' }}>El insumo se compra, costea y factura por kilogramos (peso continuo).</div>
                                     </div>
                                     <div>
-                                        <strong>📝 Captura de Pedidos:</strong>
+                                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <FileEdit size={13} strokeWidth={2} /> Captura de Pedidos:
+                                        </strong>
                                         <div style={{ color: '#92400E' }}>Permite a los clientes u operadores ingresar <strong>decimales</strong> (ej. <code>0,5 kg</code>, <code>1,25 kg</code>).</div>
                                     </div>
                                     <div>
-                                        <strong>🛡️ Cant. Mínima Venta (kg):</strong>
+                                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <ShieldAlert size={13} strokeWidth={2} /> Cant. Mínima Venta (kg):
+                                        </strong>
                                         <div style={{ color: '#92400E' }}>Por defecto <strong>0,1 kg</strong> (100g). Evita pedidos de $0 o microfracciones inviables. Si el producto tiene frutas indivisibles (ej. Mango Tommy de 550g), el sistema protegerá para que no se pida menos del peso de la fruta.</div>
                                     </div>
                                 </div>
@@ -2751,15 +2806,21 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                                 <div style={{ fontSize: '0.82rem', color: '#1E3A8A', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: '1.45' }}>
                                     <div>
-                                        <strong>📦 Compras / Proveedor:</strong>
+                                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Package size={13} strokeWidth={2} /> Compras / Proveedor:
+                                        </strong>
                                         <div style={{ color: '#1E40AF' }}>El insumo se compra por conteo de piezas o empaques cerrados (bandejas, cajas, atados).</div>
                                     </div>
                                     <div>
-                                        <strong>📝 Captura de Pedidos:</strong>
+                                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <FileEdit size={13} strokeWidth={2} /> Captura de Pedidos:
+                                        </strong>
                                         <div style={{ color: '#1E40AF' }}>Exige <strong>números enteros estrictos</strong> (<code>1</code>, <code>2</code>, <code>3...</code>). Bloquea la entrada de decimales.</div>
                                     </div>
                                     <div>
-                                        <strong>🚚 Peso Logístico (kg/und):</strong>
+                                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Truck size={13} strokeWidth={2} /> Peso Logístico (kg/und):
+                                        </strong>
                                         <div style={{ color: '#1E40AF' }}>Peso físico estimado de 1 unidad (ej. <code>0,050 kg</code>). Se usa <strong>exclusivamente para cubicaje de camiones</strong> y cálculo de carga en despacho.</div>
                                     </div>
                                 </div>
