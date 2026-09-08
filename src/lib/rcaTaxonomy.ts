@@ -279,3 +279,105 @@ export function buildRcaMetadataTag(data: {
     });
     return `[RCA_METADATA: ${json}]`;
 }
+
+// ==============================================================================
+// PERSISTENCIA Y PARAMETRIZACIÓN DE TAXONOMÍA TÉCNICA (LOCAL STORAGE + FALLBACK)
+// ==============================================================================
+export const TAXONOMY_STORAGE_KEY = 'frufresco_custom_rca_taxonomy';
+
+export function getStoredTaxonomy(): DefectCategoryL1[] {
+    if (typeof window === 'undefined') {
+        return RCA_CATEGORIES_L1;
+    }
+    try {
+        const raw = window.localStorage.getItem(TAXONOMY_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
+            }
+        }
+    } catch (e) {
+        console.warn('Error leyendo taxonomía personalizada:', e);
+    }
+    return RCA_CATEGORIES_L1;
+}
+
+export function saveStoredTaxonomy(categories: DefectCategoryL1[]): void {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.setItem(TAXONOMY_STORAGE_KEY, JSON.stringify(categories));
+    } catch (e) {
+        console.error('Error guardando taxonomía personalizada:', e);
+    }
+}
+
+export function resetStoredTaxonomy(): DefectCategoryL1[] {
+    if (typeof window !== 'undefined') {
+        try {
+            window.localStorage.removeItem(TAXONOMY_STORAGE_KEY);
+        } catch (e) {
+            console.error('Error restableciendo taxonomía:', e);
+        }
+    }
+    return RCA_CATEGORIES_L1;
+}
+
+// ==============================================================================
+// PLANTILLAS SUGERIDAS DE DISPOSICIÓN SANITARIA DE MERMA (BPM / INVIMA)
+// ==============================================================================
+export interface SanitaryDisposalTemplate {
+    id: string;
+    title: string;
+    icon: string;
+    category: 'destruccion' | 'transformacion' | 'donacion' | 'compostaje';
+    textTemplate: string;
+}
+
+export const DISPOSICION_SANITARIA_TEMPLATES: SanitaryDisposalTemplate[] = [
+    {
+        id: 'destruccion_biologica',
+        title: 'Baja Total / Destrucción Física (Contaminación / Moho)',
+        icon: 'Trash2',
+        category: 'destruccion',
+        textTemplate: `[DISPOSICIÓN SANITARIA: BAJA TOTAL POR DESCOMPOSICIÓN / NULIDAD BIOLÓGICA]
+- Dictamen: Producto con invasión fúngica / putrefacción avanzada no apto para consumo humano ni animal.
+- Acción: Segregación inmediata en contenedor de merma no recuperable en zona de cuarentena.
+- Destino final: Disposición municipal en ruta de recolección de residuos orgánicos / compostaje cerrado.
+- Responsable de baja: Supervisor de Almacén y Control de Inocuidad FruFresco.`
+    },
+    {
+        id: 'transformacion_industrial',
+        title: 'Reclasificación para Transformación Secundaria (Pulpas / Salsas)',
+        icon: 'Layers',
+        category: 'transformacion',
+        textTemplate: `[DISPOSICIÓN SANITARIA: RECLASIFICACIÓN PARA TRANSFORMACIÓN INDUSTRIAL]
+- Dictamen: Producto inocuo microbiológicamente pero con defecto estético, maduración avanzada o golpe mecánico.
+- Acción: Traslado de canastillas a cámara de reproceso para canal de despulpado / cocción.
+- Destino final: Venta como materia prima para elaboración de jugos, pulpas congeladas o mermeladas.
+- Responsable de despacho: Líder de Planta y Comercial Industrial.`
+    },
+    {
+        id: 'donacion_banco_alimentos',
+        title: 'Donación a Banco de Alimentos (Inocuo / Calibre No Comercial)',
+        icon: 'HeartHandshake',
+        category: 'donacion',
+        textTemplate: `[DISPOSICIÓN SANITARIA: ENTREGA EN DONACIÓN A BANCO DE ALIMENTOS]
+- Dictamen: Producto 100% inocuo y fresco con desviación exclusiva en calibre o fecha límite comercial HORECA.
+- Acción: Embalaje en canastillas de donación con acta de entrega social.
+- Destino final: Banco de Alimentos de Bogotá / Fundación comunitaria aliada sin fines de lucro.
+- Responsable de entrega: Coordinador de Logística y Responsabilidad Social FruFresco.`
+    },
+    {
+        id: 'compostaje_agricola',
+        title: 'Compostaje Agroecológico / Enmienda de Suelos',
+        icon: 'Sparkles',
+        category: 'compostaje',
+        textTemplate: `[DISPOSICIÓN SANITARIA: APROVECHAMIENTO AGROECOLÓGICO / COMPOSTAJE]
+- Dictamen: Merma vegetal vegetal limpia no apta para consumo, apta para reincorporación al ciclo de nutrientes.
+- Acción: Trituración y almacenamiento en tolva de biodegradación.
+- Destino final: Proveedor agroecológico aliado para generación de compost orgánico y lombricultura.
+- Responsable de entrega: Líder de Economía Circular FruFresco.`
+    }
+];
+
