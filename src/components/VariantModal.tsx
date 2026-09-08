@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Product, supabase } from '@/lib/supabase';
 import { sortSuggestedValues, groupSuggestedValues } from './ManageAttributesModal';
+import { X, Scale, Package, PackageOpen, RefreshCw, Camera, Loader2 } from 'lucide-react';
 
 interface Variant {
     id: string;
@@ -289,7 +290,9 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                         <h2 style={{ fontSize: '1.8rem', fontWeight: '800', margin: 0 }}>{readOnly ? product.name : `Configurar Variantes: ${product.name}`}</h2>
                         <span style={{ color: '#6B7280', fontWeight: '600' }}>SKU Maestro: {product.sku}</span>
                     </div>
-                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '2rem', cursor: 'pointer' }}>✕</button>
+                    <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#64748B' }}>
+                        <X size={24} strokeWidth={2} />
+                    </button>
                 </header>
 
                 {!readOnly && (
@@ -404,10 +407,10 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                                             const newVals = opt.values.filter((v: string) => v !== cVal);
                                                                             updateOption(idx, opt.name, newVals.join(', '));
                                                                         }}
-                                                                        style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontWeight: '900', padding: 0, fontSize: '0.85rem' }}
+                                                                        style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontWeight: '900', padding: 0, display: 'flex', alignItems: 'center' }}
                                                                         title="Eliminar este valor"
                                                                     >
-                                                                        ✕
+                                                                        <X size={12} strokeWidth={2.5} />
                                                                     </button>
                                                                 </span>
                                                             ))}
@@ -470,8 +473,8 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                 {under1kg.length > 0 && (
                                                                     <div>
-                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>
-                                                                            ⚖️ Menos de 1 Kilo (&lt; 1000 gr)
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <Scale size={12} strokeWidth={2} /> Menos de 1 Kilo (&lt; 1000 gr)
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                                             {under1kg.map(renderCheckboxChip)}
@@ -481,8 +484,8 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
                                                                 {overOrEqual1kg.length > 0 && (
                                                                     <div style={{ borderTop: under1kg.length > 0 ? '1px dashed #E5E7EB' : 'none', paddingTop: under1kg.length > 0 ? '6px' : '0' }}>
-                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>
-                                                                            📦 1 Kilo o Más (&ge; 1 Kg / Mayorista)
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <Package size={12} strokeWidth={2} /> 1 Kilo o Más (&ge; 1 Kg / Mayorista)
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                                             {overOrEqual1kg.map(renderCheckboxChip)}
@@ -492,8 +495,8 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
                                                                 {others.length > 0 && (
                                                                     <div style={{ borderTop: '1px dashed #E5E7EB', paddingTop: '6px' }}>
-                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>
-                                                                            🧺 Empaques &amp; Otras Presentaciones
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <PackageOpen size={12} strokeWidth={2} /> Empaques &amp; Otras Presentaciones
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                                             {others.map(renderCheckboxChip)}
@@ -510,8 +513,10 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
                                     <button 
                                         onClick={() => removeOption(idx)}
-                                        style={{ border: 'none', background: 'none', color: '#EF4444', fontSize: '1.2rem', cursor: 'pointer', fontWeight: '800', marginTop: '6px' }}
-                                    >✕</button>
+                                        style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', marginTop: '6px' }}
+                                    >
+                                        <X size={18} strokeWidth={2.2} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -520,9 +525,9 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                             <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
                                 <button 
                                     onClick={generateVariants}
-                                    style={{ padding: '0.8rem 2rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                                    style={{ padding: '0.8rem 2rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                                 >
-                                    🔄 Regenerar Todas las Combinaciones
+                                    <RefreshCw size={15} strokeWidth={2.2} /> Regenerar Todas las Combinaciones
                                 </button>
                             </div>
                         )}
@@ -557,7 +562,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                     }}
                                                 >
                                                     {uploadingIndex === idx ? (
-                                                        <span style={{ fontSize: '1.5rem' }}>⏳</span>
+                                                        <Loader2 size={22} className="animate-spin" style={{ color: '#6B7280' }} />
                                                     ) : v.image_url ? (
                                                         <Image 
                                                             src={v.image_url} 
@@ -568,7 +573,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                             sizes="60px"
                                                         />
                                                     ) : (
-                                                        <span style={{ fontSize: '1.5rem', opacity: 0.5 }}>📷</span>
+                                                        <Camera size={22} style={{ color: '#9CA3AF' }} />
                                                     )}
                                                 </label>
                                                 {!readOnly && v.image_url && uploadingIndex === null && (
@@ -578,9 +583,11 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                             position: 'absolute', top: '-8px', right: '-8px',
                                                             backgroundColor: '#EF4444', color: 'white', border: 'none',
                                                             borderRadius: '50%', width: '20px', height: '20px',
-                                                            fontSize: '12px', cursor: 'pointer'
+                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                                         }}
-                                                    >✕</button>
+                                                    >
+                                                        <X size={12} strokeWidth={2.5} />
+                                                    </button>
                                                 )}
                                                 <input
                                                     id={`v-file-${idx}`}

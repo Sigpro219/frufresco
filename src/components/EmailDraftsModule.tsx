@@ -2389,7 +2389,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return [];
     }
 
-    return matched.sort((a, b) => {
+    const finalResults = matched.sort((a, b) => {
       const excA = clientExceptions.find(e => e.product_id === a.id);
       const excB = clientExceptions.find(e => e.product_id === b.id);
       const freqA = clientFrequentProductMap[a.id];
@@ -2997,7 +2997,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .filter(itm => !itm.isDeleted && itm.matched_product_id)
         .map(itm => {
           const mProd = products.find(p => p.id === itm.matched_product_id);
-          const resolvedPrice = getResolvedPriceForItem(itm, mProd);
+          const resolvedPrice = mProd ? getResolvedPriceForDraft(selectedDraft, mProd.id) : (itm.unitPrice || 0);
           return {
             productId: itm.matched_product_id,
             productName: mProd?.name || itm.searchQuery || itm.originalName,
@@ -3021,7 +3021,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         manual_delivery_time: isManualDelivery ? manualDeliveryTime : null,
         manual_delivery_margin: isManualDelivery ? manualDeliveryMargin : null,
         address: editableAddress || selectedDraft.address || 'Bogotá',
-        notes: adminNotes || '',
+        notes: (selectedDraft as any)?.admin_notes || '',
         items: validItems,
         channel: 'email',
         originSource: 'email'
@@ -3945,6 +3945,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     return {
+      deliverySlot: deliverySlot || 'AM',
       address: meta?.address || draft.extracted_address || 'No detectado',
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
@@ -5411,8 +5412,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#92400E' }}>
                 Aviso de Motor IA: {aiHealth.message || 'Interrupción temporal en la extracción automática.'}
               </div>
-              <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
-                ⚡ <strong>La operación manual continúa 100% activa</strong> (puedes procesar borradores, seleccionar productos y gestionar pedidos sin interrupciones). Por favor notifica a administración.
+              <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+                <Zap size={13} strokeWidth={2.5} style={{ color: '#D97706', flexShrink: 0 }} />
+                <span><strong>La operación manual continúa 100% activa</strong> (puedes procesar borradores, seleccionar productos y gestionar pedidos sin interrupciones). Por favor notifica a administración.</span>
               </div>
             </div>
           </div>
@@ -7179,17 +7181,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         type="button"
                                         onClick={() => setSelectedExcelSheetIndex(sIdx)}
                                         style={{
-                                          padding: '4px 10px',
-                                          borderRadius: '6px',
-                                          border: selectedExcelSheetIndex === sIdx ? '1.5px solid #2563EB' : '1px solid #CBD5E1',
-                                          backgroundColor: selectedExcelSheetIndex === sIdx ? '#EFF6FF' : '#FFFFFF',
-                                          color: selectedExcelSheetIndex === sIdx ? '#1D4ED8' : '#475569',
-                                          fontWeight: selectedExcelSheetIndex === sIdx ? 800 : 600,
-                                          fontSize: '0.72rem',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '6px 14px',
+                                          borderRadius: '8px',
+                                          fontSize: '0.8rem',
+                                          fontWeight: '800',
+                                          border: selectedExcelSheetIndex === sIdx ? '2px solid #059669' : '1px solid #CBD5E1',
+                                          backgroundColor: selectedExcelSheetIndex === sIdx ? '#ECFDF5' : '#FFFFFF',
+                                          color: selectedExcelSheetIndex === sIdx ? '#065F46' : '#475569',
                                           cursor: 'pointer'
                                         }}
                                       >
-                                        📄 {s.sheetName} ({s.countWithQty} pedidos)
+                                        <FileText size={13} strokeWidth={2} />
+                                        <span>{s.sheetName} ({s.countWithQty} pedidos)</span>
                                       </button>
                                     ))}
                                   </div>
@@ -7659,8 +7665,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
                               </span>
                               {item.source_attachment_name && (
-                                <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700 }} title={`Anexo: ${item.source_attachment_name}`}>
-                                  📎 {item.purchase_order ? `OC: ${item.purchase_order}` : item.source_attachment_name.replace(/\.xlsx|\.pdf/i, '')}
+                                <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }} title={`Anexo: ${item.source_attachment_name}`}>
+                                  <Paperclip size={10} strokeWidth={2} />
+                                  <span>{item.purchase_order ? `OC: ${item.purchase_order}` : item.source_attachment_name.replace(/\.xlsx|\.pdf/i, '')}</span>
                                 </span>
                               )}
                               {matchedProd ? (
@@ -7934,7 +7941,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           )}
                                           {isScarcityLocked && (
                                             <span style={{ fontSize: '0.65rem', backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 7px', borderRadius: '4px', border: '1px solid #FCA5A5', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                              <PackageX size={11} /> AGOTADO POR ESCASEZ
+                                              <Package size={11} /> AGOTADO POR ESCASEZ
                                             </span>
                                           )}
                                         </div>
@@ -8270,7 +8277,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           onConfirm: async () => {
                             try {
                               setSaving(true);
-                              await handleSendBatchNovedadEmail();
+                              const res = await fetch('/api/orders/notify-deleted-item', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  draftId: selectedDraft.id,
+                                  deletedItem: recentlyDeletedItems,
+                                  sourceEmail: selectedDraft.source_email,
+                                  clientName: selectedDraft.client_detected_name || 'Cliente',
+                                  dbItems: selectedDraft.extracted_items || [],
+                                  emailItems: editableItems
+                                })
+                              });
+                              await safeFetchJson(res);
                               setRecentlyDeletedItems([]);
                               showToast('Novedades notificadas consolidadas al cliente por correo.', 'success');
                             } catch (err: any) {
@@ -9644,8 +9663,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </div>
                     <div style={{ fontSize: '0.75rem', color: notifyClientOfModifications ? '#B45309' : '#64748B', marginTop: '2px', lineHeight: '1.4' }}>
                       {notifyClientOfModifications
-                        ? '✔ Activado: El correo incluirá un apartado especial detallando los productos no disponibles o retirados por falta de stock.'
-                        : '✖ Desactivado (Recomendado si fue una corrección interna): El cliente recibirá su confirmación limpia solo con los productos aprobados, sin avisarle de ningún error o borrado de digitación.'}
+                        ? 'Activado: El correo incluirá un apartado especial detallando los productos no disponibles o retirados por falta de stock.'
+                        : 'Desactivado (Recomendado si fue una corrección interna): El cliente recibirá su confirmación limpia solo con los productos aprobados, sin avisarle de ningún error o borrado de digitación.'}
                     </div>
                   </div>
                 </div>
@@ -9732,9 +9751,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 color: '#64748B',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: '#9CA3AF',
-                cursor: 'pointer'
+                justifyContent: 'center'
               }}
             >
               <X size={20} />
@@ -10646,7 +10663,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       justifyContent: 'center',
                       boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                     }}>
-                      <PackageX size={28} color="#9CA3AF" />
+                      <Package size={28} color="#9CA3AF" />
                     </div>
                   )}
                   <div>
@@ -11420,7 +11437,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         setShowDeliveryTimeModal(false);
                         showToast(`Hora de entrega fijada: ${tempDeliveryTime} (±${tempDeliveryMargin} min)`, 'success');
                       } else {
-                        showToast('Por favor selecciona una hora', 'warning');
+                        showToast('Por favor selecciona una hora', 'info');
                       }
                     }}
                     style={{

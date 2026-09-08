@@ -60,7 +60,8 @@ import {
     ShieldCheck,
     Star,
     History,
-    ExternalLink
+    ExternalLink,
+    Settings
 } from 'lucide-react';
 
 
@@ -2158,8 +2159,9 @@ export default function OrderLoadingPage() {
                                 <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#92400E' }}>
                                     Aviso de Motor IA: {aiHealth.message || 'Interrupción temporal en la extracción automática.'}
                                 </div>
-                                <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
-                                    ⚡ <strong>La operación manual continúa 100% activa</strong> (puedes digitar pedidos, seleccionar clientes y adjuntar archivos normalmente). Por favor notifica a administración.
+                                <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+                                    <Zap size={13} strokeWidth={2.5} style={{ color: '#D97706', flexShrink: 0 }} />
+                                    <span><strong>La operación manual continúa 100% activa</strong> (puedes digitar pedidos, seleccionar clientes y adjuntar archivos normalmente). Por favor notifica a administración.</span>
                                 </div>
                             </div>
                         </div>
@@ -2496,9 +2498,10 @@ export default function OrderLoadingPage() {
                                         justifyContent: 'center',
                                         cursor: 'pointer',
                                         fontSize: '0.65rem',
-                                        fontWeight: 'bold'
                                     }}
-                                >✕</button>
+                                >
+                                    <X size={11} strokeWidth={2.5} />
+                                </button>
                             )}
                         </div>
 
@@ -3979,7 +3982,7 @@ export default function OrderLoadingPage() {
                                             justifyContent: 'center'
                                         }}
                                     >
-                                        ✕
+                                        <X size={20} strokeWidth={2.2} />
                                     </button>
                                 </div>
                             </div>
@@ -4295,8 +4298,8 @@ export default function OrderLoadingPage() {
                                                                         </span>
                                                                     )}
                                                                     {prod.options_config && prod.options_config.length > 0 && (
-                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                            ⚙️ Opciones
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 5px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <Settings size={10} strokeWidth={2.2} /> Opciones
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -4335,7 +4338,7 @@ export default function OrderLoadingPage() {
                                                     <td style={{ padding: '1.25rem 2rem', fontSize: '0.95rem', color: '#475569', fontWeight: '800' }}>
                                                          {item.products?.accounting_id || '-'}
                                                      </td>
-                                                     <td style={{ padding: '1.25rem 2rem' }}>
+                                                    <td style={{ padding: '1.25rem 2rem' }}>
                                                          <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
                                                              {item.products?.name}
                                                              {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
@@ -4364,8 +4367,8 @@ export default function OrderLoadingPage() {
                                                                              </div>
                                                                          )}
                                                                          {!(item.unit_price) || parseFloat(item.unit_price.toString()) <= 0 ? (
-                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                 ⚠️ Sin Precio
+                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                                 <AlertTriangle size={11} strokeWidth={2.5} /> Sin Precio
                                                                              </span>
                                                                          ) : contractPrices[item.product_id] !== undefined && contractPrices[item.product_id] !== null ? (
                                                                              customPriceIds.has(item.product_id) ? (
@@ -4601,10 +4604,11 @@ export default function OrderLoadingPage() {
                                         color: '#64748B',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontWeight: 'bold'
+                                        justifyContent: 'center'
                                     }}
-                                >✕</button>
+                                >
+                                    <X size={18} strokeWidth={2.2} />
+                                </button>
 
                                 {/* Flex container for header */}
                                 <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
@@ -4685,10 +4689,13 @@ export default function OrderLoadingPage() {
                                             cursor: 'pointer',
                                             padding: 0,
                                             fontSize: 'inherit',
-                                            textDecoration: 'underline'
+                                            textDecoration: 'underline',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
                                         }}
                                     >
-                                        ⚙️ Editar Variantes
+                                        <Settings size={12} strokeWidth={2} /> Editar Variantes
                                     </button>
                                     <span>|</span>
                                     <button
@@ -4708,10 +4715,13 @@ export default function OrderLoadingPage() {
                                             cursor: 'pointer',
                                             padding: 0,
                                             fontSize: 'inherit',
-                                            textDecoration: 'underline'
+                                            textDecoration: 'underline',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
                                         }}
                                     >
-                                        ⚙️ Editar Equivalencias
+                                        <Scale size={12} strokeWidth={2} /> Editar Equivalencias
                                     </button>
                                 </div>
 
@@ -4866,8 +4876,8 @@ export default function OrderLoadingPage() {
                                         border: '1px solid #DCFCE7',
                                         textAlign: 'left'
                                     }}>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#15803D', marginBottom: '8px' }}>
-                                            ⚖️ Conversiones de Equivalencia Sugeridas
+                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#15803D', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Scale size={16} strokeWidth={2.2} /> Conversiones de Equivalencia Sugeridas
                                         </div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                             {itemConversions.map(c => {
@@ -5011,9 +5021,9 @@ export default function OrderLoadingPage() {
                                     <button
                                         type="button"
                                         onClick={() => setIsMapPickerOpen(false)}
-                                        style={{ background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '10px', fontSize: '1.1rem', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        style={{ background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     >
-                                        ✕
+                                        <X size={18} strokeWidth={2.2} />
                                     </button>
                                 </div>
                             </div>
@@ -5214,7 +5224,7 @@ export default function OrderLoadingPage() {
                                         justifyContent: 'center'
                                     }}
                                 >
-                                    ✕
+                                    <X size={18} strokeWidth={2.2} />
                                 </button>
                             </div>
 
@@ -5258,9 +5268,9 @@ export default function OrderLoadingPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => setReassignSearch('')}
-                                                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                                                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                                                     >
-                                                        ✕
+                                                        <X size={14} strokeWidth={2.2} />
                                                     </button>
                                                 )}
                                             </div>
@@ -5346,8 +5356,9 @@ export default function OrderLoadingPage() {
                                     <>
                                         {/* Step 2: Double Confirmation Screen */}
                                         <div style={{ backgroundColor: '#FEF3C7', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #FCD34D' }}>
-                                            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#92400E', lineHeight: '1.4' }}>
-                                                ⚠️ <span style={{ textDecoration: 'underline' }}>{profile?.contact_name || (profile as any)?.email?.split('@')[0] || currentUser?.email?.split('@')[0] || 'Operador'}</span>, ¿estás seguro de que deseas reasignar este pedido a otro cliente?
+                                            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#92400E', lineHeight: '1.4', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                <AlertTriangle size={18} strokeWidth={2.5} style={{ color: '#D97706', flexShrink: 0, marginTop: '2px' }} />
+                                                <span><span style={{ textDecoration: 'underline' }}>{profile?.contact_name || (profile as any)?.email?.split('@')[0] || currentUser?.email?.split('@')[0] || 'Operador'}</span>, ¿estás seguro de que deseas reasignar este pedido a otro cliente?</span>
                                             </p>
                                             <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#B45309', lineHeight: '1.3' }}>
                                                 Esta acción cambiará la titularidad comercial, los datos fiscales y la dirección de entrega asignada a este pedido, y quedará registrada de forma inmutable en el historial de auditoría.
@@ -5670,7 +5681,7 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                         zIndex: 10
                     }}
                 >
-                    {isSelected && '✓'}
+                    {isSelected && <Check size={14} strokeWidth={3} color="#FFFFFF" />}
                 </div>
             ) : (
                 <div 

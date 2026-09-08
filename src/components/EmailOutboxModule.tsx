@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2, Printer, Download } from 'lucide-react';
+import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2, Printer, Download, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { generateOrderConfirmationHtml } from '@/lib/emailTemplates';
 
 interface EmailOutboxModuleProps {
@@ -460,13 +460,18 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                       {isFailed ? (
                         <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>FALLIDO</span>
                       ) : isSandbox ? (
-                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🟡 MODO PRUEBAS</span>
+                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#D97706' }} />
+                          MODO PRUEBAS
+                        </span>
                       ) : isSimulated ? (
                         <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>SIMULADO</span>
                       ) : isPending ? (
                         <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>EN COLA</span>
                       ) : (
-                        <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🟢 ENVIADO REAL</span>
+                        <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckCircle2 size={11} strokeWidth={2.5} /> ENVIADO REAL
+                        </span>
                       )}
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -650,7 +655,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                     alignItems: 'center',
                     gap: '8px'
                   }}>
-                    <span style={{ fontSize: '1.1rem' }}>🟡</span>
+                    <AlertTriangle size={18} strokeWidth={2.2} style={{ color: '#D97706', flexShrink: 0 }} />
                     <div>
                       <strong>MODO PRUEBAS ACTIVO:</strong> Este correo fue generado en entorno de pruebas y redirigido a tu buzón de auditoría (<u>no</u> fue enviado al cliente real).
                     </div>
