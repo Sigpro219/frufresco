@@ -9,7 +9,7 @@ import {
     Play, Eye, CornerDownRight, FileText, Camera, Truck, BarChart2,
     ShieldAlert, AlertCircle, Sparkles, HelpCircle, Check, ShieldCheck,
     HeartHandshake, TrendingUp, Layers, Store, Warehouse, PackageCheck,
-    Zap, ChevronRight, RotateCcw, ExternalLink, CameraOff, Upload,
+    Zap, ChevronRight, ChevronDown, ChevronUp, RotateCcw, ExternalLink, CameraOff, Upload,
     Maximize2, Phone, Mail, MessageCircle, UserCheck, X, Scale, Receipt,
     PackageMinus, Inbox, Edit2
 } from 'lucide-react';
@@ -335,6 +335,25 @@ export default function CustomerServicePage() {
     const [newPhoneInput, setNewPhoneInput] = useState('');
     const [savingPhone, setSavingPhone] = useState(false);
 
+    // Sticky header & KPI collapse state
+    const [showKpis, setShowKpis] = useState(true);
+    const kpiHeaderRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const saved = localStorage.getItem('cs_show_kpis');
+        if (saved !== null) {
+            setShowKpis(saved === 'true');
+        }
+    }, []);
+
+    const toggleShowKpis = () => {
+        setShowKpis(prev => {
+            const next = !prev;
+            localStorage.setItem('cs_show_kpis', String(next));
+            return next;
+        });
+    };
+
     const showToast = (text: string, type: 'success' | 'error' | 'warning' = 'success') => {
         setToastMessage({ text, type });
         setTimeout(() => {
@@ -519,6 +538,9 @@ export default function CustomerServicePage() {
         setNoveltyReason('');
         if (rightPanelRef.current) {
             rightPanelRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        if (typeof window !== 'undefined' && window.scrollY < 120 && showKpis) {
+            window.scrollTo({ top: 160, behavior: 'smooth' });
         }
 
         // Parse RCA metadata from record
@@ -1063,15 +1085,29 @@ export default function CustomerServicePage() {
 
     return (
         <main style={{ 
-            height: 'calc(100vh - 64px)', 
-            maxHeight: 'calc(100vh - 64px)', 
-            display: 'flex', 
-            flexDirection: 'column', 
+            minHeight: '100vh', 
             backgroundColor: '#F8FAFC', 
             color: THEME.colors.textMain, 
-            overflow: 'hidden', 
-            boxSizing: 'border-box' 
+            boxSizing: 'border-box',
+            position: 'relative'
         }}>
+            {/* Custom Sleek Scrollbar Styles */}
+            <style>{`
+                .cs-custom-scroll::-webkit-scrollbar {
+                    width: 6px;
+                    height: 6px;
+                }
+                .cs-custom-scroll::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .cs-custom-scroll::-webkit-scrollbar-thumb {
+                    background: #CBD5E1;
+                    border-radius: 9999px;
+                }
+                .cs-custom-scroll::-webkit-scrollbar-thumb:hover {
+                    background: #94A3B8;
+                }
+            `}</style>
             
             {/* Toast Banner */}
             {toastMessage && (
@@ -1099,17 +1135,18 @@ export default function CustomerServicePage() {
                 </div>
             )}
 
-            {/* 1. STICKY TOP COCKPIT (HEADER + 4 PULSE CARDS + SEARCH & TABS) */}
-            <div style={{
-                flexShrink: 0,
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                padding: '0.75rem 2rem 0.5rem 2rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.55rem',
-                zIndex: 40
-            }}>
+            {/* 1. SECCIÓN SUPERIOR: ENCABEZADO Y PULSO OPERATIVO (SE OCULTA AL HACER SCROLL O AL COLAPSAR) */}
+            <div 
+                ref={kpiHeaderRef}
+                style={{
+                    backgroundColor: '#F8FAFC',
+                    padding: '0.85rem 2rem 0.5rem 2rem',
+                    display: showKpis ? 'flex' : 'none',
+                    flexDirection: 'column',
+                    gap: '0.65rem',
+                    transition: 'all 0.25s ease-in-out'
+                }}
+            >
                 {/* Row 1: Title, Subtitle & Action Buttons */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1321,71 +1358,108 @@ export default function CustomerServicePage() {
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Row 3: Search Bar & Global View Tabs */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '10px',
-                    padding: '6px 12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    borderRadius: '12px',
-                    border: '1px solid #E2E8F0',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-                }}>
-                    {/* Search Input */}
-                    <div style={{ position: 'relative', width: '360px', maxWidth: '100%' }}>
-                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex' }}>
-                            <Search size={14} />
-                        </span>
-                        <input 
-                            type="text"
-                            placeholder="Buscar por cliente, motivo, responsable o pedido..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
+            {/* 2. BARRA DE CONTROL STICKY (A PARTIR DE LA LÍNEA HACIA ABAJO: BUSCADOR PRIMERO Y PESTAÑAS) */}
+            <div style={{
+                position: 'sticky',
+                top: '85px',
+                zIndex: 45,
+                backgroundColor: '#F8FAFC',
+                borderBottom: '1px solid #E2E8F0',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
+                padding: '0.55rem 2rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                transition: 'all 0.2s ease'
+            }}>
+                {/* Search Input - First thing visible, wide & prominent */}
+                <div style={{ position: 'relative', flex: 1, maxWidth: '520px', minWidth: '260px' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex' }}>
+                        <Search size={15} />
+                    </span>
+                    <input 
+                        type="text"
+                        placeholder="Buscar por cliente, motivo, responsable o pedido..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        onFocus={() => {
+                            if (typeof window !== 'undefined' && window.scrollY < 120 && showKpis) {
+                                window.scrollTo({ top: 160, behavior: 'smooth' });
+                            }
+                        }}
+                        style={{
+                            width: '100%',
+                            padding: '8px 32px 8px 34px',
+                            borderRadius: '10px',
+                            border: '1.5px solid #CBD5E1',
+                            fontSize: '0.82rem',
+                            outline: 'none',
+                            backgroundColor: 'white',
+                            boxSizing: 'border-box',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                            transition: 'all 0.15s ease'
+                        }}
+                    />
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchTerm('')}
                             style={{
-                                width: '100%',
-                                padding: '6px 10px 6px 32px',
-                                borderRadius: '8px',
-                                border: '1px solid #E2E8F0',
-                                fontSize: '0.78rem',
-                                outline: 'none',
-                                backgroundColor: '#F8FAFC',
-                                boxSizing: 'border-box'
+                                position: 'absolute',
+                                right: '10px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                border: 'none',
+                                background: '#F1F5F9',
+                                color: '#64748B',
+                                borderRadius: '50%',
+                                width: '18px',
+                                height: '18px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
                             }}
-                        />
-                    </div>
+                        >
+                            <X size={11} strokeWidth={2.5} />
+                        </button>
+                    )}
+                </div>
 
+                {/* Right: Global View Tabs + KPI Toggle Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {/* Global View Tabs */}
-                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px' }}>
+                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '10px' }}>
                         <button 
                             onClick={() => { setActiveTab('pending'); setStatusFilter('all'); setSelectedPqr(null); setSelectedNovelty(null); }}
                             style={{
-                                padding: '5px 12px',
+                                padding: '6px 14px',
                                 border: 'none',
-                                borderRadius: '7px',
-                                fontSize: '0.75rem',
+                                borderRadius: '8px',
+                                fontSize: '0.78rem',
                                 fontWeight: '800',
                                 cursor: 'pointer',
                                 backgroundColor: activeTab !== 'novelties' ? 'white' : 'transparent',
                                 color: activeTab !== 'novelties' ? '#0D7A57' : '#64748B',
-                                boxShadow: activeTab !== 'novelties' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                                boxShadow: activeTab !== 'novelties' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.15s'
                             }}
                         >
-                            <MessageSquare size={13} />
+                            <MessageSquare size={14} />
                             <span>PQRs Institucionales</span>
                             <span style={{
                                 fontSize: '0.65rem',
-                                padding: '1px 5px',
+                                padding: '1px 6px',
                                 borderRadius: '9999px',
-                                backgroundColor: activeTab !== 'novelties' ? '#EAEFEA' : '#E2E8F0',
-                                color: activeTab !== 'novelties' ? '#0D7A57' : '#475569',
+                                backgroundColor: activeTab !== 'novelties' ? '#EAEFEA' : '#CBD5E1',
+                                color: activeTab !== 'novelties' ? '#0D7A57' : '#334155',
                                 fontWeight: '900'
                             }}>
                                 {pqrs.length}
@@ -1394,47 +1468,70 @@ export default function CustomerServicePage() {
                         <button 
                             onClick={() => { setActiveTab('novelties'); setSelectedPqr(null); setSelectedNovelty(null); }}
                             style={{
-                                padding: '5px 12px',
+                                padding: '6px 14px',
                                 border: 'none',
-                                borderRadius: '7px',
-                                fontSize: '0.75rem',
+                                borderRadius: '8px',
+                                fontSize: '0.78rem',
                                 fontWeight: '800',
                                 cursor: 'pointer',
                                 backgroundColor: activeTab === 'novelties' ? 'white' : 'transparent',
                                 color: activeTab === 'novelties' ? '#0D7A57' : '#64748B',
-                                boxShadow: activeTab === 'novelties' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                                boxShadow: activeTab === 'novelties' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.15s'
                             }}
                         >
-                            <Truck size={13} />
+                            <Truck size={14} />
                             <span>Novedades Conductor</span>
                             <span style={{
                                 fontSize: '0.65rem',
-                                padding: '1px 5px',
+                                padding: '1px 6px',
                                 borderRadius: '9999px',
-                                backgroundColor: activeTab === 'novelties' ? '#EAEFEA' : '#E2E8F0',
-                                color: activeTab === 'novelties' ? '#0D7A57' : '#475569',
+                                backgroundColor: activeTab === 'novelties' ? '#EAEFEA' : '#CBD5E1',
+                                color: activeTab === 'novelties' ? '#0D7A57' : '#334155',
                                 fontWeight: '900'
                             }}>
                                 {novelties.length}
                             </span>
                         </button>
                     </div>
+
+                    {/* Toggle button to show/hide top KPI cockpit */}
+                    <button
+                        type="button"
+                        onClick={toggleShowKpis}
+                        title={showKpis ? "Ocultar panel superior de indicadores" : "Mostrar panel superior de indicadores"}
+                        style={{
+                            padding: '6px 12px',
+                            borderRadius: '9px',
+                            border: '1px solid #CBD5E1',
+                            backgroundColor: 'white',
+                            color: '#475569',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        {showKpis ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        <span>{showKpis ? 'Ocultar KPIs' : 'Ver KPIs'}</span>
+                    </button>
                 </div>
             </div>
 
-            {/* 2. DUAL INDEPENDENT SCROLLING GALLERIES */}
+            {/* 3. DUAL INDEPENDENT SCROLLING GALLERIES (CON MÁXIMO PROTAGONISMO) */}
             <div style={{
-                flex: 1,
-                minHeight: 0,
+                height: 'calc(100vh - 85px - 62px)',
+                minHeight: '640px',
                 display: 'grid',
-                gridTemplateColumns: 'minmax(350px, 400px) 1fr',
-                gap: '1rem',
+                gridTemplateColumns: 'minmax(380px, 440px) 1fr',
+                gap: '1.25rem',
                 padding: '0.75rem 2rem 1rem 2rem',
-                overflow: 'hidden',
                 boxSizing: 'border-box'
             }}>
                 {/* Left Column: Tickets List (Card Container) */}
@@ -1602,17 +1699,21 @@ export default function CustomerServicePage() {
                     </div>
 
                     {/* Scrollable Tickets List (Independent Scroll) */}
-                    <div style={{
-                        flex: 1,
-                        minHeight: 0,
-                        overflowY: 'auto',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        scrollbarWidth: 'thin',
-                        scrollbarColor: '#CBD5E1 transparent'
-                    }}>
+                    <div 
+                        className="cs-custom-scroll"
+                        style={{
+                            flex: 1,
+                            minHeight: 0,
+                            overflowY: 'auto',
+                            overscrollBehavior: 'contain',
+                            padding: '10px 12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            scrollbarWidth: 'thin',
+                            scrollbarColor: '#CBD5E1 transparent'
+                        }}
+                    >
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
                                 <Loader2 className="animate-spin" size={30} style={{ color: '#0D7A57', margin: '0 auto' }} />
@@ -1964,10 +2065,12 @@ export default function CustomerServicePage() {
                     {/* Right Column: Case Detail & Resolution Cockpit (Independent Scroll) */}
                     <div 
                         ref={rightPanelRef}
+                        className="cs-custom-scroll"
                         style={{ 
                             height: '100%', 
                             minHeight: 0, 
                             overflowY: 'auto', 
+                            overscrollBehavior: 'contain',
                             backgroundColor: 'white', 
                             borderRadius: '16px', 
                             border: '1px solid #E2E8F0', 
