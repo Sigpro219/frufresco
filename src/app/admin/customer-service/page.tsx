@@ -1706,7 +1706,7 @@ export default function CustomerServicePage() {
                 height: 'calc(100vh - 85px - 62px)',
                 minHeight: '640px',
                 display: 'grid',
-                gridTemplateColumns: 'minmax(380px, 440px) 1fr',
+                gridTemplateColumns: 'minmax(460px, 500px) 1fr',
                 gap: '1.25rem',
                 padding: '0.75rem 2rem 1rem 2rem',
                 boxSizing: 'border-box'
@@ -1725,13 +1725,13 @@ export default function CustomerServicePage() {
                 }}>
                     {/* Encabezado y Filtro por Estado (Sticky header inside left column) */}
                     <div style={{
-                        padding: '10px 14px',
+                        padding: '10px 10px',
                         borderBottom: '1px solid #F1F5F9',
                         backgroundColor: '#FFFFFF',
                         flexShrink: 0
                     }}>
                         {/* Header: Title & Total Badge & Refresh */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', padding: '0 2px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div style={{
                                     width: '28px',
@@ -1780,9 +1780,15 @@ export default function CustomerServicePage() {
                             </button>
                         </div>
 
-                        {/* Filtro por Estado (Pills con Conteo) */}
+                        {/* Filtro por Estado (Pills con Conteo en Grid de 5 columnas exactas) */}
                         {activeTab !== 'novelties' ? (
-                            <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                                gap: '4px',
+                                width: '100%',
+                                boxSizing: 'border-box'
+                            }}>
                                 {[
                                     { id: 'all', label: 'Todos', count: pqrCounts.all, color: '#475569', bg: '#F1F5F9' },
                                     { id: 'pending', label: 'Pendientes', count: pqrCounts.pending, color: '#B45309', bg: '#FEF3C7' },
@@ -1796,30 +1802,42 @@ export default function CustomerServicePage() {
                                             key={st.id}
                                             type="button"
                                             onClick={() => setStatusFilter(st.id as any)}
+                                            title={`${st.label} (${st.count})`}
                                             style={{
-                                                padding: '3px 7px',
+                                                padding: '4px 2px',
                                                 borderRadius: '6px',
                                                 border: `1.5px solid ${isSel ? '#0D7A57' : 'transparent'}`,
                                                 backgroundColor: isSel ? '#EAEFEA' : '#F8FAFC',
                                                 color: isSel ? '#0D7A57' : '#64748B',
-                                                fontSize: '0.68rem',
+                                                fontSize: '0.64rem',
                                                 fontWeight: isSel ? '900' : '700',
                                                 cursor: 'pointer',
-                                                display: 'inline-flex',
+                                                display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '4px',
-                                                whiteSpace: 'nowrap',
+                                                justifyContent: 'center',
+                                                gap: '3px',
+                                                minWidth: 0,
+                                                width: '100%',
+                                                boxSizing: 'border-box',
                                                 transition: 'all 0.12s ease'
                                             }}
                                         >
-                                            <span>{st.label}</span>
                                             <span style={{
-                                                fontSize: '0.62rem',
-                                                padding: '1px 5px',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                letterSpacing: '-0.01em'
+                                            }}>
+                                                {st.label}
+                                            </span>
+                                            <span style={{
+                                                fontSize: '0.58rem',
+                                                padding: '1px 3px',
                                                 borderRadius: '9999px',
                                                 backgroundColor: isSel ? '#0D7A57' : st.bg,
                                                 color: isSel ? 'white' : st.color,
-                                                fontWeight: '900'
+                                                fontWeight: '900',
+                                                flexShrink: 0
                                             }}>
                                                 {st.count}
                                             </span>
@@ -1828,7 +1846,13 @@ export default function CustomerServicePage() {
                                 })}
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                                gap: '4px',
+                                width: '100%',
+                                boxSizing: 'border-box'
+                            }}>
                                 {[
                                     { id: 'all', label: 'Todas', count: noveltyCounts.all, color: '#475569', bg: '#F1F5F9' },
                                     { id: 'pending_review', label: 'Pendientes', count: noveltyCounts.pending_review, color: '#B45309', bg: '#FEF3C7' },
@@ -1841,30 +1865,42 @@ export default function CustomerServicePage() {
                                             key={st.id}
                                             type="button"
                                             onClick={() => setNoveltyStatusFilter(st.id as any)}
+                                            title={`${st.label} (${st.count})`}
                                             style={{
-                                                padding: '3px 7px',
+                                                padding: '4px 2px',
                                                 borderRadius: '6px',
                                                 border: `1.5px solid ${isSel ? '#0D7A57' : 'transparent'}`,
                                                 backgroundColor: isSel ? '#EAEFEA' : '#F8FAFC',
                                                 color: isSel ? '#0D7A57' : '#64748B',
-                                                fontSize: '0.68rem',
+                                                fontSize: '0.64rem',
                                                 fontWeight: isSel ? '900' : '700',
                                                 cursor: 'pointer',
-                                                display: 'inline-flex',
+                                                display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '4px',
-                                                whiteSpace: 'nowrap',
+                                                justifyContent: 'center',
+                                                gap: '3px',
+                                                minWidth: 0,
+                                                width: '100%',
+                                                boxSizing: 'border-box',
                                                 transition: 'all 0.12s ease'
                                             }}
                                         >
-                                            <span>{st.label}</span>
                                             <span style={{
-                                                fontSize: '0.62rem',
-                                                padding: '1px 5px',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                letterSpacing: '-0.01em'
+                                            }}>
+                                                {st.label}
+                                            </span>
+                                            <span style={{
+                                                fontSize: '0.58rem',
+                                                padding: '1px 3px',
                                                 borderRadius: '9999px',
                                                 backgroundColor: isSel ? '#0D7A57' : st.bg,
                                                 color: isSel ? 'white' : st.color,
-                                                fontWeight: '900'
+                                                fontWeight: '900',
+                                                flexShrink: 0
                                             }}>
                                                 {st.count}
                                             </span>
