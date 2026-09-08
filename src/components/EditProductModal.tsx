@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
@@ -102,6 +102,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const isParent = !isChild && (localChildren.length > 0 || product.parent_id === product.id);
     const hasChildren = localChildren.length > 0;
 
+    const [filterOnlyActiveChildren, setFilterOnlyActiveChildren] = useState(true);
+
+    const activeChildrenCount = localChildren.filter(c => c.is_active).length;
+    const inactiveChildrenCount = localChildren.length - activeChildrenCount;
+
+    const displayedChildren = useMemo(() => {
+        if (filterOnlyActiveChildren) {
+            return localChildren.filter(c => c.is_active);
+        }
+        return localChildren;
+    }, [localChildren, filterOnlyActiveChildren]);
+
     const [showAddChildSearch, setShowAddChildSearch] = useState(false);
     const [addChildQuery, setAddChildQuery] = useState('');
     const [linkingChild, setLinkingChild] = useState(false);
@@ -164,6 +176,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const availableChildrenCandidates = (allProducts || [])
         .filter(p => 
+            p.is_active &&
             addChildQuery.trim() !== '' &&
             p.id !== product.id && 
             p.parent_id !== product.id &&
@@ -967,17 +980,40 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                         fontWeight: '800',
                                         padding: '2px 8px',
                                         borderRadius: '12px',
-                                        backgroundColor: '#EFF6FF',
-                                        color: '#1D4ED8',
-                                        border: '1px solid #BFDBFE'
+                                        backgroundColor: '#ECFDF5',
+                                        color: '#065F46',
+                                        border: '1px solid #A7F3D0'
                                     }}>
-                                        {localChildren.length} {localChildren.length === 1 ? 'Hijo' : 'Hijos'}
+                                        {activeChildrenCount} {activeChildrenCount === 1 ? 'Activo' : 'Activos'}
                                     </span>
+                                    {inactiveChildrenCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterOnlyActiveChildren(!filterOnlyActiveChildren)}
+                                            style={{
+                                                fontSize: '0.68rem',
+                                                fontWeight: filterOnlyActiveChildren ? '600' : '700',
+                                                padding: '2px 8px',
+                                                borderRadius: '8px',
+                                                border: filterOnlyActiveChildren ? '1px solid #CBD5E1' : '1px solid #A7F3D0',
+                                                backgroundColor: filterOnlyActiveChildren ? '#F8FAFC' : '#ECFDF5',
+                                                color: filterOnlyActiveChildren ? '#64748B' : '#065F46',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            title={filterOnlyActiveChildren ? 'Clic para ver también SKUs inactivos' : 'Clic para filtrar únicamente activos'}
+                                        >
+                                            <span>{filterOnlyActiveChildren ? `Ver Todos (${localChildren.length})` : '✓ Solo Activos'}</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
                             {/* Lista de Hijos */}
-                            {localChildren.length === 0 ? (
+                            {displayedChildren.length === 0 ? (
                                 <div style={{
                                     padding: '1rem',
                                     textAlign: 'center',
@@ -988,11 +1024,32 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     fontSize: '0.78rem'
                                 }}>
                                     <p style={{ margin: 0, fontWeight: '600' }}>
-                                        Este producto es una referencia PADRE, pero aún no tiene SKUs hijos vinculados.
+                                        {localChildren.length === 0 
+                                            ? "Este producto es una referencia PADRE, pero aún no tiene SKUs hijos vinculados."
+                                            : "No hay productos hijos en estado activo actualmente."}
                                     </p>
-                                    <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#94A3B8' }}>
-                                        Usa el botón inferior para buscar y vincular un producto hijo.
-                                    </p>
+                                    {localChildren.length > 0 && filterOnlyActiveChildren ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterOnlyActiveChildren(false)}
+                                            style={{
+                                                marginTop: '6px',
+                                                padding: '2px 8px',
+                                                fontSize: '0.7rem',
+                                                color: '#2563EB',
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                textDecoration: 'underline'
+                                            }}
+                                        >
+                                            Ver {localChildren.length} SKUs inactivos
+                                        </button>
+                                    ) : (
+                                        <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#94A3B8' }}>
+                                            Usa el botón inferior para buscar y vincular un producto hijo.
+                                        </p>
+                                    )}
                                 </div>
                             ) : (
                                 <div style={{
@@ -1003,7 +1060,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     overflowY: 'auto',
                                     paddingRight: '2px'
                                 }}>
-                                    {localChildren.map((child) => (
+                                    {displayedChildren.map((child) => (
                                         <div 
                                             key={child.id}
                                             style={{
