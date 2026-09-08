@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronDown, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
@@ -26,6 +26,7 @@ interface InventoryItem {
         is_active: boolean;
         min_inventory_level: number;
         accounting_id?: number | null;
+        parent_id?: string | null;
     };
     warehouses: {
         name: string;
@@ -238,6 +239,14 @@ export default function InventoryAdminPage() {
     const [stockStatusFilter, setStockStatusFilter] = useState<'available' | 'returned' | 'in_process' | 'all'>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [avgCosts, setAvgCosts] = useState<Record<string, number>>({});
+    const [collapsedParents, setCollapsedParents] = useState<Record<string, boolean>>({});
+
+    const toggleParentCollapse = (parentId: string) => {
+        setCollapsedParents(prev => ({
+            ...prev,
+            [parentId]: !prev[parentId]
+        }));
+    };
     interface ScoredItem {
         item: any;
         score: number;
@@ -276,7 +285,7 @@ export default function InventoryAdminPage() {
                     let query = supabase
                         .from('products')
                         .select(`
-                            id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id,
+                            id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id, parent_id,
                             inventory_stocks!product_id (
                                 *,
                                 warehouses (name)
@@ -583,93 +592,174 @@ export default function InventoryAdminPage() {
         // ... previous implementation ...
     };
 
-    const filteredStocks = useMemo(() => {
+    interface StockFamily {
+        id: string;
+        parent: InventoryItem;
+        isParent: boolean;
+        children: InventoryItem[];
+        totalQuantity: number;
+        totalValue: number;
+    }
+
+    const matchSearchSegment = (item: InventoryItem, segment: string): boolean => {
+        const p = item.products;
+        if (!p) return false;
+
+        const parts = segment.split(/\s+/);
+        const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1));
+        const searchTerms = parts.filter(pt => !pt.startsWith('@'));
+
+        const matchesText = searchTerms.every(term => 
+            p.name?.toLowerCase().includes(term) ||
+            p.sku?.toLowerCase().includes(term) ||
+            p.accounting_id?.toString()?.includes(term)
+        );
+
+        if (!matchesText && searchTerms.length > 0) return false;
+
+        const matchesTags = tags.every(tag => {
+            if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
+                return item.quantity <= (p.min_inventory_level || 0);
+            }
+            if (tag === 'disponible' || tag === 'ok') return item.status === 'available';
+            if (tag === 'regreso') return item.status === 'returned';
+            if (tag === 'reproceso') return item.status === 'in_process';
+
+            const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                label.toLowerCase().startsWith(tag)
+            );
+            if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+            return false;
+        });
+
+        return matchesTags;
+    };
+
+    const filteredFamilies = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
-        
+        const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
+
         // 1. First apply Status Filter (Tab buttons)
-        const filtered = stockStatusFilter === 'all' 
+        const currentStocks = stockStatusFilter === 'all' 
             ? stocks 
             : stocks.filter(s => s.status === stockStatusFilter);
 
-        if (!query) return filtered;
+        // 2. Identify children and group by parent_id
+        const childrenByParent = new Map<string, InventoryItem[]>();
+        const childProductIds = new Set<string>();
 
-        // 2. Split query by commas for multiple searches (OR logic between comma-separated terms)
-        const segments = query.split(',').map(s => s.trim()).filter(Boolean);
+        currentStocks.forEach(item => {
+            const p = item.products;
+            if (p?.parent_id && p.parent_id !== item.product_id) {
+                childProductIds.add(item.product_id);
+                const list = childrenByParent.get(p.parent_id) || [];
+                list.push(item);
+                childrenByParent.set(p.parent_id, list);
+            }
+        });
 
-        if (segments.length === 0) return filtered;
+        // 3. Build base families from non-child items (parents and standalones)
+        const baseFamilies: StockFamily[] = [];
+        const processedProductIds = new Set<string>();
 
-        return filtered.filter(s => {
-            const p = s.products;
-            if (!p) return false;
+        currentStocks.forEach(item => {
+            if (childProductIds.has(item.product_id)) {
+                // If the parent exists in currentStocks, child will be nested under it
+                const parentExists = currentStocks.some(s => s.product_id === item.products?.parent_id);
+                if (parentExists) return;
+            }
 
-            return segments.some(segment => {
-                // Apply "Power Search" logic to each segment
-                const parts = segment.split(/\s+/);
-                const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1));
-                const searchTerms = parts.filter(pt => !pt.startsWith('@'));
+            if (processedProductIds.has(item.product_id)) return;
+            processedProductIds.add(item.product_id);
 
-                // Text search (AND logic within a single segment)
-                const matchesText = searchTerms.every(term => 
-                    p.name?.toLowerCase().includes(term) ||
-                    p.sku?.toLowerCase().includes(term) ||
-                    p.accounting_id?.toString()?.includes(term)
-                );
+            const hasChildren = childrenByParent.has(item.product_id);
+            const children = (childrenByParent.get(item.product_id) || []).sort(
+                (a, b) => (a.products?.accounting_id || 0) - (b.products?.accounting_id || 0)
+            );
 
-                if (!matchesText && searchTerms.length > 0) return false;
-
-                // Tag search (AND logic within a single segment)
-                const matchesTags = tags.every(tag => {
-                    // Low stock/alert
-                    if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
-                        return s.quantity <= (p.min_inventory_level || 0);
-                    }
-                    
-                    // Status tags
-                    if (tag === 'disponible' || tag === 'ok') return s.status === 'available';
-                    if (tag === 'regreso') return s.status === 'returned';
-                    if (tag === 'reproceso') return s.status === 'in_process';
-
-                    // Category tags
-                    const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
-                        label.toLowerCase().startsWith(tag)
-                    );
-                    if (categoryEntry && p.category === categoryEntry[0]) return true;
-
-                    return false;
-                });
-
-                return matchesTags;
+            baseFamilies.push({
+                id: item.product_id,
+                parent: item,
+                isParent: hasChildren,
+                children,
+                totalQuantity: 0,
+                totalValue: 0
             });
         });
-    }, [stocks, searchQuery, stockStatusFilter]);
 
-    const paginatedStocks = useMemo(() => {
-        // --- RANKING DE VARIACIÓN PARA AUDITORÍA (2:00 PM) ---
-        // if we are checking stock, let's prioritize items with differences in the latest audit
-        const sortedStocks = [...filteredStocks].sort((a, b) => {
+        // 4. Apply search query & compute consolidated totals
+        const result: StockFamily[] = [];
+
+        baseFamilies.forEach(family => {
+            if (segments.length === 0) {
+                const childrenQty = family.children.reduce((sum, ch) => sum + (ch.quantity || 0), 0);
+                const ownQty = family.parent.quantity || 0;
+                const totalQuantity = family.isParent ? (childrenQty + ownQty) : ownQty;
+
+                const childrenVal = family.children.reduce((sum, ch) => sum + ((avgCosts[ch.product_id] || 0) * (ch.quantity || 0)), 0);
+                const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
+                const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
+
+                result.push({
+                    ...family,
+                    totalQuantity,
+                    totalValue
+                });
+                return;
+            }
+
+            const parentMatches = segments.some(seg => matchSearchSegment(family.parent, seg));
+            const matchingChildren = family.children.filter(ch => 
+                segments.some(seg => matchSearchSegment(ch, seg))
+            );
+
+            if (parentMatches || matchingChildren.length > 0) {
+                const activeChildren = parentMatches ? family.children : matchingChildren;
+
+                const childrenQty = activeChildren.reduce((sum, ch) => sum + (ch.quantity || 0), 0);
+                const ownQty = family.parent.quantity || 0;
+                const totalQuantity = family.isParent ? (childrenQty + ownQty) : ownQty;
+
+                const childrenVal = activeChildren.reduce((sum, ch) => sum + ((avgCosts[ch.product_id] || 0) * (ch.quantity || 0)), 0);
+                const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
+                const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
+
+                result.push({
+                    ...family,
+                    children: activeChildren,
+                    totalQuantity,
+                    totalValue
+                });
+            }
+        });
+
+        return result;
+    }, [stocks, searchQuery, stockStatusFilter, avgCosts]);
+
+    const paginatedFamilies = useMemo(() => {
+        const sortedFamilies = [...filteredFamilies].sort((a, b) => {
             const today = new Date().toISOString().split('T')[0];
             const currentTask = randomTasks.find(t => t.scheduled_date === today);
             
             if (currentTask) {
-                const itemA = currentTask.items.find(i => i.product_id === a.product_id);
-                const itemB = currentTask.items.find(i => i.product_id === b.product_id);
+                const itemA = currentTask.items.find(i => i.product_id === a.parent.product_id);
+                const itemB = currentTask.items.find(i => i.product_id === b.parent.product_id);
                 
-                // Prioritize items with higher difference percentage
                 const diffA = itemA?.actual_qty !== null ? Math.abs(itemA?.difference_percent || 0) : 0;
                 const diffB = itemB?.actual_qty !== null ? Math.abs(itemB?.difference_percent || 0) : 0;
                 
                 if (diffA !== diffB) return diffB - diffA;
             }
             
-            // Default sort by accounting_id if no differences to compare
-            return (a.products?.accounting_id || 0) - (b.products?.accounting_id || 0);
+            return (a.parent.products?.accounting_id || 0) - (b.parent.products?.accounting_id || 0);
         });
 
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        return sortedStocks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-    }, [filteredStocks, currentPage, randomTasks]);
+        return sortedFamilies.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredFamilies, currentPage, randomTasks]);
 
-    const totalPages = Math.ceil(filteredStocks.length / ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(filteredFamilies.length / ITEMS_PER_PAGE);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -1017,8 +1107,49 @@ export default function InventoryAdminPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
                         {activeTab === 'stock' && (
                             <>
-                                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
-                                    {formatNumber(filteredStocks.length, 0)} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>items</span>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>{formatNumber(filteredFamilies.length, 0)} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>familias</span></span>
+                                    {filteredFamilies.some(f => f.isParent) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const parentIds = filteredFamilies.filter(f => f.isParent).map(f => f.parent.product_id);
+                                                const anyCollapsed = parentIds.some(id => collapsedParents[id]);
+                                                const nextState: Record<string, boolean> = {};
+                                                parentIds.forEach(id => {
+                                                    nextState[id] = !anyCollapsed;
+                                                });
+                                                setCollapsedParents(nextState);
+                                            }}
+                                            style={{
+                                                fontSize: '0.7rem',
+                                                fontWeight: '600',
+                                                padding: '3px 8px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #CBD5E1',
+                                                backgroundColor: '#FFFFFF',
+                                                color: '#475569',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            title="Contraer o desplegar los productos hijos de todas las familias"
+                                        >
+                                            {filteredFamilies.filter(f => f.isParent).some(f => collapsedParents[f.parent.product_id]) ? (
+                                                <>
+                                                    <ChevronDown size={12} strokeWidth={2.5} />
+                                                    <span>Desplegar Hijos</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ChevronRight size={12} strokeWidth={2.5} />
+                                                    <span>Contraer Hijos</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
                                 <select 
                                     value={stockStatusFilter}
@@ -1080,141 +1211,492 @@ export default function InventoryAdminPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {paginatedStocks.map((item) => (
-                                                <tr 
-                                                    key={item.id || `stock-${item.product_id}-${item.status}`} 
-                                                    style={{ transition: 'background-color 0.2s' }} 
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} 
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                >
-                                                    <td style={styles.td}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                            <div style={{ width: '44px', height: '44px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}` }}>
-                                                                {item.products?.image_url ? (
-                                                                    <img 
-                                                                        src={item.products.image_url} 
-                                                                        alt={item.products.name} 
-                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                                                    />
-                                                                ) : (
-                                                                    <Package size={20} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
-                                                                )}
-                                                            </div>
-                                                            <div>
-                                                                <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>{item.products?.name || 'Desconocido'}</div>
-                                                                <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
-                                                                    <code style={{ fontSize: '0.7rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.03em' }}>
-                                                                        {item.products?.sku || 'S/N'}
-                                                                    </code>
-                                                                    {item.products?.accounting_id && (
-                                                                        <code style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, backgroundColor: '#EDF1EE', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700' }}>
-                                                                            ID: {item.products.accounting_id}
-                                                                        </code>
+                                            {paginatedFamilies.map((family) => {
+                                                const parent = family.parent;
+                                                const isCollapsed = !!collapsedParents[parent.product_id];
+
+                                                if (family.isParent) {
+                                                    return (
+                                                        <React.Fragment key={`family-${parent.product_id}-${parent.status}`}>
+                                                            {/* FILA PADRE */}
+                                                            <tr 
+                                                                style={{ 
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    borderLeft: '4px solid #4F46E5',
+                                                                    transition: 'background-color 0.15s ease'
+                                                                }} 
+                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} 
+                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            >
+                                                                <td style={styles.td}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleParentCollapse(parent.product_id)}
+                                                                            style={{
+                                                                                background: isCollapsed ? '#EEF2FF' : '#E0E7FF',
+                                                                                border: '1px solid #C7D2FE',
+                                                                                cursor: 'pointer',
+                                                                                padding: '4px',
+                                                                                borderRadius: '6px',
+                                                                                color: '#4F46E5',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                transition: 'all 0.15s ease'
+                                                                            }}
+                                                                            title={isCollapsed ? `Expandir ${family.children.length} hijos` : "Colapsar hijos"}
+                                                                        >
+                                                                            {isCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronDown size={14} strokeWidth={2.5} />}
+                                                                        </button>
+                                                                        <div style={{ width: '44px', height: '44px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, flexShrink: 0 }}>
+                                                                            {parent.products?.image_url ? (
+                                                                                <img 
+                                                                                    src={parent.products.image_url} 
+                                                                                    alt={parent.products.name} 
+                                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                                />
+                                                                            ) : (
+                                                                                <Package size={20} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                                                            )}
+                                                                        </div>
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <span>{parent.products?.name || 'Desconocido'}</span>
+                                                                            </div>
+                                                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem', alignItems: 'center' }}>
+                                                                                <code style={{ fontSize: '0.7rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.03em' }}>
+                                                                                    {parent.products?.sku || 'S/N'}
+                                                                                </code>
+                                                                                {parent.products?.accounting_id && (
+                                                                                    <code style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, backgroundColor: '#EDF1EE', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                                        ID: {parent.products.accounting_id}
+                                                                                    </code>
+                                                                                )}
+                                                                                <span style={{
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '800',
+                                                                                    padding: '2px 7px',
+                                                                                    borderRadius: '6px',
+                                                                                    backgroundColor: '#EEF2FF',
+                                                                                    color: '#4F46E5',
+                                                                                    border: '1px solid #C7D2FE',
+                                                                                    letterSpacing: '0.04em'
+                                                                                }}>
+                                                                                    PADRE
+                                                                                </span>
+                                                                                <span style={{
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '700',
+                                                                                    padding: '2px 7px',
+                                                                                    borderRadius: '6px',
+                                                                                    backgroundColor: '#ECFDF5',
+                                                                                    color: '#065F46',
+                                                                                    border: '1px solid #A7F3D0'
+                                                                                }}>
+                                                                                    {family.children.length} {family.children.length === 1 ? 'Hijo' : 'Hijos'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td style={styles.td}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                        <span style={styles.badge(
+                                                                            parent.status === 'available' ? THEME.colors.successBg : parent.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
+                                                                            parent.status === 'available' ? THEME.colors.successText : parent.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
+                                                                        )}>
+                                                                            {parent.status.toUpperCase()}
+                                                                        </span>
+                                                                        {parent.products?.is_active === false && (
+                                                                            <span style={{
+                                                                                fontSize: '0.6rem',
+                                                                                backgroundColor: '#FEF2F2',
+                                                                                color: '#991B1B',
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '4px',
+                                                                                fontWeight: '700',
+                                                                                border: '1px solid #FECACA',
+                                                                                textAlign: 'center',
+                                                                                letterSpacing: '0.04em',
+                                                                                width: 'fit-content'
+                                                                            }}>
+                                                                                MASTER OFF
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ 
+                                                                    ...styles.td, 
+                                                                    textAlign: 'center' as const,
+                                                                    backgroundColor: (parent.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
+                                                                }}>
+                                                                    {(parent.products?.min_inventory_level || 0) > 0 ? (
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                            <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
+                                                                                {formatNumber(parent.products?.min_inventory_level, 0)}
+                                                                            </span>
+                                                                            {family.totalQuantity <= (parent.products?.min_inventory_level || 0) && (
+                                                                                <span title="Bajo el mínimo crítico consolidado" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                                    <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
+                                                                    )}
+                                                                </td>
+                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                    <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                                        {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.85rem' }}>
+                                                                        {family.totalValue > 0 ? formatMoney(family.totalValue) : (avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * family.totalQuantity) : '—')}
+                                                                    </div>
+                                                                </td>
+                                                                <td style={styles.td}>
+                                                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                        {parent.products?.unit_of_measure}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={styles.td}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                                                        <div style={{ 
+                                                                            fontSize: '1rem', 
+                                                                            fontWeight: '800', 
+                                                                            color: family.totalQuantity <= (parent.products?.min_inventory_level || 0) ? '#B91C1C' : '#0F172A',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}>
+                                                                            <span style={{ fontSize: '0.85rem', color: '#4F46E5', fontWeight: '800' }} title="Sumatoria de stock físico de sus SKUs hijos">∑</span>
+                                                                            <span>{formatNumber(family.totalQuantity)}</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '600' }}>
+                                                                            Consolidado
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                    <button 
+                                                                        onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                        style={{ 
+                                                                            backgroundColor: '#FFFFFF', 
+                                                                            color: '#4B5563',
+                                                                            border: '1px solid #D1D5DB', 
+                                                                            padding: '0.35rem 0.75rem', 
+                                                                            borderRadius: '6px', 
+                                                                            fontWeight: '600', 
+                                                                            cursor: 'pointer',
+                                                                            transition: 'all 0.15s ease-in-out',
+                                                                            fontSize: '0.75rem'
+                                                                        }}
+                                                                        onMouseEnter={(e) => {
+                                                                            e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                                                            e.currentTarget.style.borderColor = '#94A3B8';
+                                                                            e.currentTarget.style.color = '#0F172A';
+                                                                        }}
+                                                                        onMouseLeave={(e) => {
+                                                                            e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                                                            e.currentTarget.style.borderColor = '#D1D5DB';
+                                                                            e.currentTarget.style.color = '#4B5563';
+                                                                        }}
+                                                                    >
+                                                                        Ajustar
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+
+                                                            {/* FILAS HIJOS */}
+                                                            {!isCollapsed && family.children.map((child) => (
+                                                                <tr
+                                                                    key={`child-${child.product_id}-${child.status}`}
+                                                                    style={{ 
+                                                                        backgroundColor: '#FFFFFF',
+                                                                        borderLeft: '4px solid #CBD5E1',
+                                                                        transition: 'background-color 0.15s ease'
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                                >
+                                                                    <td style={styles.td}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
+                                                                            {/* Tree branch connector line */}
+                                                                            <div style={{
+                                                                                position: 'absolute',
+                                                                                left: '1.25rem',
+                                                                                top: '-50%',
+                                                                                bottom: '50%',
+                                                                                width: '14px',
+                                                                                borderLeft: '2px solid #CBD5E1',
+                                                                                borderBottom: '2px solid #CBD5E1',
+                                                                                borderBottomLeftRadius: '6px'
+                                                                            }} />
+                                                                            <div style={{ width: '38px', height: '38px', backgroundColor: '#F8FAFC', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                                                {child.products?.image_url ? (
+                                                                                    <img 
+                                                                                        src={child.products.image_url} 
+                                                                                        alt={child.products.name} 
+                                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                                    />
+                                                                                ) : (
+                                                                                    <Package size={18} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                                                                                )}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#334155' }}>
+                                                                                    {child.products?.name || 'Desconocido'}
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem' }}>
+                                                                                    <code style={{ fontSize: '0.68rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '1.5px 5px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                                        {child.products?.sku || 'S/N'}
+                                                                                    </code>
+                                                                                    {child.products?.accounting_id && (
+                                                                                        <code style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1.5px 5px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                                            ID: {child.products.accounting_id}
+                                                                                        </code>
+                                                                                    )}
+                                                                                    <span style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '700',
+                                                                                        padding: '1px 6px',
+                                                                                        borderRadius: '4px',
+                                                                                        backgroundColor: '#F0F9FF',
+                                                                                        color: '#0284C7',
+                                                                                        border: '1px solid #BAE6FD',
+                                                                                        letterSpacing: '0.02em'
+                                                                                    }}>
+                                                                                        HIJO
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={styles.td}>
+                                                                        <span style={styles.badge(
+                                                                            child.status === 'available' ? THEME.colors.successBg : child.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
+                                                                            child.status === 'available' ? THEME.colors.successText : child.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
+                                                                        )}>
+                                                                            {child.status.toUpperCase()}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={{ 
+                                                                        ...styles.td, 
+                                                                        textAlign: 'center' as const,
+                                                                        backgroundColor: (child.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
+                                                                    }}>
+                                                                        {(child.products?.min_inventory_level || 0) > 0 ? (
+                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                                <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.85rem' }}>
+                                                                                    {formatNumber(child.products?.min_inventory_level, 0)}
+                                                                                </span>
+                                                                                {child.quantity <= (child.products?.min_inventory_level || 0) && (
+                                                                                    <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                                        <AlertTriangle size={13} strokeWidth={2} style={{ color: '#B91C1C' }} />
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                        <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.82rem' }}>
+                                                                            {avgCosts[child.product_id] ? formatMoney(avgCosts[child.product_id]) : '—'}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                        <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem' }}>
+                                                                            {avgCosts[child.product_id] ? formatMoney(avgCosts[child.product_id] * child.quantity) : '—'}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={styles.td}>
+                                                                        <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                            {child.products?.unit_of_measure}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={styles.td}>
+                                                                        <div style={{ 
+                                                                            fontSize: '0.9rem', 
+                                                                            fontWeight: '700', 
+                                                                            color: child.quantity <= (child.products?.min_inventory_level || 0) ? '#B91C1C' : '#334155' 
+                                                                        }}>
+                                                                            {formatNumber(child.quantity)}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                        <button 
+                                                                            onClick={() => { setSelectedProduct({id: child.product_id, name: child.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                            style={{ 
+                                                                                backgroundColor: 'transparent', 
+                                                                                color: '#4B5563',
+                                                                                border: '1px solid #D1D5DB', 
+                                                                                padding: '0.35rem 0.75rem', 
+                                                                                borderRadius: '6px', 
+                                                                                fontWeight: '500', 
+                                                                                cursor: 'pointer',
+                                                                                transition: 'all 0.15s ease-in-out',
+                                                                                fontSize: '0.75rem'
+                                                                            }}
+                                                                            onMouseEnter={(e) => {
+                                                                                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                                                                                e.currentTarget.style.borderColor = '#94A3AF';
+                                                                                e.currentTarget.style.color = '#111827';
+                                                                            }}
+                                                                            onMouseLeave={(e) => {
+                                                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                                                e.currentTarget.style.borderColor = '#D1D5DB';
+                                                                                e.currentTarget.style.color = '#4B5563';
+                                                                            }}
+                                                                        >
+                                                                            Ajustar
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </React.Fragment>
+                                                    );
+                                                }
+
+                                                // FILA STANDALONE (producto independiente)
+                                                return (
+                                                    <tr 
+                                                        key={parent.id || `stock-${parent.product_id}-${parent.status}`} 
+                                                        style={{ transition: 'background-color 0.2s' }} 
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} 
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                    >
+                                                        <td style={styles.td}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                                <div style={{ width: '44px', height: '44px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}` }}>
+                                                                    {parent.products?.image_url ? (
+                                                                        <img 
+                                                                            src={parent.products.image_url} 
+                                                                            alt={parent.products.name} 
+                                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                        />
+                                                                    ) : (
+                                                                        <Package size={20} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
                                                                     )}
                                                                 </div>
+                                                                <div>
+                                                                    <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>{parent.products?.name || 'Desconocido'}</div>
+                                                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
+                                                                        <code style={{ fontSize: '0.7rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.03em' }}>
+                                                                            {parent.products?.sku || 'S/N'}
+                                                                        </code>
+                                                                        {parent.products?.accounting_id && (
+                                                                            <code style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, backgroundColor: '#EDF1EE', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                                ID: {parent.products.accounting_id}
+                                                                            </code>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </td>
-                                                    <td style={styles.td}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                            <span style={styles.badge(
-                                                                item.status === 'available' ? THEME.colors.successBg : item.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
-                                                                item.status === 'available' ? THEME.colors.successText : item.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
-                                                            )}>
-                                                                {item.status.toUpperCase()}
-                                                            </span>
-                                                            {item.products?.is_active === false && (
-                                                                <span style={{
-                                                                    fontSize: '0.6rem',
-                                                                    backgroundColor: '#FEF2F2',
-                                                                    color: '#991B1B',
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: '4px',
-                                                                    fontWeight: '700',
-                                                                    border: '1px solid #FECACA',
-                                                                    textAlign: 'center',
-                                                                    letterSpacing: '0.04em',
-                                                                    width: 'fit-content'
-                                                                }}>
-                                                                    MASTER OFF
+                                                        </td>
+                                                        <td style={styles.td}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                <span style={styles.badge(
+                                                                    parent.status === 'available' ? THEME.colors.successBg : parent.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
+                                                                    parent.status === 'available' ? THEME.colors.successText : parent.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
+                                                                )}>
+                                                                    {parent.status.toUpperCase()}
                                                                 </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ 
-                                                        ...styles.td, 
-                                                        textAlign: 'center' as const,
-                                                        backgroundColor: item.products?.min_inventory_level > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
-                                                    }}>
-                                                        {item.products?.min_inventory_level > 0 ? (
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                                <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
-                                                                    {formatNumber(item.products.min_inventory_level, 0)}
-                                                                </span>
-                                                                {item.quantity <= item.products.min_inventory_level && (
-                                                                    <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
-                                                                        <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
+                                                                {parent.products?.is_active === false && (
+                                                                    <span style={{
+                                                                        fontSize: '0.6rem',
+                                                                        backgroundColor: '#FEF2F2',
+                                                                        color: '#991B1B',
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: '4px',
+                                                                        fontWeight: '700',
+                                                                        border: '1px solid #FECACA',
+                                                                        textAlign: 'center',
+                                                                        letterSpacing: '0.04em',
+                                                                        width: 'fit-content'
+                                                                    }}>
+                                                                        MASTER OFF
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                        ) : (
-                                                            <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                        <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
-                                                            {avgCosts[item.product_id] ? formatMoney(avgCosts[item.product_id]) : '—'}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                        <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
-                                                            {avgCosts[item.product_id] ? formatMoney(avgCosts[item.product_id] * item.quantity) : '—'}
-                                                        </div>
-                                                    </td>
-                                                    <td style={styles.td}>
-                                                        <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                            {item.products.unit_of_measure}
-                                                        </span>
-                                                    </td>
-                                                    <td style={styles.td}>
-                                                        <div style={{ 
-                                                            fontSize: '0.95rem', 
-                                                            fontWeight: '700', 
-                                                            color: item.quantity <= (item.products?.min_inventory_level || 0) ? '#B91C1C' : THEME.colors.textMain 
+                                                        </td>
+                                                        <td style={{ 
+                                                            ...styles.td, 
+                                                            textAlign: 'center' as const,
+                                                            backgroundColor: (parent.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
                                                         }}>
-                                                            {formatNumber(item.quantity)}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                        <button 
-                                                            onClick={() => { setSelectedProduct({id: item.product_id, name: item.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
-                                                            style={{ 
-                                                                backgroundColor: 'transparent', 
-                                                                color: '#4B5563',
-                                                                border: '1px solid #D1D5DB', 
-                                                                padding: '0.35rem 0.75rem', 
-                                                                borderRadius: '6px', 
-                                                                fontWeight: '500', 
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s ease-in-out',
-                                                                fontSize: '0.75rem'
-                                                            }}
-                                                            onMouseEnter={(e) => {
-                                                                e.currentTarget.style.backgroundColor = '#F9FAFB';
-                                                                e.currentTarget.style.borderColor = '#9CA3AF';
-                                                                e.currentTarget.style.color = '#111827';
-                                                            }}
-                                                            onMouseLeave={(e) => {
-                                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                                                e.currentTarget.style.borderColor = '#D1D5DB';
-                                                                e.currentTarget.style.color = '#4B5563';
-                                                            }}
-                                                        >
-                                                            Ajustar
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                            {(parent.products?.min_inventory_level || 0) > 0 ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                    <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
+                                                                        {formatNumber(parent.products?.min_inventory_level, 0)}
+                                                                    </span>
+                                                                    {parent.quantity <= (parent.products?.min_inventory_level || 0) && (
+                                                                        <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                            <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
+                                                            )}
+                                                        </td>
+                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                            <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                                {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                            <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
+                                                                {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * parent.quantity) : '—'}
+                                                            </div>
+                                                        </td>
+                                                        <td style={styles.td}>
+                                                            <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                {parent.products?.unit_of_measure}
+                                                            </span>
+                                                        </td>
+                                                        <td style={styles.td}>
+                                                            <div style={{ 
+                                                                fontSize: '0.95rem', 
+                                                                fontWeight: '700', 
+                                                                color: parent.quantity <= (parent.products?.min_inventory_level || 0) ? '#B91C1C' : THEME.colors.textMain 
+                                                            }}>
+                                                                {formatNumber(parent.quantity)}
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                            <button 
+                                                                onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                style={{ 
+                                                                    backgroundColor: 'transparent', 
+                                                                    color: '#4B5563',
+                                                                    border: '1px solid #D1D5DB', 
+                                                                    padding: '0.35rem 0.75rem', 
+                                                                    borderRadius: '6px', 
+                                                                    fontWeight: '500', 
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.2s ease-in-out',
+                                                                    fontSize: '0.75rem'
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    e.currentTarget.style.backgroundColor = '#F9FAFB';
+                                                                    e.currentTarget.style.borderColor = '#9CA3AF';
+                                                                    e.currentTarget.style.color = '#111827';
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                                    e.currentTarget.style.borderColor = '#D1D5DB';
+                                                                    e.currentTarget.style.color = '#4B5563';
+                                                                }}
+                                                            >
+                                                                Ajustar
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
