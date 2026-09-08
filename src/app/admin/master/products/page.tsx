@@ -2444,11 +2444,13 @@ export default function MasterProductsPage() {
 
             {selectedEditProduct && (
                 <EditProductModal 
+                    key={selectedEditProduct.id}
                     product={selectedEditProduct} 
                     allProducts={products}
                     onClose={() => setSelectedEditProduct(null)} 
                     onSave={() => fetchProducts()}
                     readOnly={!canEdit}
+                    onSelectProduct={(p) => setSelectedEditProduct(p)}
                 />
             )}
 

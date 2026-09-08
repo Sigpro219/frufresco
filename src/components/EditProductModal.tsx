@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
-import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, HelpCircle, Info, Scale, Package, Truck, X, BookOpen, ChefHat, Soup, UtensilsCrossed, Wheat, Drumstick } from 'lucide-react';
+import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, HelpCircle, Info, Scale, Package, Truck, X, BookOpen, ChefHat, Soup, UtensilsCrossed, Wheat, Drumstick, GitFork, Edit3, Search } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 
@@ -24,6 +24,7 @@ interface EditProductModalProps {
     onClose: () => void;
     onSave: () => void;
     readOnly?: boolean;
+    onSelectProduct?: (product: Product) => void;
 }
 
 const extractWeight = (val: string): number | null => {
@@ -61,7 +62,7 @@ const sortSuggestedValues = (values: string[]): string[] => {
     });
 };
 
-export default function EditProductModal({ product, allProducts, onClose, onSave, readOnly = false }: EditProductModalProps) {
+export default function EditProductModal({ product, allProducts, onClose, onSave, readOnly = false, onSelectProduct }: EditProductModalProps) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [showUnitGuideModal, setShowUnitGuideModal] = useState(false);
@@ -88,7 +89,93 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         utility_deviation_pct: product.utility_deviation_pct ?? 0,
         inherit_price: (product as any).inherit_price ?? false
     });
-    const hasChildren = allProducts.some(p => p.parent_id === product.id);
+
+    const [localChildren, setLocalChildren] = useState<Product[]>(() => {
+        return (allProducts || []).filter(p => p.parent_id === product.id && p.id !== product.id);
+    });
+
+    useEffect(() => {
+        setLocalChildren((allProducts || []).filter(p => p.parent_id === product.id && p.id !== product.id));
+    }, [allProducts, product.id]);
+
+    const isChild = !!formData.parent_id && formData.parent_id !== product.id;
+    const isParent = !isChild && (localChildren.length > 0 || product.parent_id === product.id);
+    const hasChildren = localChildren.length > 0;
+
+    const [showAddChildSearch, setShowAddChildSearch] = useState(false);
+    const [addChildQuery, setAddChildQuery] = useState('');
+    const [linkingChild, setLinkingChild] = useState(false);
+    const [unlinkingChildId, setUnlinkingChildId] = useState<string | null>(null);
+
+    const handleLinkChild = async (childToLink: Product) => {
+        try {
+            setLinkingChild(true);
+            const { error } = await supabase
+                .from('products')
+                .update({ parent_id: product.id })
+                .eq('id', childToLink.id);
+
+            if (error) throw error;
+
+            // Asegurar que el padre tenga parent_id registrado a su propio id si aún no lo tenía
+            if (!formData.parent_id || formData.parent_id !== product.id) {
+                setFormData(prev => ({ ...prev, parent_id: product.id }));
+                await supabase
+                    .from('products')
+                    .update({ parent_id: product.id })
+                    .eq('id', product.id);
+            }
+
+            setLocalChildren(prev => {
+                if (prev.some(c => c.id === childToLink.id)) return prev;
+                return [...prev, { ...childToLink, parent_id: product.id }];
+            });
+            setShowAddChildSearch(false);
+            setAddChildQuery('');
+            if (onSave) onSave();
+        } catch (err: any) {
+            alert('Error al vincular producto hijo: ' + err.message);
+        } finally {
+            setLinkingChild(false);
+        }
+    };
+
+    const handleUnlinkChild = async (childId: string, childName: string) => {
+        if (!window.confirm(`¿Confirmas desvincular "${childName}" de este producto padre? Pasará a ser un SKU independiente.`)) {
+            return;
+        }
+        try {
+            setUnlinkingChildId(childId);
+            const { error } = await supabase
+                .from('products')
+                .update({ parent_id: null })
+                .eq('id', childId);
+
+            if (error) throw error;
+
+            setLocalChildren(prev => prev.filter(c => c.id !== childId));
+            if (onSave) onSave();
+        } catch (err: any) {
+            alert('Error al desvincular producto hijo: ' + err.message);
+        } finally {
+            setUnlinkingChildId(null);
+        }
+    };
+
+    const availableChildrenCandidates = (allProducts || [])
+        .filter(p => 
+            addChildQuery.trim() !== '' &&
+            p.id !== product.id && 
+            p.parent_id !== product.id &&
+            !allProducts.some(other => other.parent_id === p.id && other.id !== p.id) &&
+            (
+                (p.name || '').toLowerCase().includes(addChildQuery.toLowerCase().trim()) ||
+                (p.accounting_id?.toString() || '').includes(addChildQuery.trim()) ||
+                (p.sku || '').toLowerCase().includes(addChildQuery.toLowerCase().trim())
+            )
+        )
+        .slice(0, 10);
+
     const [parentSearch, setParentSearch] = useState('');
     const [showParentResults, setShowParentResults] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -828,80 +915,452 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         </div>
                     </div>
 
-                    <div style={{ position: 'relative' }}>
-                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Vincular a Producto Padre (Hijo de...)</label>
-                        <input
-                            type="text"
-                            placeholder={hasChildren ? "Bloqueado: Este producto ya es PADRE" : "Buscar padre por nombre o ID Contable..."}
-                            value={parentSearch || (formData.parent_id ? (() => {
-                                const p = allProducts.find(i => i.id === formData.parent_id);
-                                return p ? `ID: #${p.accounting_id || p.sku} - ${p.name}` : '';
-                            })() : '')}
-                            onChange={(e) => {
-                                setParentSearch(e.target.value);
-                                setShowParentResults(true);
-                            }}
-                            onFocus={() => !hasChildren && setShowParentResults(true)}
-                            disabled={hasChildren}
-                            style={{ 
-                                width: '100%', 
-                                padding: '0.8rem', 
-                                borderRadius: '8px', 
-                                border: '1px solid #D1D5DB', 
-                                fontSize: '0.95rem', 
-                                fontWeight: 'bold', 
-                                color: formData.parent_id ? '#1E40AF' : 'inherit',
-                                backgroundColor: hasChildren ? '#F3F4F6' : 'white',
-                                cursor: hasChildren ? 'not-allowed' : 'text'
-                            }}
-                        />
-                        {hasChildren && (
-                            <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '4px', fontWeight: 'bold' }}>
-                                ⚠️ Este producto ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
-                            </p>
-                        )}
-                        {showParentResults && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #D1D5DB', borderRadius: '8px', marginTop: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
-                                <div 
-                                    onClick={() => {
-                                        setFormData({ ...formData, parent_id: null });
-                                        setParentSearch('');
-                                        setShowParentResults(false);
-                                    }}
-                                    style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '700' }}
-                                >
-                                    ❌ Desvincular Padre
+                    {/* SECCIÓN DE JERARQUÍA (PADRE / HIJO) */}
+                    {isParent ? (
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '12px',
+                            padding: '0.9rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px'
+                        }}>
+                            {/* Cabecera del Bloque de Hijos */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{
+                                        width: '28px',
+                                        height: '28px',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#EEF2FF',
+                                        color: '#4F46E5',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <GitFork size={16} strokeWidth={2.2} style={{ transform: 'rotate(180deg)' }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#1E293B', margin: 0 }}>
+                                            Productos Hijos Vinculados (Fraccionados)
+                                        </label>
+                                        <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                            SKUs derivados que dependen de este producto padre
+                                        </span>
+                                    </div>
                                 </div>
-                                {allProducts
-                                    .filter(p => 
-                                        p.id !== product.id && 
-                                        p.parent_id !== product.id &&
-                                        (p.name.toLowerCase().includes(parentSearch.toLowerCase()) || (p.accounting_id?.toString() || '').includes(parentSearch) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
-                                    )
-                                    .slice(0, 10)
-                                    .map(p => (
-                                        <div 
-                                            key={p.id}
-                                            onClick={() => {
-                                                setFormData({ ...formData, parent_id: p.id });
-                                                setParentSearch(`ID: #${p.accounting_id || p.sku} - ${p.name}`);
-                                                setShowParentResults(false);
-                                            }}
-                                            style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.2s' }}
-                                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                        >
-                                            <div style={{ fontWeight: '800', color: '#2563EB' }}>ID: #{p.accounting_id || p.sku}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{p.name}</div>
-                                        </div>
-                                    ))
-                                }
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: '800',
+                                        padding: '2px 8px',
+                                        borderRadius: '9999px',
+                                        backgroundColor: '#4F46E5',
+                                        color: 'white',
+                                        letterSpacing: '0.04em'
+                                    }}>
+                                        PADRE
+                                    </span>
+                                    <span style={{
+                                        fontSize: '0.72rem',
+                                        fontWeight: '800',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        backgroundColor: '#EFF6FF',
+                                        color: '#1D4ED8',
+                                        border: '1px solid #BFDBFE'
+                                    }}>
+                                        {localChildren.length} {localChildren.length === 1 ? 'Hijo' : 'Hijos'}
+                                    </span>
+                                </div>
                             </div>
-                        )}
-                    </div>
+
+                            {/* Lista de Hijos */}
+                            {localChildren.length === 0 ? (
+                                <div style={{
+                                    padding: '1rem',
+                                    textAlign: 'center',
+                                    backgroundColor: 'white',
+                                    border: '1px dashed #CBD5E1',
+                                    borderRadius: '8px',
+                                    color: '#64748B',
+                                    fontSize: '0.78rem'
+                                }}>
+                                    <p style={{ margin: 0, fontWeight: '600' }}>
+                                        Este producto es una referencia PADRE, pero aún no tiene SKUs hijos vinculados.
+                                    </p>
+                                    <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#94A3B8' }}>
+                                        Usa el botón inferior para buscar y vincular un producto hijo.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '6px',
+                                    maxHeight: '220px',
+                                    overflowY: 'auto',
+                                    paddingRight: '2px'
+                                }}>
+                                    {localChildren.map((child) => (
+                                        <div 
+                                            key={child.id}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '8px 10px',
+                                                backgroundColor: 'white',
+                                                border: '1px solid #E2E8F0',
+                                                borderRadius: '8px',
+                                                gap: '8px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.currentTarget.style.borderColor = '#93C5FD';
+                                                e.currentTarget.style.backgroundColor = '#F0F7FF';
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                                e.currentTarget.style.backgroundColor = 'white';
+                                            }}
+                                        >
+                                            {/* Thumbnail + SKU + Nombre */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                                                <div style={{
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    borderRadius: '6px',
+                                                    overflow: 'hidden',
+                                                    backgroundColor: '#F8FAFC',
+                                                    flexShrink: 0,
+                                                    border: '1px solid #E2E8F0',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '0.75rem'
+                                                }}>
+                                                    {child.image_url ? (
+                                                        <img 
+                                                            src={child.image_url} 
+                                                            alt={child.name} 
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                        />
+                                                    ) : (
+                                                        <span>📦</span>
+                                                    )}
+                                                </div>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: '800',
+                                                            color: '#1E40AF',
+                                                            backgroundColor: '#EFF6FF',
+                                                            padding: '1px 5px',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid #DBEAFE',
+                                                            fontFamily: 'monospace'
+                                                        }}>
+                                                            #{child.accounting_id || child.sku}
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: '700',
+                                                            color: '#1E293B',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }} title={child.name}>
+                                                            {child.name}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', fontSize: '0.68rem', color: '#64748B' }}>
+                                                        <span>Unidad: <strong>{child.unit_of_measure || 'Kg'}</strong></span>
+                                                        {(child as any).inherit_price ? (
+                                                            <span style={{ color: '#2563EB', fontWeight: '700' }}>
+                                                                ⚡ Hereda costo {child.utility_deviation_pct ? `(+${child.utility_deviation_pct}%)` : ''}
+                                                            </span>
+                                                        ) : (
+                                                            <span>Base: <strong>${(child.base_price || 0).toLocaleString('es-CO')}</strong></span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Badges & Acciones */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                                <span style={{
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: '700',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '8px',
+                                                    backgroundColor: child.is_active ? '#ECFDF5' : '#F1F5F9',
+                                                    color: child.is_active ? '#065F46' : '#64748B',
+                                                    border: `1px solid ${child.is_active ? '#A7F3D0' : '#E2E8F0'}`
+                                                }}>
+                                                    {child.is_active ? 'Activo' : 'Inactivo'}
+                                                </span>
+
+                                                {onSelectProduct && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onSelectProduct(child)}
+                                                        title="Editar este SKU hijo"
+                                                        style={{
+                                                            padding: '3px 8px',
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: '700',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #BFDBFE',
+                                                            backgroundColor: '#EFF6FF',
+                                                            color: '#1D4ED8',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}
+                                                    >
+                                                        <Edit3 size={11} /> Editar
+                                                    </button>
+                                                )}
+
+                                                {!readOnly && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUnlinkChild(child.id, child.name)}
+                                                        disabled={unlinkingChildId === child.id}
+                                                        title="Desvincular de este padre"
+                                                        style={{
+                                                            padding: '3px 6px',
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: '700',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #FECACA',
+                                                            backgroundColor: '#FEF2F2',
+                                                            color: '#DC2626',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center'
+                                                        }}
+                                                    >
+                                                        <X size={11} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Vincular Nuevo Hijo */}
+                            {!readOnly && (
+                                <div style={{ position: 'relative', marginTop: '2px' }}>
+                                    {!showAddChildSearch ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAddChildSearch(true)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '6px 10px',
+                                                backgroundColor: 'white',
+                                                border: '1px dashed #94A3B8',
+                                                borderRadius: '8px',
+                                                color: '#2563EB',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.currentTarget.style.borderColor = '#2563EB';
+                                                e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.currentTarget.style.borderColor = '#94A3B8';
+                                                e.currentTarget.style.backgroundColor = 'white';
+                                            }}
+                                        >
+                                            <Plus size={13} /> Vincular otro producto hijo
+                                        </button>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                <div style={{ position: 'relative', flex: 1 }}>
+                                                    <input
+                                                        type="text"
+                                                        autoFocus
+                                                        placeholder="Buscar producto por nombre o ID Contable..."
+                                                        value={addChildQuery}
+                                                        onChange={(e) => setAddChildQuery(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '6px 8px 6px 28px',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #2563EB',
+                                                            fontSize: '0.78rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }} />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowAddChildSearch(false);
+                                                        setAddChildQuery('');
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 10px',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid #D1D5DB',
+                                                        backgroundColor: 'white',
+                                                        color: '#6B7280',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Cancelar
+                                                </button>
+                                            </div>
+
+                                            {/* Resultados de Búsqueda de Hijos */}
+                                            {addChildQuery.trim() && (
+                                                <div style={{
+                                                    backgroundColor: 'white',
+                                                    border: '1px solid #D1D5DB',
+                                                    borderRadius: '8px',
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                                    maxHeight: '180px',
+                                                    overflowY: 'auto',
+                                                    zIndex: 10
+                                                }}>
+                                                    {availableChildrenCandidates.length === 0 ? (
+                                                        <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: '#9CA3AF', textAlign: 'center' }}>
+                                                            No se encontraron productos disponibles para vincular como hijo.
+                                                        </div>
+                                                    ) : (
+                                                        availableChildrenCandidates.map((candidate) => (
+                                                            <div
+                                                                key={candidate.id}
+                                                                onClick={() => handleLinkChild(candidate)}
+                                                                style={{
+                                                                    padding: '6px 10px',
+                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between',
+                                                                    fontSize: '0.75rem'
+                                                                }}
+                                                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                            >
+                                                                <div>
+                                                                    <span style={{ fontWeight: '800', color: '#2563EB', marginRight: '6px' }}>
+                                                                        #{candidate.accounting_id || candidate.sku}
+                                                                    </span>
+                                                                    <span style={{ fontWeight: '600', color: '#1E293B' }}>
+                                                                        {candidate.name}
+                                                                    </span>
+                                                                </div>
+                                                                <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700' }}>
+                                                                    + Vincular
+                                                                </span>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        /* SI ES HIJO O STANDALONE, NO HABRÍAN CAMBIOS */
+                        <div style={{ position: 'relative' }}>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Vincular a Producto Padre (Hijo de...)</label>
+                            <input
+                                type="text"
+                                placeholder={hasChildren ? "Bloqueado: Este producto ya es PADRE" : "Buscar padre por nombre o ID Contable..."}
+                                value={parentSearch || (formData.parent_id ? (() => {
+                                    const p = allProducts.find(i => i.id === formData.parent_id);
+                                    return p ? `ID: #${p.accounting_id || p.sku} - ${p.name}` : '';
+                                })() : '')}
+                                onChange={(e) => {
+                                    setParentSearch(e.target.value);
+                                    setShowParentResults(true);
+                                }}
+                                onFocus={() => !hasChildren && setShowParentResults(true)}
+                                disabled={hasChildren}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0.8rem', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #D1D5DB', 
+                                    fontSize: '0.95rem', 
+                                    fontWeight: 'bold', 
+                                    color: formData.parent_id ? '#1E40AF' : 'inherit',
+                                    backgroundColor: hasChildren ? '#F3F4F6' : 'white',
+                                    cursor: hasChildren ? 'not-allowed' : 'text'
+                                }}
+                            />
+                            {hasChildren && (
+                                <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '4px', fontWeight: 'bold' }}>
+                                    ⚠️ Este producto ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
+                                </p>
+                            )}
+                            {showParentResults && (
+                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #D1D5DB', borderRadius: '8px', marginTop: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                                    <div 
+                                        onClick={() => {
+                                            setFormData({ ...formData, parent_id: null });
+                                            setParentSearch('');
+                                            setShowParentResults(false);
+                                        }}
+                                        style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '700' }}
+                                    >
+                                        ❌ Desvincular Padre
+                                    </div>
+                                    {allProducts
+                                        .filter(p => 
+                                            p.id !== product.id && 
+                                            p.parent_id !== product.id &&
+                                            (p.name.toLowerCase().includes(parentSearch.toLowerCase()) || (p.accounting_id?.toString() || '').includes(parentSearch) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
+                                        )
+                                        .slice(0, 10)
+                                        .map(p => (
+                                            <div 
+                                                key={p.id}
+                                                onClick={() => {
+                                                    setFormData({ ...formData, parent_id: p.id });
+                                                    setParentSearch(`ID: #${p.accounting_id || p.sku} - ${p.name}`);
+                                                    setShowParentResults(false);
+                                                }}
+                                                style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.2s' }}
+                                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                                <div style={{ fontWeight: '800', color: '#2563EB' }}>ID: #{p.accounting_id || p.sku}</div>
+                                                <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{p.name}</div>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Lógica de Desviación de Utilidad (Solo si es Hijo y NO es Padre de otros) */}
-                    {!hasChildren && formData.parent_id && (
+                    {!isParent && formData.parent_id && formData.parent_id !== product.id && (
                         <div style={{ padding: '1.2rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: '800', fontSize: '0.85rem' }}>
@@ -966,6 +1425,28 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 Padre vinculado: <br />
                                                 <strong style={{ fontSize: '0.85rem' }}>{parent?.sku || 'Cargando...'}</strong>
                                                 {parent && <span style={{ display: 'block', opacity: 0.8, fontSize: '0.75rem', fontWeight: 'bold' }}>{parent.name}</span>}
+                                                {parent && onSelectProduct && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onSelectProduct(parent)}
+                                                        style={{
+                                                            marginTop: '4px',
+                                                            padding: '2px 8px',
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: '700',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid #93C5FD',
+                                                            backgroundColor: '#DBEAFE',
+                                                            color: '#1E40AF',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}
+                                                    >
+                                                        Ver Padre ↗
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     })()}
