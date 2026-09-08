@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { ShieldAlert, Loader2 } from 'lucide-react';
@@ -243,6 +244,7 @@ export default function OrderLoadingPage() {
     const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
+    const [dispatchMode, setDispatchMode] = useState<'digital' | 'contingency'>('digital');
 
     const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -741,11 +743,7 @@ export default function OrderLoadingPage() {
             const { error: orderError } = await supabase
                 .from('orders')
                 .update({
-                    user_id: reassignSelectedClient.id,
-                    customer_name: reassignSelectedClient.company_name || reassignSelectedClient.contact_name,
-                    customer_nit: reassignSelectedClient.nit || null,
-                    customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone || null,
-                    customer_email: reassignSelectedClient.email || null,
+                    profile_id: reassignSelectedClient.id,
                     shipping_address: newAddress,
                     latitude: newLat,
                     longitude: newLng,
@@ -1224,6 +1222,19 @@ export default function OrderLoadingPage() {
 
 
 
+    // Detección de Colisiones de Pedidos Duplicados (Mismo cliente, fecha de entrega y sede)
+    const duplicatesMap = useMemo(() => {
+        return detectDuplicateOrders(orders);
+    }, [orders]);
+
+    const duplicateOrdersCount = useMemo(() => {
+        let count = 0;
+        duplicatesMap.forEach(d => {
+            if (d.isDuplicate) count++;
+        });
+        return count;
+    }, [duplicatesMap]);
+
     const filteredOrders = useMemo(() => {
         return orders.filter(order => {
             const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
@@ -1296,6 +1307,9 @@ export default function OrderLoadingPage() {
                     if (['email', 'correo'].includes(command)) return order.origin_source === 'email' || notes.includes('[origin: email]');
                     if (['web', 'app'].includes(command)) return order.origin_source?.startsWith('web') || notes.includes('[origin: web');
                     if (['alerta', 'incompleto', 'sin_completar'].includes(command)) return !order.isComplete;
+                    if (['duplicado', 'duplicados', 'repetido', 'repetidos', 'doble', 'duplicada'].includes(command)) {
+                        return duplicatesMap.has(order.id);
+                    }
                 }
 
                 // B. Extracción de productos/SKUs dentro de los ítems del pedido
@@ -1324,6 +1338,7 @@ export default function OrderLoadingPage() {
                     order.paymentMethod,
                     order.admin_notes,
                     order.special_notes,
+                    duplicatesMap.has(order.id) ? 'duplicado repetido colision alerta_duplicado' : '',
                     productText
                 ].filter(Boolean).join(' '));
 
@@ -1337,7 +1352,7 @@ export default function OrderLoadingPage() {
 
             return true;
         });
-    }, [orders, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType]);
+    }, [orders, duplicatesMap, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType]);
 
     const filteredMetrics = useMemo(() => {
         const count = filteredOrders.length;
@@ -2606,8 +2621,37 @@ export default function OrderLoadingPage() {
                             <><Calendar size={13} style={{ color: '#64748B', flexShrink: 0 }} /> <span>Mostrando pedidos para entrega el <strong>{selectedDate}</strong></span></>
                         )}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
-                        {filteredOrders.length} pedido(s) listos
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {duplicateOrdersCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSearchTerm(searchTerm === '@duplicado' ? '' : '@duplicado');
+                                }}
+                                style={{
+                                    backgroundColor: searchTerm === '@duplicado' ? '#DC2626' : '#FEF2F2',
+                                    color: searchTerm === '@duplicado' ? '#FFFFFF' : '#B91C1C',
+                                    border: '1px solid #FECACA',
+                                    borderRadius: '6px',
+                                    padding: '2px 8px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s'
+                                }}
+                                title="Filtrar pedidos duplicados (mismo cliente, fecha y sede)"
+                            >
+                                <AlertTriangle size={11} color={searchTerm === '@duplicado' ? '#FFFFFF' : '#DC2626'} />
+                                <span>{duplicateOrdersCount} duplicado(s) · {searchTerm === '@duplicado' ? 'Ver todos' : 'Filtrar'}</span>
+                            </button>
+                        )}
+                        <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                            {filteredOrders.length} pedido(s) listos
+                        </div>
                     </div>
 
 
@@ -3010,18 +3054,20 @@ export default function OrderLoadingPage() {
                                             const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
                                             const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
                                             const friendlyId = getFriendlyOrderId(order);
+                                            const duplicateInfo = duplicatesMap.get(order.id);
 
                                             return (
                                                 <tr key={order.id} 
                                                     onClick={() => handleOrderClick(order)}
                                                     style={{ 
                                                         borderBottom: '1px solid #F1F5F9', 
+                                                        borderLeft: duplicateInfo ? '5px solid #EF4444' : '5px solid transparent',
                                                         transition: 'all 0.1s', 
                                                         cursor: 'pointer',
-                                                        backgroundColor: !order.isComplete ? '#FFF1F2' : 'transparent'
+                                                        backgroundColor: duplicateInfo ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'transparent'
                                                     }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFF1F2' : 'transparent'}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FEF3C7' : !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'transparent'}
                                                 >
                                                     <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
                                                         <div style={{ fontWeight: '900', fontSize: '0.9rem', color: '#0F172A', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
@@ -3035,7 +3081,7 @@ export default function OrderLoadingPage() {
                                                         )}
 
 
-                                                        <div style={{ marginTop: '4px' }}>
+                                                        <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                                                             {isB2B ? (
                                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '4px' }}>
                                                                     <Building2 size={10} strokeWidth={2} /> Institucional
@@ -3043,6 +3089,27 @@ export default function OrderLoadingPage() {
                                                             ) : (
                                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', padding: '1px 6px', borderRadius: '4px' }}>
                                                                     <Home size={10} strokeWidth={2} /> Hogar
+                                                                </span>
+                                                            )}
+                                                            {duplicateInfo && (
+                                                                <span 
+                                                                    title={duplicateInfo.alertMessage}
+                                                                    style={{
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px',
+                                                                        backgroundColor: '#FEF2F2',
+                                                                        color: '#B91C1C',
+                                                                        border: '1px solid #F87171',
+                                                                        borderRadius: '4px',
+                                                                        padding: '1px 6px',
+                                                                        fontSize: '0.65rem',
+                                                                        fontWeight: '900',
+                                                                        boxShadow: '0 1px 2px rgba(220, 38, 38, 0.1)'
+                                                                    }}
+                                                                >
+                                                                    <AlertTriangle size={10} strokeWidth={2.5} style={{ color: '#DC2626' }} />
+                                                                    <span>Duplicado #{duplicateInfo.otherFriendlyIds.join(', #')}</span>
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3053,15 +3120,34 @@ export default function OrderLoadingPage() {
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>{order.shipping_address?.slice(0, 35)}...</div>
-                                                        {hasGPS ? (
-                                                            <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                <MapPin size={11} strokeWidth={2} /> GPS OK
-                                                            </span>
-                                                        ) : (
-                                                            <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                <AlertTriangle size={11} strokeWidth={2} /> SIN GPS
-                                                            </span>
-                                                        )}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                                            {hasGPS ? (
+                                                                <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <MapPin size={11} strokeWidth={2} /> GPS OK
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <AlertTriangle size={11} strokeWidth={2} /> SIN GPS
+                                                                </span>
+                                                            )}
+                                                            {duplicateInfo && (
+                                                                <span style={{
+                                                                    fontSize: '0.63rem',
+                                                                    fontWeight: '800',
+                                                                    color: '#B91C1C',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '3px',
+                                                                    backgroundColor: '#FEF2F2',
+                                                                    padding: '1px 5px',
+                                                                    borderRadius: '4px',
+                                                                    border: '1px solid #FECACA'
+                                                                }} title={duplicateInfo.alertMessage}>
+                                                                    <AlertTriangle size={9} strokeWidth={2.5} style={{ color: '#DC2626' }} />
+                                                                    <span>Misma sede y fecha</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
                                                         {getChannelBadge(order.origin_source, isB2B)}
@@ -3192,6 +3278,7 @@ export default function OrderLoadingPage() {
                                         isSelected={selectedOrders.has(order.id)}
                                         onToggleSelect={() => toggleSelectOrder(order.id)}
                                         onClick={() => handleOrderClick(order)} 
+                                        duplicateInfo={duplicatesMap.get(order.id)}
                                     />
                                 ))}
                             </div>
@@ -3339,41 +3426,143 @@ export default function OrderLoadingPage() {
                                      </div>
                                 </div>
 
-                                {/* Section: Document Printing Projection */}
-                                <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.2rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <Printer size={16} style={{ color: THEME.colors.primary }} />
-                                            <span style={{ fontSize: '0.78rem', fontWeight: '900', color: '#0F172A', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
-                                                Documentación & Planillas Logísticas
-                                            </span>
+                                {/* Section: Document Printing & Operation Mode (Dual: Digital vs Contingencia) */}
+                                <div style={{ 
+                                    backgroundColor: dispatchMode === 'contingency' ? '#FFFBEB' : '#F8FAFC', 
+                                    border: `1.5px solid ${dispatchMode === 'contingency' ? '#FCD34D' : '#E2E8F0'}`, 
+                                    borderRadius: '16px', 
+                                    padding: '1.2rem',
+                                    transition: 'all 0.2s ease'
+                                }}>
+                                    {/* Mode Selector Header */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Printer size={18} style={{ color: dispatchMode === 'contingency' ? '#B45309' : THEME.colors.primary }} />
+                                            <div>
+                                                <span style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0F172A', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                                    Documentación & Planillas Logísticas
+                                                </span>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                                    {dispatchMode === 'contingency' ? 'Modo Contingencia: Alistamiento y despacho físico en planta sin red' : 'Modo Digital: Sincronización en la nube con tablets y app de transporte'}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
-                                            Proyección para impresión y despacho
-                                        </span>
+
+                                        {/* Toggle Buttons (Digital vs Manual) */}
+                                        <div style={{ display: 'flex', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '10px', gap: '3px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDispatchMode('digital')}
+                                                style={{
+                                                    padding: '5px 12px',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    backgroundColor: dispatchMode === 'digital' ? '#FFFFFF' : 'transparent',
+                                                    color: dispatchMode === 'digital' ? THEME.colors.primary : '#64748B',
+                                                    boxShadow: dispatchMode === 'digital' ? '0 2px 4px rgba(0,0,0,0.08)' : 'none',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                <Sparkles size={12} /> Modo Digital (Nube)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDispatchMode('contingency')}
+                                                style={{
+                                                    padding: '5px 12px',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    backgroundColor: dispatchMode === 'contingency' ? '#B45309' : 'transparent',
+                                                    color: dispatchMode === 'contingency' ? '#FFFFFF' : '#64748B',
+                                                    boxShadow: dispatchMode === 'contingency' ? '0 2px 4px rgba(180, 83, 9, 0.25)' : 'none',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                <FileText size={12} /> Modo Manual (Piso/Emergencia)
+                                            </button>
+                                        </div>
                                     </div>
 
+                                    {/* Mode-Specific Banner */}
+                                    {dispatchMode === 'contingency' ? (
+                                        <div style={{
+                                            backgroundColor: '#FEF3C7',
+                                            border: '1px solid #FCD34D',
+                                            borderRadius: '12px',
+                                            padding: '10px 14px',
+                                            marginBottom: '1rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: '12px',
+                                            flexWrap: 'wrap'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <ShieldAlert size={20} color="#B45309" style={{ flexShrink: 0 }} />
+                                                <div style={{ fontSize: '0.75rem', color: '#92400E', fontWeight: '700' }}>
+                                                    <strong>PLANTA SIN ENERGÍA / SIN INTERNET:</strong> Genera e imprime el kit físico con casillas de báscula, remisiones de entrega y manifiesto de canastillas para no detener la operación.
+                                                </div>
+                                            </div>
+                                            <Link
+                                                href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                target="_blank"
+                                                style={{
+                                                    padding: '7px 14px',
+                                                    backgroundColor: '#B45309',
+                                                    color: 'white',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '900',
+                                                    textDecoration: 'none',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    boxShadow: '0 2px 8px rgba(180, 83, 9, 0.3)'
+                                                }}
+                                            >
+                                                <Printer size={13} /> IMPRIMIR KIT COMPLETO (1-CLIC) <ExternalLink size={11} />
+                                            </Link>
+                                        </div>
+                                    ) : null}
+
+                                    {/* Document Cards Grid */}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
-                                        {/* Doc 1: Planilla Compras */}
+                                        {/* Doc 1: Compras */}
                                         <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                             <div>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <FileText size={15} style={{ color: '#0D7A57' }} />
                                                     <span style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Compras</span>
                                                 </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Consolidado Corabastos</div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Demanda neta por kilos y mermas</div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>
+                                                    {dispatchMode === 'contingency' ? 'Planilla de Plaza' : 'Consolidado Corabastos'}
+                                                </div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
+                                                    {dispatchMode === 'contingency' ? 'Demanda neta + precios a mano' : 'Demanda neta por kilos y mermas'}
+                                                </div>
                                             </div>
                                             <Link 
-                                                href="/ops/compras" 
+                                                href={dispatchMode === 'contingency' ? `/admin/orders/contingency-print?mode=purchases&orderIds=${Array.from(selectedOrders).join(',')}` : "/ops/compras"} 
                                                 target="_blank"
                                                 style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
                                             >
-                                                <span>Ver Módulo</span> <ExternalLink size={10} />
+                                                <span>{dispatchMode === 'contingency' ? 'Imprimir Planilla' : 'Ver Módulo'}</span> <ExternalLink size={10} />
                                             </Link>
                                         </div>
 
-                                        {/* Doc 2: Etiquetas Térmicas */}
+                                        {/* Doc 2: Rótulos / Etiquetas */}
                                         <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                             <div>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -3384,7 +3573,7 @@ export default function OrderLoadingPage() {
                                                 <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Etiquetas QR de canastilla</div>
                                             </div>
                                             <Link 
-                                                href="/admin/orders/print-labels" 
+                                                href={`/admin/orders/print-labels?orderIds=${Array.from(selectedOrders).join(',')}`}
                                                 target="_blank"
                                                 style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#4F46E5', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
                                             >
@@ -3399,27 +3588,63 @@ export default function OrderLoadingPage() {
                                                     <Package size={15} style={{ color: '#D97706' }} />
                                                     <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Alistamiento</span>
                                                 </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Hojas de Picking</div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Por zonas: Fruver / Abarrotes</div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>
+                                                    {dispatchMode === 'contingency' ? 'Hojas de Báscula' : 'Hojas de Picking'}
+                                                </div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
+                                                    {dispatchMode === 'contingency' ? 'Casillas de peso real y lote' : 'Por zonas: Fruver / Abarrotes'}
+                                                </div>
                                             </div>
-                                            <span style={{ marginTop: '8px', fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8' }}>
-                                                Auto al confirmar
-                                            </span>
+                                            {dispatchMode === 'contingency' ? (
+                                                <Link 
+                                                    href={`/admin/orders/contingency-print?mode=picking&orderIds=${Array.from(selectedOrders).join(',')}`} 
+                                                    target="_blank"
+                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#B45309', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                >
+                                                    <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
+                                                </Link>
+                                            ) : (
+                                                <Link 
+                                                    href="/ops/picking" 
+                                                    target="_blank"
+                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#D97706', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                >
+                                                    <span>Ver Terminal</span> <ExternalLink size={10} />
+                                                </Link>
+                                            )}
                                         </div>
 
-                                        {/* Doc 4: Remisiones */}
+                                        {/* Doc 4: Remisiones & Guías */}
                                         <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                             <div>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <Truck size={15} style={{ color: '#0284C7' }} />
                                                     <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Ruta</span>
                                                 </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Remisiones & Guías</div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Manifiestos y remisiones B2B</div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>
+                                                    {dispatchMode === 'contingency' ? 'Remisiones Físicas' : 'Remisiones & Guías'}
+                                                </div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
+                                                    {dispatchMode === 'contingency' ? 'Duplicado cliente y canastillas' : 'Manifiestos y remisiones B2B'}
+                                                </div>
                                             </div>
-                                            <span style={{ marginTop: '8px', fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8' }}>
-                                                En módulo Transporte
-                                            </span>
+                                            {dispatchMode === 'contingency' ? (
+                                                <Link 
+                                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${Array.from(selectedOrders).join(',')}`} 
+                                                    target="_blank"
+                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#0284C7', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                >
+                                                    <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
+                                                </Link>
+                                            ) : (
+                                                <Link 
+                                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${Array.from(selectedOrders).join(',')}`} 
+                                                    target="_blank"
+                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#0284C7', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                >
+                                                    <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
+                                                </Link>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -3443,15 +3668,26 @@ export default function OrderLoadingPage() {
                                         }}
                                         disabled={updateLoading}
                                         style={{
-                                            flex: 2, padding: '0.9rem', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: updateLoading ? 'wait' : 'pointer', boxShadow: '0 4px 14px rgba(13, 122, 87, 0.35)', transition: 'all 0.15s', fontSize: '0.95rem', letterSpacing: '0.01em', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                            flex: 2, padding: '0.9rem', 
+                                            backgroundColor: dispatchMode === 'contingency' ? '#B45309' : THEME.colors.primary, 
+                                            color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', 
+                                            cursor: updateLoading ? 'wait' : 'pointer', 
+                                            boxShadow: dispatchMode === 'contingency' ? '0 4px 14px rgba(180, 83, 9, 0.35)' : '0 4px 14px rgba(13, 122, 87, 0.35)', 
+                                            transition: 'all 0.15s', fontSize: '0.95rem', letterSpacing: '0.01em', 
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                         }}
-                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = dispatchMode === 'contingency' ? '#92400E' : THEME.colors.primaryHover}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = dispatchMode === 'contingency' ? '#B45309' : THEME.colors.primary}
                                     >
                                         {updateLoading ? (
                                             <>
                                                 <Loader2 size={18} className="animate-spin" />
                                                 <span>Procesando Despacho...</span>
+                                            </>
+                                        ) : dispatchMode === 'contingency' ? (
+                                            <>
+                                                <FileText size={18} strokeWidth={2} />
+                                                <span>FIRMAR Y CONFIRMAR CONTINGENCIA EN PISO</span>
                                             </>
                                         ) : (
                                             <>
@@ -3667,6 +3903,83 @@ export default function OrderLoadingPage() {
 
                             {/* Modal Body */}
                             <div style={{ padding: '0', overflowY: 'auto', flex: 1, position: 'relative' }}>
+                                {(() => {
+                                    const modalDup = duplicatesMap.get(selectedOrder.id);
+                                    if (!modalDup || !modalDup.isDuplicate) return null;
+
+                                    return (
+                                        <div style={{
+                                            margin: '1.2rem 2rem 0.5rem 2rem',
+                                            padding: '1rem 1.4rem',
+                                            backgroundColor: '#FEF2F2',
+                                            border: '1.5px solid #F87171',
+                                            borderLeft: '6px solid #DC2626',
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: '16px',
+                                            boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <div style={{
+                                                    width: '36px',
+                                                    height: '36px',
+                                                    borderRadius: '10px',
+                                                    backgroundColor: '#FEE2E2',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    <AlertTriangle size={20} color="#DC2626" />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#991B1B' }}>
+                                                        ALERTA OPERATIVA: Posible Pedido Duplicado
+                                                    </div>
+                                                    <div style={{ fontSize: '0.78rem', color: '#B91C1C', marginTop: '2px', fontWeight: '600', lineHeight: '1.35' }}>
+                                                        {modalDup.alertMessage}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.72rem', color: '#7F1D1D', marginTop: '4px', fontWeight: '500' }}>
+                                                        Mismo cliente (<strong>{modalDup.matchingCriteria.client}</strong>), misma fecha de entrega (<strong>{modalDup.matchingCriteria.deliveryDate}</strong>) y misma sede (<strong>{modalDup.matchingCriteria.address}</strong>).
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {modalDup.otherOrders.length > 0 && (
+                                                <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                                    {modalDup.otherOrders.map((otherOrder: any) => (
+                                                        <button
+                                                            key={otherOrder.id}
+                                                            type="button"
+                                                            onClick={() => handleOrderClick(otherOrder)}
+                                                            style={{
+                                                                backgroundColor: '#FFFFFF',
+                                                                color: '#B91C1C',
+                                                                border: '1.5px solid #F87171',
+                                                                borderRadius: '8px',
+                                                                padding: '8px 14px',
+                                                                fontSize: '0.78rem',
+                                                                fontWeight: '800',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px',
+                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                        >
+                                                            <ExternalLink size={13} />
+                                                            Ver Pedido #{getFriendlyOrderId(otherOrder)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                                 {editMode && (
                                     <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F0FDFA', borderBottom: '1px solid #D1FAE5' }}>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -5128,7 +5441,7 @@ function KPICard({ title, value, icon, color, subtitle }: { title: string, value
     );
 }
 
-function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
+function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }: any) {
     const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
     const friendlyId = getFriendlyOrderId(order);
 
@@ -5139,12 +5452,13 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
                 padding: '1.2rem',
                 borderRadius: '16px',
                 border: '1px solid #E5E7EB',
+                borderLeft: duplicateInfo ? '5px solid #EF4444' : '1px solid #E5E7EB',
                 boxShadow: isSelected ? '0 0 0 2px #6366F1' : '0 2px 8px rgba(0,0,0,0.04)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'all 0.2s',
                 opacity: order.isComplete ? 1 : 0.8,
-                backgroundColor: !order.isComplete ? '#FFF1F2' : 'white'
+                backgroundColor: duplicateInfo ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'white'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
@@ -5159,9 +5473,26 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
                             </span>
                         )}
                     </div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <span>{isB2B ? 'CORPORATIVO' : 'CONSUMIDOR'}</span>
                         {getChannelBadge(order.origin_source)}
+                        {duplicateInfo && (
+                            <span style={{
+                                backgroundColor: '#FEF2F2',
+                                color: '#B91C1C',
+                                border: '1px solid #F87171',
+                                borderRadius: '4px',
+                                padding: '1px 6px',
+                                fontSize: '0.65rem',
+                                fontWeight: '900',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                            }} title={duplicateInfo.alertMessage}>
+                                <AlertTriangle size={10} strokeWidth={2.5} style={{ color: '#DC2626' }} />
+                                <span>Duplicado #{duplicateInfo.otherFriendlyIds.join(', #')}</span>
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div style={{

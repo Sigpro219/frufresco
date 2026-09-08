@@ -26,8 +26,10 @@ import {
     Sparkles,
     Truck,
     PackageOpen,
-    Printer
+    Printer,
+    ExternalLink
 } from 'lucide-react';
+import { normalizeAddress } from '@/lib/orderDuplicates';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -36,6 +38,7 @@ export default function OrderDetailPage() {
     const [order, setOrder] = useState<Order | null>(null);
     const [items, setItems] = useState<OrderItem[]>([]);
     const [userEmail, setUserEmail] = useState('');
+    const [duplicateSiblings, setDuplicateSiblings] = useState<any[]>([]);
 
     interface Order {
         id: string;
@@ -146,6 +149,33 @@ export default function OrderDetailPage() {
                 }, 0);
                 if (autoWeight > 0) {
                     setEditForm(prev => ({ ...prev, total_weight_kg: autoWeight }));
+                }
+            }
+
+            // 4. Duplicate Detection (Same client, delivery_date and sede)
+            if (orderData && orderData.delivery_date && orderData.status !== 'cancelled') {
+                const dateStr = String(orderData.delivery_date).split('T')[0];
+                let dupQuery = supabase
+                    .from('orders')
+                    .select('id, sequence_id, created_at, total, total_weight_kg, status, shipping_address, delivery_date')
+                    .eq('delivery_date', dateStr)
+                    .neq('id', orderData.id)
+                    .neq('status', 'cancelled');
+
+                if (orderData.profile_id) {
+                    dupQuery = dupQuery.eq('profile_id', orderData.profile_id);
+                }
+
+                const { data: siblingData } = await dupQuery;
+                if (siblingData && siblingData.length > 0) {
+                    const myNormAddr = normalizeAddress(orderData.shipping_address || orderData.profile?.address || '');
+                    const matching = siblingData.filter(s => {
+                        const sNorm = normalizeAddress(s.shipping_address || '');
+                        return sNorm === myNormAddr;
+                    });
+                    setDuplicateSiblings(matching);
+                } else {
+                    setDuplicateSiblings([]);
                 }
             }
 
@@ -429,6 +459,73 @@ export default function OrderDetailPage() {
                 <Link href="/admin/orders/loading" style={{ color: '#6B7280', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
                     <ArrowLeft size={16} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Volver al Listado
                 </Link>
+
+                {duplicateSiblings.length > 0 && (
+                    <div style={{
+                        marginBottom: '1.5rem',
+                        padding: '1rem 1.4rem',
+                        backgroundColor: '#FEF2F2',
+                        border: '1.5px solid #F87171',
+                        borderLeft: '6px solid #DC2626',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                            <div style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                backgroundColor: '#FEE2E2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                            }}>
+                                <AlertTriangle size={20} color="#DC2626" />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: '900', color: '#991B1B' }}>
+                                    ALERTA OPERATIVA: Posible Pedido Duplicado
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#B91C1C', marginTop: '2px', fontWeight: '600' }}>
+                                    Este pedido coincide en cliente, fecha de entrega y sede con {duplicateSiblings.map(s => `#${getFriendlyOrderId(s)}`).join(', ')}.
+                                </div>
+                                <div style={{ fontSize: '0.74rem', color: '#7F1D1D', marginTop: '3px' }}>
+                                    Sede: {order.shipping_address || order.profile?.address} · Entrega: {order.delivery_date}
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                            {duplicateSiblings.map(s => (
+                                <Link
+                                    key={s.id}
+                                    href={`/admin/orders/${s.id}`}
+                                    style={{
+                                        backgroundColor: '#FFFFFF',
+                                        color: '#B91C1C',
+                                        border: '1.5px solid #F87171',
+                                        borderRadius: '8px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                                    }}
+                                >
+                                    <ExternalLink size={13} />
+                                    Abrir Pedido #{getFriendlyOrderId(s)}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                     <div>
