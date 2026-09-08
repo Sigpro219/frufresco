@@ -1236,7 +1236,7 @@ export default function OrderLoadingPage() {
     }, [duplicatesMap]);
 
     const filteredOrders = useMemo(() => {
-        return orders.filter(order => {
+        const filtered = orders.filter(order => {
             const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
             const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
             const friendlyId = getFriendlyOrderId(order).toLowerCase();
@@ -1351,6 +1351,35 @@ export default function OrderLoadingPage() {
 
 
             return true;
+        });
+
+        // Ordenamiento Inteligente: Pedidos con Novedad (Duplicados, Incompletos) DE PRIMERO
+        return filtered.sort((a, b) => {
+            const aDup = duplicatesMap.has(a.id);
+            const bDup = duplicatesMap.has(b.id);
+            const aIncomplete = !a.isComplete;
+            const bIncomplete = !b.isComplete;
+
+            const aScore = (aDup ? 20 : 0) + (aIncomplete ? 10 : 0);
+            const bScore = (bDup ? 20 : 0) + (bIncomplete ? 10 : 0);
+
+            if (aScore !== bScore) {
+                return bScore - aScore; // Mayor prioridad con novedad primero
+            }
+
+            // Si ambos tienen duplicado, agrupar las parejas juntas
+            if (aDup && bDup) {
+                const aGroup = duplicatesMap.get(a.id)?.groupKey || '';
+                const bGroup = duplicatesMap.get(b.id)?.groupKey || '';
+                if (aGroup !== bGroup) {
+                    return aGroup.localeCompare(bGroup);
+                }
+            }
+
+            // Secundario: Más recientes primero
+            const aTime = new Date(a.created_at || 0).getTime();
+            const bTime = new Date(b.created_at || 0).getTime();
+            return bTime - aTime;
         });
     }, [orders, duplicatesMap, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType]);
 
@@ -2567,6 +2596,56 @@ export default function OrderLoadingPage() {
                             )}
                         </div>
 
+                        {/* View Mode Toggle (Table / Cards Gallery) */}
+                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px', gap: '2px', border: '1px solid #E2E8F0' }}>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('table')}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'table' ? '#FFFFFF' : 'transparent',
+                                    color: viewMode === 'table' ? '#0F172A' : '#64748B',
+                                    fontWeight: viewMode === 'table' ? '800' : '600',
+                                    fontSize: '0.74rem',
+                                    cursor: 'pointer',
+                                    boxShadow: viewMode === 'table' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s'
+                                }}
+                                title="Vista Lista / Tabla"
+                            >
+                                <List size={14} strokeWidth={2.2} />
+                                <span>Lista</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('cards')}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'cards' ? '#FFFFFF' : 'transparent',
+                                    color: viewMode === 'cards' ? '#0F172A' : '#64748B',
+                                    fontWeight: viewMode === 'cards' ? '800' : '600',
+                                    fontSize: '0.74rem',
+                                    cursor: 'pointer',
+                                    boxShadow: viewMode === 'cards' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s'
+                                }}
+                                title="Vista Galería (Cuadrícula)"
+                            >
+                                <Grid size={14} strokeWidth={2.2} />
+                                <span>Galería</span>
+                            </button>
+                        </div>
+
                         {/* New Order Button */}
                         <Link href="/admin/orders/create" style={{ 
                             backgroundColor: THEME.colors.primary, 
@@ -2630,23 +2709,24 @@ export default function OrderLoadingPage() {
                                     setSearchTerm(searchTerm === '@duplicado' ? '' : '@duplicado');
                                 }}
                                 style={{
-                                    backgroundColor: searchTerm === '@duplicado' ? '#DC2626' : '#FEF2F2',
-                                    color: searchTerm === '@duplicado' ? '#FFFFFF' : '#B91C1C',
-                                    border: '1px solid #FECACA',
+                                    backgroundColor: searchTerm === '@duplicado' ? '#991B1B' : '#DC2626',
+                                    color: '#FFFFFF',
+                                    border: '1px solid #B91C1C',
                                     borderRadius: '6px',
-                                    padding: '2px 8px',
-                                    fontSize: '0.68rem',
-                                    fontWeight: '800',
+                                    padding: '3px 10px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '900',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px',
+                                    gap: '5px',
+                                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.4)',
                                     transition: 'all 0.15s'
                                 }}
                                 title="Filtrar pedidos duplicados (mismo cliente, fecha y sede)"
                             >
-                                <AlertTriangle size={11} color={searchTerm === '@duplicado' ? '#FFFFFF' : '#DC2626'} />
-                                <span>{duplicateOrdersCount} duplicado(s) · {searchTerm === '@duplicado' ? 'Ver todos' : 'Filtrar'}</span>
+                                <AlertTriangle size={13} color="#FFFFFF" strokeWidth={2.8} />
+                                <span>{duplicateOrdersCount} NOVEDAD(ES) DUPLICADAS · {searchTerm === '@duplicado' ? 'VER TODOS' : 'FILTRAR'}</span>
                             </button>
                         )}
                         <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
@@ -3061,13 +3141,14 @@ export default function OrderLoadingPage() {
                                                     onClick={() => handleOrderClick(order)}
                                                     style={{ 
                                                         borderBottom: '1px solid #F1F5F9', 
-                                                        borderLeft: duplicateInfo ? '5px solid #EF4444' : '5px solid transparent',
-                                                        transition: 'all 0.1s', 
+                                                        borderLeft: duplicateInfo ? '8px solid #DC2626' : !order.isComplete ? '4px solid #F43F5E' : '8px solid transparent',
+                                                        transition: 'all 0.15s ease-in-out', 
                                                         cursor: 'pointer',
-                                                        backgroundColor: duplicateInfo ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'transparent'
+                                                        backgroundColor: duplicateInfo ? '#FEF2F2' : !order.isComplete ? '#FFF1F2' : 'transparent',
+                                                        boxShadow: duplicateInfo ? 'inset 0 0 0 1px #FCA5A5' : 'none'
                                                     }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FEF3C7' : !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'transparent'}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FEE2E2' : !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FEF2F2' : !order.isComplete ? '#FFF1F2' : 'transparent'}
                                                 >
                                                     <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
                                                         <div style={{ fontWeight: '900', fontSize: '0.9rem', color: '#0F172A', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
@@ -3097,19 +3178,20 @@ export default function OrderLoadingPage() {
                                                                     style={{
                                                                         display: 'inline-flex',
                                                                         alignItems: 'center',
-                                                                        gap: '3px',
-                                                                        backgroundColor: '#FEF2F2',
-                                                                        color: '#B91C1C',
-                                                                        border: '1px solid #F87171',
-                                                                        borderRadius: '4px',
-                                                                        padding: '1px 6px',
-                                                                        fontSize: '0.65rem',
+                                                                        gap: '4px',
+                                                                        backgroundColor: '#DC2626',
+                                                                        color: '#FFFFFF',
+                                                                        border: '1px solid #B91C1C',
+                                                                        borderRadius: '5px',
+                                                                        padding: '2px 8px',
+                                                                        fontSize: '0.67rem',
                                                                         fontWeight: '900',
-                                                                        boxShadow: '0 1px 2px rgba(220, 38, 38, 0.1)'
+                                                                        letterSpacing: '0.01em',
+                                                                        boxShadow: '0 2px 5px rgba(220, 38, 38, 0.35)'
                                                                     }}
                                                                 >
-                                                                    <AlertTriangle size={10} strokeWidth={2.5} style={{ color: '#DC2626' }} />
-                                                                    <span>Duplicado #{duplicateInfo.otherFriendlyIds.join(', #')}</span>
+                                                                    <AlertTriangle size={11} strokeWidth={3} style={{ color: '#FFFFFF' }} />
+                                                                    <span>DUPLICADO #{duplicateInfo.otherFriendlyIds.join(', #')}</span>
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3132,19 +3214,20 @@ export default function OrderLoadingPage() {
                                                             )}
                                                             {duplicateInfo && (
                                                                 <span style={{
-                                                                    fontSize: '0.63rem',
-                                                                    fontWeight: '800',
-                                                                    color: '#B91C1C',
+                                                                    fontSize: '0.65rem',
+                                                                    fontWeight: '900',
+                                                                    color: '#991B1B',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: '3px',
-                                                                    backgroundColor: '#FEF2F2',
-                                                                    padding: '1px 5px',
-                                                                    borderRadius: '4px',
-                                                                    border: '1px solid #FECACA'
+                                                                    gap: '4px',
+                                                                    backgroundColor: '#FEE2E2',
+                                                                    padding: '2px 7px',
+                                                                    borderRadius: '5px',
+                                                                    border: '1.5px solid #F87171',
+                                                                    boxShadow: '0 1px 2px rgba(220, 38, 38, 0.15)'
                                                                 }} title={duplicateInfo.alertMessage}>
-                                                                    <AlertTriangle size={9} strokeWidth={2.5} style={{ color: '#DC2626' }} />
-                                                                    <span>Misma sede y fecha</span>
+                                                                    <AlertTriangle size={10} strokeWidth={2.8} style={{ color: '#DC2626' }} />
+                                                                    <span>MISMA SEDE Y FECHA</span>
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3910,38 +3993,39 @@ export default function OrderLoadingPage() {
                                     return (
                                         <div style={{
                                             margin: '1.2rem 2rem 0.5rem 2rem',
-                                            padding: '1rem 1.4rem',
+                                            padding: '1.1rem 1.5rem',
                                             backgroundColor: '#FEF2F2',
-                                            border: '1.5px solid #F87171',
-                                            borderLeft: '6px solid #DC2626',
-                                            borderRadius: '12px',
+                                            border: '2px solid #F87171',
+                                            borderLeft: '10px solid #DC2626',
+                                            borderRadius: '14px',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
                                             gap: '16px',
-                                            boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
+                                            boxShadow: '0 4px 16px rgba(220, 38, 38, 0.16)'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
                                                 <div style={{
-                                                    width: '36px',
-                                                    height: '36px',
+                                                    width: '40px',
+                                                    height: '40px',
                                                     borderRadius: '10px',
-                                                    backgroundColor: '#FEE2E2',
+                                                    backgroundColor: '#DC2626',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    flexShrink: 0
+                                                    flexShrink: 0,
+                                                    boxShadow: '0 2px 6px rgba(220, 38, 38, 0.35)'
                                                 }}>
-                                                    <AlertTriangle size={20} color="#DC2626" />
+                                                    <AlertTriangle size={22} color="#FFFFFF" strokeWidth={2.6} />
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#991B1B' }}>
-                                                        ALERTA OPERATIVA: Posible Pedido Duplicado
+                                                    <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#991B1B', letterSpacing: '-0.01em' }}>
+                                                        ALERTA OPERATIVA: POSIBLE PEDIDO DUPLICADO
                                                     </div>
-                                                    <div style={{ fontSize: '0.78rem', color: '#B91C1C', marginTop: '2px', fontWeight: '600', lineHeight: '1.35' }}>
+                                                    <div style={{ fontSize: '0.8rem', color: '#B91C1C', marginTop: '3px', fontWeight: '700', lineHeight: '1.35' }}>
                                                         {modalDup.alertMessage}
                                                     </div>
-                                                    <div style={{ fontSize: '0.72rem', color: '#7F1D1D', marginTop: '4px', fontWeight: '500' }}>
+                                                    <div style={{ fontSize: '0.74rem', color: '#7F1D1D', marginTop: '4px', fontWeight: '600' }}>
                                                         Mismo cliente (<strong>{modalDup.matchingCriteria.client}</strong>), misma fecha de entrega (<strong>{modalDup.matchingCriteria.deliveryDate}</strong>) y misma sede (<strong>{modalDup.matchingCriteria.address}</strong>).
                                                     </div>
                                                 </div>
@@ -3954,25 +4038,25 @@ export default function OrderLoadingPage() {
                                                             type="button"
                                                             onClick={() => handleOrderClick(otherOrder)}
                                                             style={{
-                                                                backgroundColor: '#FFFFFF',
-                                                                color: '#B91C1C',
-                                                                border: '1.5px solid #F87171',
+                                                                backgroundColor: '#DC2626',
+                                                                color: '#FFFFFF',
+                                                                border: 'none',
                                                                 borderRadius: '8px',
-                                                                padding: '8px 14px',
-                                                                fontSize: '0.78rem',
-                                                                fontWeight: '800',
+                                                                padding: '9px 16px',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: '900',
                                                                 cursor: 'pointer',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 gap: '6px',
-                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                                                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
                                                                 transition: 'all 0.15s'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
                                                         >
-                                                            <ExternalLink size={13} />
-                                                            Ver Pedido #{getFriendlyOrderId(otherOrder)}
+                                                            <ExternalLink size={13} strokeWidth={2.5} />
+                                                            Ver Pedido Hermano #{getFriendlyOrderId(otherOrder)}
                                                         </button>
                                                     ))}
                                                 </div>
@@ -5449,82 +5533,141 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
         <div 
             onClick={onClick}
             style={{
-                padding: '1.2rem',
                 borderRadius: '16px',
-                border: '1px solid #E5E7EB',
-                borderLeft: duplicateInfo ? '5px solid #EF4444' : '1px solid #E5E7EB',
-                boxShadow: isSelected ? '0 0 0 2px #6366F1' : '0 2px 8px rgba(0,0,0,0.04)',
+                border: duplicateInfo ? '2px solid #F87171' : '1px solid #E5E7EB',
+                borderLeft: duplicateInfo ? '8px solid #DC2626' : !order.isComplete ? '4px solid #F43F5E' : '1px solid #E5E7EB',
+                boxShadow: duplicateInfo ? '0 6px 20px rgba(220, 38, 38, 0.16)' : isSelected ? '0 0 0 2px #6366F1' : '0 2px 8px rgba(0,0,0,0.04)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'all 0.2s',
                 opacity: order.isComplete ? 1 : 0.8,
-                backgroundColor: duplicateInfo ? '#FFFBEB' : !order.isComplete ? '#FFF1F2' : 'white'
+                backgroundColor: duplicateInfo ? '#FEF2F2' : !order.isComplete ? '#FFF1F2' : 'white',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>{friendlyId}</div>
-                        {order.created_at && (
-                            <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '5px', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
-                                {formatCreatedAt(order.created_at)}
-                            </span>
-                        )}
+            {/* Si es duplicado, banner superior de alto impacto rojo */}
+            {duplicateInfo && (
+                <div style={{
+                    backgroundColor: '#DC2626',
+                    color: '#FFFFFF',
+                    padding: '8px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.74rem',
+                    fontWeight: '900',
+                    letterSpacing: '0.02em',
+                    boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AlertTriangle size={15} strokeWidth={2.8} />
+                        <span>NOVEDAD: PEDIDO DUPLICADO</span>
                     </div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span>{isB2B ? 'CORPORATIVO' : 'CONSUMIDOR'}</span>
-                        {getChannelBadge(order.origin_source)}
+                    <span style={{
+                        backgroundColor: '#FFFFFF',
+                        color: '#991B1B',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.7rem',
+                        fontWeight: '900'
+                    }}>
+                        Coincide con #{duplicateInfo.otherFriendlyIds.join(', #')}
+                    </span>
+                </div>
+            )}
+
+            <div style={{ padding: '1.2rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.9rem' }}>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ fontWeight: '900', fontSize: '1.1rem', color: duplicateInfo ? '#991B1B' : '#111827' }}>{friendlyId}</div>
+                                {order.created_at && (
+                                    <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '5px', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+                                        {formatCreatedAt(order.created_at)}
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span>{isB2B ? 'CORPORATIVO' : 'CONSUMIDOR'}</span>
+                                {getChannelBadge(order.origin_source)}
+                                {duplicateInfo && (
+                                    <span style={{
+                                        backgroundColor: '#DC2626',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #B91C1C',
+                                        borderRadius: '5px',
+                                        padding: '2px 8px',
+                                        fontSize: '0.67rem',
+                                        fontWeight: '900',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        boxShadow: '0 1px 3px rgba(220, 38, 38, 0.3)'
+                                    }} title={duplicateInfo.alertMessage}>
+                                        <AlertTriangle size={10} strokeWidth={2.8} style={{ color: '#FFFFFF' }} />
+                                        <span>DUPLICADO #{duplicateInfo.otherFriendlyIds.join(', #')}</span>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        <div style={{
+                            padding: '4px 10px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '900',
+                            backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : '#DCFCE7',
+                            color: order.status === 'pending_approval' ? '#92400E' : '#15803D',
+                            height: 'fit-content'
+                        }}>
+                            {getStatusLabel(order.status)}
+                        </div>
+                    </div>
+
+                    <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#111827' }}>{order.customer_name}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#6B7280', marginTop: '4px' }}>{order.shipping_address?.slice(0, 45)}...</div>
                         {duplicateInfo && (
-                            <span style={{
-                                backgroundColor: '#FEF2F2',
-                                color: '#B91C1C',
-                                border: '1px solid #F87171',
-                                borderRadius: '4px',
-                                padding: '1px 6px',
-                                fontSize: '0.65rem',
-                                fontWeight: '900',
+                            <div style={{
+                                marginTop: '6px',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '3px'
-                            }} title={duplicateInfo.alertMessage}>
-                                <AlertTriangle size={10} strokeWidth={2.5} style={{ color: '#DC2626' }} />
-                                <span>Duplicado #{duplicateInfo.otherFriendlyIds.join(', #')}</span>
-                            </span>
+                                gap: '5px',
+                                backgroundColor: '#FEE2E2',
+                                border: '1.5px solid #F87171',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '0.68rem',
+                                fontWeight: '800',
+                                color: '#991B1B'
+                            }}>
+                                <AlertTriangle size={11} strokeWidth={2.6} style={{ color: '#DC2626' }} />
+                                <span>MISMA SEDE Y FECHA DE ENTREGA</span>
+                            </div>
                         )}
                     </div>
                 </div>
-                <div style={{
-                    padding: '4px 10px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '900',
-                    backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : '#DCFCE7',
-                    color: order.status === 'pending_approval' ? '#92400E' : '#15803D',
-                    height: 'fit-content'
-                }}>
-                    {getStatusLabel(order.status)}
+
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F3F4F6', paddingTop: '0.8rem' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>{formatMoney(order.total)}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{formatNumber(order.total_weight_kg, 1)} kg</div>
+                    </div>
                 </div>
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-                <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#111827' }}>{order.customer_name}</div>
-                <div style={{ fontSize: '0.8rem', color: '#6B7280', marginTop: '4px' }}>{order.shipping_address?.slice(0, 45)}...</div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F3F4F6', paddingTop: '0.8rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>{formatMoney(order.total)}</div>
-                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{formatNumber(order.total_weight_kg, 1)} kg</div>
             </div>
 
             {order.status === 'pending_approval' ? (
                 <div 
                     onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
                     style={{
-                        position: 'absolute', top: '12px', right: '12px',
+                        position: 'absolute', top: duplicateInfo ? '46px' : '12px', right: '12px',
                         width: '24px', height: '24px', borderRadius: '50%',
                         border: '2px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         backgroundColor: isSelected ? THEME.colors.primary : 'white',
                         color: 'white', fontSize: '0.8rem', cursor: 'pointer',
-                        boxShadow: isSelected ? '0 2px 5px rgba(13, 122, 87, 0.3)' : 'none'
+                        boxShadow: isSelected ? '0 2px 5px rgba(13, 122, 87, 0.3)' : 'none',
+                        zIndex: 10
                     }}
                 >
                     {isSelected && '✓'}
@@ -5533,16 +5676,16 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                 <div 
                     title="Pedido ya procesado en logística (Bloqueado)"
                     style={{
-                        position: 'absolute', top: '12px', right: '12px',
+                        position: 'absolute', top: duplicateInfo ? '46px' : '12px', right: '12px',
                         width: '24px', height: '24px', borderRadius: '50%',
                         backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#94A3B8'
+                        color: '#94A3B8',
+                        zIndex: 10
                     }}
                 >
                     <Lock size={12} strokeWidth={2.2} />
                 </div>
             )}
-
         </div>
     );
 }
