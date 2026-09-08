@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MapPin, Camera, X, Check, AlertTriangle, Package } from 'lucide-react';
+import RoleProcessGuide from '@/components/common/RoleProcessGuide';
+import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
 
 interface DeliverableItem {
     id: string;
@@ -326,21 +328,39 @@ export default function DeliveryConfirmationPage() {
 
                 // Automatic insertion into customer_service_pqrs
                 const clientId = stop.orders?.profiles?.id;
+                const isReplacement = stop.orders?.origin_source === 'customer_service' || (stop.orders?.admin_notes || '').includes('REPOSICIÓN');
                 if (clientId) {
+                    const rcaTag = buildRcaMetadataTag({
+                        categoryL1: 'comercial_cliente',
+                        subtypeL2: 'sobrestock_cliente',
+                        responsible: 'cliente',
+                        notes: `Cancelación total reportada por conductor: ${novedadReason}`,
+                        isReplacementRejection: isReplacement
+                    });
+
+                    const subject = isReplacement 
+                        ? `[ALERTA PING-PONG] Cancelación de Reposición - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`
+                        : `[Conductor] Cancelación Total en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`;
+
+                    const desc = isReplacement
+                        ? `⚠️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente canceló la entrega. NO volver a reprogramar despacho; compensar mediante Nota Crédito.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
+                        : `El conductor reportó cancelación total de la entrega en sitio.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
+
                     await supabase.from('customer_service_pqrs').insert({
                         client_id: clientId,
                         order_id: stop.orders.id,
                         type: 'reclamo',
                         category: 'entrega',
                         priority: 'urgent',
-                        subject: `[Conductor] Cancelación Total en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`,
-                        description: `El conductor reportó cancelación total de la entrega en sitio.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}`,
+                        subject: subject,
+                        description: desc,
                         primary_photo_url: evidenceUrl,
                         status: 'pending'
                     });
                 }
             } else if (hasNovedad) {
                 // Multiple events for partial returns
+                const isReplacement = stop.orders?.origin_source === 'customer_service' || (stop.orders?.admin_notes || '').includes('REPOSICIÓN');
                 const partialReturns = items.filter(i => i.returned_qty > 0);
                 for (const item of partialReturns) {
                     await supabase.from('delivery_events').insert({
@@ -373,14 +393,30 @@ export default function DeliveryConfirmationPage() {
                             .filter(i => i.return_evidence_url && i.return_evidence_url !== firstPhoto)
                             .map(i => i.return_evidence_url as string);
 
+                        const rcaTag = buildRcaMetadataTag({
+                            categoryL1: 'dano_mecanico',
+                            subtypeL2: 'golpe_magulladura',
+                            responsible: 'transporte',
+                            notes: `Rechazo parcial en entrega conductor`,
+                            isReplacementRejection: isReplacement
+                        });
+
+                        const subject = isReplacement 
+                            ? `[ALERTA PING-PONG] Rechazo Parcial en Reposición - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`
+                            : `[Conductor] Rechazo Parcial en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`;
+
+                        const desc = isReplacement
+                            ? `⚠️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente devolvió parcialmente los productos. NO volver a reprogramar; liquidar los kilos rechazados como Nota Crédito.\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
+                            : `El conductor registró devolución de producto(s) en sitio:\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
+
                         await supabase.from('customer_service_pqrs').insert({
                             client_id: clientId,
                             order_id: stop.orders.id,
                             type: 'reclamo',
                             category: 'producto',
-                            priority: 'high',
-                            subject: `[Conductor] Rechazo Parcial en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`,
-                            description: `El conductor registró devolución de producto(s) en sitio:\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}`,
+                            priority: isReplacement ? 'urgent' : 'high',
+                            subject: subject,
+                            description: desc,
                             primary_photo_url: firstPhoto,
                             additional_photos: additionalPhotos.length > 0 ? additionalPhotos : null,
                             status: 'pending'
@@ -437,32 +473,57 @@ export default function DeliveryConfirmationPage() {
 
     return (
         <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white', minHeight: '100vh', backgroundColor: '#090D16' }}>
-             <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <button 
-                    onClick={() => router.back()} 
-                    style={{ 
-                        background: 'rgba(255, 255, 255, 0.05)', 
-                        border: '1px solid rgba(255, 255, 255, 0.08)', 
-                        color: 'white', 
-                        padding: '0.6rem', 
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}
-                >
-                    <ArrowLeft size={18} />
-                </button>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, letterSpacing: '-0.3px' }}>
-                    Cierre de <span style={{ color: '#059669' }}>Entrega</span>
-                </h1>
+             <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button 
+                        onClick={() => router.back()} 
+                        style={{ 
+                            background: 'rgba(255, 255, 255, 0.05)', 
+                            border: '1px solid rgba(255, 255, 255, 0.08)', 
+                            color: 'white', 
+                            padding: '0.6rem', 
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
+                    <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, letterSpacing: '-0.3px' }}>
+                        Cierre de <span style={{ color: '#059669' }}>Entrega</span>
+                    </h1>
+                </div>
+                <RoleProcessGuide role="driver" compact sectionTitle="Protocolo Conductor" />
             </header>
 
             <div className="premium-card" style={{ 
                 padding: '1.5rem', 
                 marginBottom: '1.5rem' 
             }}>
+                {/* Alerta si es Pedido de Reposición */}
+                {(stop?.orders?.origin_source === 'customer_service' || (stop?.orders?.admin_notes || '').includes('REPOSICIÓN')) && (
+                    <div style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        borderRadius: '10px',
+                        padding: '0.75rem 1rem',
+                        marginBottom: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        fontSize: '0.75rem',
+                        color: '#FCA5A5'
+                    }}>
+                        <AlertTriangle size={20} color="#F87171" style={{ flexShrink: 0 }} />
+                        <div>
+                            <strong style={{ color: 'white', fontSize: '0.8rem', display: 'block' }}>PEDIDO DE REPOSICIÓN (REGLA DE CORTE DE BUCLE)</strong>
+                            Si el cliente rechaza algún producto, el saldo NO se reprogramará en un tercer viaje. Se liquidará contablemente como Nota Crédito.
+                        </div>
+                    </div>
+                )}
+
                 <div style={{ fontSize: '1.2rem', fontWeight: '800', color: 'white' }}>{stop?.orders?.customer_name || 'Cargando cliente...'}</div>
                 <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
                     <MapPin size={14} style={{ color: '#059669' }} /> 

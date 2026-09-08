@@ -112,7 +112,7 @@ export async function fetchGeminiExtraction(
  * Capa 1: NIT -> Capa 2: Emails / Aliases -> Capa 3: Razón Social -> Capa 4: Texto de Firma
  */
 export function resolveClientProfile(
-  clientInfo: { nit?: string; email?: string; name?: string; signatureText?: string },
+  clientInfo: { nit?: string; email?: string; name?: string; address?: string; signatureText?: string },
   profiles: any[]
 ): any | null {
   if (!profiles || profiles.length === 0) return null;

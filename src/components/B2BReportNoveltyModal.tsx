@@ -6,6 +6,8 @@ import {
     X, AlertTriangle, Camera, CheckCircle2, Loader2, 
     Package, FileText, UploadCloud
 } from 'lucide-react';
+import RoleProcessGuide from '@/components/common/RoleProcessGuide';
+import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
 
 interface B2BReportNoveltyModalProps {
     isOpen: boolean;
@@ -31,18 +33,20 @@ export default function B2BReportNoveltyModal({
     const [reportType, setReportType] = useState<'product' | 'general'>('product');
     const [selectedItemId, setSelectedItemId] = useState('');
     const [category, setCategory] = useState<'producto' | 'entrega' | 'facturacion'>('producto');
-    const [reason, setReason] = useState('Avería / Producto en mal estado');
+    const [reason, setReason] = useState('Avería / Producto magullado o golpeado');
     const [affectedQty, setAffectedQty] = useState<number | ''>('');
     const [description, setDescription] = useState('');
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
     const NOVELTY_REASONS = [
-        "Avería / Producto en mal estado",
-        "Calidad / Maduración inadecuada",
+        "Avería / Producto magullado o golpeado",
+        "Fisiología / Sobremaduro o pasado",
+        "Fitopatología / Pudrición o moho",
+        "Error en montaje de pedido / Producto no solicitado en orden",
         "Faltante de kilos en pesaje",
         "Calibre o especificación incorrecta",
-        "Empaque / Canastilla rota",
+        "Cadena de frío / Daño térmico o deshidratación",
         "Error en precio o cobro",
         "Otro motivo"
     ];
@@ -147,15 +151,53 @@ export default function B2BReportNoveltyModal({
                 });
             }
 
-            // 3. Insert into customer_service_pqrs
+            // 3. Determinar Categoría y Subtipo RCA
+            let catL1 = 'dano_mecanico';
+            let subL2 = 'golpe_magulladura';
+            let responsible = 'transporte';
+
+            if (reason.includes('montaje') || reason.includes('no solicitado')) {
+                catL1 = 'error_montaje_pedido';
+                subL2 = 'sku_equivocado_captura';
+                responsible = 'comercial';
+            } else if (reason.includes('Sobremaduro') || reason.includes('Fisiología')) {
+                catL1 = 'fisiologia_maduracion';
+                subL2 = 'sobremaduro_blando';
+                responsible = 'bodega';
+            } else if (reason.includes('Pudrición') || reason.includes('Fitopatología')) {
+                catL1 = 'fitopatologia';
+                subL2 = 'pudricion_origen';
+                responsible = 'proveedor';
+            } else if (reason.includes('frío') || reason.includes('Cadena')) {
+                catL1 = 'cadena_frio';
+                subL2 = 'dano_por_frio_ennegrecimiento';
+                responsible = 'bodega';
+            } else if (reason.includes('Calibre')) {
+                catL1 = 'calibre_especificacion';
+                subL2 = 'calibre_fuera_rango';
+                responsible = 'proveedor';
+            } else if (reason.includes('Faltante')) {
+                catL1 = 'error_montaje_pedido';
+                subL2 = 'unidad_cantidad_errada';
+                responsible = 'picking';
+            }
+
+            const rcaTag = buildRcaMetadataTag({
+                categoryL1: catL1,
+                subtypeL2: subL2,
+                responsible: responsible,
+                notes: `Radicado desde Portal B2B: ${reason}`
+            });
+
+            // 4. Insert into customer_service_pqrs
             const prodName = selectedItem?.products?.name || (selectedItem?.nickname || '');
             const subject = reportType === 'product'
                 ? `[Portal B2B] Novedad en ${prodName} - Pedido #${order.sequence_id || order.id.substring(0, 8)}`
                 : `[Portal B2B] Reclamo General - Pedido #${order.sequence_id || order.id.substring(0, 8)}`;
 
             const fullDescription = reportType === 'product'
-                ? `Reporte de autoservicio B2B registrado por ${clientProfile?.company_name || clientProfile?.contact_name || 'Cliente B2B'}.\n\n• Producto Afectado: ${prodName}\n• Motivo: ${reason}\n• Cantidad Reportada: ${affectedQty} ${selectedItem?.products?.unit_of_measure || 'und'}\n• Detalle: ${description.trim()}`
-                : `Reporte de autoservicio B2B registrado por ${clientProfile?.company_name || clientProfile?.contact_name || 'Cliente B2B'}.\n\n• Categoría: ${category}\n• Motivo: ${reason}\n• Detalle: ${description.trim()}`;
+                ? `Reporte de autoservicio B2B registrado por ${clientProfile?.company_name || clientProfile?.contact_name || 'Cliente B2B'}.\n\n• Producto Afectado: ${prodName}\n• Motivo: ${reason}\n• Cantidad Reportada: ${affectedQty} ${selectedItem?.products?.unit_of_measure || 'und'}\n• Detalle: ${description.trim()}\n\n${rcaTag}`
+                : `Reporte de autoservicio B2B registrado por ${clientProfile?.company_name || clientProfile?.contact_name || 'Cliente B2B'}.\n\n• Categoría: ${category}\n• Motivo: ${reason}\n• Detalle: ${description.trim()}\n\n${rcaTag}`;
 
             const { error: pqrErr } = await supabase.from('customer_service_pqrs').insert({
                 client_id: clientProfile?.id || order.profile_id,
@@ -238,19 +280,22 @@ export default function B2BReportNoveltyModal({
                             </p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#94A3B8',
-                            padding: '4px',
-                            borderRadius: '6px'
-                        }}
-                    >
-                        <X size={20} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <RoleProcessGuide role="b2b_client" compact sectionTitle="Guía de Radicación" />
+                        <button
+                            onClick={onClose}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#94A3B8',
+                                padding: '4px',
+                                borderRadius: '6px'
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {submittedSuccess ? (

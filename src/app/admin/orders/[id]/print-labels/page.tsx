@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { Printer } from 'lucide-react';
 
 interface LabelInfo {
     name: string;
@@ -178,9 +179,9 @@ export default function OrderPrintLabelsPage() {
                     </button>
                     <button 
                         onClick={() => window.print()} 
-                        style={{ padding: '8px 16px', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                        style={{ padding: '8px 16px', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
-                        🖨️ Imprimir
+                        <Printer size={16} /> Imprimir
                     </button>
                 </div>
             </div>

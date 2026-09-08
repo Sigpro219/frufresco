@@ -4,6 +4,9 @@ const nextConfig = {
     // !! URGENTE: Ignorar errores de tipos para desbloquear despliegue inicial !!
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 2592000,

@@ -95,15 +95,17 @@ export async function POST(req: Request) {
       // This immediately returns 200 OK to CloudMailin to prevent Vercel Function Invocation timeouts.
       const processMailAsync = async () => {
         const mailId = mailRecord?.id;
+        let fromField = '';
+        let subject = '';
         console.log(`[Email Inbound] Asynchronously processing mail record: ${mailId}`);
 
         try {
           const headers = payload.headers || {};
           const envelope = payload.envelope || {};
 
-          const fromField = headers.from || headers.From || envelope.from || '';
+          fromField = headers.from || headers.From || envelope.from || '';
           const toField = headers.to || headers.To || envelope.to || '';
-          const subject = headers.subject || headers.Subject || '';
+          subject = headers.subject || headers.Subject || '';
           const plainText = payload.plain || '';
           const htmlText = payload.html || '';
           let attachments = payload.attachments || [];

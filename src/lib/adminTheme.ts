@@ -50,3 +50,15 @@ export const formatMoney = (num: number): string => {
     if (num === null || num === undefined || isNaN(num)) return '-';
     return `$${formatNumber(Math.round(num))}`;
 };
+
+// Smart money formatter: formats >= 1.000.000 as "$X,X M" (Millions of Colombian Pesos)
+export const formatSmartMoney = (num: number): string => {
+    if (num === null || num === undefined || isNaN(num)) return '$0';
+    const abs = Math.abs(num);
+    if (abs >= 1_000_000) {
+        const millions = num / 1_000_000;
+        return `$${millions.toFixed(1).replace('.', ',')} M`;
+    }
+    return formatMoney(num);
+};
+

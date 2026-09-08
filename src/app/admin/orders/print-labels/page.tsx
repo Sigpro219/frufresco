@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { Printer } from 'lucide-react';
 
 interface LabelInfo {
     name: string;
@@ -193,9 +194,9 @@ export default function BulkOrderPrintLabelsPage() {
                     </button>
                     <button 
                         onClick={() => window.print()} 
-                        style={{ padding: '8px 16px', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                        style={{ padding: '8px 16px', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
-                        🖨️ Imprimir Todo
+                        <Printer size={16} /> Imprimir Todo
                     </button>
                 </div>
             </div>
