@@ -242,7 +242,7 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
         channelBadgeBorder: '#DDD6FE',
         authorTitle: 'Radicado Internamente en Mesa SAC',
         authorName: 'Mesa de Experiencia FruFresco',
-        authorRole: 'Gestión de Atención al Cliente & Calidad FruFresco',
+        authorRole: 'Gestión de Calidad & No Conformidades FruFresco',
         authorInitials: 'SAC',
         receptionChannel: 'Llamada Telefónica / WhatsApp Directo SAC',
         companyName: company,
@@ -349,8 +349,8 @@ export default function CustomerServicePage() {
     const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
     const [showTaxonomyModal, setShowTaxonomyModal] = useState(false);
     const [editingTaxonomy, setEditingTaxonomy] = useState<DefectCategoryL1[]>([]);
-    const [selectedTaxonomyCatIdx, setSelectedTaxonomyCatIdx] = useState(0);
-    const [totalOrdersCount, setTotalOrdersCount] = useState(120);
+    const [totalOrdersCount, setTotalOrdersCount] = useState<number | null>(null);
+    const [deliveredOrdersCount, setDeliveredOrdersCount] = useState<number | null>(null);
 
     // New Category L1 Form
     const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -529,7 +529,7 @@ export default function CustomerServicePage() {
                 .from('billing_returns')
                 .select(`
                     *,
-                    products(name, sku, unit_of_measure),
+                    products(name, sku, unit_of_measure, base_price),
                     orders(
                         sequence_id,
                         total,
@@ -544,11 +544,18 @@ export default function CustomerServicePage() {
             if (returnsError) throw returnsError;
             setNovelties(returnsData || []);
 
-            // 3. Fetch Total Delivered Orders Count for FTR Calculation
-            const { count: ordCount } = await supabase
+            // 3. Fetch Delivered Orders Count for FTR Calculation (real delivered orders)
+            const { count: delCount, error: delErr } = await supabase
+                .from('orders')
+                .select('*', { count: 'exact', head: true })
+                .in('status', ['completed', 'delivered', 'recibido']);
+            if (delCount !== null && !delErr) setDeliveredOrdersCount(delCount);
+
+            // 4. Also fetch total orders count for audit visibility
+            const { count: ordCount, error: ordErr } = await supabase
                 .from('orders')
                 .select('*', { count: 'exact', head: true });
-            if (ordCount) setTotalOrdersCount(ordCount);
+            if (ordCount !== null && !ordErr) setTotalOrdersCount(ordCount);
         } catch (e: any) {
             console.error('Error fetching PQRs/novelties:', e);
             showToast('Error cargando datos: ' + e.message, 'error');
@@ -1111,40 +1118,76 @@ export default function CustomerServicePage() {
 
     // =========================================================================
     // LEAN & QUALITY METRICS CALCULATIONS (FTR, CoQ, MTTR, PARETO TOP 1)
+    // 100% CONECTADO A BASE DE DATOS REAL — CERO CONSTANTES NI MULTIPLICADORES MOCK
     // =========================================================================
-    const totalDelivered = Math.max(totalOrdersCount, pqrs.length);
-    const ftrRate = totalDelivered > 0 ? Number((((totalDelivered - pqrs.length) / totalDelivered) * 100).toFixed(1)) : 98.5;
-    const ftrColor = ftrRate >= 98 ? '#15803D' : ftrRate >= 95 ? '#B45309' : '#DC2626';
-    const ftrBg = ftrRate >= 98 ? '#DCFCE7' : ftrRate >= 95 ? '#FEF3C7' : '#FEE2E2';
+    const totalDelivered = deliveredOrdersCount !== null ? deliveredOrdersCount : (totalOrdersCount !== null ? totalOrdersCount : null);
+    
+    // Conteo de órdenes únicas entregadas que tuvieron reclamos o devoluciones de calidad
+    const affectedOrdersCount = useMemo(() => {
+        const set = new Set<string>();
+        pqrs.forEach(p => { if (p.order_id) set.add(p.order_id); });
+        novelties.forEach(n => { if (n.order_id) set.add(n.order_id); });
+        return set.size;
+    }, [pqrs, novelties]);
 
+    const conformingDeliveries = totalDelivered !== null ? Math.max(0, totalDelivered - affectedOrdersCount) : 0;
+    const ftrRate = (totalDelivered !== null && totalDelivered > 0)
+        ? Number(((conformingDeliveries / totalDelivered) * 100).toFixed(1))
+        : null;
+    const ftrColor = ftrRate !== null ? (ftrRate >= 98 ? '#15803D' : ftrRate >= 95 ? '#B45309' : '#DC2626') : '#64748B';
+    const ftrBg = ftrRate !== null ? (ftrRate >= 98 ? '#DCFCE7' : ftrRate >= 95 ? '#FEF3C7' : '#FEE2E2') : '#F1F5F9';
+
+    // Costo Real de No Calidad (CoQ): Valorización exacta de mermas + reposiciones generadas
     const costOfQuality = useMemo(() => {
-        let totalReturns = novelties.reduce((acc, n) => acc + (Number(n.quantity_returned || 0) * 3500), 0);
-        let totalFreightOverhead = pqrs.length * 25000;
-        return totalReturns + totalFreightOverhead;
+        let totalReturnsValuated = 0;
+        novelties.forEach(n => {
+            const qty = Number(n.quantity_returned || 0);
+            const unitPrice = Number(n.products?.base_price || 0);
+            totalReturnsValuated += (qty * unitPrice);
+        });
+
+        // Sumar órdenes de reposición originadas en atención a no conformidades
+        let correctiveReplacementsCost = 0;
+        pqrs.forEach(p => {
+            if (p.orders?.origin_source === 'customer_service' || (p.orders?.admin_notes || '').includes('REPOSICIÓN')) {
+                correctiveReplacementsCost += Number(p.orders?.total || 0);
+            }
+        });
+
+        return totalReturnsValuated + correctiveReplacementsCost;
     }, [novelties, pqrs]);
 
+    // MTTR Real: Tiempo Medio de Resolución en Horas (solo sobre casos cerrados con resolved_at)
     const avgMttrHours = useMemo(() => {
         const resolved = pqrs.filter(p => p.resolved_at && p.created_at);
-        if (resolved.length === 0) return 1.4;
+        if (resolved.length === 0) return null; // Transparencia: sin casos cerrados no se inventa valor
         const sumMs = resolved.reduce((acc, p) => acc + (new Date(p.resolved_at!).getTime() - new Date(p.created_at).getTime()), 0);
-        return Math.max(0.4, Number((sumMs / (resolved.length * 3600000)).toFixed(1)));
+        return Math.max(0.1, Number((sumMs / (resolved.length * 3600000)).toFixed(1)));
     }, [pqrs]);
 
+    // Pareto #1 Real de Causa Raíz
     const paretoTop1 = useMemo(() => {
-        const counts: Record<string, number> = {};
+        const counts: Record<string, { count: number; isExplicit: boolean }> = {};
         pqrs.forEach(p => {
             const rca = parseRcaFromRecord(p);
-            counts[rca.categoryL1] = (counts[rca.categoryL1] || 0) + 1;
+            const code = rca.categoryL1;
+            if (!counts[code]) counts[code] = { count: 0, isExplicit: rca.isExplicitRca };
+            counts[code].count += 1;
+            if (rca.isExplicitRca) counts[code].isExplicit = true;
         });
-        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-        if (sorted.length === 0) return { label: 'Sin defectos', pct: 100, count: 0 };
+        const sorted = Object.entries(counts).sort((a, b) => b[1].count - a[1].count);
+        if (sorted.length === 0) return { label: 'Sin defectos', pct: 100, count: 0, isExplicit: true };
+        
         const topCode = sorted[0][0];
-        const topCount = sorted[0][1];
+        const topData = sorted[0][1];
         const activeCats = customTaxonomy.length > 0 ? customTaxonomy : RCA_CATEGORIES_L1;
         const catObj = activeCats.find(c => c.code === topCode);
-        const label = catObj ? catObj.label.replace(/^\d+\.\s*/, '') : topCode;
-        const pct = Math.round((topCount / Math.max(1, pqrs.length)) * 100);
-        return { label, pct, count: topCount };
+        
+        let label = catObj ? catObj.label.replace(/^\d+\.\s*/, '') : topCode;
+        if (topCode === 'sin_clasificar') label = 'Pendiente Dictamen RCA';
+        
+        const pct = Math.round((topData.count / Math.max(1, pqrs.length)) * 100);
+        return { label, pct, count: topData.count, isExplicit: topData.isExplicit };
     }, [pqrs, customTaxonomy]);
 
     const handleSelectFirstPending = () => {
@@ -1222,19 +1265,19 @@ export default function CustomerServicePage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '10px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, boxShadow: '0 2px 6px rgba(13,122,87,0.12)' }}>
-                            <HeartHandshake size={20} />
+                            <ShieldCheck size={22} />
                         </div>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <h1 style={{ fontSize: '1.35rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', lineHeight: '1.2' }}>
-                                    Mesa de Experiencia & Atención al Cliente
+                                    Gestión de Calidad & No Conformidades
                                 </h1>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '1px 7px', borderRadius: '9999px', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}>
-                                    Ecosistema FruFresco
+                                    SGC & Lean Agroindustrial
                                 </span>
                             </div>
                             <p style={{ color: THEME.colors.textSecondary, fontSize: '0.78rem', margin: '2px 0 0 0', fontWeight: '500' }}>
-                                Cuidando la relación con cada restaurante y cliente institucional mediante soluciones justas y aprendizaje continuo de calidad.
+                                Aseguramiento de calidad agroindustrial, dictamen técnico de mermas y resolución de novedades de entrega.
                             </p>
                         </div>
                     </div>
@@ -1325,7 +1368,7 @@ export default function CustomerServicePage() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
                                 <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0F172A' }}>
-                                    {ftrRate}%
+                                    {ftrRate !== null ? `${ftrRate}%` : '--'}
                                 </span>
                                 <span style={{
                                     fontSize: '0.62rem',
@@ -1335,8 +1378,11 @@ export default function CustomerServicePage() {
                                     backgroundColor: ftrBg,
                                     color: ftrColor
                                 }}>
-                                    {ftrRate >= 98 ? 'Clase Mundial' : ftrRate >= 95 ? 'Vigilancia' : 'Crítico'}
+                                    {ftrRate !== null ? (ftrRate >= 98 ? 'Clase Mundial' : ftrRate >= 95 ? 'Vigilancia' : 'Crítico') : 'Auditando'}
                                 </span>
+                            </div>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
+                                {totalDelivered !== null ? `${conformingDeliveries} de ${totalDelivered} despachos conformes` : 'Auditando histórico...'}
                             </div>
                         </div>
                     </div>
@@ -1356,8 +1402,8 @@ export default function CustomerServicePage() {
                             width: '32px',
                             height: '32px',
                             borderRadius: '8px',
-                            backgroundColor: '#FEF2F2',
-                            color: '#DC2626',
+                            backgroundColor: costOfQuality > 0 ? '#FEF2F2' : '#F0FDF4',
+                            color: costOfQuality > 0 ? '#DC2626' : '#16A34A',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1370,12 +1416,22 @@ export default function CustomerServicePage() {
                                 Costo No Calidad (CoQ)
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
-                                <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#991B1B' }}>
+                                <span style={{ fontSize: '1.05rem', fontWeight: '900', color: costOfQuality > 0 ? '#991B1B' : '#15803D' }}>
                                     {formatMoney(costOfQuality)}
                                 </span>
-                                <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B' }}>
-                                    Mermas + Flete
+                                <span style={{
+                                    fontSize: '0.62rem',
+                                    fontWeight: '800',
+                                    padding: '1px 5px',
+                                    borderRadius: '4px',
+                                    backgroundColor: costOfQuality > 0 ? '#FEE2E2' : '#DCFCE7',
+                                    color: costOfQuality > 0 ? '#DC2626' : '#15803D'
+                                }}>
+                                    {costOfQuality > 0 ? 'Pérdida Neta' : 'Cero Mermas'}
                                 </span>
+                            </div>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
+                                {costOfQuality > 0 ? 'Mermas y fletes correctivos' : 'Sin mermas valorizadas en BD'}
                             </div>
                         </div>
                     </div>
@@ -1412,9 +1468,19 @@ export default function CustomerServicePage() {
                                 <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0F172A' }}>
                                     {pendingPqrsCount} casos
                                 </span>
-                                <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#0284C7' }}>
-                                    ~{avgMttrHours}h resolución
+                                <span style={{
+                                    fontSize: '0.62rem',
+                                    fontWeight: '800',
+                                    padding: '1px 5px',
+                                    borderRadius: '4px',
+                                    backgroundColor: avgMttrHours !== null ? '#E0F2FE' : '#F1F5F9',
+                                    color: avgMttrHours !== null ? '#0369A1' : '#64748B'
+                                }}>
+                                    {avgMttrHours !== null ? `MTTR: ${avgMttrHours}h` : 'Sin cierres'}
                                 </span>
+                            </div>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
+                                {resolvedPqrsCount > 0 ? `${resolvedPqrsCount} caso(s) cerrado(s)` : `${pendingPqrsCount} en gestión activa`}
                             </div>
                         </div>
                     </div>
@@ -1448,7 +1514,7 @@ export default function CustomerServicePage() {
                                 Fuga Principal (Pareto #1)
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
-                                <span style={{ fontSize: '0.92rem', fontWeight: '900', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                                <span style={{ fontSize: '0.92rem', fontWeight: '900', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '135px' }} title={paretoTop1.label}>
                                     {paretoTop1.label}
                                 </span>
                                 <span style={{
@@ -1461,6 +1527,9 @@ export default function CustomerServicePage() {
                                 }}>
                                     {paretoTop1.pct}%
                                 </span>
+                            </div>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
+                                {paretoTop1.count} caso(s) ({paretoTop1.isExplicit ? 'RCA formal' : 'Heurística'})
                             </div>
                         </div>
                     </div>
@@ -1490,7 +1559,7 @@ export default function CustomerServicePage() {
                     </span>
                     <input 
                         type="text"
-                        placeholder="Buscar por cliente, motivo, responsable o pedido..."
+                        placeholder="Buscar por cliente, motivo, causal técnica RCA o pedido..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         onFocus={() => {
@@ -1529,6 +1598,7 @@ export default function CustomerServicePage() {
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
+                                justifySelf: 'center',
                                 justifyContent: 'center'
                             }}
                         >
@@ -1559,8 +1629,8 @@ export default function CustomerServicePage() {
                                 transition: 'all 0.15s'
                             }}
                         >
-                            <MessageSquare size={14} />
-                            <span>PQRs Institucionales</span>
+                            <ShieldCheck size={14} />
+                            <span>No Conformidades & Reclamos</span>
                             <span style={{
                                 fontSize: '0.65rem',
                                 padding: '1px 6px',
@@ -1591,7 +1661,7 @@ export default function CustomerServicePage() {
                             }}
                         >
                             <Truck size={14} />
-                            <span>Novedades Conductor</span>
+                            <span>Novedades Transportador</span>
                             <span style={{
                                 fontSize: '0.65rem',
                                 padding: '1px 6px',

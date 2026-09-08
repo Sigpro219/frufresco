@@ -289,7 +289,7 @@ export default function RootCauseAnalysisDashboardPage() {
                                 transition: 'all 0.15s',
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                             }}
-                            title="Volver a Atención al Cliente"
+                            title="Volver a Gestión de Calidad"
                         >
                             <ArrowLeft size={18} />
                         </Link>

@@ -176,6 +176,7 @@ export function parseRcaFromRecord(record: any): {
     responsible: 'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente' | 'no_definido';
     notes: string;
     isReplacementRejection: boolean;
+    isExplicitRca: boolean;
 } {
     // 1. Direct columns if present in DB
     if (record.defect_category_l1) {
@@ -184,7 +185,8 @@ export function parseRcaFromRecord(record: any): {
             subtypeL2: record.defect_subtype_l2 || '',
             responsible: (record.imputed_responsible as any) || 'no_definido',
             notes: record.imputation_evidence_notes || '',
-            isReplacementRejection: Boolean(record.is_replacement_rejection)
+            isReplacementRejection: Boolean(record.is_replacement_rejection),
+            isExplicitRca: true
         };
     }
 
@@ -199,7 +201,8 @@ export function parseRcaFromRecord(record: any): {
                 subtypeL2: parsed.subtypeL2 || '',
                 responsible: parsed.responsible || 'no_definido',
                 notes: parsed.notes || '',
-                isReplacementRejection: Boolean(parsed.isReplacementRejection)
+                isReplacementRejection: Boolean(parsed.isReplacementRejection),
+                isExplicitRca: true
             };
         } catch {
             // Ignore parse error and continue
@@ -211,39 +214,43 @@ export function parseRcaFromRecord(record: any): {
     const desc = textToSearch.toLowerCase();
     const fullText = `${sub} ${desc}`;
 
-    let inferredCatL1 = 'dano_mecanico';
-    let inferredSubtype = 'golpe_magulladura';
-    let inferredResponsible: any = 'transporte';
+    let inferredCatL1 = 'sin_clasificar';
+    let inferredSubtype = 'pendiente_dictamen';
+    let inferredResponsible: any = 'no_definido';
 
-    if (fullText.includes('montaje') || fullText.includes('pedido errado') || fullText.includes('no pedí') || fullText.includes('no pedi') || fullText.includes('digit') || fullText.includes('precio incorrecto')) {
+    if (fullText.includes('verde') || fullText.includes('madur') || fullText.includes('blando') || fullText.includes('firmeza')) {
+        inferredCatL1 = 'fisiologia_maduracion';
+        inferredSubtype = 'sobremaduro_blando';
+        inferredResponsible = 'bodega';
+    } else if (fullText.includes('magulla') || fullText.includes('golpe') || fullText.includes('aplastad') || fullText.includes('partid') || fullText.includes('volcad')) {
+        inferredCatL1 = 'dano_mecanico';
+        inferredSubtype = 'golpe_magulladura';
+        inferredResponsible = 'transporte';
+    } else if (fullText.includes('calibre') || fullText.includes('tamaño') || fullText.includes('pequeñ') || fullText.includes('grande') || fullText.includes('cebolla') || fullText.includes('cerbolla')) {
+        inferredCatL1 = 'calibre_especificacion';
+        inferredSubtype = 'calibre_fuera_rango';
+        inferredResponsible = 'proveedor';
+    } else if (fullText.includes('faltaron') || fullText.includes('faltante') || fullText.includes('incompleto') || fullText.includes('no me entregaron') || fullText.includes('no me llegó') || fullText.includes('no me llego')) {
+        inferredCatL1 = 'error_montaje_pedido';
+        inferredSubtype = 'pedido_incompleto_faltante';
+        inferredResponsible = 'picking';
+    } else if (fullText.includes('montaje') || fullText.includes('pedido errado') || fullText.includes('no pedí') || fullText.includes('no pedi') || fullText.includes('digit') || fullText.includes('precio incorrecto')) {
         inferredCatL1 = 'error_montaje_pedido';
         inferredSubtype = 'sku_equivocado_captura';
         inferredResponsible = 'comercial';
-    } else if (fullText.includes('faltaron') || fullText.includes('faltante') || fullText.includes('incompleto') || fullText.includes('no me entregaron')) {
-        inferredCatL1 = 'dano_mecanico';
-        inferredSubtype = 'corte_raspadura';
-        inferredResponsible = 'picking';
     } else if (fullText.includes('podr') || fullText.includes('moho') || fullText.includes('hongo') || fullText.includes('gusano') || fullText.includes('plaga') || fullText.includes('corazon negro')) {
         inferredCatL1 = 'fitopatologia';
         inferredSubtype = 'pudricion_origen';
         inferredResponsible = 'proveedor';
-    } else if (fullText.includes('verde') || fullText.includes('madur') || fullText.includes('blando') || fullText.includes('mango') || fullText.includes('tommy') || fullText.includes('firmeza')) {
-        inferredCatL1 = 'fisiologia_maduracion';
-        inferredSubtype = 'sobremaduro_blando';
-        inferredResponsible = 'bodega';
     } else if (fullText.includes('frio') || fullText.includes('frío') || fullText.includes('termic') || fullText.includes('térmic') || fullText.includes('quemad') || fullText.includes('deshidrat')) {
         inferredCatL1 = 'cadena_frio';
         inferredSubtype = 'dano_por_frio_ennegrecimiento';
         inferredResponsible = 'transporte';
-    } else if (fullText.includes('calibre') || fullText.includes('pequeñ') || fullText.includes('tamaño') || fullText.includes('ceballa') || fullText.includes('cebolla')) {
-        inferredCatL1 = 'calibre_especificacion';
-        inferredSubtype = 'calibre_fuera_rango';
-        inferredResponsible = 'proveedor';
     } else if (fullText.includes('cliente') || fullText.includes('menu') || fullText.includes('menú') || fullText.includes('local cerrado')) {
         inferredCatL1 = 'comercial_cliente';
         inferredSubtype = 'rechazo_subjetivo';
         inferredResponsible = 'cliente';
-    } else if (sub.includes('[conductor]') || desc.includes('cancelación') || desc.includes('volcada')) {
+    } else if (sub.includes('[conductor]') || desc.includes('cancelación')) {
         inferredCatL1 = 'dano_mecanico';
         inferredSubtype = 'aplastamiento_sobreestiba';
         inferredResponsible = 'transporte';
@@ -259,7 +266,8 @@ export function parseRcaFromRecord(record: any): {
         subtypeL2: inferredSubtype,
         responsible: inferredResponsible,
         notes: '',
-        isReplacementRejection: isReplacement
+        isReplacementRejection: isReplacement,
+        isExplicitRca: false
     };
 }
 
