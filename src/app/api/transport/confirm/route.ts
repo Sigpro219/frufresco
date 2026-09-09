@@ -109,12 +109,15 @@ export async function POST(request: Request) {
             });
         }
 
-        // Fetch avg_kg_per_crate parameter
+        // Fetch avg_kg_per_crate and space_capacity parameter
         let avg_kg_per_crate = 12.5;
+        let space_capacity = 36;
         const { data: dbParams } = await supabase.from('logistic_parameters').select('*');
         if (dbParams) {
             const avgParam = dbParams.find(p => p.id === 'avg_kg_per_crate')?.value;
             if (avgParam) avg_kg_per_crate = parseFloat(avgParam);
+            const spaceParam = dbParams.find(p => p.id === 'space_capacity')?.value;
+            if (spaceParam) space_capacity = parseFloat(spaceParam) || 36;
         }
 
         // Ordenar vehículos / rutas que se van a procesar por hora de salida (ascendente)
@@ -200,7 +203,7 @@ export async function POST(request: Request) {
 
                 if (orderDetail) {
                     cratesCount = Math.ceil((orderDetail.total_weight_kg || 0) / avg_kg_per_crate) || 1;
-                    const spacesNeeded = Math.ceil(cratesCount / 36);
+                    const spacesNeeded = Math.ceil(cratesCount / space_capacity);
                     console.log(`[SPACE ALLOC] Order ${orderId}: weight=${orderDetail.total_weight_kg}, crates=${cratesCount}, spacesNeeded=${spacesNeeded}, routeStartMin=${routeStartMin}, routeEndMin=${routeEndMin}`);
                     
                     let spaceCandidate = 1;

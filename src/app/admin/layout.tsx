@@ -16,6 +16,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 return;
             }
             if (!user && !profile) {
+                if (typeof window !== 'undefined' && (window.location.hash.includes('access_token') || window.location.search.includes('code='))) {
+                    return;
+                }
                 router.push('/');
                 return;
             }

@@ -289,9 +289,9 @@ export default function AdminSettingsPage() {
             { 
               key: 'value_proposition_items', 
               value: JSON.stringify([
-                { icon: '⏱️', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
-                { icon: '🥬', title: 'Frescura Absoluta', desc: 'Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.' },
-                { icon: '💎', title: 'Precios Competitivos', desc: 'Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.' }
+                { icon: 'clock', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
+                { icon: 'sprout', title: 'Frescura Absoluta', desc: 'Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.' },
+                { icon: 'sparkles', title: 'Precios Competitivos', desc: 'Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.' }
               ]), 
               description: 'Los 3 pilares de valor que se muestran en el inicio' 
             },
@@ -302,17 +302,17 @@ export default function AdminSettingsPage() {
                     title: 'Tu Operación Merece \n Lo Mejor del Campo',
                     description: 'Únete a los +500 restaurantes, hoteles, casinos y comedores que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos para tu volumen.',
                     benefits: [
-                        { icon: '🚀', title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
-                        { icon: '💰', title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },
-                        { icon: '🥕', title: 'Frescura Total', desc: 'Cosechado ayer, entregado hoy.' },
-                        { icon: '💳', title: 'Crédito B2B', desc: 'Paga a 15 o 30 días fácil.' }
+                        { icon: 'rocket', title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
+                        { icon: 'banknote', title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },
+                        { icon: 'carrot', title: 'Frescura Total', desc: 'Cosechado ayer, entregado hoy.' },
+                        { icon: 'credit-card', title: 'Crédito B2B', desc: 'Paga a 15 o 30 días fácil.' }
                     ]
                 }), 
                 description: 'Contenido dinámico de la página de registro B2B' 
             },
             { key: 'store_status', value: 'open', description: 'Estado actual de la tienda (Abierto/Cerrado)' },
             { key: 'global_banner', value: '', description: 'Anuncio superior (ej: ¡Envíos gratis hoy!)' },
-            { key: 'home_featured_title', value: '🔥 Lo más vendido de la semana', description: 'Título sección productos destacados' },
+            { key: 'home_featured_title', value: 'Lo más vendido de la semana', description: 'Título sección productos destacados' },
             { key: 'home_catalog_title', value: 'Nuestro Catálogo', description: 'Título sección catálogo general' },
             { key: 'contact_phone', value: '+57 300 123 4567', description: 'Teléfono de contacto (Footer)' },
             { key: 'contact_email', value: 'contacto@frufresco.com', description: 'Email de contacto (Footer)' },

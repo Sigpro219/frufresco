@@ -2368,7 +2368,7 @@ export default function ProvidersPage() {
                                                         <td style={{ padding: '0.45rem 0.75rem', textAlign: 'center' }}>
                                                             {r.isValid ? (
                                                                 <span style={{ color: '#059669', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                    <Check size={14} /> Listo
+                                                                    <CheckCircle2 size={14} /> Listo
                                                                 </span>
                                                             ) : (
                                                                 <span style={{ color: '#DC2626', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>

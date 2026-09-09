@@ -3601,25 +3601,82 @@ export default function OrderLoadingPage() {
                                                     <strong>PLANTA SIN ENERGÍA / SIN INTERNET:</strong> Genera e imprime el kit físico con casillas de báscula, remisiones de entrega y manifiesto de canastillas para no detener la operación.
                                                 </div>
                                             </div>
-                                            <Link
-                                                href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                target="_blank"
-                                                style={{
-                                                    padding: '7px 14px',
-                                                    backgroundColor: '#B45309',
-                                                    color: 'white',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: '900',
-                                                    textDecoration: 'none',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    boxShadow: '0 2px 8px rgba(180, 83, 9, 0.3)'
-                                                }}
-                                            >
-                                                <Printer size={13} /> IMPRIMIR KIT COMPLETO (1-CLIC) <ExternalLink size={11} />
-                                            </Link>
+                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                                <Link
+                                                    href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                    target="_blank"
+                                                    style={{
+                                                        padding: '7px 14px',
+                                                        backgroundColor: '#B45309',
+                                                        color: 'white',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '900',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        boxShadow: '0 2px 8px rgba(180, 83, 9, 0.3)'
+                                                    }}
+                                                >
+                                                    <Printer size={13} /> IMPRIMIR KIT COMPLETO (1-CLIC) <ExternalLink size={11} />
+                                                </Link>
+                                                <Link
+                                                    href={`/admin/orders/alistamiento-print?orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                    target="_blank"
+                                                    style={{
+                                                        padding: '7px 12px',
+                                                        backgroundColor: '#FFFFFF',
+                                                        color: '#0D7A57',
+                                                        border: '1px solid #0D7A57',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    Sábana Alistamiento
+                                                </Link>
+                                                <Link
+                                                    href="/admin/logistics/staging-spaces"
+                                                    style={{
+                                                        padding: '7px 12px',
+                                                        backgroundColor: '#FFFFFF',
+                                                        color: '#0F172A',
+                                                        border: '1px solid #CBD5E1',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    Bahías Muelle (1-150)
+                                                </Link>
+                                                <Link
+                                                    href="/admin/orders/contingency-reconciliation"
+                                                    style={{
+                                                        padding: '7px 12px',
+                                                        backgroundColor: '#FFFFFF',
+                                                        color: '#0369A1',
+                                                        border: '1px solid #BAE6FD',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    Conciliación
+                                                </Link>
+                                            </div>
                                         </div>
                                     ) : null}
 

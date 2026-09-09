@@ -22,7 +22,7 @@ const createSafeClient = () => {
                 detectSessionInUrl: true
             },
             cookieOptions: {
-                lifetime: 60 * 60 * 24 * 365, // 1 año de persistencia de sesión
+                maxAge: 60 * 60 * 24 * 365, // 1 año de persistencia de sesión
                 sameSite: 'lax',
                 path: '/'
             }

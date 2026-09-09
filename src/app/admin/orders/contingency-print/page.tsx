@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import { Printer, ShieldAlert } from 'lucide-react';
+import { Printer, ShieldAlert, ArrowLeft } from 'lucide-react';
+import Letterhead from '@/components/Letterhead';
+import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
+import { printViaNewWindow } from '@/components/print';
 
 interface OrderItem {
     id: string;
@@ -25,6 +28,7 @@ interface OrderItem {
 interface OrderData {
     id: string;
     sequence_id?: number;
+    warehouse_spaces?: number[];
     created_at: string;
     delivery_date: string;
     delivery_slot?: string;
@@ -56,6 +60,7 @@ export default function ContingencyPrintPage() {
 
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [loading, setLoading] = useState(true);
+    const printDocRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const fetchOrdersData = async () => {
@@ -75,7 +80,7 @@ export default function ContingencyPrintPage() {
                     .from('orders')
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
-                        shipping_address, admin_notes, special_notes,
+                        shipping_address, admin_notes, special_notes, warehouse_spaces,
                         profiles:profiles(id, company_name, contact_name, contact_phone, address, nit, role),
                         order_items(id, quantity, unit, unit_price, nickname, variant_label, products(id, name, sku, unit_of_measure, weight_kg))
                     `)
@@ -213,7 +218,14 @@ export default function ContingencyPrintPage() {
                         Volver
                     </button>
                     <button
-                        onClick={() => window.print()}
+                        onClick={() => {
+                            printViaNewWindow({
+                                element: printDocRef.current,
+                                title: `Kit de Contingencia - ${orders.length} Pedidos (${mode.toUpperCase()})`,
+                                paperSize: 'letter',
+                                orientation: 'portrait'
+                            });
+                        }}
                         style={{
                             padding: '10px 22px',
                             backgroundColor: '#0D7A57',
@@ -234,75 +246,68 @@ export default function ContingencyPrintPage() {
                 </div>
             </div>
 
-            {/* Printable Container */}
-            <div style={{ maxWidth: '850px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Printable Container (Attached ref for clean new-window printing) */}
+            <div ref={printDocRef} style={{ maxWidth: '850px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
                 {/* ========================================================= */}
                 {/* 1. PLANILLA DE COMPRAS CORABASTOS (FÍSICA DE PISO)        */}
                 {/* ========================================================= */}
                 {showPurchases && (
-                    <div className="print-sheet page-break" style={{ backgroundColor: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #CBD5E1', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
-                            <div>
-                                <h1 style={{ margin: 0, fontSize: '18pt', fontWeight: '900', textTransform: 'uppercase' }}>
-                                    Planilla Maestra de Compras (Corabastos)
-                                </h1>
-                                <div style={{ fontSize: '9pt', color: '#333', marginTop: '2px' }}>
-                                    INVESTMENTS CORTES S.A.S. &bull; FruFresco &bull; Operación de Contingencia
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'right', fontSize: '9pt' }}>
-                                <div><strong>Fecha Despacho:</strong> {orders[0]?.delivery_date || new Date().toISOString().split('T')[0]}</div>
-                                <div><strong>Total SKUs Consolidados:</strong> {consolidatedPurchases.length}</div>
-                                <div><strong>Pedidos Amparados:</strong> {orders.length}</div>
-                            </div>
+                    <Letterhead
+                        title="Planilla Maestra de Compras (Corabastos)"
+                        subtitle="INVESTMENTS CORTES S.A.S. · Central de Abastos Corabastos · Operación de Contingencia"
+                        date={orders[0]?.delivery_date || new Date().toISOString().split('T')[0]}
+                        reference={`SKUs: ${consolidatedPurchases.length}`}
+                        badge="COMPRAS CORABASTOS"
+                        badgeVariant="dark"
+                        className="page-break"
+                    >
+                        <div style={{ backgroundColor: '#F8FAFC', padding: '4px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.64rem', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span><strong>Instrucciones para Plaza:</strong> Registre el precio pactado por kilo/bulto y el puesto o bodega en Corabastos.</span>
+                            <span><strong>Pedidos amparados:</strong> {orders.length}</span>
                         </div>
 
-                        <div style={{ backgroundColor: '#F1F5F9', padding: '6px 10px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: '8pt', marginBottom: '12px' }}>
-                            <strong>Instrucciones para el Comprador en Corabastos:</strong> Registre a mano el precio final negociado por bulto/kilo, los kilos efectivamente comprados en plaza y el puesto/bodega de procedencia.
-                        </div>
-
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
+                        <table>
                             <thead>
-                                <tr style={{ backgroundColor: '#E2E8F0', borderBottom: '1.5px solid #000', textAlign: 'left' }}>
-                                    <th style={{ padding: '6px', width: '5%' }}>#</th>
-                                    <th style={{ padding: '6px', width: '38%' }}>Producto / Descripción</th>
-                                    <th style={{ padding: '6px', width: '8%', textAlign: 'center' }}>Und</th>
-                                    <th style={{ padding: '6px', width: '12%', textAlign: 'right' }}>Demanda Neta</th>
-                                    <th style={{ padding: '6px', width: '13%', textAlign: 'right' }}>+Merma (5%)</th>
-                                    <th style={{ padding: '6px', width: '12%' }}>Precio $/Kg</th>
-                                    <th style={{ padding: '6px', width: '12%' }}>Comprado</th>
+                                <tr>
+                                    <th style={{ width: '4%', textAlign: 'center' }}>#</th>
+                                    <th style={{ width: '40%' }}>Producto / Descripción</th>
+                                    <th style={{ width: '7%', textAlign: 'center' }}>Und</th>
+                                    <th style={{ width: '12%', textAlign: 'right' }}>Demanda Neta</th>
+                                    <th style={{ width: '13%', textAlign: 'right' }}>+Merma (5%)</th>
+                                    <th style={{ width: '12%', textAlign: 'center' }}>Precio $/Kg</th>
+                                    <th style={{ width: '12%', textAlign: 'center' }}>Comprado</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {consolidatedPurchases.map((p, idx) => {
                                     const withMerma = (p.totalQty * 1.05).toFixed(1);
                                     return (
-                                        <tr key={idx} style={{ borderBottom: '1px solid #CBD5E1' }}>
-                                            <td style={{ padding: '5px 6px', fontWeight: 'bold' }}>{idx + 1}</td>
-                                            <td style={{ padding: '5px 6px' }}>
-                                                <strong>{p.name}</strong> {p.sku !== 'N/A' && <span style={{ fontSize: '7.5pt', color: '#666' }}>({p.sku})</span>}
+                                        <tr key={idx}>
+                                            <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
+                                            <td>
+                                                <strong>{p.name}</strong> {p.sku !== 'N/A' && <span style={{ fontSize: '0.60rem', color: '#64748B' }}>({p.sku})</span>}
                                             </td>
-                                            <td style={{ padding: '5px 6px', textAlign: 'center' }}>{p.unit}</td>
-                                            <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 'bold' }}>
+                                            <td style={{ textAlign: 'center' }}>{p.unit}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                                                 {p.totalQty.toLocaleString('es-CO')}
                                             </td>
-                                            <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: '900', color: '#000' }}>
+                                            <td style={{ textAlign: 'right', fontWeight: '900', color: '#0F172A' }}>
                                                 {withMerma}
                                             </td>
-                                            <td style={{ padding: '5px 6px', borderBottom: '1px dashed #94A3B8' }}>$ ________</td>
-                                            <td style={{ padding: '5px 6px', borderBottom: '1px dashed #94A3B8' }}>________</td>
+                                            <td style={{ textAlign: 'center', borderBottom: '1px dashed #CBD5E1' }}>$ ________</td>
+                                            <td style={{ textAlign: 'center', borderBottom: '1px dashed #CBD5E1' }}>________</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
 
-                        <div style={{ marginTop: '25px', display: 'flex', justifyContent: 'space-between', fontSize: '9pt', paddingTop: '15px', borderTop: '1px solid #CBD5E1' }}>
+                        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
                             <div>Firma Comprador en Corabastos: ___________________________</div>
-                            <div>Firma Recibido en Bodega: ___________________________</div>
+                            <div>Firma Recibido en Bodega Central: ___________________________</div>
                         </div>
-                    </div>
+                    </Letterhead>
                 )}
 
 
@@ -312,45 +317,49 @@ export default function ContingencyPrintPage() {
                 {showPicking && orders.map((order, orderIdx) => {
                     const clientName = order.profiles?.company_name || order.profiles?.contact_name || order.customer_name || 'Cliente';
                     const orderNum = getFriendlyOrderId(order);
+                    const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
+                        ? formatSpaceLabel(order.warehouse_spaces)
+                        : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
+
                     return (
-                        <div key={`picking-${order.id}`} className="print-sheet page-break" style={{ backgroundColor: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #CBD5E1', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '12px' }}>
+                        <Letterhead
+                            key={`picking-${order.id}`}
+                            title="Hoja de Picking & Pesaje en Báscula"
+                            subtitle={`CLIENTE: ${clientName.toUpperCase()}`}
+                            date={order.delivery_date}
+                            reference={`PEDIDO #${orderNum}`}
+                            espacioNum={espacioNum}
+                            badge="BÁSCULA Y ALISTAMIENTO"
+                            badgeVariant="amber"
+                            className="page-break"
+                        >
+                            {/* Metadata cliente compacta */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', backgroundColor: '#F8FAFC', padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.66rem', marginBottom: '5px' }}>
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <h1 style={{ margin: 0, fontSize: '16pt', fontWeight: '900' }}>
-                                            HOJA DE PICKING & PESAJE EN BÁSCULA
-                                        </h1>
-                                        <span style={{ fontSize: '8pt', border: '1px solid #000', padding: '2px 6px', fontWeight: 'bold' }}>
-                                            PEDIDO #{orderNum}
-                                        </span>
-                                    </div>
-                                    <div style={{ fontSize: '11pt', fontWeight: '900', color: '#000', marginTop: '4px' }}>
-                                        CLIENTE: {clientName.toUpperCase()}
-                                    </div>
-                                </div>
-                                <div style={{ textAlign: 'right', fontSize: '8.5pt' }}>
-                                    <div><strong>Fecha Entrega:</strong> {order.delivery_date}</div>
-                                    <div><strong>Franja:</strong> {order.delivery_slot || 'AM'}</div>
                                     <div><strong>Dirección:</strong> {order.shipping_address || order.profiles?.address || 'Bogotá'}</div>
                                     <div><strong>Contacto:</strong> {order.profiles?.contact_phone || order.customer_phone || 'N/A'}</div>
+                                </div>
+                                <div>
+                                    <div><strong>Franja Horaria:</strong> {order.delivery_slot || 'AM (05:00 - 08:00)'}</div>
+                                    <div><strong>Líneas Solicitadas:</strong> {(order.order_items || []).length} ítems</div>
                                 </div>
                             </div>
 
                             {order.admin_notes && (
-                                <div style={{ backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', padding: '6px 10px', borderRadius: '4px', fontSize: '8pt', marginBottom: '10px' }}>
-                                    <strong>Notas / Instrucciones Especiales:</strong> {order.admin_notes}
+                                <div style={{ backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', padding: '3px 8px', borderRadius: '4px', fontSize: '0.64rem', marginBottom: '5px', color: '#92400E' }}>
+                                    <strong>Instrucciones Especiales:</strong> {order.admin_notes}
                                 </div>
                             )}
 
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
+                            <table>
                                 <thead>
-                                    <tr style={{ backgroundColor: '#000', color: '#FFF', textAlign: 'left' }}>
-                                        <th style={{ padding: '5px', width: '5%', textAlign: 'center' }}>[✓]</th>
-                                        <th style={{ padding: '5px', width: '42%' }}>Producto / Requisito</th>
-                                        <th style={{ padding: '5px', width: '12%', textAlign: 'right' }}>Cant. Pedida</th>
-                                        <th style={{ padding: '5px', width: '8%', textAlign: 'center' }}>Und</th>
-                                        <th style={{ padding: '5px', width: '15%', textAlign: 'center', backgroundColor: '#333' }}>Peso Real Báscula</th>
-                                        <th style={{ padding: '5px', width: '18%', textAlign: 'center' }}>Lote / Novedad</th>
+                                    <tr>
+                                        <th style={{ width: '4%', textAlign: 'center' }}>[✓]</th>
+                                        <th style={{ width: '46%' }}>Producto / Especificación</th>
+                                        <th style={{ width: '12%', textAlign: 'right' }}>Cant. Pedida</th>
+                                        <th style={{ width: '8%', textAlign: 'center' }}>Und</th>
+                                        <th style={{ width: '15%', textAlign: 'center', backgroundColor: '#1E293B' }}>Peso Real Báscula</th>
+                                        <th style={{ width: '15%', textAlign: 'center' }}>Lote / Novedad</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -358,22 +367,20 @@ export default function ContingencyPrintPage() {
                                         const pName = itm.nickname || itm.products?.name || 'Producto';
                                         const unit = itm.unit || itm.products?.unit_of_measure || 'Kg';
                                         return (
-                                            <tr key={itmIdx} style={{ borderBottom: '1px solid #CBD5E1', backgroundColor: itmIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
-                                                <td style={{ padding: '6px', textAlign: 'center', fontSize: '12pt' }}>
-                                                    &#9633;
-                                                </td>
-                                                <td style={{ padding: '6px' }}>
+                                            <tr key={itmIdx}>
+                                                <td style={{ textAlign: 'center', fontSize: '0.75rem' }}>&#9633;</td>
+                                                <td>
                                                     <strong>{pName}</strong>
-                                                    {itm.variant_label && <div style={{ fontSize: '7.5pt', color: '#475569' }}>Esp: {itm.variant_label}</div>}
+                                                    {itm.variant_label && <span style={{ fontSize: '0.60rem', color: '#475569' }}> ({itm.variant_label})</span>}
                                                 </td>
-                                                <td style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                                                     {Number(itm.quantity || 0).toLocaleString('es-CO')}
                                                 </td>
-                                                <td style={{ padding: '6px', textAlign: 'center' }}>{unit}</td>
-                                                <td style={{ padding: '6px', textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold' }}>
+                                                <td style={{ textAlign: 'center' }}>{unit}</td>
+                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', fontWeight: 'bold', backgroundColor: '#FFFFFF' }}>
                                                     ______ kg
                                                 </td>
-                                                <td style={{ padding: '6px', textAlign: 'center', color: '#64748B' }}>
+                                                <td style={{ textAlign: 'center', color: '#64748B' }}>
                                                     ________________
                                                 </td>
                                             </tr>
@@ -382,26 +389,25 @@ export default function ContingencyPrintPage() {
                                 </tbody>
                             </table>
 
-                            <div style={{ marginTop: '20px', borderTop: '1px solid #000', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', fontSize: '8pt' }}>
+                            <div style={{ marginTop: 'auto', borderTop: '1px solid #E2E8F0', paddingTop: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', fontSize: '0.64rem' }}>
                                 <div>
                                     <div><strong>Alistador / Pesador:</strong></div>
-                                    <div style={{ marginTop: '15px' }}>Firma: ___________________________</div>
+                                    <div style={{ marginTop: '8px' }}>Firma: ___________________________</div>
                                 </div>
                                 <div>
                                     <div><strong>Auditor de Calidad:</strong></div>
-                                    <div style={{ marginTop: '15px' }}>Firma: ___________________________</div>
+                                    <div style={{ marginTop: '8px' }}>Firma: ___________________________</div>
                                 </div>
                                 <div>
                                     <div><strong>Total Canastillas Usadas:</strong></div>
-                                    <div style={{ marginTop: '15px' }}>[ _____ ] Canastillas Plásticas</div>
+                                    <div style={{ marginTop: '8px' }}>[ _____ ] Canastillas Plásticas</div>
                                 </div>
                             </div>
-                        </div>
+                        </Letterhead>
                     );
                 })}
 
 
-                {/* ========================================================= */}
                 {/* ========================================================= */}
                 {/* 3. REMISIONES DE ENTREGA FÍSICAS DE CONTINGENCIA          */}
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
@@ -413,7 +419,9 @@ export default function ContingencyPrintPage() {
                     const isHogar = order.profiles?.role === 'hogar' || order.profiles?.role === 'b2c';
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici');
                     const remissionPrefix = isReposicion ? 'REPOSICIÓN' : (isHogar ? 'REMISION H' : 'REMISION I');
-                    const espacioNum = order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`;
+                    const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
+                        ? formatSpaceLabel(order.warehouse_spaces)
+                        : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
                     const itemsCount = (order.order_items || []).length;
 
                     // Cada pedido genera 2 hojas consecutivas: Original y Copia
@@ -421,56 +429,26 @@ export default function ContingencyPrintPage() {
                         { copyType: 'ORIGINAL - CLIENTE', isCopy: false },
                         { copyType: 'COPIA - TRANSPORTADOR / CONTABILIDAD', isCopy: true }
                     ].map((copyInfo, copyIdx) => (
-                        <div key={`remission-${order.id}-copy-${copyIdx}`} className="print-sheet page-break" style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', border: '1px solid #CBD5E1', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', position: 'relative' }}>
-                            {/* Top Badge Original / Copia */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #E2E8F0', paddingBottom: '4px' }}>
-                                <span style={{
-                                    fontSize: '8pt',
-                                    fontWeight: '900',
-                                    padding: '2px 8px',
-                                    borderRadius: '4px',
-                                    backgroundColor: copyInfo.isCopy ? '#F1F5F9' : '#0F172A',
-                                    color: copyInfo.isCopy ? '#0F172A' : '#FFFFFF',
-                                    border: '1px solid #0F172A',
-                                    letterSpacing: '0.5px'
-                                }}>
-                                    {copyInfo.copyType}
-                                </span>
-                                <span style={{ fontSize: '7.5pt', color: '#64748B' }}>
-                                    Documento Operativo de Piso &bull; FruFresco Logística
-                                </span>
-                            </div>
-
-                            {/* Header Corporativo con ESPACIO */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '12px' }}>
-                                <div>
-                                    <div style={{ fontSize: '13pt', fontWeight: '900', letterSpacing: '-0.3px' }}>
-                                        INVESTMENTS CORTES SAS
-                                    </div>
-                                    <div style={{ fontSize: '8pt', color: '#334155', marginTop: '1px' }}>
-                                        NIT 901.393.217-5 &bull; Bogotá D.C.
-                                    </div>
-                                    <div style={{ fontSize: '10.5pt', fontWeight: '800', marginTop: '4px', color: '#0F172A' }}>
-                                        {remissionPrefix} #{orderNum}
-                                    </div>
-                                </div>
-                                <div style={{ textAlign: 'right', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <div style={{ border: '2px solid #000', padding: '4px 10px', borderRadius: '6px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                                        <div style={{ fontSize: '7pt', fontWeight: 'bold', textTransform: 'uppercase', color: '#64748B' }}>Bahía de Piso</div>
-                                        <div style={{ fontSize: '12pt', fontWeight: '900' }}>ESPACIO {espacioNum}</div>
-                                    </div>
-                                </div>
-                            </div>
-
+                        <Letterhead
+                            key={`remission-${order.id}-copy-${copyIdx}`}
+                            title={`${remissionPrefix} #${orderNum}`}
+                            subtitle={`CLIENTE: ${clientName.toUpperCase()}`}
+                            date={order.delivery_date}
+                            reference={`ORDEN: ${orderNum}`}
+                            badge={copyInfo.copyType}
+                            badgeVariant={copyInfo.isCopy ? 'light' : 'dark'}
+                            espacioNum={espacioNum}
+                            className="page-break"
+                        >
                             {/* Poka-Yoke Banner Reposición si aplica */}
                             {isReposicion && (
-                                <div style={{ backgroundColor: '#FEF2F2', border: '1.5px solid #EF4444', padding: '6px 10px', borderRadius: '6px', marginBottom: '10px', fontSize: '7.5pt', color: '#991B1B', fontWeight: 'bold' }}>
-                                    RECUERDE: Los productos en este documento NO TIENEN COBRO, dado que corresponden a una reposición de calidad autorizada por Servicio al Cliente.
+                                <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '4px 8px', borderRadius: '4px', marginBottom: '5px', fontSize: '0.64rem', color: '#991B1B', fontWeight: 'bold' }}>
+                                    RECUERDE: Los productos en este documento NO TIENEN COBRO (Reposición de Calidad autorizada por Servicio al Cliente).
                                 </div>
                             )}
 
-                            {/* Client & Route Box */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 10px', border: '1px solid #CBD5E1', borderRadius: '6px', fontSize: '8pt', marginBottom: '12px' }}>
+                            {/* Client & Route Micro-Grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', backgroundColor: '#F8FAFC', padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.66rem', marginBottom: '5px' }}>
                                 <div>
                                     <div><strong>CLIENTE:</strong> {clientName}</div>
                                     <div><strong>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
@@ -479,23 +457,23 @@ export default function ContingencyPrintPage() {
                                 </div>
                                 <div>
                                     <div><strong>FECHA DESPACHO:</strong> {order.delivery_date}</div>
-                                    <div><strong>FRANJA:</strong> {order.delivery_slot || 'AM (05:00 - 08:00)'}</div>
-                                    <div><strong>LÍNEAS:</strong> {itemsCount} productos solicitados</div>
-                                    {order.special_notes && <div><strong>OBS:</strong> {order.special_notes}</div>}
+                                    <div><strong>FRANJA HORARIA:</strong> {order.delivery_slot || 'AM (05:00 - 08:00)'}</div>
+                                    <div><strong>LÍNEAS DE PEDIDO:</strong> {itemsCount} productos solicitados</div>
+                                    {order.special_notes && <div><strong>OBSERVACIÓN:</strong> {order.special_notes}</div>}
                                 </div>
                             </div>
 
-                            {/* Products Table con columna KG-UN recibe */}
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt', marginBottom: '12px' }}>
+                            {/* Products Table con columna KG-UN recibe compacta */}
+                            <table>
                                 <thead>
-                                    <tr style={{ backgroundColor: '#E2E8F0', borderBottom: '1.5px solid #000', textAlign: 'left' }}>
-                                        <th style={{ padding: '4px', width: '4%', textAlign: 'center' }}>P</th>
-                                        <th style={{ padding: '4px', width: '40%' }}>Descripción del Producto</th>
-                                        <th style={{ padding: '4px', width: '10%', textAlign: 'right' }}>Cant.</th>
-                                        <th style={{ padding: '4px', width: '7%', textAlign: 'center' }}>UM</th>
-                                        <th style={{ padding: '4px', width: '13%', textAlign: 'right' }}>Valor/UM</th>
-                                        <th style={{ padding: '4px', width: '12%', textAlign: 'right' }}>Total</th>
-                                        <th style={{ padding: '4px', width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFF' }}>KG-UN recibe</th>
+                                    <tr>
+                                        <th style={{ width: '4%', textAlign: 'center' }}>P</th>
+                                        <th style={{ width: '42%' }}>Descripción del Producto</th>
+                                        <th style={{ width: '9%', textAlign: 'right' }}>Cant.</th>
+                                        <th style={{ width: '7%', textAlign: 'center' }}>UM</th>
+                                        <th style={{ width: '12%', textAlign: 'right' }}>Valor/UM</th>
+                                        <th style={{ width: '12%', textAlign: 'right' }}>Total</th>
+                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF' }}>KG-UN recibe</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -506,17 +484,17 @@ export default function ContingencyPrintPage() {
                                         const price = isReposicion ? 0 : Number(itm.unit_price || 0);
                                         const lineTotal = qty * price;
                                         return (
-                                            <tr key={idx} style={{ borderBottom: '1px solid #CBD5E1' }}>
-                                                <td style={{ padding: '4px', textAlign: 'center', fontSize: '10pt' }}>&#9633;</td>
-                                                <td style={{ padding: '4px' }}>
+                                            <tr key={idx}>
+                                                <td style={{ textAlign: 'center', fontSize: '0.75rem' }}>&#9633;</td>
+                                                <td>
                                                     <strong>{pName}</strong>
-                                                    {itm.variant_label && <span style={{ fontSize: '7pt', color: '#64748B' }}> ({itm.variant_label})</span>}
+                                                    {itm.variant_label && <span style={{ fontSize: '0.60rem', color: '#64748B' }}> ({itm.variant_label})</span>}
                                                 </td>
-                                                <td style={{ padding: '4px', textAlign: 'right', fontWeight: 'bold' }}>{qty.toLocaleString('es-CO')}</td>
-                                                <td style={{ padding: '4px', textAlign: 'center' }}>{unit}</td>
-                                                <td style={{ padding: '4px', textAlign: 'right' }}>{price > 0 ? formatMoney(price) : '$0'}</td>
-                                                <td style={{ padding: '4px', textAlign: 'right', fontWeight: 'bold' }}>{lineTotal > 0 ? formatMoney(lineTotal) : '$0'}</td>
-                                                <td style={{ padding: '4px', textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold' }}>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{qty.toLocaleString('es-CO')}</td>
+                                                <td style={{ textAlign: 'center' }}>{unit}</td>
+                                                <td style={{ textAlign: 'right' }}>{price > 0 ? formatMoney(price) : '$0'}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{lineTotal > 0 ? formatMoney(lineTotal) : '$0'}</td>
+                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF' }}>
                                                     __________
                                                 </td>
                                             </tr>
@@ -525,63 +503,51 @@ export default function ContingencyPrintPage() {
                                 </tbody>
                             </table>
 
-                            {/* Summary & Canastillas Control */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
-                                <div style={{ width: '55%', fontSize: '7.5pt', color: '#334155' }}>
-                                    <div style={{ fontWeight: 'bold', color: '#000', marginBottom: '2px' }}>Balance de Canastillas Plásticas:</div>
-                                    <div style={{ display: 'flex', gap: '15px', border: '1px dashed #94A3B8', padding: '5px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
-                                        <div>Canastillas Entregadas: <strong>[ _____ ]</strong></div>
-                                        <div>Canastillas Recogidas: <strong>[ _____ ]</strong></div>
+                            {/* Summary & Canastillas Control Compact */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                                <div style={{ width: '56%', fontSize: '0.64rem', color: '#334155' }}>
+                                    <div style={{ fontWeight: 'bold', color: '#0F172A', marginBottom: '2px' }}>Control de Canastillas Plásticas:</div>
+                                    <div style={{ display: 'flex', gap: '10px', border: '1px dashed #94A3B8', padding: '3px 6px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
+                                        <div>Entregadas: <strong>[ _____ ]</strong></div>
+                                        <div>Recogidas: <strong>[ _____ ]</strong></div>
                                     </div>
-                                    <div style={{ marginTop: '3px', fontSize: '7pt', color: '#64748B' }}>
-                                        * Las canastillas son activos en comodato de FruFresco. Entregue al conductor la misma cantidad recibida.
+                                    <div style={{ marginTop: '2px', fontSize: '0.56rem', color: '#64748B' }}>
+                                        * Activos en comodato propiedad exclusiva de FruFresco. Retorne al conductor igual cantidad recibida.
                                     </div>
                                 </div>
 
-                                <div style={{ width: '38%', backgroundColor: '#F8FAFC', padding: '6px 10px', border: '1px solid #CBD5E1', borderRadius: '6px', fontSize: '8pt' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                                        <span>SUBTOTAL:</span>
+                                <div style={{ width: '38%', backgroundColor: '#F8FAFC', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.68rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                                        <span>Subtotal:</span>
                                         <span style={{ fontWeight: 'bold' }}>{isReposicion ? '$0' : formatMoney(subtotal)}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                                         <span>IVA:</span>
                                         <span>{isReposicion ? '$0' : formatMoney(order.tax || 0)}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #000', paddingTop: '3px', fontSize: '9.5pt', fontWeight: '900' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '2px', fontSize: '0.82rem', fontWeight: '900' }}>
                                         <span>TOTAL:</span>
-                                        <span>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
+                                        <span style={{ color: '#0D7A57' }}>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Signatures Block */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', border: '1px solid #000', padding: '8px 12px', borderRadius: '6px', fontSize: '7.5pt', marginBottom: '12px' }}>
+                            {/* Signatures Block Compact */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', border: '1px solid #0F172A', padding: '5px 8px', borderRadius: '4px', fontSize: '0.62rem', marginTop: 'auto' }}>
                                 <div>
-                                    <div style={{ fontWeight: '900', marginBottom: '2px' }}>FIRMA Y CÉDULA DE QUIEN RECIBE:</div>
-                                    <div style={{ marginTop: '22px', borderBottom: '1px solid #000', width: '90%' }}></div>
-                                    <div style={{ marginTop: '3px' }}>Nombre Legible: ____________________________________</div>
-                                    <div style={{ marginTop: '3px' }}>C.C. / Cargo: _______________________________________</div>
+                                    <div style={{ fontWeight: '900', marginBottom: '2px' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
+                                    <div style={{ marginTop: '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
+                                    <div style={{ marginTop: '2px' }}>Nombre Legible: ____________________________________</div>
+                                    <div style={{ marginTop: '2px' }}>C.C. / Cargo: _______________________________________</div>
                                 </div>
                                 <div>
                                     <div style={{ fontWeight: '900', marginBottom: '2px' }}>SELLO / NOVEDADES EN SITIO:</div>
-                                    <div style={{ height: '48px', border: '1px dashed #CBD5E1', borderRadius: '4px', padding: '4px', color: '#94A3B8', fontSize: '7pt' }}>
-                                        Sello del establecimiento o detalle de faltantes/devoluciones anotados por el cliente.
+                                    <div style={{ height: '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: '0.56rem' }}>
+                                        Sello húmedo del establecimiento o relación de devoluciones/faltantes firmados.
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Corporate Footer */}
-                            <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '6px', textAlign: 'center', fontSize: '7pt', color: '#64748B' }}>
-                                <div style={{ fontWeight: 'bold', color: '#334155' }}>
-                                    Más que su proveedor, somos el puente que impulsa el campo. Gracias por crecer con nosotros.
-                                </div>
-                                <div style={{ marginTop: '2px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
-                                    <span><strong>Gestión Pedidos:</strong> 310 5564160 &bull; pedidos@frufresco.com</span>
-                                    <span><strong>Servicio al Cliente:</strong> 301 5421761 &bull; info@frufresco.com</span>
-                                    <span><strong>Línea Hogar:</strong> www.frufresco.com</span>
-                                </div>
-                            </div>
-                        </div>
+                        </Letterhead>
                     ));
                 })}
 
@@ -590,39 +556,32 @@ export default function ContingencyPrintPage() {
                 {/* 4. MANIFIESTO DE RUTA & CONTROL DE CANASTILLAS            */}
                 {/* ========================================================= */}
                 {showDispatch && (
-                    <div className="print-sheet page-break" style={{ backgroundColor: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #CBD5E1', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
-                            <div>
-                                <h1 style={{ margin: 0, fontSize: '16pt', fontWeight: '900' }}>
-                                    MANIFIESTO DE RUTA & CONTROL DE CANASTILLAS
-                                </h1>
-                                <div style={{ fontSize: '8.5pt', color: '#475569' }}>
-                                    Despacho de Contingencia &bull; Salida de Bodega &bull; Puerta y Vigilancia
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'right', fontSize: '8.5pt' }}>
-                                <div><strong>Fecha:</strong> {orders[0]?.delivery_date || new Date().toISOString().split('T')[0]}</div>
-                                <div><strong>Total Paradas:</strong> {orders.length}</div>
-                            </div>
-                        </div>
-
+                    <Letterhead
+                        title="Manifiesto de Ruta & Control de Canastillas"
+                        subtitle="DESPACHO DE CONTINGENCIA · SALIDA DE PLANTA Y VIGILANCIA EN PORTERÍA"
+                        date={orders[0]?.delivery_date || new Date().toISOString().split('T')[0]}
+                        reference={`TOTAL PARADAS: ${orders.length}`}
+                        badge="DESPACHO & VIGILANCIA"
+                        badgeVariant="emerald"
+                        className="page-break"
+                    >
                         {/* Driver & Vehicle Box */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', backgroundColor: '#F1F5F9', padding: '8px 12px', borderRadius: '6px', fontSize: '9pt', marginBottom: '15px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', backgroundColor: '#F8FAFC', padding: '5px 8px', borderRadius: '4px', border: '1px solid #E2E8F0', fontSize: '0.68rem', marginBottom: '6px' }}>
                             <div><strong>Conductor Asignado:</strong> ______________________</div>
                             <div><strong>Placa del Vehículo:</strong> ______________________</div>
-                            <div><strong>Hora de Salida Bodega:</strong> ______:______ AM</div>
+                            <div><strong>Hora Salida Planta:</strong> ______:______ AM</div>
                         </div>
 
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+                        <table>
                             <thead>
-                                <tr style={{ backgroundColor: '#000', color: '#FFF', textAlign: 'left' }}>
-                                    <th style={{ padding: '6px', width: '5%', textAlign: 'center' }}>#</th>
-                                    <th style={{ padding: '6px', width: '10%' }}>Pedido</th>
-                                    <th style={{ padding: '6px', width: '30%' }}>Cliente / Razón Social</th>
-                                    <th style={{ padding: '6px', width: '25%' }}>Dirección de Entrega</th>
-                                    <th style={{ padding: '6px', width: '10%', textAlign: 'center' }}>Canastillas Entregadas</th>
-                                    <th style={{ padding: '6px', width: '10%', textAlign: 'center' }}>Canastillas Recogidas</th>
-                                    <th style={{ padding: '6px', width: '10%', textAlign: 'center' }}>Firma Cliente</th>
+                                <tr>
+                                    <th style={{ width: '4%', textAlign: 'center' }}>#</th>
+                                    <th style={{ width: '10%' }}>Pedido</th>
+                                    <th style={{ width: '30%' }}>Cliente / Razón Social</th>
+                                    <th style={{ width: '26%' }}>Dirección de Entrega</th>
+                                    <th style={{ width: '10%', textAlign: 'center' }}>Canastillas Salida</th>
+                                    <th style={{ width: '10%', textAlign: 'center' }}>Canastillas Retorno</th>
+                                    <th style={{ width: '10%', textAlign: 'center' }}>Firma Cliente</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -630,35 +589,29 @@ export default function ContingencyPrintPage() {
                                     const clientName = order.profiles?.company_name || order.profiles?.contact_name || order.customer_name || 'Cliente';
                                     const orderNum = getFriendlyOrderId(order);
                                     return (
-                                        <tr key={idx} style={{ borderBottom: '1px solid #CBD5E1', backgroundColor: idx % 2 === 0 ? '#FFF' : '#F8FAFC' }}>
-                                            <td style={{ padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
-                                            <td style={{ padding: '6px', fontWeight: '900' }}>#{orderNum}</td>
-                                            <td style={{ padding: '6px' }}>
+                                        <tr key={idx}>
+                                            <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
+                                            <td style={{ fontWeight: '900' }}>#{orderNum}</td>
+                                            <td>
                                                 <strong>{clientName}</strong>
-                                                <div style={{ fontSize: '7.5pt', color: '#64748B' }}>Tel: {order.profiles?.contact_phone || order.customer_phone || 'N/A'}</div>
+                                                <div style={{ fontSize: '0.58rem', color: '#64748B' }}>Tel: {order.profiles?.contact_phone || order.customer_phone || 'N/A'}</div>
                                             </td>
-                                            <td style={{ padding: '6px', fontSize: '8pt' }}>{order.shipping_address || order.profiles?.address || 'Bogotá'}</td>
-                                            <td style={{ padding: '6px', textAlign: 'center', fontWeight: 'bold', borderLeft: '1px solid #CBD5E1' }}>
-                                                [ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]
-                                            </td>
-                                            <td style={{ padding: '6px', textAlign: 'center', fontWeight: 'bold', borderLeft: '1px solid #CBD5E1' }}>
-                                                [ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]
-                                            </td>
-                                            <td style={{ padding: '6px', textAlign: 'center', borderLeft: '1px solid #CBD5E1', color: '#94A3B8' }}>
-                                                ________________
-                                            </td>
+                                            <td>{order.shipping_address || order.profiles?.address || 'Bogotá'}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 'bold' }}>[ &nbsp;&nbsp;&nbsp;&nbsp; ]</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 'bold' }}>[ &nbsp;&nbsp;&nbsp;&nbsp; ]</td>
+                                            <td style={{ textAlign: 'center', color: '#94A3B8' }}>________________</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
 
-                        <div style={{ marginTop: '30px', display: 'flex', justifyContent: 'space-between', fontSize: '8.5pt', paddingTop: '15px', borderTop: '1px solid #CBD5E1' }}>
+                        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
                             <div>Firma del Conductor: ___________________________</div>
                             <div>Firma Despachador en Planta: ___________________________</div>
-                            <div>Firma Vigilancia en Puerta: ___________________________</div>
+                            <div>Firma Vigilancia en Portería: ___________________________</div>
                         </div>
-                    </div>
+                    </Letterhead>
                 )}
 
             </div>

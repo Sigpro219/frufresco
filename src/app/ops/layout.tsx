@@ -27,6 +27,42 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     const [roles, setRoles] = useState<any[]>([]);
 
     useEffect(() => {
+        try {
+            const saved = localStorage.getItem('ops_theme');
+            if (saved !== null) {
+                setIsDarkMode(saved === 'dark');
+            }
+        } catch (e) {
+            // ignore
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('ops_theme', isDarkMode ? 'dark' : 'light');
+        } catch (e) {}
+
+        const root = document.documentElement;
+        if (isDarkMode) {
+            root.classList.add('dark');
+            root.style.setProperty('--ops-bg', '#0a111c');
+            root.style.setProperty('--ops-surface', '#121d2d');
+            root.style.setProperty('--ops-text', '#F9FAFB');
+            root.style.setProperty('--ops-text-muted', '#8295a5');
+            root.style.setProperty('--ops-border', '#22354c');
+            root.style.setProperty('--ops-primary', '#10B981');
+        } else {
+            root.classList.remove('dark');
+            root.style.setProperty('--ops-bg', '#F3F4F6');
+            root.style.setProperty('--ops-surface', '#FFFFFF');
+            root.style.setProperty('--ops-text', '#111827');
+            root.style.setProperty('--ops-text-muted', '#6B7280');
+            root.style.setProperty('--ops-border', '#E5E7EB');
+            root.style.setProperty('--ops-primary', '#10B981');
+        }
+    }, [isDarkMode]);
+
+    useEffect(() => {
         if (!loading) {
             if (!profile) {
                 router.push('/');
@@ -104,13 +140,22 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     };
 
     return (
-        <div className="ops-theme-wrapper" style={{
-            minHeight: '100vh',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            transition: 'background-color 0.3s, color 0.3s',
-            backgroundColor: 'var(--ops-bg)',
-            color: 'var(--ops-text)'
-        }}>
+        <div 
+            className={`ops-theme-wrapper ${isDarkMode ? 'dark' : 'light'}`} 
+            style={{
+                minHeight: '100vh',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                transition: 'background-color 0.3s, color 0.3s',
+                backgroundColor: isDarkMode ? '#0a111c' : '#F3F4F6',
+                color: isDarkMode ? '#F9FAFB' : '#111827',
+                ['--ops-bg' as any]: isDarkMode ? '#0a111c' : '#F3F4F6',
+                ['--ops-surface' as any]: isDarkMode ? '#121d2d' : '#FFFFFF',
+                ['--ops-text' as any]: isDarkMode ? '#F9FAFB' : '#111827',
+                ['--ops-text-muted' as any]: isDarkMode ? '#8295a5' : '#6B7280',
+                ['--ops-border' as any]: isDarkMode ? '#22354c' : '#E5E7EB',
+                ['--ops-primary' as any]: '#10B981'
+            }}
+        >
             {/* Simple Top Bar */}
             <header id="ops-main-header" style={{
                 backgroundColor: 'var(--ops-surface)',

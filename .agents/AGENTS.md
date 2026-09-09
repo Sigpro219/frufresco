@@ -40,3 +40,11 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 ## 4. Identificadores de Producto y Denominación de Categorías
 * **Campos SKU en Excel e Interfaz:** Queda estrictamente prohibido mostrar o requerir el campo `SKU` en interfaces de usuario, modales, ranking de productos y planillas Excel (.xlsx). En su lugar, se debe utilizar únicamente la columna **`accounting_id`** (ID Contable) para asociar los registros de productos de manera inequívoca.
 * **Nombres Completos de Categoría:** En toda la interfaz de usuario queda prohibido mostrar códigos abreviados de categoría (`VE`, `TU`, `FR`, `HO`, `DE`, `LA`, `CO`, `PR`). Se deben mapear siempre a sus nombres completos en español: **Verdura**, **Tubérculo**, **Fruta**, **Hortaliza**, **Despensa**, **Lácteo**, **Congelado**, **Procesado**.
+
+---
+
+## 5. Iconografía Exclusiva: Lucide Icons (Cero Emojis en UI)
+* **Regla Invariable:** Todas las interfaces, tarjetas, tablas, modales, botones y badges deben utilizar exclusivamente componentes SVG vectoriales de `lucide-react`.
+* **Cero Emojis:** Queda terminantemente prohibido el uso de emojis unicode (🥬, 🥦, 📦, 🍎, etc.) en cualquier capa visual o interactiva de la aplicación.
+* **Transformación de Datos de BD:** Si registros de base de datos heredados contienen emojis o cadenas de texto en campos como `icon`, el código debe mapearlos obligatoriamente a componentes Lucide antes de renderizarlos.
+* **Selectores de Iconos:** En modales donde el usuario elija un icono para un registro (como "Nueva Célula"), el selector debe componerse exclusivamente de opciones vectoriales de `lucide-react`.

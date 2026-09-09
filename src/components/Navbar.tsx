@@ -6,7 +6,7 @@ import { useCart } from '../lib/cartContext';
 import { useAuth, checkUserPermission } from '../lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
-import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare, ShieldCheck, Layers, CheckCircle2 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { config } from '@/lib/config';
 import { SYNC_METADATA } from '@/lib/sync-status';
@@ -458,6 +458,24 @@ export default function Navbar() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                     <ClipboardList size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navOrders}
+                                                </Link>
+                                            )}
+                                            {hasPermission('orders') && (
+                                                <Link href="/admin/logistics/staging-spaces"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Layers size={15} strokeWidth={1.5} style={dropdownIconStyle} /> Muelle y Bahías (1-150)
+                                                </Link>
+                                            )}
+                                            {hasPermission('orders') && (
+                                                <Link href="/admin/orders/contingency-reconciliation"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <CheckCircle2 size={15} strokeWidth={1.5} style={dropdownIconStyle} /> Conciliación Post-Despacho
                                                 </Link>
                                             )}
                                             {hasPermission('transport') && (

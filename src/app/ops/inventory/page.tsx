@@ -23,7 +23,24 @@ import {
     Check,
     ChevronDown,
     ChevronRight,
-    RefreshCw
+    RefreshCw,
+    Globe,
+    Lock,
+    PackageCheck,
+    ClipboardList,
+    MessageSquare,
+    Warehouse,
+    Trash2,
+    HeartHandshake,
+    Sparkles,
+    Apple,
+    Carrot,
+    Salad,
+    Boxes,
+    Milk,
+    Sprout,
+    Beef,
+    Wheat
 } from 'lucide-react';
 
 interface InventoryTask {
@@ -44,14 +61,22 @@ interface TaskItem {
         category?: string;
     };
     warehouse_id: string;
-    actual_qty: number | null;
+    expected_qty: number;
+    actual_qty: number;
+    difference_percent: number;
+    status: 'pending' | 'counted' | 'reconciled';
 }
+
+import { WorkCell } from '@/types/workCells';
+import InventoryWasteModal from '@/components/InventoryWasteModal';
 
 interface ProductWithStock {
     id: string;
     name: string;
     accounting_id: number | null;
     category: string | null;
+    inventory_group?: string | null;
+    buying_team?: string | null;
     unit_of_measure: string;
     parent_id: string | null;
     is_active: boolean;
@@ -70,16 +95,114 @@ interface ProductFamily {
     children: ProductWithStock[];
 }
 
-const CATEGORY_NAMES: Record<string, string> = {
-    'Todos': 'Todos',
-    'FR': 'Frutas',
-    'VE': 'Verduras',
-    'HO': 'Hojas / Hierbas',
-    'TU': 'Tubérculos',
-    'LA': 'Lácteos',
-    'DE': 'Despensa',
-    'CO': 'Congelados',
+interface VerificationLog {
+    id: string;
+    product_id: string;
+    verified_qty: number;
+    system_qty: number;
+    difference_percent: number;
+    verified_by?: string;
+    notes?: string;
+    created_at: string;
+    products?: {
+        name: string;
+        sku?: string;
+        unit_of_measure: string;
+    };
+}
+
+const renderCellLucideIcon = (cell?: WorkCell | null, size = 15) => {
+    if (!cell) return <Layers size={size} />;
+    const iconKey = (cell.icon || '').toLowerCase();
+    const name = (cell.short_name || cell.name || '').toLowerCase();
+    if (iconKey === 'sprout' || iconKey === '🥬' || name.includes('hortaliza')) return <Sprout size={size} />;
+    if (iconKey === 'carrot' || iconKey === '🥦' || name.includes('verdura')) return <Carrot size={size} />;
+    if (iconKey === 'apple' || iconKey === '🍎' || name.includes('fruta')) return <Apple size={size} />;
+    if (iconKey === 'boxes' || iconKey === '🧀' || name.includes('abarrote') || name.includes('seco')) return <Boxes size={size} />;
+    if (iconKey === 'layers' || iconKey === '🥔' || name.includes('tuberculo') || name.includes('papa') || name.includes('platano') || name.includes('tomate')) return <Layers size={size} />;
+    if (iconKey === 'milk' || iconKey === '🥛' || name.includes('lacteo') || name.includes('lácteo')) return <Milk size={size} />;
+    if (iconKey === 'beef' || iconKey === '🥩' || name.includes('carne')) return <Beef size={size} />;
+    if (iconKey === 'wheat' || iconKey === '🌾' || name.includes('grano')) return <Wheat size={size} />;
+    return <Package size={size} />;
 };
+
+const DEFAULT_WORK_CELLS: WorkCell[] = [
+    {
+        id: 'cell_abarrotes',
+        name: 'Célula de Abarrotes, Frutos Secos, Lácteos & Carnes Frías',
+        short_name: 'Abarrotes, Frutos Secos, Lácteos & Carnes Frías',
+        icon: 'boxes',
+        inventory_group: 'INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS',
+        categories: ['ABARROTES', 'LACTEOS', 'CARNES'],
+        buying_teams: [],
+        leader_id: null,
+        leader_name: 'CORONADO',
+        color: '#D97706',
+        badge_bg: '#FEF3C7',
+        badge_text: '#92400E',
+        description: 'Abarrotes, frutos secos, lácteos y carnes frías'
+    },
+    {
+        id: 'cell_frutas',
+        name: 'Célula de Frutas & Otros',
+        short_name: 'Frutas & Otros',
+        icon: 'apple',
+        inventory_group: 'INVENTARIO DE FRUTAS Y OTROS',
+        categories: ['FRUTAS'],
+        buying_teams: [],
+        leader_id: null,
+        leader_name: 'MENDOZA',
+        color: '#E11D48',
+        badge_bg: '#FFE4E6',
+        badge_text: '#9F1239',
+        description: 'Frutas frescas y otros'
+    },
+    {
+        id: 'cell_verduras',
+        name: 'Célula de Verduras',
+        short_name: 'Verduras',
+        icon: 'carrot',
+        inventory_group: 'INVENTARIO DE VERDURAS',
+        categories: ['VERDURAS'],
+        buying_teams: [],
+        leader_id: null,
+        leader_name: 'GALVIS',
+        color: '#059669',
+        badge_bg: '#D1FAE5',
+        badge_text: '#065F46',
+        description: 'Verduras de hoja y tallo'
+    },
+    {
+        id: 'cell_hortalizas',
+        name: 'Célula de Hortalizas',
+        short_name: 'Hortalizas',
+        icon: 'sprout',
+        inventory_group: 'INVENTARIO DE HORTALIZAS',
+        categories: ['HORTALIZAS'],
+        buying_teams: [],
+        leader_id: null,
+        leader_name: 'LEAL',
+        color: '#10B981',
+        badge_bg: '#CCFBF1',
+        badge_text: '#115E59',
+        description: 'Hortalizas y hierbas'
+    },
+    {
+        id: 'cell_papas',
+        name: 'Célula de Papas, Plátano, Tomate y Aguacates',
+        short_name: 'Papas, Plátano, Tomate & Aguacates',
+        icon: 'layers',
+        inventory_group: 'INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES',
+        categories: ['TUBERCULOS'],
+        buying_teams: [],
+        leader_id: null,
+        leader_name: 'BAUTISTA',
+        color: '#EA580C',
+        badge_bg: '#FFEDD5',
+        badge_text: '#9A3412',
+        description: 'Papas, plátanos, tomates y aguacates'
+    }
+];
 
 export default function OpsInventoryPage() {
     const [loading, setLoading] = useState(true);
@@ -88,12 +211,16 @@ export default function OpsInventoryPage() {
     const router = useRouter();
     const isMounted = useRef(true);
 
+    // Gobernanza por Células de Trabajo
+    const [workCells, setWorkCells] = useState<WorkCell[]>(DEFAULT_WORK_CELLS);
+    const [selectedCellId, setSelectedCellId] = useState<string>('ALL');
+    const [stockFilterMode, setStockFilterMode] = useState<'with_stock' | 'all'>('with_stock');
+
     // Conteo Físico State
     const [products, setProducts] = useState<ProductWithStock[]>([]);
     const [warehouseId, setWarehouseId] = useState<string>('d606c381-45bd-45f3-a0a9-9b8b3b196ac3');
     const [counts, setCounts] = useState<Record<string, string>>({});
     const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
-    const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [filterOnlyWithCount, setFilterOnlyWithCount] = useState<boolean>(false);
     const [savingItem, setSavingItem] = useState<string | null>(null);
@@ -103,6 +230,50 @@ export default function OpsInventoryPage() {
     const [activeTask, setActiveTask] = useState<InventoryTask | null>(null);
     const [auditCounts, setAuditCounts] = useState<Record<string, string>>({});
     const [pendingReturns, setPendingReturns] = useState<any[]>([]);
+    const [isWasteModalOpen, setIsWasteModalOpen] = useState(false);
+
+    const cellByGroup = useMemo(() => {
+        const map = new Map<string, WorkCell>();
+        (workCells || []).forEach(c => {
+            if (c.inventory_group) {
+                map.set(c.inventory_group.trim().toUpperCase(), c);
+            }
+        });
+        return map;
+    }, [workCells]);
+
+    const activeSelectedCell = useMemo(() => {
+        if (selectedCellId === 'ALL') return null;
+        return workCells.find(c => c.id === selectedCellId) || null;
+    }, [selectedCellId, workCells]);
+
+    const getProductCell = useCallback((p?: ProductWithStock | null): WorkCell | null => {
+        if (!p?.inventory_group) return null;
+        return cellByGroup.get(p.inventory_group.trim().toUpperCase()) || null;
+    }, [cellByGroup]);
+
+    const fetchWorkCells = useCallback(async () => {
+        try {
+            const { data } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'work_cells_governance')
+                .maybeSingle();
+
+            if (data?.value) {
+                const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setWorkCells(parsed);
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching work cells in ops inventory:', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchWorkCells();
+    }, [fetchWorkCells]);
 
     useEffect(() => {
         isMounted.current = true;
@@ -123,13 +294,13 @@ export default function OpsInventoryPage() {
             const { data, error } = await supabase
                 .from('products')
                 .select(`
-                    id, name, accounting_id, category, unit_of_measure, parent_id, is_active,
+                    id, name, accounting_id, category, inventory_group, buying_team, unit_of_measure, parent_id, is_active,
                     inventory_stocks!product_id (
                         id, quantity, status, warehouse_id
                     )
                 `)
                 .eq('is_active', true)
-                .order('name')
+                .order('accounting_id', { ascending: true })
                 .limit(2000);
 
             if (!isMounted.current) return;
@@ -258,18 +429,43 @@ export default function OpsInventoryPage() {
         return Object.values(map);
     }, [products]);
 
-    // 5. Filtrar familias por categoría, término de búsqueda e ID Contable
+    // 5. Estadísticas de inventario por Célula
+    const cellStats = useMemo(() => {
+        const stats: Record<string, { totalItems: number; withStockItems: number }> = {};
+        workCells.forEach(c => {
+            stats[c.id] = { totalItems: 0, withStockItems: 0 };
+        });
+
+        products.forEach(p => {
+            const cell = getProductCell(p);
+            if (cell && stats[cell.id]) {
+                stats[cell.id].totalItems++;
+                const qty = Number(p.inventory_stocks?.find(s => s.warehouse_id === warehouseId)?.quantity || p.inventory_stocks?.[0]?.quantity || 0);
+                if (qty > 0.0001) {
+                    stats[cell.id].withStockItems++;
+                }
+            }
+        });
+        return stats;
+    }, [workCells, products, getProductCell, warehouseId]);
+
+    // 6. Filtrar familias por Célula / Grupo de Inventario, Búsqueda y Existencias Teóricas
     const filteredFamilies = useMemo(() => {
         return families.filter(fam => {
-            // Filtro por categoría
-            if (selectedCategory !== 'Todos') {
-                const parentCatMatch = fam.parent.category === selectedCategory;
-                const childCatMatch = fam.children.some(c => c.category === selectedCategory);
-                if (!parentCatMatch && !childCatMatch) return false;
+            // A. Filtro por Célula / Grupo de Inventario
+            if (selectedCellId !== 'ALL' && activeSelectedCell) {
+                const targetGroup = (activeSelectedCell.inventory_group || '').trim().toUpperCase();
+                const parentGroup = (fam.parent.inventory_group || '').trim().toUpperCase();
+                const parentMatches = parentGroup === targetGroup;
+                const childMatches = fam.children.some(c => 
+                    (c.inventory_group || '').trim().toUpperCase() === targetGroup
+                );
+                if (!parentMatches && !childMatches) return false;
             }
 
-            // Filtro por búsqueda (Nombre o ID Contable)
-            if (searchTerm.trim()) {
+            // B. Filtro por término de búsqueda (Nombre o ID Contable)
+            const hasSearch = Boolean(searchTerm.trim());
+            if (hasSearch) {
                 const term = searchTerm.toLowerCase().trim();
                 const parentMatch = 
                     fam.parent.name.toLowerCase().includes(term) ||
@@ -283,7 +479,32 @@ export default function OpsInventoryPage() {
                 if (!parentMatch && !childMatch) return false;
             }
 
-            // Filtro por solo los que tienen conteo ingresado
+            // C. Filtro por Existencias Teóricas vs Todo el Catálogo
+            // Si stockFilterMode === 'with_stock':
+            // Se mantiene si:
+            // - El usuario buscó algo explícitamente (hasSearch) -> permite encontrar ítems en cero fácilmente
+            // - O ya se le ingresó conteo físico en la sesión (hasParentCount || hasChildCount)
+            // - O tiene existencia teórica > 0 en bodega
+            if (stockFilterMode === 'with_stock' && !hasSearch) {
+                const parentStock = Number(
+                    fam.parent.inventory_stocks?.find(s => s.warehouse_id === warehouseId)?.quantity || 
+                    fam.parent.inventory_stocks?.[0]?.quantity || 0
+                );
+                const childrenStockSum = fam.children.reduce((acc, c) => {
+                    const st = c.inventory_stocks?.find(s => s.warehouse_id === warehouseId) || c.inventory_stocks?.[0];
+                    return acc + Number(st?.quantity || 0);
+                }, 0);
+
+                const totalSysStock = fam.isParent ? childrenStockSum : parentStock;
+                const hasSysStock = totalSysStock > 0.0001;
+
+                const hasParentCount = counts[fam.parent.id] !== undefined && counts[fam.parent.id] !== '';
+                const hasChildCount = fam.children.some(c => counts[c.id] !== undefined && counts[c.id] !== '');
+
+                if (!hasSysStock && !hasParentCount && !hasChildCount) return false;
+            }
+
+            // D. Filtro por solo los que tienen conteo ingresado
             if (filterOnlyWithCount) {
                 const hasParentCount = counts[fam.parent.id] !== undefined && counts[fam.parent.id] !== '';
                 const hasChildCount = fam.children.some(c => counts[c.id] !== undefined && counts[c.id] !== '');
@@ -292,20 +513,14 @@ export default function OpsInventoryPage() {
 
             return true;
         });
-    }, [families, selectedCategory, searchTerm, filterOnlyWithCount, counts]);
-
-    // Categorías disponibles detectadas en productos activos
-    const availableCategories = useMemo(() => {
-        const set = new Set(products.map(p => p.category).filter(Boolean) as string[]);
-        return ['Todos', ...Array.from(set).sort()];
-    }, [products]);
+    }, [families, selectedCellId, activeSelectedCell, searchTerm, stockFilterMode, filterOnlyWithCount, counts, warehouseId]);
 
     // Conteo total de ítems ingresados por el usuario
     const totalCountedItemsCount = useMemo(() => {
         return Object.keys(counts).filter(id => counts[id] !== undefined && counts[id] !== '').length;
     }, [counts]);
 
-    // 6. Aplicar ajuste individual
+    // 7. Aplicar ajuste individual
     const handleSaveSingleItem = async (product: ProductWithStock) => {
         const rawVal = counts[product.id];
         if (rawVal === undefined || rawVal === '' || isNaN(parseFloat(rawVal))) {
@@ -322,6 +537,8 @@ export default function OpsInventoryPage() {
         const currentStockRecord = product.inventory_stocks?.find(s => s.warehouse_id === warehouseId) || product.inventory_stocks?.[0];
         const currentQty = Number(currentStockRecord?.quantity || 0);
         const diff = countedQty - currentQty;
+        const cell = getProductCell(product) || activeSelectedCell;
+        const cellInfo = cell ? ` | Célula: ${cell.name} (Líder: ${cell.leader_name || 'Sin asignar'})` : '';
 
         setSavingItem(product.id);
         try {
@@ -332,14 +549,14 @@ export default function OpsInventoryPage() {
                     quantity: diff,
                     type: 'adjustment',
                     status_to: 'available',
-                    notes: `Conteo Físico: Anterior ${currentQty} -> Contado ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[product.id] ? ` | Obs: ${itemNotes[product.id]}` : ''),
-                    reference_type: 'physical_count'
+                    notes: `Cruce a ciegas fin de turno${cellInfo} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[product.id] ? ` | Obs: ${itemNotes[product.id]}` : ''),
+                    reference_type: 'blind_count_shift_close'
                 }]);
 
                 if (error) throw error;
             }
 
-            window.showToast?.(`✅ ${product.name} ajustado a ${countedQty} ${product.unit_of_measure}`, 'success');
+            window.showToast?.(`${product.name} ajustado a ${countedQty} ${product.unit_of_measure}`, 'success');
             
             // Actualizar localmente el producto
             setProducts(prev => prev.map(p => {
@@ -367,7 +584,7 @@ export default function OpsInventoryPage() {
         }
     };
 
-    // 7. Guardar y Aplicar Conteo Físico en lote (Batch)
+    // 8. Guardar y Aplicar Conteo Físico en lote (Batch)
     const handleSavePhysicalCountBatch = async () => {
         const countedIds = Object.keys(counts).filter(id => {
             const val = counts[id];
@@ -379,7 +596,7 @@ export default function OpsInventoryPage() {
             return;
         }
 
-        const confirmMsg = `¿Desea registrar y aplicar el conteo físico para los ${countedIds.length} productos ingresados?`;
+        const confirmMsg = `¿Desea registrar y aplicar el cruce a ciegas para los ${countedIds.length} productos ingresados?`;
         if (!confirm(confirmMsg)) return;
 
         setSubmitting(true);
@@ -397,6 +614,8 @@ export default function OpsInventoryPage() {
                 const stockRec = product.inventory_stocks?.find(s => s.warehouse_id === warehouseId) || product.inventory_stocks?.[0];
                 const currentQty = Number(stockRec?.quantity || 0);
                 const diff = countedQty - currentQty;
+                const cell = getProductCell(product) || activeSelectedCell;
+                const cellInfo = cell ? ` | Célula: ${cell.name} (Líder: ${cell.leader_name || 'Sin asignar'})` : '';
 
                 if (Math.abs(diff) > 0.0001) {
                     movementRows.push({
@@ -405,8 +624,8 @@ export default function OpsInventoryPage() {
                         quantity: diff,
                         type: 'adjustment',
                         status_to: 'available',
-                        notes: `Conteo Físico Operaciones: Stock anterior ${currentQty} -> Contado ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : ''),
-                        reference_type: 'physical_count'
+                        notes: `Cruce a ciegas fin de turno${cellInfo} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : ''),
+                        reference_type: 'blind_count_shift_close'
                     });
                     adjustedCount++;
                 }
@@ -420,7 +639,7 @@ export default function OpsInventoryPage() {
                 if (insertError) throw insertError;
             }
 
-            window.showToast?.(`✅ Conteo físico aplicado exitosamente (${adjustedCount} productos actualizados)`, 'success');
+            window.showToast?.(`Conteo físico aplicado exitosamente (${adjustedCount} productos actualizados)`, 'success');
             
             // Limpiar conteos y recargar
             setCounts({});
@@ -456,7 +675,7 @@ export default function OpsInventoryPage() {
                 .update({ status: 'completed' })
                 .eq('id', activeTask.id);
 
-            window.showToast?.('✅ Auditoría a ciegas completada', 'success');
+            window.showToast?.('Auditoría a ciegas completada', 'success');
             setActiveTask(null);
             fetchTasks();
         } catch (error: unknown) {
@@ -485,7 +704,7 @@ export default function OpsInventoryPage() {
 
             if (updateError) throw updateError;
 
-            window.showToast?.(`✅ Producto gestionado como ${decision}`, 'success');
+            window.showToast?.(`Producto gestionado como ${decision}`, 'success');
             fetchReturns();
         } catch (error) {
             alert('Error al procesar decisión');
@@ -505,7 +724,9 @@ export default function OpsInventoryPage() {
         return (
             <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--ops-bg)' }}>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '2.5rem', marginBottom: '1rem', animation: 'spin 1.5s linear infinite' }}>📦</div>
+                    <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                        <Package size={44} color="var(--ops-primary)" className="animate-spin" />
+                    </div>
                     <div style={{ fontWeight: '800', color: 'var(--ops-text)', fontSize: '1.2rem' }}>Cargando inventario operativo...</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', marginTop: '0.5rem' }}>Sincronizando existencias de bodega</div>
                 </div>
@@ -602,55 +823,76 @@ export default function OpsInventoryPage() {
                         >
                             <ClipboardCheck size={15} /> Auditorías a Ciegas
                         </button>
+                        <button 
+                            type="button"
+                            onClick={() => setIsWasteModalOpen(true)}
+                            style={{ 
+                                padding: '0.55rem 1.25rem', 
+                                borderRadius: '100px', 
+                                border: 'none', 
+                                backgroundColor: '#DC2626', 
+                                color: 'white', 
+                                fontWeight: '800', 
+                                fontSize: '0.8rem', 
+                                cursor: 'pointer', 
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)'
+                            }}
+                        >
+                            <Camera size={15} /> + Merma / Salida
+                        </button>
                     </div>
 
                     <h1 style={{ fontSize: '1.8rem', fontWeight: '950', color: 'var(--ops-text)', margin: 0, letterSpacing: '-0.5px' }}>
-                        {activeView === 'full_count' && 'Conteo Físico Total de Bodega'}
+                        {activeView === 'full_count' && 'Conteo Físico a Ciegas por Célula'}
                         {activeView === 'returns' && 'Gestión de Retornos y Devoluciones'}
                         {activeView === 'audits' && 'Auditorías a Ciegas de Piso'}
                     </h1>
                     <p style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', marginTop: '0.35rem' }}>
-                        {activeView === 'full_count' && 'Ingreso y ajuste reactivo de inventario físico en tiempo real (Base Cero)'}
+                        {activeView === 'full_count' && 'Cruce de inventario operativo al cierre de turno por Jefe de Célula (Protocolo a Ciegas)'}
                         {activeView === 'returns' && 'Recepción de canastillas en patio y liquidación de sobrantes devueltos de ruta'}
                         {activeView === 'audits' && 'Muestreos aleatorios y auditorías de control programadas'}
                     </p>
                 </header>
 
                 {/* ========================================================================= */}
-                {/* VISTA 1: CONTEO FÍSICO TOTAL                                              */}
+                {/* VISTA 1: CONTEO FÍSICO A CIEGAS POR CÉLULA                                */}
                 {/* ========================================================================= */}
                 {activeView === 'full_count' && (
                     <div>
-                        {/* Barra Sticky de Búsqueda y Filtros con Blur */}
+                        {/* Barra Sticky de Búsqueda y Filtros */}
                         <div style={{ 
                             position: 'sticky', 
                             top: '10px', 
                             zIndex: 45, 
-                            backgroundColor: 'rgba(255, 255, 255, 0.94)', 
+                            backgroundColor: 'var(--ops-surface)', 
                             backdropFilter: 'blur(12px)',
                             WebkitBackdropFilter: 'blur(12px)',
                             padding: '1rem', 
                             borderRadius: '20px', 
                             border: '1px solid var(--ops-border)',
-                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.06)',
+                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
                             marginBottom: '1.5rem',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '0.75rem'
+                            gap: '0.85rem'
                         }}>
                             {/* Input de Búsqueda */}
                             <div style={{ position: 'relative' }}>
                                 <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--ops-text-muted)' }} />
                                 <input 
                                     type="text"
-                                    placeholder="Buscar por nombre o ID Contable..."
+                                    placeholder="Buscar por nombre o ID Contable (incluso productos con stock 0)..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem 1rem 0.75rem 2.75rem',
                                         borderRadius: '12px',
-                                        border: '1px solid var(--ops-border)',
+                                        border: '1.5px solid var(--ops-border)',
                                         backgroundColor: 'var(--ops-bg)',
                                         color: 'var(--ops-text)',
                                         fontSize: '0.9rem',
@@ -668,39 +910,161 @@ export default function OpsInventoryPage() {
                                 )}
                             </div>
 
-                            {/* Categorías deslizables */}
-                            <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
-                                {availableCategories.map(cat => {
-                                    const isSelected = selectedCategory === cat;
-                                    const label = CATEGORY_NAMES[cat] || cat;
+                            {/* Selector de Células de Trabajo / Grupos de Inventario */}
+                            <div style={{ display: 'flex', gap: '0.45rem', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                                <button
+                                    onClick={() => setSelectedCellId('ALL')}
+                                    style={{
+                                        padding: '0.5rem 0.95rem',
+                                        borderRadius: '100px',
+                                        border: selectedCellId === 'ALL' ? 'none' : '1px solid var(--ops-border)',
+                                        backgroundColor: selectedCellId === 'ALL' ? 'var(--ops-text)' : 'var(--ops-bg)',
+                                        color: selectedCellId === 'ALL' ? 'var(--ops-surface)' : 'var(--ops-text-muted)',
+                                        fontWeight: '800',
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    <Globe size={15} /> <span>Todas las Células</span>
+                                </button>
+                                {workCells.map(cell => {
+                                    const isSelected = selectedCellId === cell.id;
+                                    const withStockCount = cellStats[cell.id]?.withStockItems || 0;
                                     return (
                                         <button
-                                            key={cat}
-                                            onClick={() => setSelectedCategory(cat)}
+                                            key={cell.id}
+                                            onClick={() => setSelectedCellId(cell.id)}
                                             style={{
-                                                padding: '0.45rem 0.9rem',
+                                                padding: '0.5rem 0.95rem',
                                                 borderRadius: '100px',
-                                                border: isSelected ? 'none' : '1px solid var(--ops-border)',
-                                                backgroundColor: isSelected ? 'var(--ops-text)' : 'var(--ops-surface)',
-                                                color: isSelected ? 'var(--ops-surface)' : 'var(--ops-text-muted)',
+                                                border: isSelected ? `2px solid ${cell.color}` : '1px solid var(--ops-border)',
+                                                backgroundColor: isSelected ? (cell.badge_bg || 'var(--ops-surface)') : 'var(--ops-bg)',
+                                                color: isSelected ? (cell.badge_text || 'var(--ops-text)') : 'var(--ops-text-muted)',
                                                 fontWeight: '800',
                                                 fontSize: '0.75rem',
                                                 cursor: 'pointer',
                                                 whiteSpace: 'nowrap',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: isSelected ? `0 2px 10px ${cell.color}35` : 'none',
                                                 transition: 'all 0.15s'
                                             }}
                                         >
-                                            {label}
+                                            {renderCellLucideIcon(cell, 15)}
+                                            <span>{cell.short_name || cell.name}</span>
+                                            {cell.leader_name && (
+                                                <span style={{ 
+                                                    opacity: 0.9, 
+                                                    fontWeight: '700',
+                                                    fontSize: '0.68rem',
+                                                    padding: '1px 5px',
+                                                    borderRadius: '4px',
+                                                    backgroundColor: isSelected ? 'rgba(0,0,0,0.08)' : 'var(--ops-border)'
+                                                }}>
+                                                    {cell.leader_name.split(' ')[0]}
+                                                </span>
+                                            )}
+                                            <span style={{ 
+                                                fontSize: '0.65rem', 
+                                                fontWeight: '800',
+                                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                                padding: '1px 5px',
+                                                borderRadius: '10px'
+                                            }}>
+                                                {withStockCount}
+                                            </span>
                                         </button>
                                     );
                                 })}
                             </div>
 
-                            {/* Fila de Contadores y Toggle de solo con conteo */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingTop: '0.25rem', borderTop: '1px dashed var(--ops-border)' }}>
-                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
-                                    Mostrando <span style={{ color: 'var(--ops-text)', fontWeight: '950' }}>{filteredFamilies.length}</span> familias / productos
+                            {/* Banner Operativo de Célula Seleccionada */}
+                            {activeSelectedCell && (
+                                <div style={{
+                                    padding: '0.75rem 1rem',
+                                    borderRadius: '14px',
+                                    backgroundColor: activeSelectedCell.badge_bg || 'var(--ops-surface)',
+                                    border: `1.5px solid ${activeSelectedCell.color}45`,
+                                    color: activeSelectedCell.badge_text || 'var(--ops-text)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '0.5rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                        {renderCellLucideIcon(activeSelectedCell, 22)}
+                                        <div>
+                                            <div style={{ fontWeight: '950', fontSize: '0.9rem' }}>
+                                                {activeSelectedCell.name}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', opacity: 0.9 }}>
+                                                Líder: <b>{activeSelectedCell.leader_name || 'Sin asignar'}</b> · Cruce de inventario a ciegas
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span style={{
+                                        fontSize: '0.68rem',
+                                        fontWeight: '800',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        backgroundColor: 'rgba(0,0,0,0.08)',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Lock size={13} style={{ display: 'inline', verticalAlign: 'middle' }} /> Modo a Ciegas Activo
+                                    </span>
                                 </div>
+                            )}
+
+                            {/* Selector de Modo de Existencias: Solo con Stock vs Catálogo Completo */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                    <button
+                                        onClick={() => setStockFilterMode('with_stock')}
+                                        style={{
+                                            padding: '0.4rem 0.8rem',
+                                            borderRadius: '8px',
+                                            border: stockFilterMode === 'with_stock' ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
+                                            backgroundColor: stockFilterMode === 'with_stock' ? 'rgba(16, 185, 129, 0.12)' : 'var(--ops-bg)',
+                                            color: stockFilterMode === 'with_stock' ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                    >
+                                        <PackageCheck size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Con Existencias Teóricas
+                                    </button>
+                                    <button
+                                        onClick={() => setStockFilterMode('all')}
+                                        style={{
+                                            padding: '0.4rem 0.8rem',
+                                            borderRadius: '8px',
+                                            border: stockFilterMode === 'all' ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
+                                            backgroundColor: stockFilterMode === 'all' ? 'rgba(16, 185, 129, 0.12)' : 'var(--ops-bg)',
+                                            color: stockFilterMode === 'all' ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                    >
+                                        <ClipboardList size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Catálogo Completo (Inc. Stock 0)
+                                    </button>
+                                </div>
+
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer', color: filterOnlyWithCount ? 'var(--ops-primary)' : 'var(--ops-text-muted)' }}>
                                         <input 
@@ -720,12 +1084,26 @@ export default function OpsInventoryPage() {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Mensaje de ayuda para productos con stock 0 */}
+                            {stockFilterMode === 'with_stock' && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--ops-text-muted)', borderTop: '1px dashed var(--ops-border)', paddingTop: '0.35rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                    <div>
+                                        Mostrando <span style={{ color: 'var(--ops-text)', fontWeight: '900' }}>{filteredFamilies.length}</span> ítems con existencia teórica o buscados
+                                    </div>
+                                    <div>
+                                        ¿Producto físico con saldo 0 en sistema? <span style={{ color: 'var(--ops-primary)', fontWeight: '700' }}>Escribe su nombre arriba para ingresarlo</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Listado de Familias y Productos */}
                         {filteredFamilies.length === 0 ? (
                             <div style={{ backgroundColor: 'var(--ops-surface)', padding: '3rem 2rem', borderRadius: '24px', textAlign: 'center', border: '1px solid var(--ops-border)' }}>
-                                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
+                                <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'center' }}>
+                                    <Search size={40} color="var(--ops-text-muted)" />
+                                </div>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: '900', margin: '0 0 0.5rem 0' }}>No se encontraron productos</h3>
                                 <p style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', margin: 0 }}>
                                     Intente modificando los filtros de categoría o el término de búsqueda.
@@ -757,6 +1135,8 @@ export default function OpsInventoryPage() {
 
                                     if (isParentWithVariants) {
                                         // RENDER PRODUCTO PADRE CON VARIANTES
+                                        const parentCell = getProductCell(family.parent);
+
                                         return (
                                             <div 
                                                 key={family.id} 
@@ -795,253 +1175,324 @@ export default function OpsInventoryPage() {
                                                                         ID: {family.parent.accounting_id}
                                                                     </span>
                                                                 )}
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', backgroundColor: '#ECFDF5', color: '#059669', padding: '2px 8px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                                                                {parentCell && (
+                                                                    <span style={{
+                                                                        fontSize: '0.65rem',
+                                                                        fontWeight: '800',
+                                                                        backgroundColor: parentCell.badge_bg || 'var(--ops-bg)',
+                                                                        color: parentCell.badge_text || 'var(--ops-primary)',
+                                                                        border: `1px solid ${parentCell.color}40`,
+                                                                        padding: '2px 7px',
+                                                                        borderRadius: '6px',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px'
+                                                                    }}>
+                                                                        {renderCellLucideIcon(parentCell, 13)}
+                                                                        <span>{parentCell.short_name || parentCell.name}</span>
+                                                                    </span>
+                                                                )}
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--ops-primary)', padding: '2px 8px', borderRadius: '6px', border: '1px solid var(--ops-primary)' }}>
                                                                     PADRE ({family.children.length} variantes)
                                                                 </span>
                                                             </div>
                                                             <div style={{ fontSize: '0.72rem', color: 'var(--ops-text-muted)', marginTop: '2px' }}>
-                                                                Existencia total calculada como sumatoria estricta de sus variantes
+                                                                Conteo a ciegas agrupado para las {family.children.length} variantes
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Resumen de Stock Padre */}
+                                                    {/* Estado de Conteo Padre a Ciegas (Sin mostrar stock de sistema) */}
                                                     <div style={{ textAlign: 'right' }}>
-                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
-                                                            SISTEMA: <span style={{ color: 'var(--ops-text)', fontWeight: '900' }}>{childrenCurrentStockSum.toFixed(2)}</span> {family.parent.unit_of_measure}
-                                                        </div>
-                                                        {anyChildHasCount && (
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: '950', color: 'var(--ops-primary)', marginTop: '2px' }}>
-                                                                Total Contado: {childrenCountedStockSum.toFixed(2)} {family.parent.unit_of_measure}
+                                                        {anyChildHasCount ? (
+                                                            <div style={{
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: '950',
+                                                                color: 'var(--ops-primary)',
+                                                                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                                                                padding: '4px 10px',
+                                                                borderRadius: '8px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px'
+                                                            }}>
+                                                                <Check size={14} /> Contado: {childrenCountedStockSum.toFixed(2)} {family.parent.unit_of_measure}
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                color: 'var(--ops-text-muted)',
+                                                                backgroundColor: 'var(--ops-bg)',
+                                                                border: '1px solid var(--ops-border)',
+                                                                padding: '3px 8px',
+                                                                borderRadius: '6px'
+                                                            }}>
+                                                                Pendiente
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
 
-                                                {/* Lista de Variantes (Hijos) */}
-                                                {isExpanded && (
-                                                    <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                        {family.children.map((child) => {
-                                                            const childStockRec = child.inventory_stocks?.find(s => s.warehouse_id === warehouseId) || child.inventory_stocks?.[0];
-                                                            const currentQty = Number(childStockRec?.quantity || 0);
-                                                            const rawVal = counts[child.id] || '';
-                                                            const hasCount = rawVal !== '';
-                                                            const countedNum = hasCount ? parseFloat(rawVal) : currentQty;
-                                                            const diff = hasCount && !isNaN(countedNum) ? countedNum - currentQty : 0;
-                                                            const isSavingThis = savingItem === child.id;
+                                        {/* Lista de Variantes (Hijos) */}
+                                        {isExpanded && (
+                                            <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                {family.children.map((child) => {
+                                                    const rawVal = counts[child.id] || '';
+                                                    const hasCount = rawVal !== '';
+                                                    const isSavingThis = savingItem === child.id;
 
-                                                            return (
-                                                                <div 
-                                                                    key={child.id}
-                                                                    style={{
-                                                                        padding: '1rem',
-                                                                        backgroundColor: hasCount ? 'rgba(16, 185, 129, 0.05)' : 'var(--ops-bg)',
-                                                                        borderRadius: '16px',
-                                                                        border: hasCount ? '1px solid var(--ops-primary)' : '1px solid var(--ops-border)',
-                                                                        display: 'flex',
-                                                                        flexDirection: 'column',
-                                                                        gap: '0.75rem'
-                                                                    }}
-                                                                >
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                                        <div>
-                                                                            <div style={{ fontWeight: '900', fontSize: '0.95rem' }}>
-                                                                                {child.name}
-                                                                            </div>
-                                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '3px' }}>
-                                                                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
-                                                                                    ID: {child.accounting_id || child.id.slice(0, 8)}
-                                                                                </span>
-                                                                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
-                                                                                    • Stock Sistema: <b style={{ color: 'var(--ops-text)' }}>{currentQty.toFixed(2)} {child.unit_of_measure}</b>
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {hasCount && !isNaN(diff) && (
-                                                                            <div style={{
-                                                                                fontSize: '0.75rem',
-                                                                                fontWeight: '900',
-                                                                                padding: '3px 8px',
-                                                                                borderRadius: '6px',
-                                                                                backgroundColor: diff > 0 ? '#ECFDF5' : diff < 0 ? '#FEF2F2' : '#F3F4F6',
-                                                                                color: diff > 0 ? '#059669' : diff < 0 ? '#DC2626' : '#6B7280'
-                                                                            }}>
-                                                                                {diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)} {child.unit_of_measure}
-                                                                            </div>
-                                                                        )}
+                                                    return (
+                                                        <div 
+                                                            key={child.id}
+                                                            style={{
+                                                                padding: '1rem',
+                                                                backgroundColor: hasCount ? 'rgba(16, 185, 129, 0.08)' : 'var(--ops-bg)',
+                                                                borderRadius: '16px',
+                                                                border: hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.75rem'
+                                                            }}
+                                                        >
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                <div>
+                                                                    <div style={{ fontWeight: '900', fontSize: '0.95rem', color: 'var(--ops-text)' }}>
+                                                                        {child.name}
                                                                     </div>
-
-                                                                    {/* Input de Conteo */}
-                                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                                        <div style={{ position: 'relative', flex: 1 }}>
-                                                                            <input 
-                                                                                type="number"
-                                                                                step="any"
-                                                                                placeholder="0.00"
-                                                                                value={rawVal}
-                                                                                onChange={(e) => setCounts({ ...counts, [child.id]: e.target.value })}
-                                                                                style={{
-                                                                                    width: '100%',
-                                                                                    padding: '0.8rem 3.5rem 0.8rem 1rem',
-                                                                                    borderRadius: '12px',
-                                                                                    border: '1px solid var(--ops-border)',
-                                                                                    backgroundColor: 'var(--ops-surface)',
-                                                                                    fontSize: '1.25rem',
-                                                                                    fontWeight: '950',
-                                                                                    color: 'var(--ops-text)',
-                                                                                    outline: 'none'
-                                                                                }}
-                                                                            />
-                                                                            <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>
-                                                                                {child.unit_of_measure}
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* Botón Guardar Individual */}
-                                                                        {hasCount && (
-                                                                            <button
-                                                                                onClick={() => handleSaveSingleItem(child)}
-                                                                                disabled={isSavingThis}
-                                                                                title="Aplicar ajuste para este producto"
-                                                                                style={{
-                                                                                    padding: '0.8rem 1rem',
-                                                                                    borderRadius: '12px',
-                                                                                    border: 'none',
-                                                                                    backgroundColor: 'var(--ops-primary)',
-                                                                                    color: 'white',
-                                                                                    fontWeight: '800',
-                                                                                    fontSize: '0.8rem',
-                                                                                    cursor: 'pointer',
-                                                                                    display: 'flex',
-                                                                                    alignItems: 'center',
-                                                                                    gap: '4px'
-                                                                                }}
-                                                                            >
-                                                                                {isSavingThis ? '...' : <Check size={18} />}
-                                                                            </button>
-                                                                        )}
+                                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '3px' }}>
+                                                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
+                                                                            ID: {child.accounting_id || child.id.slice(0, 8)}
+                                                                        </span>
+                                                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
+                                                                            • Unidad: <b style={{ color: 'var(--ops-text)' }}>{child.unit_of_measure}</b>
+                                                                        </span>
                                                                     </div>
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
+
+                                                                {hasCount ? (
+                                                                    <div style={{
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: '900',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '6px',
+                                                                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                                                        color: 'var(--ops-primary)',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px'
+                                                                    }}>
+                                                                        <Check size={12} /> Contado: {parseFloat(rawVal).toFixed(2)} {child.unit_of_measure}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: '800',
+                                                                        padding: '2px 7px',
+                                                                        borderRadius: '6px',
+                                                                        backgroundColor: 'var(--ops-surface)',
+                                                                        color: 'var(--ops-text-muted)',
+                                                                        border: '1px solid var(--ops-border)'
+                                                                    }}>
+                                                                        Pendiente
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Input de Conteo a Ciegas */}
+                                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                                <div style={{ position: 'relative', flex: 1 }}>
+                                                                    <input 
+                                                                        type="number"
+                                                                        step="any"
+                                                                        placeholder="0.00"
+                                                                        value={rawVal}
+                                                                        onChange={(e) => setCounts({ ...counts, [child.id]: e.target.value })}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.8rem 3.5rem 0.8rem 1rem',
+                                                                            borderRadius: '12px',
+                                                                            border: '1.5px solid var(--ops-border)',
+                                                                            backgroundColor: 'var(--ops-surface)',
+                                                                            fontSize: '1.25rem',
+                                                                            fontWeight: '950',
+                                                                            color: 'var(--ops-text)',
+                                                                            outline: 'none'
+                                                                        }}
+                                                                    />
+                                                                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>
+                                                                        {child.unit_of_measure}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Botón Guardar Individual */}
+                                                                {hasCount && (
+                                                                    <button
+                                                                        onClick={() => handleSaveSingleItem(child)}
+                                                                        disabled={isSavingThis}
+                                                                        title="Aplicar ajuste para este producto"
+                                                                        style={{
+                                                                            padding: '0.8rem 1rem',
+                                                                            borderRadius: '12px',
+                                                                            border: 'none',
+                                                                            backgroundColor: 'var(--ops-primary)',
+                                                                            color: 'white',
+                                                                            fontWeight: '800',
+                                                                            fontSize: '0.8rem',
+                                                                            cursor: 'pointer',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                    >
+                                                                        {isSavingThis ? '...' : <Check size={18} />}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                        );
-                                    }
+                                        )}
+                                    </div>
+                                );
+                            }
 
-                                    // RENDER PRODUCTO STANDALONE (Sin variantes)
-                                    const standaloneProduct = family.parent;
-                                    const stockRec = standaloneProduct.inventory_stocks?.find(s => s.warehouse_id === warehouseId) || standaloneProduct.inventory_stocks?.[0];
-                                    const currentQty = Number(stockRec?.quantity || 0);
-                                    const rawVal = counts[standaloneProduct.id] || '';
-                                    const hasCount = rawVal !== '';
-                                    const countedNum = hasCount ? parseFloat(rawVal) : currentQty;
-                                    const diff = hasCount && !isNaN(countedNum) ? countedNum - currentQty : 0;
-                                    const isSavingThis = savingItem === standaloneProduct.id;
+                            // RENDER PRODUCTO STANDALONE (Sin variantes)
+                            const standaloneProduct = family.parent;
+                            const rawVal = counts[standaloneProduct.id] || '';
+                            const hasCount = rawVal !== '';
+                            const isSavingThis = savingItem === standaloneProduct.id;
+                            const productCell = getProductCell(standaloneProduct);
 
-                                    return (
-                                        <div 
-                                            key={standaloneProduct.id}
-                                            style={{
-                                                backgroundColor: 'var(--ops-surface)',
-                                                borderRadius: '24px',
-                                                border: hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
-                                                padding: '1.25rem',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '0.85rem',
-                                                boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontWeight: '950', fontSize: '1.05rem', color: 'var(--ops-text)' }}>
-                                                            {standaloneProduct.name}
-                                                        </span>
-                                                        {standaloneProduct.accounting_id && (
-                                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text-muted)', padding: '2px 8px', borderRadius: '6px', border: '1px solid var(--ops-border)' }}>
-                                                                ID: {standaloneProduct.accounting_id}
-                                                            </span>
-                                                        )}
-                                                        {standaloneProduct.category && (
-                                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', backgroundColor: '#F3F4F6', color: '#6B7280', padding: '2px 6px', borderRadius: '4px' }}>
-                                                                {CATEGORY_NAMES[standaloneProduct.category] || standaloneProduct.category}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-text-muted)', marginTop: '4px' }}>
-                                                        Stock en Sistema: <b style={{ color: 'var(--ops-text)' }}>{currentQty.toFixed(2)} {standaloneProduct.unit_of_measure}</b>
-                                                    </div>
-                                                </div>
-
-                                                {hasCount && !isNaN(diff) && (
-                                                    <div style={{
-                                                        fontSize: '0.8rem',
-                                                        fontWeight: '900',
-                                                        padding: '4px 10px',
-                                                        borderRadius: '8px',
-                                                        backgroundColor: diff > 0 ? '#ECFDF5' : diff < 0 ? '#FEF2F2' : '#F3F4F6',
-                                                        color: diff > 0 ? '#059669' : diff < 0 ? '#DC2626' : '#6B7280'
+                            return (
+                                <div 
+                                    key={standaloneProduct.id}
+                                    style={{
+                                        backgroundColor: 'var(--ops-surface)',
+                                        borderRadius: '24px',
+                                        border: hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
+                                        padding: '1.25rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '0.85rem',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '950', fontSize: '1.05rem', color: 'var(--ops-text)' }}>
+                                                    {standaloneProduct.name}
+                                                </span>
+                                                {standaloneProduct.accounting_id && (
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text-muted)', padding: '2px 8px', borderRadius: '6px', border: '1px solid var(--ops-border)' }}>
+                                                        ID: {standaloneProduct.accounting_id}
+                                                    </span>
+                                                )}
+                                                {productCell && (
+                                                    <span style={{
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: '800',
+                                                        backgroundColor: productCell.badge_bg || 'var(--ops-bg)',
+                                                        color: productCell.badge_text || 'var(--ops-primary)',
+                                                        border: `1px solid ${productCell.color}40`,
+                                                        padding: '2px 7px',
+                                                        borderRadius: '6px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
                                                     }}>
-                                                        Dif: {diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)} {standaloneProduct.unit_of_measure}
-                                                    </div>
+                                                        {renderCellLucideIcon(productCell, 13)}
+                                                        <span>{productCell.short_name || productCell.name}</span>
+                                                    </span>
                                                 )}
                                             </div>
-
-                                            {/* Input Conteo Standalone */}
-                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                <div style={{ position: 'relative', flex: 1 }}>
-                                                    <input 
-                                                        type="number"
-                                                        step="any"
-                                                        placeholder="0.00"
-                                                        value={rawVal}
-                                                        onChange={(e) => setCounts({ ...counts, [standaloneProduct.id]: e.target.value })}
-                                                        style={{
-                                                            width: '100%',
-                                                            padding: '0.85rem 3.5rem 0.85rem 1rem',
-                                                            borderRadius: '14px',
-                                                            border: '1.5px solid var(--ops-border)',
-                                                            backgroundColor: 'var(--ops-bg)',
-                                                            fontSize: '1.35rem',
-                                                            fontWeight: '950',
-                                                            color: 'var(--ops-text)',
-                                                            outline: 'none'
-                                                        }}
-                                                    />
-                                                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.85rem', color: 'var(--ops-text-muted)' }}>
-                                                        {standaloneProduct.unit_of_measure}
-                                                    </div>
-                                                </div>
-
-                                                {hasCount && (
-                                                    <button
-                                                        onClick={() => handleSaveSingleItem(standaloneProduct)}
-                                                        disabled={isSavingThis}
-                                                        title="Guardar este producto"
-                                                        style={{
-                                                            padding: '0.85rem 1.2rem',
-                                                            borderRadius: '14px',
-                                                            border: 'none',
-                                                            backgroundColor: 'var(--ops-primary)',
-                                                            color: 'white',
-                                                            fontWeight: '900',
-                                                            fontSize: '0.85rem',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px'
-                                                        }}
-                                                    >
-                                                        {isSavingThis ? '...' : <Check size={20} />}
-                                                    </button>
-                                                )}
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-text-muted)', marginTop: '4px' }}>
+                                                Unidad de medida: <b style={{ color: 'var(--ops-text)' }}>{standaloneProduct.unit_of_measure}</b>
                                             </div>
                                         </div>
-                                    );
+
+                                        {hasCount ? (
+                                            <div style={{
+                                                fontSize: '0.8rem',
+                                                fontWeight: '900',
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                                color: 'var(--ops-primary)',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                <Check size={14} /> Contado: {parseFloat(rawVal).toFixed(2)} {standaloneProduct.unit_of_measure}
+                                            </div>
+                                        ) : (
+                                            <div style={{
+                                                fontSize: '0.72rem',
+                                                fontWeight: '800',
+                                                padding: '3px 8px',
+                                                borderRadius: '6px',
+                                                backgroundColor: 'var(--ops-bg)',
+                                                color: 'var(--ops-text-muted)',
+                                                border: '1px solid var(--ops-border)'
+                                            }}>
+                                                Pendiente
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Input Conteo Standalone a Ciegas */}
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <div style={{ position: 'relative', flex: 1 }}>
+                                            <input 
+                                                type="number"
+                                                step="any"
+                                                placeholder="0.00"
+                                                value={rawVal}
+                                                onChange={(e) => setCounts({ ...counts, [standaloneProduct.id]: e.target.value })}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.85rem 3.5rem 0.85rem 1rem',
+                                                    borderRadius: '14px',
+                                                    border: '1.5px solid var(--ops-border)',
+                                                    backgroundColor: 'var(--ops-bg)',
+                                                    fontSize: '1.35rem',
+                                                    fontWeight: '950',
+                                                    color: 'var(--ops-text)',
+                                                    outline: 'none'
+                                                }}
+                                            />
+                                            <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.85rem', color: 'var(--ops-text-muted)' }}>
+                                                {standaloneProduct.unit_of_measure}
+                                            </div>
+                                        </div>
+
+                                        {hasCount && (
+                                            <button
+                                                onClick={() => handleSaveSingleItem(standaloneProduct)}
+                                                disabled={isSavingThis}
+                                                title="Guardar este producto"
+                                                style={{
+                                                    padding: '0.85rem 1.2rem',
+                                                    borderRadius: '14px',
+                                                    border: 'none',
+                                                    backgroundColor: 'var(--ops-primary)',
+                                                    color: 'white',
+                                                    fontWeight: '900',
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                {isSavingThis ? '...' : <Check size={20} />}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
                                 })}
                             </div>
                         )}
@@ -1153,34 +1604,38 @@ export default function OpsInventoryPage() {
                                     {ret.evidence_url && (
                                         <div style={{ height: '150px', position: 'relative' }}>
                                             <img src={ret.evidence_url} alt="Evidencia ruta" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            <div style={{ position: 'absolute', bottom: 10, left: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', color: 'white' }}>📸 FOTO DE RUTA</div>
+                                             <div style={{ position: 'absolute', bottom: 10, left: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', color: 'white', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                <Camera size={12} /> FOTO DE RUTA
+                                            </div>
                                         </div>
                                     )}
                                     <div style={{ padding: '1.5rem' }}>
                                         <div style={{ marginBottom: '1rem' }}>
                                             <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{ret.products?.name}</div>
                                             <div style={{ fontSize: '0.85rem', color: '#F59E0B', fontWeight: '800' }}>Regresan: {ret.quantity} {ret.products?.unit_of_measure}</div>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '4px' }}>💬 {ret.notes}</div>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                <MessageSquare size={12} /> {ret.notes}
+                                            </div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem' }}>
                                             <button 
                                                 onClick={() => handleReturnDecision(ret.id, 'inventory')}
-                                                style={{ padding: '0.8rem 0.4rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer' }}
+                                                style={{ padding: '0.8rem 0.4rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                                             >
-                                                📦 BODEGA
+                                                <Warehouse size={13} /> BODEGA
                                             </button>
                                             <button 
                                                 onClick={() => handleReturnDecision(ret.id, 'waste')}
-                                                style={{ padding: '0.8rem 0.4rem', borderRadius: '12px', border: 'none', background: '#EF4444', color: 'white', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer' }}
+                                                style={{ padding: '0.8rem 0.4rem', borderRadius: '12px', border: 'none', background: '#EF4444', color: 'white', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                                             >
-                                                🗑️ DESPERD.
+                                                <Trash2 size={13} /> DESPERD.
                                             </button>
                                             <button 
                                                 onClick={() => handleReturnDecision(ret.id, 'donation')}
-                                                style={{ padding: '0.8rem 0.4rem', borderRadius: '12px', border: 'none', background: '#3B82F6', color: 'white', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer' }}
+                                                style={{ padding: '0.8rem 0.4rem', borderRadius: '12px', border: 'none', background: '#3B82F6', color: 'white', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                                             >
-                                                🤝 DONA
+                                                <HeartHandshake size={13} /> DONA
                                             </button>
                                         </div>
                                     </div>
@@ -1218,7 +1673,9 @@ export default function OpsInventoryPage() {
 
                         {!activeTask ? (
                             <div style={{ backgroundColor: 'var(--ops-surface)', padding: '3rem 2rem', borderRadius: '32px', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.06)', border: '1px solid var(--ops-border)' }}>
-                                <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>✨</div>
+                                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                                    <Sparkles size={48} color="var(--ops-primary)" />
+                                </div>
                                 <h2 style={{ fontWeight: '950', color: 'var(--ops-text)', fontSize: '1.3rem', marginBottom: '0.5rem' }}>Sin auditorías pendientes</h2>
                                 <p style={{ color: 'var(--ops-text-muted)', fontSize: '0.85rem', lineHeight: '1.5', maxWidth: '400px', margin: '0 auto 1.5rem auto' }}>
                                     No hay tareas de conteo a ciegas asignadas para hoy. Utilice el módulo de Conteo Físico Total para ingresar los stocks de bodega.
@@ -1269,6 +1726,14 @@ export default function OpsInventoryPage() {
                     </div>
                 )}
             </div>
+
+            {/* Modal de Registro de Mermas y Novedades con Evidencia */}
+            <InventoryWasteModal
+                isOpen={isWasteModalOpen}
+                onClose={() => setIsWasteModalOpen(false)}
+                onSuccess={() => fetchCountProducts()}
+                warehouseId={warehouseId}
+            />
         </main>
     );
 }

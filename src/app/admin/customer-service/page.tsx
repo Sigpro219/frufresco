@@ -349,6 +349,7 @@ export default function CustomerServicePage() {
     const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
     const [showTaxonomyModal, setShowTaxonomyModal] = useState(false);
     const [editingTaxonomy, setEditingTaxonomy] = useState<DefectCategoryL1[]>([]);
+    const [selectedTaxonomyCatIdx, setSelectedTaxonomyCatIdx] = useState(0);
     const [totalOrdersCount, setTotalOrdersCount] = useState<number | null>(null);
     const [deliveredOrdersCount, setDeliveredOrdersCount] = useState<number | null>(null);
 

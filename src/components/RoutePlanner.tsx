@@ -83,6 +83,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         time_per_10_crates_unload: 4,      // Y: Descarga física de 10 canastillas
         time_per_10_crates_delivery: 10,   // Z: Recepción/Revisión de 10 canastillas
         avg_kg_per_crate: 12.5,
+        space_capacity: 36,               // Capacidad de canastillas por bahía física
         driver_break_mins: 45,
         fleet_start_time: '04:30',
         fleet_end_time: '19:00',
@@ -1267,6 +1268,23 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                             onChange={(e) => updateParameter('warehouse_time_per_10_crates_load', e.target.value)}
                                             style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                         />
+                                    </div>
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280' }}>Capacidad por Espacio de Alistamiento</label>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#10B981', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                                                {params.space_capacity || 36} canastillas
+                                            </span>
+                                        </div>
+                                        <input 
+                                            type="number" 
+                                            value={params.space_capacity ?? 36} 
+                                            onChange={(e) => updateParameter('space_capacity', e.target.value)}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                        />
+                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px', display: 'block' }}>
+                                            Canastillas máximas por bahía en bodega. Si un pedido supera este valor, se le asignan espacios múltiples (ej: 4-5).
+                                        </span>
                                     </div>
                                 </div>
                             </div>

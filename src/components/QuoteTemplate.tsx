@@ -77,22 +77,22 @@ export default function QuoteTemplate({
                 .quote-table {
                     width: 100%;
                     border-collapse: collapse;
-                    margin-bottom: 2rem;
+                    margin-bottom: 0.85rem;
                 }
                 .quote-table th {
-                    background-color: #1e3a8a; /* Corporate Navy Blue */
+                    background-color: #0F172A;
                     color: white;
                     text-align: left;
-                    padding: 0.75rem;
-                    font-size: 0.85rem;
+                    padding: 3.5px 6px;
+                    font-size: 0.64rem;
                     font-weight: 800;
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                 }
                 .quote-table td {
-                    padding: 0.75rem;
-                    border-bottom: 1px solid #f3f4f6;
-                    font-size: 0.95rem;
+                    padding: 3px 6px;
+                    border-bottom: 1px solid #E2E8F0;
+                    font-size: 0.70rem;
                 }
                 .text-right {
                     text-align: right;
@@ -101,31 +101,36 @@ export default function QuoteTemplate({
                 .summary-section {
                     display: flex;
                     justify-content: flex-end;
-                    margin-bottom: 3rem;
+                    margin-bottom: 1rem;
                 }
                 .summary-table {
-                    width: 250px;
+                    width: 230px;
+                    background-color: #F8FAFC;
+                    padding: 6px 10px;
+                    border-radius: 5px;
+                    border: 1px solid #E2E8F0;
                 }
                 .summary-row {
                     display: flex;
                     justify-content: space-between;
-                    padding: 0.5rem 0;
-                    font-size: 0.95rem;
+                    padding: 2px 0;
+                    font-size: 0.72rem;
                 }
                 .summary-row.total {
-                    border-top: 2px solid #111827;
-                    margin-top: 0.5rem;
-                    padding-top: 1rem;
-                    font-weight: 800;
-                    font-size: 1.1rem;
+                    border-top: 1.5px solid #0F172A;
+                    margin-top: 3px;
+                    padding-top: 4px;
+                    font-weight: 900;
+                    font-size: 0.90rem;
                 }
 
                 .conditions-box {
-                    background-color: #f9fafb;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 0.75rem;
-                    padding: 1.5rem;
-                    margin-top: 2rem;
+                    background-color: #F8FAFC;
+                    border: 1px solid #E2E8F0;
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    margin-top: 0.85rem;
+                    font-size: 0.68rem;
                 }
                 .conditions-title {
                     font-weight: 700;

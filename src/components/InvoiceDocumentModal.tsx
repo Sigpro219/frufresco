@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import Letterhead from './Letterhead';
 import { X, Printer, CheckCircle2, Clock, AlertTriangle, FileText, Truck } from 'lucide-react';
+import { printViaNewWindow } from '@/components/print';
 
 interface OrderItem {
     id?: string;
@@ -76,10 +77,17 @@ export default function InvoiceDocumentModal({
     }, 0);
 
     const totalAmount = Number(order.total || order.subtotal || calculatedSubtotal);
+    const printDocRef = useRef<HTMLDivElement>(null);
 
     const handlePrint = () => {
-        if (typeof window !== 'undefined') {
-            window.print();
+        if (printDocRef.current) {
+            printViaNewWindow({
+                element: printDocRef.current,
+                title: `Comprobante_${refCode}`,
+                paperSize: 'letter',
+                orientation: 'portrait',
+                margin: '1.0cm 1.2cm'
+            });
         }
     };
 
@@ -199,7 +207,7 @@ export default function InvoiceDocumentModal({
             </div>
 
             {/* Printable Document Sheet Container */}
-            <div className="printable-sheet-wrapper" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <div ref={printDocRef} className="printable-sheet-wrapper" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                 <Letterhead>
                     {/* Watermark in Background */}
                     <div style={{
@@ -219,15 +227,15 @@ export default function InvoiceDocumentModal({
                     }} />
 
                     {/* Metadata columns: Client Info (Left) & Document Info (Right) */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.85rem', position: 'relative', zIndex: 1, backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                         <div style={{ width: '55%' }}>
-                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '2px' }}>
                                 DATOS DEL CLIENTE B2B:
                             </div>
-                            <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.35rem', lineHeight: '1.3' }}>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0F172A', marginBottom: '1px', lineHeight: '1.2' }}>
                                 {clientProfile?.company_name || order.profile?.company_name || 'Cliente Institucional'}
                             </div>
-                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                            <div style={{ fontSize: '0.70rem', color: '#475569', lineHeight: '1.35' }}>
                                 {(clientProfile?.nit || order.profile?.nit) && (
                                     <div>NIT: {clientProfile?.nit || order.profile?.nit}</div>
                                 )}
@@ -238,42 +246,42 @@ export default function InvoiceDocumentModal({
                         </div>
 
                         <div style={{ width: '45%', textAlign: 'right' }}>
-                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '2px' }}>
                                 COMPROBANTE DE COMPRA B2B
                             </div>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.35rem' }}>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0D7A57', marginBottom: '1px', fontFamily: 'monospace' }}>
                                 {refCode}
                             </div>
-                            <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: '1.5' }}>
-                                <div>Fecha: {orderDate}</div>
-                                <div style={{ marginTop: '4px' }}>
+                            <div style={{ fontSize: '0.70rem', color: '#475569', lineHeight: '1.35' }}>
+                                <div>Fecha Pedido: {orderDate}</div>
+                                <div style={{ marginTop: '2px' }}>
                                     Estado: <span style={{
                                         fontWeight: '800',
                                         backgroundColor: statusObj.bg,
                                         color: statusObj.color,
-                                        padding: '2px 8px',
-                                        borderRadius: '4px',
-                                        fontSize: '0.75rem',
+                                        padding: '1px 6px',
+                                        borderRadius: '3px',
+                                        fontSize: '0.65rem',
                                         display: 'inline-block'
                                     }}>{statusObj.label}</span>
                                 </div>
                                 {deliveryDateStr && (
-                                    <div style={{ marginTop: '2px' }}>Entrega Programada: {deliveryDateStr}</div>
+                                    <div style={{ marginTop: '1px' }}>Entrega: {deliveryDateStr}</div>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* ITEMS TABLE - Minimal & Clean Standard */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
+                    {/* ITEMS TABLE - Standard Compact */}
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '0.85rem', position: 'relative', zIndex: 1 }}>
                         <thead>
-                            <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%' }}>SKU</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Producto / Descripción</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'center' }}>Cant.</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Valor Unitario</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'right' }}>Total</th>
+                            <tr>
+                                <th style={{ width: '5%', textAlign: 'center' }}>#</th>
+                                <th style={{ width: '14%' }}>SKU</th>
+                                <th style={{ width: '45%' }}>Producto / Descripción</th>
+                                <th style={{ width: '12%', textAlign: 'center' }}>Cant.</th>
+                                <th style={{ width: '12%', textAlign: 'right' }}>Valor Unit.</th>
+                                <th style={{ width: '12%', textAlign: 'right' }}>Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -286,23 +294,23 @@ export default function InvoiceDocumentModal({
                                 const itemSubtotal = qty * price;
 
                                 return (
-                                    <tr key={item.id || idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                        <td style={{ padding: '1.2rem 0.5rem', fontSize: '1rem', fontWeight: '800', color: '#CBD5E1' }}>
+                                    <tr key={item.id || idx}>
+                                        <td style={{ textAlign: 'center', color: '#94A3B8', fontWeight: '700' }}>
                                             {String(idx + 1).padStart(2, '0')}
                                         </td>
-                                        <td style={{ padding: '1.2rem 0.5rem', fontWeight: '600', fontFamily: 'monospace', color: '#64748B', fontSize: '0.82rem' }}>
+                                        <td style={{ fontFamily: 'monospace', color: '#64748B' }}>
                                             {sku}
                                         </td>
-                                        <td style={{ padding: '1.2rem 0.5rem', fontWeight: '800', color: '#0F172A', fontSize: '0.95rem' }}>
+                                        <td style={{ fontWeight: '700', color: '#0F172A' }}>
                                             {pName}
                                         </td>
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', fontWeight: '800', color: '#0F172A' }}>
-                                            {formatQuantity(qty)} <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{unit}</span>
+                                        <td style={{ textAlign: 'center', fontWeight: '800', color: '#0F172A' }}>
+                                            {formatQuantity(qty)} <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '600' }}>{unit}</span>
                                         </td>
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
+                                        <td style={{ textAlign: 'right', fontWeight: '600', color: '#334155' }}>
                                             ${formatPrice(price)}
                                         </td>
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                        <td style={{ textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
                                             ${formatPrice(itemSubtotal)}
                                         </td>
                                     </tr>
@@ -312,26 +320,26 @@ export default function InvoiceDocumentModal({
                     </table>
 
                     {/* FINANCIAL SUMMARY TOTALS - Aligned to Right */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
-                        <div style={{ width: '300px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', fontSize: '0.95rem', color: '#475569' }}>
-                                <span>Subtotal antes de impuestos:</span>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.85rem', position: 'relative', zIndex: 1 }}>
+                        <div style={{ width: '240px', backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '5px', border: '1px solid #E2E8F0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0', fontSize: '0.70rem', color: '#475569' }}>
+                                <span>Subtotal:</span>
                                 <span style={{ fontWeight: '700', color: '#0F172A' }}>${formatPrice(calculatedSubtotal)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', fontSize: '0.95rem', color: '#475569' }}>
-                                <span>Impuestos (IVA):</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0', fontSize: '0.70rem', color: '#475569' }}>
+                                <span>Impuestos (IVA 0%):</span>
                                 <span style={{ fontWeight: '700', color: '#0F172A' }}>$0</span>
                             </div>
                             <div style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                borderTop: '2px solid #0F172A',
-                                marginTop: '0.5rem',
-                                paddingTop: '1rem',
-                                fontSize: '1.2rem',
-                                fontWeight: '800'
+                                borderTop: '1.5px solid #0F172A',
+                                marginTop: '3px',
+                                paddingTop: '3px',
+                                fontSize: '0.85rem',
+                                fontWeight: '900'
                             }}>
-                                <span style={{ color: '#0F172A' }}>Total</span>
+                                <span style={{ color: '#0F172A' }}>TOTAL</span>
                                 <span style={{ color: '#0D7A57' }}>${formatPrice(totalAmount)}</span>
                             </div>
                         </div>

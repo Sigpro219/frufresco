@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import Letterhead from './Letterhead';
 import { X, Printer, Rocket, Tag, Calendar, Building2, CheckCircle2, FileText } from 'lucide-react';
+import { printViaNewWindow } from '@/components/print';
 
 interface AgreementItem {
     id?: string;
@@ -78,10 +79,17 @@ export default function AgreementDocumentModal({
     });
 
     const avgSavingsPct = validSavingsCount > 0 ? (totalSavingsSum / validSavingsCount).toFixed(1) : '15.0';
+    const printDocRef = useRef<HTMLDivElement>(null);
 
     const handlePrint = () => {
-        if (typeof window !== 'undefined') {
-            window.print();
+        if (printDocRef.current) {
+            printViaNewWindow({
+                element: printDocRef.current,
+                title: `Acuerdo_Comercial_${refCode}`,
+                paperSize: 'letter',
+                orientation: 'portrait',
+                margin: '1.0cm 1.2cm'
+            });
         }
     };
 
@@ -178,7 +186,7 @@ export default function AgreementDocumentModal({
                 </div>
 
                 {/* Document Body (Printable Area) */}
-                <div style={{
+                <div ref={printDocRef} style={{
                     flex: 1,
                     overflowY: 'auto',
                     padding: '2.5rem',
@@ -276,16 +284,16 @@ export default function AgreementDocumentModal({
                                 <FileText size={18} color="#0D7A57" /> Portafolio de Insumos Incluidos en el Convenio
                             </h3>
 
-                            <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '12px' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                            <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.70rem' }}>
                                     <thead>
-                                        <tr style={{ backgroundColor: '#F1F5F9', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.04em' }}>
-                                            <th style={{ padding: '0.75rem 1rem' }}>#</th>
-                                            <th style={{ padding: '0.75rem 1rem' }}>Insumo / Producto</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Lista Base</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Pactado Convenio</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Ahorro Garantizado</th>
+                                        <tr style={{ backgroundColor: '#0F172A', color: '#FFFFFF', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.63rem', letterSpacing: '0.05em' }}>
+                                            <th style={{ padding: '3.5px 6px' }}>#</th>
+                                            <th style={{ padding: '3.5px 6px' }}>Insumo / Producto</th>
+                                            <th style={{ padding: '3.5px 6px', textAlign: 'center' }}>Unidad</th>
+                                            <th style={{ padding: '3.5px 6px', textAlign: 'right' }}>Precio Lista Base</th>
+                                            <th style={{ padding: '3.5px 6px', textAlign: 'right' }}>Precio Pactado</th>
+                                            <th style={{ padding: '3.5px 6px', textAlign: 'right' }}>Ahorro</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -300,22 +308,22 @@ export default function AgreementDocumentModal({
 
                                             return (
                                                 <tr key={it.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
-                                                    <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>{idx + 1}</td>
-                                                    <td style={{ padding: '0.75rem 1rem', color: '#0F172A', fontWeight: '800' }}>{name}</td>
-                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#475569', fontWeight: '600' }}>{unit}</td>
-                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#94A3B8', textDecoration: basePrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
+                                                    <td style={{ padding: '2.5px 6px', color: '#64748B', fontWeight: '700' }}>{idx + 1}</td>
+                                                    <td style={{ padding: '2.5px 6px', color: '#0F172A', fontWeight: '700' }}>{name}</td>
+                                                    <td style={{ padding: '2.5px 6px', textAlign: 'center', color: '#475569', fontWeight: '600' }}>{unit}</td>
+                                                    <td style={{ padding: '2.5px 6px', textAlign: 'right', color: '#94A3B8', textDecoration: basePrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
                                                         {basePrice > 0 ? `$${formatPrice(basePrice)}` : '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#0D7A57', fontWeight: '900', fontSize: '0.9rem' }}>
+                                                    <td style={{ padding: '2.5px 6px', textAlign: 'right', color: '#0D7A57', fontWeight: '800' }}>
                                                         ${formatPrice(uPrice)}
                                                     </td>
-                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                                                    <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                                                         {savings > 0 ? (
-                                                            <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px' }}>
+                                                            <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800', fontSize: '0.65rem', padding: '1px 5px', borderRadius: '4px' }}>
                                                                 -${formatPrice(savings)} ({savingsPct}%)
                                                             </span>
                                                         ) : (
-                                                            <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>Tarifa Estándar</span>
+                                                            <span style={{ color: '#94A3B8', fontSize: '0.65rem' }}>Tarifa Estándar</span>
                                                         )}
                                                     </td>
                                                 </tr>

@@ -430,9 +430,9 @@ export default function DeliveryConfirmationPage() {
             if (returns.length > 0) {
                 const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
                 if (warehouseData) {
-                    const movementPromises = returns.map(item => {
+                    const movementPromises = returns.map(async (item) => {
                         const qtyToReturn = isTotalCancellation ? item.picked_quantity : item.returned_qty;
-                        return supabase.from('inventory_movements').insert([{
+                        const movementPayload: any = {
                             product_id: item.product_id,
                             warehouse_id: warehouseData.id,
                             quantity: qtyToReturn,
@@ -441,8 +441,18 @@ export default function DeliveryConfirmationPage() {
                             notes: `Devolución en entrega: ${novedadReason || 'Novedad parcial'}`,
                             reference_type: 'delivery_return',
                             reference_id: id as string,
-                            evidence_url: item.return_evidence_url || evidenceUrl // Link photo to movement
-                        }]);
+                        };
+                        const photo = item.return_evidence_url || evidenceUrl;
+                        if (photo) {
+                            movementPayload.evidence_url = photo;
+                        }
+                        const { error: movErr } = await supabase.from('inventory_movements').insert([movementPayload]);
+                        if (movErr && (movErr.message?.includes('evidence_url') || movErr.code === '42703')) {
+                            // Si la columna evidence_url no existe en la BD, respaldar URL en notes e insertar limpiamente
+                            delete movementPayload.evidence_url;
+                            if (photo) movementPayload.notes += ` | Foto: ${photo}`;
+                            await supabase.from('inventory_movements').insert([movementPayload]);
+                        }
                     });
                     await Promise.all(movementPromises);
                 }
