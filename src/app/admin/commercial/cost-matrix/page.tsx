@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
     Search, 
@@ -34,7 +34,9 @@ import {
     Sparkles,
     Tag,
     Sun,
-    Info
+    Info,
+    FileSpreadsheet,
+    Trash2
 } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
@@ -45,10 +47,11 @@ import { es } from 'date-fns/locale';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 
 interface Purchase {
+    id?: string;
     product_id: string;
     unit_price: number;
     created_at: string;
-    purchase_unit: string;
+    purchase_unit?: string;
     normalized_price: number;
 }
 
@@ -528,6 +531,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     const [importError, setImportError] = useState('');
     const [importSuccess, setImportSuccess] = useState('');
     const [importFile, setImportFile] = useState<File | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [lifecycleFilter, setLifecycleFilter] = useState<'all' | 'vigente' | 'por_vencer' | 'vencido'>('all');
 
     useEffect(() => {
@@ -996,7 +1001,6 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
             let updatedCount = 0;
             const updatesToPerform: any[] = [];
-            const purchasesToPerform: any[] = [];
             const nowIso = new Date().toISOString();
 
             for (const row of jsonData) {
@@ -1055,17 +1059,6 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                         updated_by: 'EXCEL-IMPORT',
                         is_active: true
                     });
-                    purchasesToPerform.push({
-                        product_id: matchedProduct.id,
-                        quantity: 1,
-                        unit_price: newCost,
-                        total_cost: newCost,
-                        payment_method: 'cash',
-                        purchase_unit: matchedProduct.unit_of_measure || 'Kg',
-                        raw_data_source: 'EXCEL_IMPORT_SYNC',
-                        created_at: nowIso,
-                        status: 'received_ok'
-                    });
                 }
             }
 
@@ -1073,7 +1066,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 throw new Error('No se encontraron filas válidas con ID_CONTABLE/SKU/ID y la columna de costo diligenciada.');
             }
 
-            // Upsert in commercial_cost_matrix
+            // Upsert in commercial_cost_matrix in batches of 50
             for (let i = 0; i < updatesToPerform.length; i += 50) {
                 const batch = updatesToPerform.slice(i, i + 50);
                 const { error: upsertErr } = await supabase.from('commercial_cost_matrix').upsert(batch);
@@ -1081,13 +1074,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 updatedCount += batch.length;
             }
 
-            // Insert in purchases to register as recent purchase event with today's date
-            for (let i = 0; i < purchasesToPerform.length; i += 15) {
-                const pBatch = purchasesToPerform.slice(i, i + 15);
-                await supabase.from('purchases').insert(pBatch);
-            }
-
-            setImportSuccess(`¡Carga exitosa! Se registraron ${updatedCount} compras con fecha de hoy y se actualizaron los costos base.`);
+            setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos en la matriz de costos con fecha de hoy.`);
             await fetchData();
 
             setTimeout(() => {
@@ -1841,6 +1828,40 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         const lifecycle = getProductCostLifecycle(p.id);
                                         const currentManual = manual?.manual_cost;
 
+                                        // Combinar la señal de costo de la Matriz con el historial de compras físicas de bodega
+                                        const histDate = hist[0]?.created_at ? safeGetValidDate(hist[0].created_at) : null;
+                                        const manualDate = manual?.updated_at ? safeGetValidDate(manual.updated_at) : null;
+                                        const hasManual = manual && typeof manual.manual_cost === 'number' && manual.manual_cost > 0;
+
+                                        const combinedPurchases: Purchase[] = [];
+                                        if (hasManual && (!histDate || (manualDate && manualDate >= histDate))) {
+                                            combinedPurchases.push({
+                                                id: `manual-${p.id}`,
+                                                product_id: p.id,
+                                                unit_price: manual.manual_cost,
+                                                purchase_unit: p.unit_of_measure || 'Kg',
+                                                normalized_price: manual.manual_cost,
+                                                created_at: manual.updated_at || new Date().toISOString()
+                                            });
+                                            hist.forEach(h => {
+                                                if (h.normalized_price > 0) combinedPurchases.push(h);
+                                            });
+                                        } else {
+                                            hist.forEach(h => {
+                                                if (h.normalized_price > 0) combinedPurchases.push(h);
+                                            });
+                                            if (combinedPurchases.length === 0 && hasManual) {
+                                                combinedPurchases.push({
+                                                    id: `manual-${p.id}`,
+                                                    product_id: p.id,
+                                                    unit_price: manual.manual_cost,
+                                                    purchase_unit: p.unit_of_measure || 'Kg',
+                                                    normalized_price: manual.manual_cost,
+                                                    created_at: manual.updated_at || new Date().toISOString()
+                                                });
+                                            }
+                                        }
+
                                         // Category separator row only when not custom-sorted across categories
                                         const showCategorySeparator = !sortField || sortField === 'name';
                                         const isFirstOfCategory = showCategorySeparator && (idx === 0 || sortedProducts[idx - 1].category !== p.category);
@@ -1924,11 +1945,11 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
                                                     {/* Purchase History Columns 1 to 8 */}
                                                     {(() => {
-                                                        const validPrices = hist.map(h => h.normalized_price).filter(priceVal => priceVal > 0);
+                                                        const validPrices = combinedPurchases.map(h => h.normalized_price).filter(priceVal => priceVal > 0);
                                                         const minPrice = validPrices.length > 1 ? Math.min(...validPrices) : null;
 
                                                         return [0, 1, 2, 3, 4, 5, 6, 7].map((colIdx) => {
-                                                            const purchase = hist[colIdx];
+                                                            const purchase = combinedPurchases[colIdx];
                                                             const price = purchase ? Math.round(purchase.normalized_price) : null;
                                                             const dateStr = purchase?.created_at ? safeFormatDate(purchase.created_at, 'dd MMM', '') : '';
                                                             const isBestPrice = purchase && minPrice !== null && Math.abs(purchase.normalized_price - minPrice) < 0.01;
@@ -2001,7 +2022,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
                                                     {/* Trend Indicator Cell with Interactive Sparkline */}
                                                     <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        <Sparkline data={hist} productId={p.id} />
+                                                        <Sparkline data={combinedPurchases} productId={p.id} />
                                                     </td>
                                                 </tr>
                                             </Fragment>
@@ -2039,89 +2060,410 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
             {/* --- MODAL: IMPORTAR EXCEL --- */}
             {isImportModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    backdropFilter: 'blur(4px)',
-                    zIndex: 9999,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '1rem'
-                }}>
-                    <div style={{
-                        backgroundColor: THEME.colors.surface,
-                        borderRadius: THEME.radius.xl,
-                        maxWidth: '500px',
-                        width: '100%',
-                        padding: '2rem',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-                        textAlign: 'left'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Upload size={22} color={THEME.colors.primary} />
-                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
-                                    Cargar Matriz de Costos
-                                </h3>
+                <div 
+                    onClick={() => {
+                        if (!importing) {
+                            setIsImportModalOpen(false);
+                            setImportError('');
+                            setImportSuccess('');
+                            setImportFile(null);
+                        }
+                    }}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                        backdropFilter: 'blur(8px)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1.25rem'
+                    }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '20px',
+                            border: '1px solid #E2E8F0',
+                            maxWidth: '540px',
+                            width: '100%',
+                            boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.05)',
+                            padding: '1.75rem',
+                            textAlign: 'left',
+                            position: 'relative'
+                        }}
+                    >
+                        {/* Cabecera del Modal */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{
+                                    width: '44px',
+                                    height: '44px',
+                                    borderRadius: '12px',
+                                    backgroundColor: '#EDF5F1',
+                                    border: '1px solid #C8DDD3',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#0D7A57',
+                                    flexShrink: 0
+                                }}>
+                                    <FileSpreadsheet size={22} strokeWidth={2.2} />
+                                </div>
+                                <div>
+                                    <span style={{ 
+                                        fontSize: '0.66rem', 
+                                        fontWeight: '800', 
+                                        color: '#0D7A57', 
+                                        textTransform: 'uppercase', 
+                                        letterSpacing: '0.06em',
+                                        display: 'block'
+                                    }}>
+                                        Operaciones Comerciales & Costos
+                                    </span>
+                                    <h3 style={{ 
+                                        margin: '2px 0 0 0', 
+                                        fontSize: '1.22rem', 
+                                        fontWeight: '900', 
+                                        color: '#1A231E', 
+                                        letterSpacing: '-0.02em',
+                                        fontFamily: THEME.typography.fontFamilyMain 
+                                    }}>
+                                        Cargar Matriz de Costos
+                                    </h3>
+                                </div>
                             </div>
                             <button
-                                onClick={() => { setIsImportModalOpen(false); setImportError(''); setImportSuccess(''); }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary }}
+                                type="button"
+                                disabled={importing}
+                                onClick={() => { setIsImportModalOpen(false); setImportError(''); setImportSuccess(''); setImportFile(null); }}
+                                style={{ 
+                                    background: '#F1F5F9', 
+                                    border: 'none', 
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    cursor: importing ? 'not-allowed' : 'pointer', 
+                                    color: '#64748B',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E2E8F0'; e.currentTarget.style.color = '#1A231E'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.color = '#64748B'; }}
                             >
-                                <X size={20} />
+                                <X size={16} strokeWidth={2.4} />
                             </button>
                         </div>
 
-                        <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.84rem', color: THEME.colors.textSecondary, lineHeight: '1.45' }}>
-                            Sube el archivo Excel con las columnas <strong>ID_CONTABLE</strong> (o ID/SKU) y <strong>NUEVO_COSTO</strong> (o COSTO) diligenciadas.
-                        </p>
+                        {/* Tarjeta de instrucciones y requerimientos de columnas */}
+                        <div style={{
+                            backgroundColor: '#F8FAF9',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '12px',
+                            padding: '0.85rem 1rem',
+                            marginBottom: '1.15rem'
+                        }}>
+                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#475569', lineHeight: '1.45', fontWeight: '500' }}>
+                                Sube tu archivo Excel con las listas de precios actualizadas. El sistema actualizará el costo unitario de compra y recalculará la dispersión comercial.
+                            </p>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.65rem' }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Columnas obligatorias:
+                                </span>
+                                <span style={{ 
+                                    fontSize: '0.68rem', 
+                                    fontWeight: '800', 
+                                    backgroundColor: '#EFF6FF', 
+                                    color: '#1D4ED8', 
+                                    border: '1px solid #BFDBFE', 
+                                    padding: '1px 7px', 
+                                    borderRadius: '6px',
+                                    fontFamily: 'monospace'
+                                }}>
+                                    ID_CONTABLE <span style={{ fontWeight: '500', opacity: 0.8 }}>(o SKU / ID)</span>
+                                </span>
+                                <span style={{ 
+                                    fontSize: '0.68rem', 
+                                    fontWeight: '800', 
+                                    backgroundColor: '#EDF5F1', 
+                                    color: '#0D7A57', 
+                                    border: '1px solid #C8DDD3', 
+                                    padding: '1px 7px', 
+                                    borderRadius: '6px',
+                                    fontFamily: 'monospace'
+                                }}>
+                                    NUEVO_COSTO <span style={{ fontWeight: '500', opacity: 0.8 }}>(o COSTO)</span>
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.65rem', paddingTop: '0.55rem', borderTop: '1px dashed #E2E8F0', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleExportTemplateAll}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        fontSize: '0.74rem',
+                                        fontWeight: '700',
+                                        color: '#0D7A57',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Download size={13} strokeWidth={2.2} /> Descargar plantilla completa (.xlsx)
+                                </button>
+                                <span style={{ color: '#CBD5E1' }}>•</span>
+                                <button
+                                    type="button"
+                                    onClick={handleExportTemplateExpired}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        fontSize: '0.74rem',
+                                        fontWeight: '700',
+                                        color: '#D97706',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <Download size={13} strokeWidth={2.2} /> Solo costos desactualizados
+                                </button>
+                            </div>
+                        </div>
 
                         <form onSubmit={handleImportSubmit}>
+                            {/* Input oculto nativo */}
                             <input 
+                                ref={fileInputRef}
                                 type="file" 
                                 accept=".xlsx, .xls" 
-                                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.8rem',
-                                    borderRadius: THEME.radius.md,
-                                    border: `1.5px dashed ${THEME.colors.border}`,
-                                    backgroundColor: '#F8FAFC',
-                                    marginBottom: '1rem',
-                                    fontSize: '0.85rem',
-                                    outline: 'none',
-                                    cursor: 'pointer'
+                                onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f) {
+                                        setImportFile(f);
+                                        setImportError('');
+                                    }
                                 }}
+                                style={{ display: 'none' }}
                             />
 
+                            {/* Zona interactiva Drag & Drop */}
+                            {!importFile ? (
+                                <div
+                                    onClick={() => fileInputRef.current?.click()}
+                                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(false);
+                                        const droppedFile = e.dataTransfer.files?.[0];
+                                        if (droppedFile && (droppedFile.name.endsWith('.xlsx') || droppedFile.name.endsWith('.xls'))) {
+                                            setImportFile(droppedFile);
+                                            setImportError('');
+                                        } else if (droppedFile) {
+                                            setImportError('Por favor selecciona un archivo con extensión .xlsx o .xls');
+                                        }
+                                    }}
+                                    style={{
+                                        border: isDragging ? '2px dashed #0D7A57' : '2px dashed #CBD5E1',
+                                        backgroundColor: isDragging ? '#EDF5F1' : '#F8FAF9',
+                                        borderRadius: '16px',
+                                        padding: '1.8rem 1.25rem',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        marginBottom: '1rem'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isDragging) {
+                                            e.currentTarget.style.borderColor = '#0D7A57';
+                                            e.currentTarget.style.backgroundColor = '#F4F8F6';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isDragging) {
+                                            e.currentTarget.style.borderColor = '#CBD5E1';
+                                            e.currentTarget.style.backgroundColor = '#F8FAF9';
+                                        }
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '46px',
+                                        height: '46px',
+                                        borderRadius: '12px',
+                                        backgroundColor: '#FFFFFF',
+                                        border: '1px solid #E2E8F0',
+                                        color: '#0D7A57',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                        marginBottom: '0.2rem'
+                                    }}>
+                                        <Upload size={22} strokeWidth={2.2} />
+                                    </div>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1A231E' }}>
+                                        Haz clic o arrastra tu archivo Excel aquí
+                                    </span>
+                                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: '500' }}>
+                                        Formatos compatibles: .xlsx o .xls (hasta 25 MB)
+                                    </span>
+                                </div>
+                            ) : (
+                                /* Ficha del archivo seleccionado */
+                                <div style={{
+                                    border: '1.5px solid #0D7A57',
+                                    backgroundColor: '#EDF5F1',
+                                    borderRadius: '16px',
+                                    padding: '1rem 1.25rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '0.85rem',
+                                    marginBottom: '1rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
+                                        <div style={{
+                                            width: '42px',
+                                            height: '42px',
+                                            borderRadius: '10px',
+                                            backgroundColor: '#FFFFFF',
+                                            border: '1px solid #C8DDD3',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#0D7A57',
+                                            flexShrink: 0
+                                        }}>
+                                            <FileSpreadsheet size={22} strokeWidth={2.2} />
+                                        </div>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ 
+                                                fontSize: '0.86rem', 
+                                                fontWeight: '800', 
+                                                color: '#1A231E', 
+                                                whiteSpace: 'nowrap', 
+                                                overflow: 'hidden', 
+                                                textOverflow: 'ellipsis' 
+                                            }}>
+                                                {importFile.name}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginTop: '2px' }}>
+                                                <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
+                                                    {(importFile.size / 1024).toFixed(1)} KB
+                                                </span>
+                                                <span style={{ color: '#CBD5E1' }}>•</span>
+                                                <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                    <Check size={12} strokeWidth={3} /> Listo para procesar
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        disabled={importing}
+                                        onClick={() => {
+                                            setImportFile(null);
+                                            if (fileInputRef.current) fileInputRef.current.value = '';
+                                        }}
+                                        style={{
+                                            backgroundColor: '#FFFFFF',
+                                            border: '1px solid #CBD5E1',
+                                            borderRadius: '8px',
+                                            width: '32px',
+                                            height: '32px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#DC2626',
+                                            cursor: importing ? 'not-allowed' : 'pointer',
+                                            flexShrink: 0,
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Quitar archivo"
+                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.borderColor = '#FCA5A5'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+                                    >
+                                        <Trash2 size={15} strokeWidth={2.2} />
+                                    </button>
+                                </div>
+                            )}
+
                             {importError && (
-                                <div style={{ padding: '0.65rem 0.9rem', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: THEME.radius.md, color: '#991B1B', fontSize: '0.8rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <AlertCircle size={15} /> {importError}
+                                <div style={{ 
+                                    padding: '0.75rem 1rem', 
+                                    backgroundColor: '#FEF2F2', 
+                                    border: '1px solid #FCA5A5', 
+                                    borderRadius: '10px', 
+                                    color: '#991B1B', 
+                                    fontSize: '0.8rem', 
+                                    marginBottom: '1rem', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '8px' 
+                                }}>
+                                    <AlertCircle size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} /> 
+                                    <span>{importError}</span>
                                 </div>
                             )}
 
                             {importSuccess && (
-                                <div style={{ padding: '0.65rem 0.9rem', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: THEME.radius.md, color: '#065F46', fontSize: '0.8rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <CheckCircle2 size={15} /> {importSuccess}
+                                <div style={{ 
+                                    padding: '0.75rem 1rem', 
+                                    backgroundColor: '#ECFDF5', 
+                                    border: '1px solid #A7F3D0', 
+                                    borderRadius: '10px', 
+                                    color: '#065F46', 
+                                    fontSize: '0.8rem', 
+                                    marginBottom: '1rem', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '8px' 
+                                }}>
+                                    <CheckCircle2 size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} /> 
+                                    <span>{importSuccess}</span>
                                 </div>
                             )}
 
-                            <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.4rem' }}>
                                 <button
                                     type="button"
-                                    onClick={() => setIsImportModalOpen(false)}
-                                    style={{
-                                        padding: '0.65rem 1.25rem',
-                                        backgroundColor: '#F1F5F9',
-                                        color: THEME.colors.textSecondary,
-                                        borderRadius: THEME.radius.md,
-                                        border: 'none',
-                                        fontWeight: '700',
-                                        fontSize: '0.85rem',
-                                        cursor: 'pointer'
+                                    disabled={importing}
+                                    onClick={() => {
+                                        setIsImportModalOpen(false);
+                                        setImportError('');
+                                        setImportSuccess('');
+                                        setImportFile(null);
                                     }}
+                                    style={{
+                                        padding: '0.65rem 1.35rem',
+                                        backgroundColor: '#FFFFFF',
+                                        color: '#475569',
+                                        borderRadius: '10px',
+                                        border: '1px solid #CBD5E1',
+                                        fontWeight: '700',
+                                        fontSize: '0.84rem',
+                                        cursor: importing ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#94A3B8'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
                                 >
                                     Cancelar
                                 </button>
@@ -2129,21 +2471,35 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                     type="submit"
                                     disabled={!importFile || importing}
                                     style={{
-                                        padding: '0.65rem 1.4rem',
-                                        backgroundColor: THEME.colors.primary,
-                                        color: 'white',
-                                        borderRadius: THEME.radius.md,
+                                        padding: '0.65rem 1.6rem',
+                                        backgroundColor: (!importFile || importing) ? '#94A3B8' : '#0D7A57',
+                                        color: '#FFFFFF',
+                                        borderRadius: '10px',
                                         border: 'none',
                                         fontWeight: '800',
-                                        fontSize: '0.85rem',
+                                        fontSize: '0.84rem',
                                         cursor: (!importFile || importing) ? 'not-allowed' : 'pointer',
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '6px'
+                                        gap: '7px',
+                                        boxShadow: (!importFile || importing) ? 'none' : '0 4px 10px rgba(13, 122, 87, 0.25)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (importFile && !importing) {
+                                            e.currentTarget.style.backgroundColor = '#0A5F43';
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (importFile && !importing) {
+                                            e.currentTarget.style.backgroundColor = '#0D7A57';
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                        }
                                     }}
                                 >
-                                    {importing ? <RefreshCw size={15} className="animate-spin" /> : <Upload size={15} />}
-                                    {importing ? 'Procesando...' : 'Aplicar Costos'}
+                                    {importing ? <RefreshCw size={15} className="animate-spin" /> : <Upload size={15} strokeWidth={2.4} />}
+                                    {importing ? 'Procesando matriz...' : 'Aplicar Costos'}
                                 </button>
                             </div>
                         </form>
