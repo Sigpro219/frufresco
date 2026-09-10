@@ -607,12 +607,28 @@ export default function AuditLogPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                             <thead style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                 <tr>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform }}>Fecha y Hora</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform }}>Usuario</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform }}>Acción</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform }}>Módulo</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform }}>Detalles</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', width: '50px' }}></th>
+                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '170px' }}>Fecha y Hora</th>
+                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '180px' }}>Usuario</th>
+                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '160px' }}>Acción</th>
+                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '140px' }}>Módulo</th>
+                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '320px' }}>Detalles</th>
+                                    <th style={{ 
+                                        padding: '0.85rem 1rem', 
+                                        width: '90px', 
+                                        minWidth: '90px', 
+                                        textAlign: 'center', 
+                                        position: 'sticky', 
+                                        right: 0, 
+                                        backgroundColor: '#F9FAFB', 
+                                        boxShadow: '-4px 0 8px rgba(0,0,0,0.03)',
+                                        fontSize: THEME.typography.tableHeader.fontSize, 
+                                        letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                        fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                        color: THEME.typography.tableHeader.color, 
+                                        textTransform: THEME.typography.tableHeader.textTransform 
+                                    }}>
+                                        Detalle
+                                    </th>
                                 </tr>
                             </thead>
                             {loading && logs.length === 0 ? (
@@ -644,7 +660,13 @@ export default function AuditLogPage() {
                                     {logs.map((log, index) => {
                                         const badge = getActionBadgeColor(log.action);
                                         return (
-                                            <tr key={`${log.id}-${index}`} style={{ borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', verticalAlign: 'middle', transition: 'background-color 0.15s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                            <tr 
+                                                key={`${log.id}-${index}`} 
+                                                style={{ borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', verticalAlign: 'middle', transition: 'background-color 0.15s', cursor: 'pointer' }} 
+                                                onClick={() => setSelectedLog(log)}
+                                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
+                                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '600', whiteSpace: 'nowrap' }}>
                                                     {new Date(log.created_at).toLocaleString('es-CO')}
                                                 </td>
@@ -662,13 +684,49 @@ export default function AuditLogPage() {
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textSecondary }}>
                                                     {formatDetailsSummary(log)}
                                                 </td>
-                                                <td style={{ padding: '0.85rem 1.25rem' }}>
+                                                <td 
+                                                    style={{ 
+                                                        padding: '0.85rem 1rem', 
+                                                        textAlign: 'center', 
+                                                        position: 'sticky', 
+                                                        right: 0, 
+                                                        backgroundColor: 'inherit', 
+                                                        boxShadow: '-4px 0 8px rgba(0,0,0,0.03)' 
+                                                    }}
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
+                                                >
                                                     <button 
+                                                        type="button"
                                                         onClick={() => setSelectedLog(log)}
-                                                        style={{ background: 'none', border: 'none', color: THEME.colors.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px' }}
+                                                        style={{ 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'center',
+                                                            gap: '6px',
+                                                            padding: '6px 12px', 
+                                                            borderRadius: '8px', 
+                                                            backgroundColor: '#EDF5F1', 
+                                                            color: THEME.colors.primary, 
+                                                            border: '1px solid rgba(13, 122, 87, 0.25)', 
+                                                            cursor: 'pointer', 
+                                                            fontWeight: '700', 
+                                                            fontSize: '0.8rem',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        onMouseOver={(e) => {
+                                                            e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                                            e.currentTarget.style.color = '#FFFFFF';
+                                                            e.currentTarget.style.borderColor = THEME.colors.primary;
+                                                        }}
+                                                        onMouseOut={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#EDF5F1';
+                                                            e.currentTarget.style.color = THEME.colors.primary;
+                                                            e.currentTarget.style.borderColor = 'rgba(13, 122, 87, 0.25)';
+                                                        }}
                                                         title="Ver detalles completos"
                                                     >
-                                                        <Eye size={18} />
+                                                        <Eye size={16} />
+                                                        <span>Ver</span>
                                                     </button>
                                                 </td>
                                             </tr>

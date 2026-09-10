@@ -1018,56 +1018,127 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 throw new Error('El archivo Excel está vacío o no tiene datos reconocibles.');
             }
 
-            let updatedCount = 0;
+            const normalizeKey = (key: string) => {
+                return key
+                    .trim()
+                    .toUpperCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[$#]/g, '')
+                    .replace(/[\s\-_.]+/g, '_');
+            };
+
+            const parseCostNumber = (raw: any): number => {
+                if (raw === undefined || raw === null || raw === '') return 0;
+                if (typeof raw === 'number') return isNaN(raw) ? 0 : raw;
+                let s = String(raw).trim().replace(/[$]/g, '').replace(/\s+/g, '');
+                if (s.includes('.') && s.includes(',')) {
+                    s = s.replace(/\./g, '').replace(',', '.');
+                } else if (s.includes(',')) {
+                    const parts = s.split(',');
+                    if (parts[1] && parts[1].length === 3 && parts.length === 2 && Number(parts[0]) > 0) {
+                        s = parts[0] + parts[1];
+                    } else {
+                        s = s.replace(',', '.');
+                    }
+                } else if (s.includes('.')) {
+                    const parts = s.split('.');
+                    if (parts.length > 2 || (parts[1] && parts[1].length === 3)) {
+                        s = s.replace(/\./g, '');
+                    }
+                }
+                const n = parseFloat(s);
+                return isNaN(n) ? 0 : n;
+            };
+
             const updatesToPerform: any[] = [];
             const nowIso = new Date().toISOString();
 
             for (const row of jsonData) {
-                // Normalize and clean all keys of the row (removing $, spaces, accents)
                 const normalizedRow: Record<string, any> = {};
                 for (const [k, v] of Object.entries(row)) {
-                    const cleanKey = k.trim().toUpperCase().replace(/[$]/g, '').replace(/\s+/g, '_');
-                    normalizedRow[cleanKey] = v;
+                    normalizedRow[normalizeKey(k)] = v;
                 }
 
                 // Identifiers lookup
-                const accIdVal = normalizedRow['ID_CONTABLE'] || normalizedRow['IDCONTABLE'] || normalizedRow['IDPRODUCTO'] || normalizedRow['ID_PRODUCTO'] || normalizedRow['ACCOUNTING_ID'] || normalizedRow['CODIGO'] || normalizedRow['CÓDIGO'];
-                const idVal = normalizedRow['ID'];
+                const accIdVal = normalizedRow['ID_CONTABLE'] || normalizedRow['IDCONTABLE'] || 
+                                 normalizedRow['ACCOUNTING_ID'] || normalizedRow['CODIGO_CONTABLE'] || 
+                                 normalizedRow['COD_CONTABLE'] || normalizedRow['IDPRODUCTO'] || 
+                                 normalizedRow['ID_PRODUCTO'] || normalizedRow['CODIGO'] || 
+                                 normalizedRow['COD'];
+                const idVal = normalizedRow['ID'] || normalizedRow['UUID'];
                 const skuVal = normalizedRow['SKU'];
-                const nameVal = normalizedRow['PRODUCTO'] || normalizedRow['NOMBRE'] || normalizedRow['DESCRIPCION'] || normalizedRow['DESCRIPCIÓN'];
+                const nameVal = normalizedRow['PRODUCTO'] || normalizedRow['NOMBRE'] || 
+                                normalizedRow['DESCRIPCION'] || normalizedRow['ITEM'];
 
-                // Cost lookup
-                const newCostRaw = normalizedRow['NUEVO_COSTO'] || normalizedRow['NUEVO_PRECIO'] || normalizedRow['COSTO'] || normalizedRow['PRECIO'] || normalizedRow['VALOR'];
+                // Cost lookup - comprehensive support for ULTIMO, NUEVO_COSTO, COSTO, PRECIO, etc.
+                let newCostRaw = normalizedRow['ULTIMO'] || normalizedRow['ULTIMO_COSTO'] || 
+                                 normalizedRow['COSTO_ULTIMO'] || normalizedRow['VALOR_ULTIMO'] || 
+                                 normalizedRow['ULTIMA_COMPRA'] || normalizedRow['COMPRA'] ||
+                                 normalizedRow['NUEVO_COSTO'] || normalizedRow['COSTO_NUEVO'] || 
+                                 normalizedRow['COSTO'] || normalizedRow['COSTO_ACTUAL'] || 
+                                 normalizedRow['NUEVO_PRECIO'] || normalizedRow['PRECIO_NUEVO'] || 
+                                 normalizedRow['PRECIO'] || normalizedRow['PRECIO_COMPRA'] || 
+                                 normalizedRow['COSTO_COMPRA'] || normalizedRow['VALOR'] || 
+                                 normalizedRow['VALOR_UNITARIO'] || normalizedRow['PRECIO_UNITARIO'] || 
+                                 normalizedRow['COSTO_UNITARIO'];
+
+                // Fallback: search for any key ending in COSTO, PRECIO, ULTIMO or VALOR
+                if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') {
+                    for (const [k, v] of Object.entries(normalizedRow)) {
+                        if (k.endsWith('_COSTO') || k.endsWith('_PRECIO') || k.endsWith('_ULTIMO') || k.endsWith('_VALOR')) {
+                            if (v !== undefined && v !== null && v !== '') {
+                                newCostRaw = v;
+                                break;
+                            }
+                        }
+                    }
+                }
 
                 if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
 
-                const newCost = parseFloat(String(newCostRaw).replace(/[^0-9.]/g, ''));
-                if (isNaN(newCost) || newCost <= 0) continue;
+                const newCost = parseCostNumber(newCostRaw);
+                if (newCost <= 0) continue;
 
                 let matchedProduct: Product | undefined = undefined;
 
                 // 1. Prioritize match by accounting_id (ID_CONTABLE)
                 if (accIdVal !== undefined && accIdVal !== null && String(accIdVal).trim() !== '') {
-                    const num = Number(String(accIdVal).trim());
-                    if (!isNaN(num) && num > 0) {
-                        matchedProduct = products.find(p => p.accounting_id && Number(p.accounting_id) === num);
-                    }
+                    const rawStr = String(accIdVal).trim();
+                    const num = Number(rawStr);
+                    matchedProduct = products.find(p => {
+                        if (!p.accounting_id) return false;
+                        const pStr = String(p.accounting_id).trim();
+                        if (pStr === rawStr) return true;
+                        if (!isNaN(num) && num > 0 && Number(pStr) === num) return true;
+                        return false;
+                    });
                 }
 
                 // 2. Match by UUID ID
                 if (!matchedProduct && idVal) {
-                    matchedProduct = products.find(p => p.id === String(idVal).trim());
+                    const cleanId = String(idVal).trim().toLowerCase();
+                    matchedProduct = products.find(p => p.id && p.id.toLowerCase() === cleanId);
                 }
 
                 // 3. Match by SKU
                 if (!matchedProduct && skuVal) {
-                    matchedProduct = products.find(p => p.sku && p.sku.toLowerCase().trim() === String(skuVal).toLowerCase().trim());
+                    const cleanSku = String(skuVal).trim().toLowerCase();
+                    matchedProduct = products.find(p => p.sku && p.sku.trim().toLowerCase() === cleanSku);
                 }
 
                 // 4. Match by exact Product Name as fallback
                 if (!matchedProduct && nameVal) {
-                    const cleanName = String(nameVal).toLowerCase().trim();
-                    matchedProduct = products.find(p => p.name && p.name.toLowerCase().trim() === cleanName);
+                    const cleanName = String(nameVal)
+                        .trim()
+                        .toLowerCase()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '');
+                    matchedProduct = products.find(p => {
+                        if (!p.name) return false;
+                        const pName = p.name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        return pName === cleanName;
+                    });
                 }
 
                 if (matchedProduct) {
@@ -1082,35 +1153,31 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             }
 
             if (updatesToPerform.length === 0) {
-                throw new Error('No se encontraron filas válidas con ID_CONTABLE/SKU/ID y la columna de costo diligenciada.');
+                const detectedKeys = jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'Ninguna';
+                throw new Error(`No se encontraron productos coincidentes o la columna de costo no fue reconocida. Columnas encontradas en tu archivo: [${detectedKeys}]. Asegúrate de incluir una columna de identificación (ID_CONTABLE, SKU, ID o PRODUCTO) y una de costo (ULTIMO, NUEVO_COSTO, COSTO, etc.).`);
             }
 
-            // Upsert in commercial_cost_matrix in batches of 50
-            for (let i = 0; i < updatesToPerform.length; i += 50) {
-                const batch = updatesToPerform.slice(i, i + 50);
-                const { error: upsertErr } = await supabase.from('commercial_cost_matrix').upsert(batch);
-                if (upsertErr) throw upsertErr;
-                updatedCount += batch.length;
-            }
+            // Enviar al endpoint seguro del servidor para inserción masiva y registro automático de auditoría
+            const collaboratorName = profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial';
+            const collaboratorId = user?.id || null;
 
-            // Registrar trazabilidad en el módulo de auditoría
-            fetch('/api/audit/log', {
+            const res = await fetch('/api/commercial/cost-matrix/bulk-import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'BULK_IMPORT_COST_MATRIX',
-                    module: 'COMMERCIAL',
-                    collaborator_name: profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial',
-                    collaborator_id: user?.id || null,
-                    details: {
-                        file_name: importFile.name,
-                        products_updated: updatedCount,
-                        summary: `Carga masiva de ${updatedCount} productos desde archivo ${importFile.name}`
-                    }
+                    updates: updatesToPerform,
+                    fileName: importFile.name,
+                    collaboratorName,
+                    collaboratorId
                 })
-            }).catch(e => console.warn('Audit log error:', e));
+            });
 
-            setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos en la matriz de costos con fecha de hoy.`);
+            const jsonRes = await res.json();
+            if (!res.ok || !jsonRes.success) {
+                throw new Error(jsonRes.error || 'Error al procesar la actualización en el servidor.');
+            }
+
+            setImportSuccess(`¡Carga exitosa! Se actualizaron ${jsonRes.count} productos en la matriz de costos con fecha de hoy y se registró la trazabilidad.`);
             await fetchData();
 
             setTimeout(() => {
