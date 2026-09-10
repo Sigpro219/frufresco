@@ -45,6 +45,7 @@ import * as XLSX from 'xlsx';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { THEME, formatNumber } from '@/lib/adminTheme';
+import { useAuth } from '@/lib/authContext';
 
 interface Purchase {
     id?: string;
@@ -513,6 +514,7 @@ function ManualCostInput({ productId, onSave, savingId, currentManual, cellState
 }
 
 export default function CostMatrixPage({ embedded = false }: { embedded?: boolean } = {}) {
+    const { user, profile } = useAuth();
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Purchase[]>>({});
@@ -633,6 +635,23 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 ...prev,
                 [productId]: { manual_cost: manualCost }
             }));
+
+            // Registrar trazabilidad en auditoría
+            fetch('/api/audit/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'UPDATE_COST_MATRIX',
+                    module: 'COMMERCIAL',
+                    collaborator_name: profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial',
+                    collaborator_id: user?.id || null,
+                    details: {
+                        product_id: productId,
+                        product_name: products.find(p => p.id === productId)?.name || productId,
+                        manual_cost: manualCost
+                    }
+                })
+            }).catch(e => console.warn('Audit log error:', e));
 
             setTimeout(() => setSavingId(null), 2000);
         } catch (err) {
@@ -1073,6 +1092,23 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 if (upsertErr) throw upsertErr;
                 updatedCount += batch.length;
             }
+
+            // Registrar trazabilidad en el módulo de auditoría
+            fetch('/api/audit/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'BULK_IMPORT_COST_MATRIX',
+                    module: 'COMMERCIAL',
+                    collaborator_name: profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial',
+                    collaborator_id: user?.id || null,
+                    details: {
+                        file_name: importFile.name,
+                        products_updated: updatedCount,
+                        summary: `Carga masiva de ${updatedCount} productos desde archivo ${importFile.name}`
+                    }
+                })
+            }).catch(e => console.warn('Audit log error:', e));
 
             setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos en la matriz de costos con fecha de hoy.`);
             await fetchData();

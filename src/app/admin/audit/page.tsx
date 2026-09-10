@@ -110,6 +110,8 @@ const formatActionName = (log: any) => {
         return 'ELIMINAR ' + translateTableName(action.replace('DELETE_', ''));
     }
     if (action === 'BULK_IMPORT_CLIENTS') return 'IMPORTACIÓN MASIVA CLIENTES';
+    if (action === 'BULK_IMPORT_COST_MATRIX') return 'CARGA MASIVA MATRIZ DE COSTOS';
+    if (action === 'UPDATE_COST_MATRIX') return 'MODIFICAR COSTO COMERCIAL';
     return action;
 };
 
@@ -132,6 +134,7 @@ const translateModule = (log: any) => {
     if (module === 'ORDERS') return 'PEDIDOS';
     if (module === 'SETTINGS') return 'CONFIGURACIÓN';
     if (module === 'HR_ADMIN') return 'ADMIN GESTIÓN HUMANA';
+    if (module === 'COMMERCIAL' || module === 'COST_MATRIX') return 'MATRIZ DE COSTOS';
     return module;
 };
 
@@ -149,6 +152,12 @@ const formatDetailsSummary = (log: any) => {
     const d = log.details;
     if (log.action === 'BULK_IMPORT_CLIENTS') {
         return `Clientes creados: ${d.parents_created || 0}, Sucursales creadas: ${d.children_created || 0}`;
+    }
+    if (log.action === 'BULK_IMPORT_COST_MATRIX') {
+        return `Archivo: ${d.file_name || 'Excel'} | Productos actualizados: ${d.products_updated || 0}${d.summary ? ` (${d.summary})` : ''}`;
+    }
+    if (log.action === 'UPDATE_COST_MATRIX') {
+        return `Producto: ${d.product_name || d.product_id} | Nuevo Costo: $${Number(d.manual_cost).toLocaleString('es-CO')}`;
     }
     if (log.action === 'LOGIN' || log.action === 'USER_LOGIN') {
         return `Inicio de sesión exitoso${d.email ? ` (${d.email})` : ''}`;
