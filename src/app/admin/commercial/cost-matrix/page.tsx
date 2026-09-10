@@ -644,7 +644,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                     action: 'UPDATE_COST_MATRIX',
                     module: 'COMMERCIAL',
                     collaborator_name: profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial',
-                    collaborator_id: user?.id || null,
+                    collaborator_id: profile?.collaborator_id || user?.user_metadata?.collaborator_id || user?.id || null,
                     details: {
                         product_id: productId,
                         product_name: products.find(p => p.id === productId)?.name || productId,
@@ -1159,7 +1159,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
             // Enviar al endpoint seguro del servidor para inserción masiva y registro automático de auditoría
             const collaboratorName = profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial';
-            const collaboratorId = user?.id || null;
+            const collaboratorId = profile?.collaborator_id || user?.user_metadata?.collaborator_id || user?.id || null;
 
             const res = await fetch('/api/commercial/cost-matrix/bulk-import', {
                 method: 'POST',

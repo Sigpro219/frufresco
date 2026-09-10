@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
@@ -16,13 +16,39 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Action and module are required' }, { status: 400 });
         }
 
-        const { data, error } = await supabaseAdmin.from('audit_logs').insert([{
+        // Validate collaborator_id against collaborators table
+        let validCollabId = null;
+        if (collaborator_id) {
+            const { data: collab } = await supabaseAdmin
+                .from('collaborators')
+                .select('id')
+                .eq('id', collaborator_id)
+                .maybeSingle();
+            if (collab) {
+                validCollabId = collab.id;
+            }
+        }
+
+        let { data, error } = await supabaseAdmin.from('audit_logs').insert([{
             action,
             module,
             collaborator_name: collaborator_name || 'Administrador FruFresco',
-            collaborator_id: collaborator_id || null,
+            collaborator_id: validCollabId,
             details: details || {}
         }]).select();
+
+        // Safe fallback if foreign key constraint trips
+        if (error && error.code === '23503') {
+            const retry = await supabaseAdmin.from('audit_logs').insert([{
+                action,
+                module,
+                collaborator_name: collaborator_name || 'Administrador FruFresco',
+                collaborator_id: null,
+                details: details || {}
+            }]).select();
+            data = retry.data;
+            error = retry.error;
+        }
 
         if (error) {
             console.error('[Audit API] Error inserting audit log:', error);

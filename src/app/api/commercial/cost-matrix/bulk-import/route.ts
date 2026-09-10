@@ -47,22 +47,53 @@ export async function POST(req: NextRequest) {
             updatedCount += batch.length;
         }
 
-        // Insert audit log automatically
+        // Resolve valid collaborator_id for foreign key constraint in audit_logs (references collaborators.id)
+        let validCollabId = null;
+        if (collaboratorId) {
+            const { data: collab } = await supabaseAdmin
+                .from('collaborators')
+                .select('id')
+                .eq('id', collaboratorId)
+                .maybeSingle();
+            if (collab) {
+                validCollabId = collab.id;
+            }
+        }
+
         const colName = collaboratorName || 'Administrador Comercial';
         const file = fileName || 'Archivo Excel';
-        const { error: auditError } = await supabaseAdmin
+
+        // Insert audit log automatically with safe FK fallback
+        let { error: auditError } = await supabaseAdmin
             .from('audit_logs')
             .insert([{
                 action: 'BULK_IMPORT_COST_MATRIX',
                 module: 'COMMERCIAL',
                 collaborator_name: colName,
-                collaborator_id: collaboratorId || null,
+                collaborator_id: validCollabId,
                 details: {
                     file_name: file,
                     products_updated: updatedCount,
                     summary: `Carga masiva de ${updatedCount} productos en Matriz de Costos desde ${file}`
                 }
             }]);
+
+        if (auditError && auditError.code === '23503') {
+            const retry = await supabaseAdmin
+                .from('audit_logs')
+                .insert([{
+                    action: 'BULK_IMPORT_COST_MATRIX',
+                    module: 'COMMERCIAL',
+                    collaborator_name: colName,
+                    collaborator_id: null,
+                    details: {
+                        file_name: file,
+                        products_updated: updatedCount,
+                        summary: `Carga masiva de ${updatedCount} productos en Matriz de Costos desde ${file}`
+                    }
+                }]);
+            auditError = retry.error;
+        }
 
         if (auditError) {
             console.warn('[Bulk Import Cost Matrix] Warning: Could not write audit log:', auditError);
