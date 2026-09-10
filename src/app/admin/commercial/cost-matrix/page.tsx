@@ -533,6 +533,17 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     const [importError, setImportError] = useState('');
     const [importSuccess, setImportSuccess] = useState('');
     const [importFile, setImportFile] = useState<File | null>(null);
+    const [fileValidation, setFileValidation] = useState<{
+        status: 'idle' | 'validating' | 'valid' | 'invalid';
+        idColumn?: string;
+        costColumn?: string;
+        detectedCostColumns?: string[];
+        allDetectedColumns?: string[];
+        totalMatchedRows?: number;
+        totalFileRows?: number;
+        errorMessage?: string;
+        parsedUpdates?: any[];
+    }>({ status: 'idle' });
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [lifecycleFilter, setLifecycleFilter] = useState<'all' | 'vigente' | 'por_vencer' | 'vencido'>('all');
@@ -999,36 +1010,121 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         XLSX.writeFile(wb, `Plantilla_Costos_Vencidos_${safeFormatDate(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
-    const handleImportSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!importFile) return;
+    const handleFileSelection = (file: File | null) => {
+        setImportFile(file);
+        setImportError('');
+        setImportSuccess('');
+        if (!file) {
+            setFileValidation({ status: 'idle' });
+            return;
+        }
+        validateExcelFile(file);
+    };
 
-        setImporting(true);
+    const validateExcelFile = async (file: File) => {
+        setFileValidation({ status: 'validating' });
         setImportError('');
         setImportSuccess('');
 
         try {
-            const dataBuffer = await importFile.arrayBuffer();
+            const dataBuffer = await file.arrayBuffer();
             const workbook = XLSX.read(dataBuffer);
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
             const jsonData: any[] = XLSX.utils.sheet_to_json(sheet);
 
             if (!jsonData || jsonData.length === 0) {
-                throw new Error('El archivo Excel está vacío o no tiene datos reconocibles.');
+                setFileValidation({
+                    status: 'invalid',
+                    errorMessage: 'El archivo Excel está vacío o no contiene filas con datos legibles.'
+                });
+                return;
             }
 
-            const normalizeKey = (key: string) => {
-                return key
-                    .trim()
-                    .toUpperCase()
-                    .normalize('NFD')
-                    .replace(/[\u0300-\u036f]/g, '')
-                    .replace(/[$#]/g, '')
-                    .replace(/[\s\-_.]+/g, '_');
-            };
+            const rawHeaders = Object.keys(jsonData[0] || {});
+            if (rawHeaders.length === 0) {
+                setFileValidation({
+                    status: 'invalid',
+                    errorMessage: 'No se encontraron encabezados de columna en la primera fila del archivo.'
+                });
+                return;
+            }
 
-            const parseCostNumber = (raw: any): number => {
+            const normalizeKey = (k: string) => k.trim().toUpperCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[$#]/g, '')
+                .replace(/[\s\-_.]+/g, '_');
+
+            // 1. Identificar columna obligatoria ID_CONTABLE / ACCOUNTING_ID / SKU / ID
+            let foundIdCol: string | null = null;
+            for (const h of rawHeaders) {
+                const norm = normalizeKey(h);
+                if (['ID_CONTABLE', 'IDCONTABLE', 'ACCOUNTING_ID', 'CODIGO_CONTABLE', 'COD_CONTABLE', 'CODIGO', 'COD', 'IDPRODUCTO', 'ID_PRODUCTO'].includes(norm)) {
+                    foundIdCol = h;
+                    break;
+                }
+            }
+            if (!foundIdCol) {
+                for (const h of rawHeaders) {
+                    const norm = normalizeKey(h);
+                    if (['SKU', 'ID', 'UUID'].includes(norm)) {
+                        foundIdCol = h;
+                        break;
+                    }
+                }
+            }
+
+            if (!foundIdCol) {
+                setFileValidation({
+                    status: 'invalid',
+                    allDetectedColumns: rawHeaders,
+                    errorMessage: `No se encontró la columna de identificación "ID_CONTABLE" (o ACCOUNTING_ID / SKU / ID). Columnas detectadas en tu archivo: [${rawHeaders.join(', ')}].`
+                });
+                return;
+            }
+
+            // 2. Identificar columnas candidatas a precio/costo
+            const costKeywords = [
+                'ULTIMO', 'ULTIMA', 'ULTIMO_COSTO', 'COSTO_ULTIMO', 'ULTIMA_COMPRA', 'COMPRA',
+                'NUEVO_COSTO', 'COSTO_NUEVO', 'COSTO', 'COSTO_ACTUAL', 'COSTO_ANTERIOR', 'COSTO_COMPRA',
+                'NUEVO_PRECIO', 'PRECIO_NUEVO', 'PRECIO', 'PRECIO_COMPRA', 'PRECIO_VENTA', 'PRECIO_UNITARIO', 'PRECIO_ACTUAL',
+                'VALOR', 'VALOR_UNITARIO', 'VALOR_ULTIMO', 'COSTO_UNITARIO'
+            ];
+
+            const detectedCostCols: string[] = [];
+            for (const h of rawHeaders) {
+                const norm = normalizeKey(h);
+                const isCost = costKeywords.includes(norm) ||
+                    norm.endsWith('_COSTO') || norm.endsWith('_PRECIO') || norm.endsWith('_VALOR') || norm.endsWith('_ULTIMO') ||
+                    norm.includes('COSTO') || norm.includes('PRECIO');
+                if (isCost && !detectedCostCols.includes(h)) {
+                    detectedCostCols.push(h);
+                }
+            }
+
+            // Validación estricta: debe haber exactamente 1 columna de precio
+            if (detectedCostCols.length === 0) {
+                setFileValidation({
+                    status: 'invalid',
+                    allDetectedColumns: rawHeaders,
+                    errorMessage: `No se detectó ninguna columna de costo o precio en el archivo. Columnas detectadas: [${rawHeaders.join(', ')}]. Debe incluir una columna con el valor del costo (ej: ULTIMO o NUEVO_COSTO).`
+                });
+                return;
+            }
+
+            if (detectedCostCols.length > 1) {
+                setFileValidation({
+                    status: 'invalid',
+                    detectedCostColumns: detectedCostCols,
+                    allDetectedColumns: rawHeaders,
+                    errorMessage: `Archivo ambiguo rechazado: Detectamos ${detectedCostCols.length} columnas de precio/costo: [${detectedCostCols.join(', ')}]. Para garantizar la exactitud financiera y evitar discrepancias de cálculo, por favor deja únicamente una sola columna de costo en tu archivo Excel.`
+                });
+                return;
+            }
+
+            const singleCostCol = detectedCostCols[0];
+            const parseCostNum = (raw: any): number => {
                 if (raw === undefined || raw === null || raw === '') return 0;
                 if (typeof raw === 'number') return isNaN(raw) ? 0 : raw;
                 let s = String(raw).trim().replace(/[$]/g, '').replace(/\s+/g, '');
@@ -1051,61 +1147,24 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 return isNaN(n) ? 0 : n;
             };
 
-            const updatesToPerform: any[] = [];
             const nowIso = new Date().toISOString();
+            const updatesToPerform: any[] = [];
 
             for (const row of jsonData) {
-                const normalizedRow: Record<string, any> = {};
-                for (const [k, v] of Object.entries(row)) {
-                    normalizedRow[normalizeKey(k)] = v;
-                }
+                const idVal = row[foundIdCol];
+                const costValRaw = row[singleCostCol];
 
-                // Identifiers lookup
-                const accIdVal = normalizedRow['ID_CONTABLE'] || normalizedRow['IDCONTABLE'] || 
-                                 normalizedRow['ACCOUNTING_ID'] || normalizedRow['CODIGO_CONTABLE'] || 
-                                 normalizedRow['COD_CONTABLE'] || normalizedRow['IDPRODUCTO'] || 
-                                 normalizedRow['ID_PRODUCTO'] || normalizedRow['CODIGO'] || 
-                                 normalizedRow['COD'];
-                const idVal = normalizedRow['ID'] || normalizedRow['UUID'];
-                const skuVal = normalizedRow['SKU'];
-                const nameVal = normalizedRow['PRODUCTO'] || normalizedRow['NOMBRE'] || 
-                                normalizedRow['DESCRIPCION'] || normalizedRow['ITEM'];
-
-                // Cost lookup - comprehensive support for ULTIMO, NUEVO_COSTO, COSTO, PRECIO, etc.
-                let newCostRaw = normalizedRow['ULTIMO'] || normalizedRow['ULTIMO_COSTO'] || 
-                                 normalizedRow['COSTO_ULTIMO'] || normalizedRow['VALOR_ULTIMO'] || 
-                                 normalizedRow['ULTIMA_COMPRA'] || normalizedRow['COMPRA'] ||
-                                 normalizedRow['NUEVO_COSTO'] || normalizedRow['COSTO_NUEVO'] || 
-                                 normalizedRow['COSTO'] || normalizedRow['COSTO_ACTUAL'] || 
-                                 normalizedRow['NUEVO_PRECIO'] || normalizedRow['PRECIO_NUEVO'] || 
-                                 normalizedRow['PRECIO'] || normalizedRow['PRECIO_COMPRA'] || 
-                                 normalizedRow['COSTO_COMPRA'] || normalizedRow['VALOR'] || 
-                                 normalizedRow['VALOR_UNITARIO'] || normalizedRow['PRECIO_UNITARIO'] || 
-                                 normalizedRow['COSTO_UNITARIO'];
-
-                // Fallback: search for any key ending in COSTO, PRECIO, ULTIMO or VALOR
-                if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') {
-                    for (const [k, v] of Object.entries(normalizedRow)) {
-                        if (k.endsWith('_COSTO') || k.endsWith('_PRECIO') || k.endsWith('_ULTIMO') || k.endsWith('_VALOR')) {
-                            if (v !== undefined && v !== null && v !== '') {
-                                newCostRaw = v;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
-
-                const newCost = parseCostNumber(newCostRaw);
-                if (newCost <= 0) continue;
+                if (costValRaw === undefined || costValRaw === null || costValRaw === '') continue;
+                const costNum = parseCostNum(costValRaw);
+                if (costNum <= 0) continue;
 
                 let matchedProduct: Product | undefined = undefined;
 
-                // 1. Prioritize match by accounting_id (ID_CONTABLE)
-                if (accIdVal !== undefined && accIdVal !== null && String(accIdVal).trim() !== '') {
-                    const rawStr = String(accIdVal).trim();
+                if (idVal !== undefined && idVal !== null && String(idVal).trim() !== '') {
+                    const rawStr = String(idVal).trim();
                     const num = Number(rawStr);
+
+                    // Match por accounting_id
                     matchedProduct = products.find(p => {
                         if (!p.accounting_id) return false;
                         const pStr = String(p.accounting_id).trim();
@@ -1113,38 +1172,22 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                         if (!isNaN(num) && num > 0 && Number(pStr) === num) return true;
                         return false;
                     });
-                }
 
-                // 2. Match by UUID ID
-                if (!matchedProduct && idVal) {
-                    const cleanId = String(idVal).trim().toLowerCase();
-                    matchedProduct = products.find(p => p.id && p.id.toLowerCase() === cleanId);
-                }
+                    // Match por SKU
+                    if (!matchedProduct) {
+                        matchedProduct = products.find(p => p.sku && p.sku.trim().toLowerCase() === rawStr.toLowerCase());
+                    }
 
-                // 3. Match by SKU
-                if (!matchedProduct && skuVal) {
-                    const cleanSku = String(skuVal).trim().toLowerCase();
-                    matchedProduct = products.find(p => p.sku && p.sku.trim().toLowerCase() === cleanSku);
-                }
-
-                // 4. Match by exact Product Name as fallback
-                if (!matchedProduct && nameVal) {
-                    const cleanName = String(nameVal)
-                        .trim()
-                        .toLowerCase()
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '');
-                    matchedProduct = products.find(p => {
-                        if (!p.name) return false;
-                        const pName = p.name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                        return pName === cleanName;
-                    });
+                    // Match por ID UUID
+                    if (!matchedProduct) {
+                        matchedProduct = products.find(p => p.id && p.id.toLowerCase() === rawStr.toLowerCase());
+                    }
                 }
 
                 if (matchedProduct) {
                     updatesToPerform.push({
                         product_id: matchedProduct.id,
-                        manual_cost: newCost,
+                        manual_cost: costNum,
                         updated_at: nowIso,
                         updated_by: 'EXCEL-IMPORT',
                         is_active: true
@@ -1153,11 +1196,49 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             }
 
             if (updatesToPerform.length === 0) {
-                const detectedKeys = jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'Ninguna';
-                throw new Error(`No se encontraron productos coincidentes o la columna de costo no fue reconocida. Columnas encontradas en tu archivo: [${detectedKeys}]. Asegúrate de incluir una columna de identificación (ID_CONTABLE, SKU, ID o PRODUCTO) y una de costo (ULTIMO, NUEVO_COSTO, COSTO, etc.).`);
+                setFileValidation({
+                    status: 'invalid',
+                    idColumn: foundIdCol,
+                    costColumn: singleCostCol,
+                    allDetectedColumns: rawHeaders,
+                    errorMessage: `Se reconocieron las columnas "${foundIdCol}" y "${singleCostCol}", pero ninguno de los registros coincidió con los IDs contables o SKUs activos de los productos en el catálogo.`
+                });
+                return;
             }
 
-            // Enviar al endpoint seguro del servidor para inserción masiva y registro automático de auditoría
+            // Validación exitosa
+            setFileValidation({
+                status: 'valid',
+                idColumn: foundIdCol,
+                costColumn: singleCostCol,
+                totalMatchedRows: updatesToPerform.length,
+                totalFileRows: jsonData.length,
+                allDetectedColumns: rawHeaders,
+                parsedUpdates: updatesToPerform
+            });
+
+        } catch (err: any) {
+            setFileValidation({
+                status: 'invalid',
+                errorMessage: err.message || 'Error al procesar el archivo Excel.'
+            });
+        }
+    };
+
+    const handleImportSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!importFile || fileValidation.status !== 'valid' || !fileValidation.parsedUpdates) {
+            if (fileValidation.errorMessage) {
+                setImportError(fileValidation.errorMessage);
+            }
+            return;
+        }
+
+        setImporting(true);
+        setImportError('');
+        setImportSuccess('');
+
+        try {
             const collaboratorName = profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial';
             const collaboratorId = profile?.collaborator_id || user?.user_metadata?.collaborator_id || user?.id || null;
 
@@ -1165,7 +1246,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    updates: updatesToPerform,
+                    updates: fileValidation.parsedUpdates,
                     fileName: importFile.name,
                     collaboratorName,
                     collaboratorId
@@ -1183,12 +1264,13 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             setTimeout(() => {
                 setIsImportModalOpen(false);
                 setImportFile(null);
+                setFileValidation({ status: 'idle' });
                 setImportSuccess('');
             }, 2500);
 
         } catch (err: any) {
             console.error('Error importando Excel:', err);
-            setImportError(err.message || 'Error al procesar el archivo Excel.');
+            setImportError(err.message || 'No se pudo completar la carga en el servidor.');
         } finally {
             setImporting(false);
         }
@@ -2353,10 +2435,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                 accept=".xlsx, .xls" 
                                 onChange={(e) => {
                                     const f = e.target.files?.[0];
-                                    if (f) {
-                                        setImportFile(f);
-                                        setImportError('');
-                                    }
+                                    if (f) handleFileSelection(f);
                                 }}
                                 style={{ display: 'none' }}
                             />
@@ -2372,8 +2451,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         setIsDragging(false);
                                         const droppedFile = e.dataTransfer.files?.[0];
                                         if (droppedFile && (droppedFile.name.endsWith('.xlsx') || droppedFile.name.endsWith('.xls'))) {
-                                            setImportFile(droppedFile);
-                                            setImportError('');
+                                            handleFileSelection(droppedFile);
                                         } else if (droppedFile) {
                                             setImportError('Por favor selecciona un archivo con extensión .xlsx o .xls');
                                         }
@@ -2430,8 +2508,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             ) : (
                                 /* Ficha del archivo seleccionado */
                                 <div style={{
-                                    border: '1.5px solid #0D7A57',
-                                    backgroundColor: '#EDF5F1',
+                                    border: fileValidation.status === 'invalid' ? '1.5px solid #F87171' : '1.5px solid #0D7A57',
+                                    backgroundColor: fileValidation.status === 'invalid' ? '#FEF2F2' : '#EDF5F1',
                                     borderRadius: '16px',
                                     padding: '1rem 1.25rem',
                                     display: 'flex',
@@ -2446,11 +2524,11 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             height: '42px',
                                             borderRadius: '10px',
                                             backgroundColor: '#FFFFFF',
-                                            border: '1px solid #C8DDD3',
+                                            border: fileValidation.status === 'invalid' ? '1px solid #FCA5A5' : '1px solid #C8DDD3',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            color: '#0D7A57',
+                                            color: fileValidation.status === 'invalid' ? '#DC2626' : '#0D7A57',
                                             flexShrink: 0
                                         }}>
                                             <FileSpreadsheet size={22} strokeWidth={2.2} />
@@ -2471,9 +2549,19 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                     {(importFile.size / 1024).toFixed(1)} KB
                                                 </span>
                                                 <span style={{ color: '#CBD5E1' }}>•</span>
-                                                <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                    <Check size={12} strokeWidth={3} /> Listo para procesar
-                                                </span>
+                                                {fileValidation.status === 'validating' ? (
+                                                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <Loader2 size={11} className="animate-spin" /> Verificando columnas...
+                                                    </span>
+                                                ) : fileValidation.status === 'valid' ? (
+                                                    <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <Check size={12} strokeWidth={3} /> Archivo validado (1 precio)
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ fontSize: '0.72rem', color: '#DC2626', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <AlertCircle size={12} strokeWidth={2.5} /> Archivo no admitido
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -2482,7 +2570,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         type="button"
                                         disabled={importing}
                                         onClick={() => {
-                                            setImportFile(null);
+                                            handleFileSelection(null);
                                             if (fileInputRef.current) fileInputRef.current.value = '';
                                         }}
                                         style={{
@@ -2505,6 +2593,84 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                     >
                                         <Trash2 size={15} strokeWidth={2.2} />
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Tarjeta de Validación: Verificando */}
+                            {fileValidation.status === 'validating' && (
+                                <div style={{
+                                    padding: '0.85rem 1rem',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    color: '#475569',
+                                    fontSize: '0.82rem',
+                                    marginBottom: '1rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}>
+                                    <Loader2 size={16} className="animate-spin" color="#0D7A57" />
+                                    <span>Validando estructura de columnas y verificando que exista un solo precio...</span>
+                                </div>
+                            )}
+
+                            {/* Tarjeta de Validación: Rechazo por regla de negocio */}
+                            {fileValidation.status === 'invalid' && (
+                                <div style={{
+                                    padding: '0.9rem 1.1rem',
+                                    backgroundColor: '#FEF2F2',
+                                    border: '1.5px solid #F87171',
+                                    borderRadius: '12px',
+                                    color: '#991B1B',
+                                    fontSize: '0.82rem',
+                                    marginBottom: '1.1rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '6px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', fontSize: '0.88rem' }}>
+                                        <AlertCircle size={18} strokeWidth={2.4} style={{ flexShrink: 0 }} />
+                                        <span>Archivo no admitido para actualización</span>
+                                    </div>
+                                    <p style={{ margin: 0, lineHeight: '1.45', color: '#7F1D1D' }}>
+                                        {fileValidation.errorMessage}
+                                    </p>
+                                    <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#B91C1C', fontWeight: '600' }}>
+                                        ℹ️ Asegúrate de que tu archivo contenga la columna <strong>ID_CONTABLE</strong> y <strong>una sola columna de precio</strong> (ej: ULTIMO o NUEVO_COSTO).
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tarjeta de Validación: Exitosa */}
+                            {fileValidation.status === 'valid' && (
+                                <div style={{
+                                    padding: '0.85rem 1.1rem',
+                                    backgroundColor: '#ECFDF5',
+                                    border: '1.5px solid #34D399',
+                                    borderRadius: '12px',
+                                    color: '#065F46',
+                                    fontSize: '0.82rem',
+                                    marginBottom: '1.1rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '6px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', fontSize: '0.88rem' }}>
+                                        <CheckCircle2 size={18} strokeWidth={2.4} color="#059669" style={{ flexShrink: 0 }} />
+                                        <span>Estructura validada exitosamente</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '2px' }}>
+                                        <span style={{ backgroundColor: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #A7F3D0', fontWeight: '700', fontSize: '0.74rem' }}>
+                                            Columna ID: <strong>{fileValidation.idColumn}</strong>
+                                        </span>
+                                        <span style={{ backgroundColor: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #A7F3D0', fontWeight: '700', fontSize: '0.74rem' }}>
+                                            Columna de Costo: <strong>{fileValidation.costColumn}</strong>
+                                        </span>
+                                        <span style={{ backgroundColor: '#D1FAE5', color: '#047857', padding: '3px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.74rem' }}>
+                                            ✔ {fileValidation.totalMatchedRows} productos listos para actualizar
+                                        </span>
+                                    </div>
                                 </div>
                             )}
 
@@ -2552,7 +2718,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         setIsImportModalOpen(false);
                                         setImportError('');
                                         setImportSuccess('');
-                                        setImportFile(null);
+                                        handleFileSelection(null);
                                     }}
                                     style={{
                                         padding: '0.65rem 1.35rem',
@@ -2572,37 +2738,51 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={!importFile || importing}
+                                    disabled={!importFile || fileValidation.status !== 'valid' || importing}
                                     style={{
                                         padding: '0.65rem 1.6rem',
-                                        backgroundColor: (!importFile || importing) ? '#94A3B8' : '#0D7A57',
+                                        backgroundColor: (!importFile || fileValidation.status !== 'valid' || importing) ? '#94A3B8' : '#0D7A57',
                                         color: '#FFFFFF',
                                         borderRadius: '10px',
                                         border: 'none',
                                         fontWeight: '800',
                                         fontSize: '0.84rem',
-                                        cursor: (!importFile || importing) ? 'not-allowed' : 'pointer',
+                                        cursor: (!importFile || fileValidation.status !== 'valid' || importing) ? 'not-allowed' : 'pointer',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '7px',
-                                        boxShadow: (!importFile || importing) ? 'none' : '0 4px 10px rgba(13, 122, 87, 0.25)',
+                                        boxShadow: (!importFile || fileValidation.status !== 'valid' || importing) ? 'none' : '0 4px 10px rgba(13, 122, 87, 0.25)',
                                         transition: 'all 0.15s ease'
                                     }}
                                     onMouseEnter={(e) => {
-                                        if (importFile && !importing) {
+                                        if (importFile && fileValidation.status === 'valid' && !importing) {
                                             e.currentTarget.style.backgroundColor = '#0A5F43';
                                             e.currentTarget.style.transform = 'translateY(-1px)';
                                         }
                                     }}
                                     onMouseLeave={(e) => {
-                                        if (importFile && !importing) {
+                                        if (importFile && fileValidation.status === 'valid' && !importing) {
                                             e.currentTarget.style.backgroundColor = '#0D7A57';
                                             e.currentTarget.style.transform = 'translateY(0)';
                                         }
                                     }}
                                 >
-                                    {importing ? <RefreshCw size={15} className="animate-spin" /> : <Upload size={15} strokeWidth={2.4} />}
-                                    {importing ? 'Procesando matriz...' : 'Aplicar Costos'}
+                                    {importing ? (
+                                        <>
+                                            <RefreshCw size={15} className="animate-spin" />
+                                            <span>Procesando matriz...</span>
+                                        </>
+                                    ) : fileValidation.status === 'valid' ? (
+                                        <>
+                                            <Check size={15} strokeWidth={2.4} />
+                                            <span>Actualizar Matriz ({fileValidation.totalMatchedRows} productos)</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload size={15} strokeWidth={2.4} />
+                                            <span>Subir y Actualizar Matriz</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </form>
