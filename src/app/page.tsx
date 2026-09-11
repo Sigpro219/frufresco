@@ -271,7 +271,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           }
 
           .carousel-slide-2 {
-            background-image: url('/hero_fresh_2_clean.png');
+            background-image: url('/hero_fresh_2.jpg');
             animation: kb-2 18s infinite ease-in-out;
           }
 
@@ -412,23 +412,42 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
         <div className="hero-left">
           <div style={{ maxWidth: '640px', width: '100%' }}>
+            {/* KICKER / EYEBROW */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.75rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.22em',
+              color: '#A7F3D0',
+              fontWeight: 800,
+              marginBottom: '1rem',
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              border: '1px solid rgba(16, 185, 129, 0.25)'
+            }}>
+              <span>✦ {locale === 'en' ? 'DAILY HARVEST · ORIGIN SELECTION' : 'COSECHA DIARIA · SELECCIÓN DE ORIGEN'}</span>
+            </div>
+
             <h1 style={{ 
               fontFamily: 'var(--font-outfit), sans-serif', 
-              fontSize: '4rem', 
-              fontWeight: '900', 
-              marginBottom: '1.5rem', 
+              fontSize: 'clamp(2.4rem, 4.2vw, 3.6rem)', 
+              fontWeight: '800', 
+              marginBottom: '1.25rem', 
               color: '#ffffff',
-              lineHeight: 1.1,
+              lineHeight: 1.12,
               letterSpacing: '-0.02em'
             }}>
               {formatHeroTitle(heroTitle)}
             </h1>
             <p style={{ 
               fontFamily: '"Inter", sans-serif',
-              fontSize: '1.2rem', 
-              lineHeight: '1.6',
-              marginBottom: '3rem', 
-              color: 'rgba(255,255,255,0.85)',
+              fontSize: '1.08rem', 
+              lineHeight: '1.65', 
+              marginBottom: '1.75rem', 
+              color: 'rgba(255, 255, 255, 0.8)',
               fontWeight: 400
             }}>
               {heroDescription}
@@ -436,6 +455,23 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             <div style={{ display: 'flex', justifyContent: 'inherit' }} className="hero-actions-wrapper">
               <HeroActions t={t} isB2bEnabled={isB2bEnabled} />
             </div>
+
+            {/* Micro Trust Proof */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              marginTop: '1.25rem',
+              color: 'rgba(255, 255, 255, 0.65)',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              flexWrap: 'wrap'
+            }}>
+              <span>✦ {locale === 'en' ? 'Dawn Harvest' : 'Cosecha de Madrugada'}</span>
+              <span>✦ {locale === 'en' ? 'Early Delivery' : 'Despacho 5:00 AM - 8:00 AM'}</span>
+              <span>✦ {locale === 'en' ? 'Zero Waste' : 'Cero Mermas Ocultas'}</span>
+            </div>
+
             <ReorderHeroBanner />
           </div>
         </div>

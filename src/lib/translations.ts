@@ -3,8 +3,8 @@ export type Locale = 'es' | 'en';
 export const translations = {
   es: {
     // Landing
-    heroTitle: "Excelencia en Frescura \n para tu Negocio y Hogar",
-    heroDescription: "Somos el aliado estratégico de los mejores restaurantes y casinos de Bogotá. Llevamos la calidad de Corabastos a tu puerta, con cero desperdicio y puntualidad suiza.",
+    heroTitle: "La frescura de la alta cocina, *en tu negocio y en tu mesa.*",
+    heroDescription: "Frutas y verduras seleccionadas pieza por pieza en su punto óptimo de maduración. El estándar de los mejores restaurantes de Bogotá, disponible hoy en tu puerta.",
     btnInstitutional: "Institucional",
     btnHome: "Hogar / Mi cuenta",
     navHome: "Inicio",
@@ -232,8 +232,8 @@ export const translations = {
   },
   en: {
     // Landing
-    heroTitle: "Freshness Excellence \n for your Business and Home",
-    heroDescription: "We are the strategic ally of Bogotá's top restaurants and clubs. We bring the freshness of the local fields to your door with zero waste and Swiss punctuality.",
+    heroTitle: "High culinary freshness, *for your business and home.*",
+    heroDescription: "Produce hand-selected at peak ripeness. The standard demanded by Bogota's top culinary kitchens, delivered directly to your doorstep today.",
     btnInstitutional: "Business Portal",
     btnHome: "Consumer / My Account",
     navHome: "Home",
