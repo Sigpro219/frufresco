@@ -2081,20 +2081,6 @@ export default function MasterProductsPage() {
                                                 </span>
                                                 <Edit3 size={10} style={{ opacity: 0.5 }} strokeWidth={1.5} />
                                             </div>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                {p.sku && (
-                                                    <span style={{ 
-                                                        fontSize: '0.65rem', 
-                                                        fontWeight: '600', 
-                                                        color: THEME.colors.textSecondary,
-                                                        backgroundColor: '#F1F5F9',
-                                                        padding: '1px 4px',
-                                                        borderRadius: '4px'
-                                                    }}>
-                                                        SKU: {p.sku}
-                                                    </span>
-                                                )}
-                                            </div>
                                         </div>
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
