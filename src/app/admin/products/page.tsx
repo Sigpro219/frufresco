@@ -132,6 +132,19 @@ const activeChipStyle: React.CSSProperties = {
     gap: '4px'
 };
 
+const stickyThStyle = (isActive: boolean = false, align: 'left' | 'center' = 'center', width?: string): React.CSSProperties => ({
+    ...THEME.typography?.tableHeader,
+    padding: '0.75rem 1rem',
+    textAlign: align,
+    width,
+    position: 'sticky',
+    top: '85px',
+    zIndex: isActive ? 55 : 40,
+    backgroundColor: '#F8FAFC',
+    borderBottom: `1.5px solid ${THEME.colors.border}`,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)',
+});
+
 export default function AdminProductsPage() {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
@@ -1393,9 +1406,9 @@ export default function AdminProductsPage() {
                         minHeight: '380px'
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-                            <thead>
+                            <thead style={{ position: 'sticky', top: '85px', zIndex: 40, backgroundColor: '#F8FAFC' }}>
                                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '50px', textAlign: 'center' }}>
+                                    <th style={{ ...stickyThStyle(false, 'center', '50px'), borderTopLeftRadius: THEME.radius.lg }}>
                                         <input
                                             type="checkbox"
                                             checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
@@ -1408,7 +1421,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA PRODUCTO */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'product', 'left'), position: 'sticky' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                                             <span>Producto</span>
                                             <button
@@ -1531,7 +1544,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA CATEGORÍA */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'category', 'center'), position: 'sticky' }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Categoría</span>
                                             <button
@@ -1645,7 +1658,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA RECETAS & TAGS */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'recipetag', 'center'), position: 'sticky' }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Recetas & Tags</span>
                                             <button
@@ -1755,7 +1768,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA PRECIO */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'price', 'center'), position: 'sticky' }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Precio</span>
                                             <button
@@ -1885,7 +1898,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA OFERTA / VAR. */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'variants', 'center'), position: 'sticky' }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Oferta / Var.</span>
                                             <button
@@ -1973,7 +1986,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA PRESENCIA */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'visibility', 'center'), position: 'sticky' }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Presencia</span>
                                             <button
@@ -2061,7 +2074,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA DEV REVISIÓN */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'devreview', 'center'), position: 'sticky' }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Dev Revisión</span>
                                             <button
@@ -2149,7 +2162,7 @@ export default function AdminProductsPage() {
                                     </th>
 
                                     {/* COLUMNA ACCIÓN */}
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Acción</th>
+                                    <th style={{ ...stickyThStyle(false, 'center'), borderTopRightRadius: THEME.radius.lg }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
