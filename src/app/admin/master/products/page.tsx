@@ -63,6 +63,19 @@ interface ProductConversion {
     conversion_factor: number;
 }
 
+const stickyThStyle = (isActive: boolean = false, align: 'left' | 'center' = 'left', width?: string): React.CSSProperties => ({
+    ...THEME.typography?.tableHeader,
+    padding: '0.75rem 1rem',
+    textAlign: align,
+    width,
+    position: 'sticky',
+    top: '147px',
+    zIndex: isActive ? 65 : 50,
+    backgroundColor: '#F8FAFC',
+    borderBottom: `1.5px solid ${THEME.colors.border}`,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)',
+});
+
 export default function MasterProductsPage() {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
@@ -1487,7 +1500,6 @@ export default function MasterProductsPage() {
                         { label: 'Cobertura Imagen', value: `${formatNumber(kpiMetrics.imageCoverage)}%`, icon: <Globe size={16} strokeWidth={1.5} />, color: '#F59E0B', bg: '#FFFBEB' }, // Replaced with Globe or Eye for styling, let's keep Globe for similarity
                         { label: 'Alertas Inventario', value: formatNumber(kpiMetrics.alerts), icon: <AlertTriangle size={16} strokeWidth={1.5} />, color: '#EF4444', bg: '#FEF2F2' },
                         { label: 'Jerarquía (P/H)', value: `${formatNumber(kpiMetrics.parentCount)} P / ${formatNumber(kpiMetrics.childCount)} H`, icon: <GitFork size={16} strokeWidth={1.5} />, color: '#6D28D9', bg: '#F5F3FF' },
-                        { label: 'Revisión Dev', value: `${formatNumber(kpiMetrics.devVerifiedCount)} / ${formatNumber(kpiMetrics.total)}`, icon: <CheckCircle size={16} strokeWidth={1.5} />, color: '#10B981', bg: '#ECFDF5' },
                     ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: THEME.colors.surface,
@@ -1557,7 +1569,20 @@ export default function MasterProductsPage() {
                 )}
 
                 {/* Buscador Con Esteroides (X y Info) */}
-                <div style={{ marginBottom: '1.5rem', position: 'relative', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ 
+                    position: 'sticky',
+                    top: '85px',
+                    zIndex: 70,
+                    backgroundColor: THEME.colors.background,
+                    paddingTop: '0.75rem',
+                    paddingBottom: '0.75rem',
+                    marginBottom: '0.5rem',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.75rem',
+                    boxSizing: 'border-box',
+                    height: '62px'
+                }}>
                     <div style={{ flex: 1, position: 'relative' }}>
                         <div style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
                             <Search size={16} strokeWidth={1.5} />
@@ -1578,7 +1603,9 @@ export default function MasterProductsPage() {
                                 transition: 'all 0.2s ease',
                                 backgroundColor: THEME.colors.surface,
                                 boxShadow: THEME.shadow.sm,
-                                color: THEME.colors.textMain
+                                color: THEME.colors.textMain,
+                                height: '38px',
+                                boxSizing: 'border-box'
                             }}
                             onFocus={(e) => {
                                 e.target.style.borderColor = THEME.colors.primary;
@@ -1751,15 +1778,14 @@ export default function MasterProductsPage() {
                     backgroundColor: THEME.colors.surface, 
                     borderRadius: THEME.radius.lg, 
                     boxShadow: THEME.shadow.sm, 
-                    overflowX: 'auto', 
                     border: `1px solid ${THEME.colors.border}`,
                     width: '100%'
                 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                        <thead style={{ position: 'sticky', top: '147px', zIndex: 50, backgroundColor: '#F8FAFC' }}>
+                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>
                                 {/* FOTO */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '80px', position: 'relative' }}>
+                                <th style={{ ...stickyThStyle(openHeaderDropdown === 'photo', 'left', '80px'), borderTopLeftRadius: THEME.radius.lg }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span>FOTO</span>
                                         <button 
@@ -1785,12 +1811,12 @@ export default function MasterProductsPage() {
                                         </div>
                                     )}
                                 </th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>ID Contable</th>
+                                <th style={stickyThStyle(false, 'left', '140px')}>ID Contable</th>
 
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
+                                <th style={stickyThStyle(false, 'left')}>Nombre Técnico</th>
 
                                 {/* CATEGORÍA */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', position: 'relative' }}>
+                                <th style={stickyThStyle(openHeaderDropdown === 'category', 'left')}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span>CATEGORÍA</span>
                                         <button 
@@ -1825,10 +1851,10 @@ export default function MasterProductsPage() {
                                     )}
                                 </th>
 
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>
+                                <th style={stickyThStyle(false, 'left')}>Logística</th>
                                 
                                 {/* UNIDAD */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                <th style={stickyThStyle(openHeaderDropdown === 'unit', 'center')}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                         <span>UNIDAD</span>
                                         <button 
@@ -1855,7 +1881,7 @@ export default function MasterProductsPage() {
                                 </th>
 
                                 {/* IVA */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                <th style={stickyThStyle(openHeaderDropdown === 'iva', 'center')}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                         <span>IVA</span>
                                         <button 
@@ -1885,12 +1911,12 @@ export default function MasterProductsPage() {
                                     )}
                                 </th>
 
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Mínimo</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Configuración</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Descripción</th>
+                                <th style={stickyThStyle(false, 'center')}>Mínimo</th>
+                                <th style={stickyThStyle(false, 'center')}>Configuración</th>
+                                <th style={stickyThStyle(false, 'left')}>Descripción</th>
 
                                 {/* WEB */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '80px', textAlign: 'center', position: 'relative' }}>
+                                <th style={stickyThStyle(openHeaderDropdown === 'web', 'center', '80px')}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                         <span>WEB</span>
                                         <button 
@@ -1918,7 +1944,7 @@ export default function MasterProductsPage() {
                                 </th>
 
                                 {/* ESTADO */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '120px', position: 'relative' }}>
+                                <th style={stickyThStyle(openHeaderDropdown === 'status', 'left', '120px')}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span>ESTADO</span>
                                         <button 
@@ -1946,7 +1972,7 @@ export default function MasterProductsPage() {
                                 </th>
 
                                 {/* DEV REVISIÓN */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '130px', position: 'relative' }}>
+                                <th style={{ ...stickyThStyle(openHeaderDropdown === 'dev', 'left', '130px'), borderTopRightRadius: THEME.radius.lg }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span>DEV (REVISADO)</span>
                                         <button 
@@ -1977,7 +2003,7 @@ export default function MasterProductsPage() {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={12} style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.9rem' }}>
+                                    <td colSpan={13} style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.9rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                             <RefreshCw size={16} className="animate-spin" strokeWidth={1.5} /> Cargando maestros...
                                         </div>
