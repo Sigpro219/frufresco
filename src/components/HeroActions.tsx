@@ -24,67 +24,61 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
     <div style={{ 
       display: 'flex', 
       flexDirection: 'column',
-      gap: '1rem', 
+      gap: '1.25rem', 
       justifyContent: 'flex-start', 
-      alignItems: 'stretch',
-      marginTop: '1.2rem',
-      maxWidth: '480px',
-      width: '100%'
+      alignItems: 'flex-start',
+      marginTop: '1rem'
     }}>
       {/* Main CTA: Catalog */}
       <button 
         onClick={scrollToCatalog}
         className="btn-premium" 
         style={{
-          fontSize: '1.25rem',
-          padding: '1.1rem 2.2rem',
+          fontSize: '1.4rem',
+          padding: '1.2rem 4.5rem',
           fontWeight: '900',
           borderRadius: 'var(--radius-full)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.85rem',
-          backgroundColor: '#0D7A57',
+          gap: '1rem',
+          backgroundColor: 'var(--primary)',
           border: 'none',
           cursor: 'pointer',
           color: 'white',
           position: 'relative',
-          overflow: 'hidden',
-          boxShadow: '0 10px 28px rgba(13, 122, 87, 0.4)'
+          overflow: 'hidden'
         }}
       >
-        <LayoutGrid size={24} strokeWidth={2.5} /> 
-        <span>{t.navCatalog || 'Nuestro Catálogo'}</span>
-        <ArrowRight size={18} style={{ opacity: 0.8 }} />
+        <LayoutGrid size={28} strokeWidth={2.5} /> 
+        {t.navCatalog || 'Nuestro Catálogo'}
+        <ArrowRight size={20} style={{ opacity: 0.7 }} />
       </button>
 
-      {/* HORECA Institutional CTA */}
+      {/* Chatbot HORECA CTA */}
       <div style={{ 
         display: 'flex', 
-        gap: '0.75rem', 
+        gap: '1rem', 
         alignItems: 'center',
-        width: '100%'
+        flexWrap: 'wrap'
       }}>
-        <Link href="/b2b/register" style={{ textDecoration: 'none', width: '100%' }}>
+        <Link href="/b2b/register" style={{ textDecoration: 'none' }}>
           <button className="btn-glass" style={{
-            fontSize: '1.02rem',
-            padding: '0.9rem 1.6rem',
-            fontWeight: '800',
+            fontSize: '1.1rem',
+            padding: '0.9rem 2rem',
+            fontWeight: '700',
             borderRadius: 'var(--radius-full)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.65rem',
+            gap: '0.6rem',
             color: '#A7F3D0',
             border: '1px solid rgba(167, 243, 208, 0.4)',
             cursor: 'pointer',
-            backgroundColor: 'rgba(6, 78, 59, 0.45)',
+            backgroundColor: 'rgba(6, 78, 59, 0.4)',
             backdropFilter: 'blur(15px)',
             transition: 'all 0.3s ease',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-            width: '100%'
+            boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
           }}>
-            <Building2 size={20} strokeWidth={2.2} />
+            <Building2 size={22} strokeWidth={2.2} />
             <span>Cotizador Institucional HORECA</span>
             <Sparkles size={16} />
           </button>
