@@ -781,7 +781,27 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                                             <select
                                                 value={formData.web_unit}
-                                                onChange={(e) => setFormData({ ...formData, web_unit: e.target.value })}
+                                                onChange={(e) => {
+                                                    const newUnit = e.target.value;
+                                                    const lower = newUnit.trim().toLowerCase();
+                                                    let newFactor = formData.web_conversion_factor;
+                                                    let newInput = conversionFactorInput;
+
+                                                    if (lower === 'libra' || lower.includes('libra') || lower === 'lb') {
+                                                        newFactor = 0.5;
+                                                        newInput = '0,5';
+                                                    } else if (lower === 'kg' || lower === 'kilo' || lower.includes('kilo')) {
+                                                        newFactor = 1.0;
+                                                        newInput = '1,0';
+                                                    }
+
+                                                    setFormData({
+                                                        ...formData,
+                                                        web_unit: newUnit,
+                                                        web_conversion_factor: newFactor
+                                                    });
+                                                    setConversionFactorInput(newInput);
+                                                }}
                                                 style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #FFD8A8', fontSize: '0.8rem', fontWeight: '700' }}
                                             >
                                                 <option value="">Unidad Web...</option>
@@ -799,6 +819,28 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                                         if (!isNaN(parseFloat(normalized))) {
                                                             setFormData({ ...formData, web_conversion_factor: parseFloat(normalized) });
                                                         }
+                                                    }
+                                                }}
+                                                onBlur={() => {
+                                                    const lower = (formData.web_unit || '').trim().toLowerCase();
+                                                    if (lower === 'libra' || lower.includes('libra') || lower === 'lb') {
+                                                        setConversionFactorInput('0,5');
+                                                        setFormData(prev => ({ ...prev, web_conversion_factor: 0.5 }));
+                                                        return;
+                                                    }
+                                                    if (lower === 'kg' || lower === 'kilo' || lower.includes('kilo')) {
+                                                        setConversionFactorInput('1,0');
+                                                        setFormData(prev => ({ ...prev, web_conversion_factor: 1.0 }));
+                                                        return;
+                                                    }
+                                                    const normalized = conversionFactorInput.replace(',', '.');
+                                                    const parsed = parseFloat(normalized);
+                                                    if (isNaN(parsed) || parsed <= 0) {
+                                                        setConversionFactorInput('1,0');
+                                                        setFormData(prev => ({ ...prev, web_conversion_factor: 1.0 }));
+                                                    } else {
+                                                        setConversionFactorInput(parsed.toString().replace('.', ','));
+                                                        setFormData(prev => ({ ...prev, web_conversion_factor: parsed }));
                                                     }
                                                 }}
                                                 style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #FFD8A8', fontSize: '0.8rem', fontWeight: '700', textAlign: 'center' }}

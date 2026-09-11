@@ -87,10 +87,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         return 1.0;
     };
 
+    const initialWebUnit = (product.web_unit || '').trim().toLowerCase();
+    const initialWebFactor = () => {
+        if (initialWebUnit === 'libra' || initialWebUnit.includes('libra') || initialWebUnit === 'lb') return 0.5;
+        if (initialWebUnit === 'kg' || initialWebUnit === 'kilo' || initialWebUnit.includes('kilo')) return 1.0;
+        return product.web_conversion_factor ?? 1.0;
+    };
+
     const [formData, setFormData] = useState<Product>({ 
         ...product,
         unit_of_measure: product.unit_of_measure?.toLowerCase() === 'unidad' ? 'Unidad' : 'Kg',
         weight_kg: initialWeight(),
+        web_conversion_factor: initialWebFactor(),
         iva_rate: product.iva_rate ?? 19,
         utility_deviation_pct: product.utility_deviation_pct ?? 0,
         inherit_price: (product as any).inherit_price ?? false
@@ -236,7 +244,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         });
     });
     const [variantUploading, setVariantUploading] = useState<string | null>(null);
-    const [conversionFactorInput, setConversionFactorInput] = useState(product.web_conversion_factor?.toString().replace('.', ',') || '1,0');
+    const [conversionFactorInput, setConversionFactorInput] = useState(initialWebFactor().toString().replace('.', ','));
     const [generatingAI, setGeneratingAI] = useState(false);
     const [tagInput, setTagInput] = useState('');
     const [keywordInput, setKeywordInput] = useState('');
@@ -1982,7 +1990,27 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Unidad Comercial (Web)</label>
                                 <select
                                     value={formData.web_unit || ''}
-                                    onChange={(e) => setFormData({ ...formData, web_unit: e.target.value })}
+                                    onChange={(e) => {
+                                        const newUnit = e.target.value;
+                                        const lower = newUnit.trim().toLowerCase();
+                                        let newFactor = formData.web_conversion_factor;
+                                        let newInput = conversionFactorInput;
+
+                                        if (lower === 'libra' || lower.includes('libra') || lower === 'lb') {
+                                            newFactor = 0.5;
+                                            newInput = '0,5';
+                                        } else if (lower === 'kg' || lower === 'kilo' || lower.includes('kilo')) {
+                                            newFactor = 1.0;
+                                            newInput = '1,0';
+                                        }
+
+                                        setFormData({
+                                            ...formData,
+                                            web_unit: newUnit,
+                                            web_conversion_factor: newFactor
+                                        });
+                                        setConversionFactorInput(newInput);
+                                    }}
                                     style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', backgroundColor: 'white', cursor: 'pointer' }}
                                 >
                                     <option value="">Seleccionar unidad...</option>
@@ -2009,14 +2037,25 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             }
                                         }}
                                         onBlur={() => {
-                                            // Limpiar el input al salir si es inválido
+                                            const lower = (formData.web_unit || '').trim().toLowerCase();
+                                            if (lower === 'libra' || lower.includes('libra') || lower === 'lb') {
+                                                setConversionFactorInput('0,5');
+                                                setFormData(prev => ({ ...prev, web_conversion_factor: 0.5 }));
+                                                return;
+                                            }
+                                            if (lower === 'kg' || lower === 'kilo' || lower.includes('kilo')) {
+                                                setConversionFactorInput('1,0');
+                                                setFormData(prev => ({ ...prev, web_conversion_factor: 1.0 }));
+                                                return;
+                                            }
                                             const normalized = conversionFactorInput.replace(',', '.');
                                             const parsed = parseFloat(normalized);
-                                            if (isNaN(parsed)) {
+                                            if (isNaN(parsed) || parsed <= 0) {
                                                 setConversionFactorInput('1,0');
-                                                setFormData({ ...formData, web_conversion_factor: 1.0 });
+                                                setFormData(prev => ({ ...prev, web_conversion_factor: 1.0 }));
                                             } else {
                                                 setConversionFactorInput(parsed.toString().replace('.', ','));
+                                                setFormData(prev => ({ ...prev, web_conversion_factor: parsed }));
                                             }
                                         }}
                                         style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', textAlign: 'center' }}
@@ -2428,13 +2467,21 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                         )}
                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
                                                             {sortSuggestedValues(masterAttr?.values || []).map(val => {
-                                                        const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
-                                                        const webUnitName = formData.web_unit || 'Libra';
-                                                        const webFactorKg = formData.web_conversion_factor ?? (formData.unit_of_measure?.toLowerCase() === 'kg' ? 0.5 : 1);
-                                                        const webWeightText = webFactorKg >= 1 ? `${webFactorKg} kg` : `${Math.round(webFactorKg * 1000)} gr`;
-                                                        const displayLabel = isWebUnit 
-                                                            ? `Unidad Web (${webUnitName} - ${webWeightText})`
-                                                            : (val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` : val);
+                                                         const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
+                                                         const webUnitName = formData.web_unit || 'Libra';
+                                                         const lowerWebUnit = webUnitName.trim().toLowerCase();
+                                                         let webFactorKg = formData.web_conversion_factor;
+                                                         if (lowerWebUnit === 'libra' || lowerWebUnit.includes('libra') || lowerWebUnit === 'lb') {
+                                                             webFactorKg = 0.5;
+                                                         } else if (lowerWebUnit === 'kg' || lowerWebUnit === 'kilo' || lowerWebUnit.includes('kilo')) {
+                                                             webFactorKg = 1.0;
+                                                         } else if (webFactorKg === undefined || webFactorKg === null) {
+                                                             webFactorKg = (formData.unit_of_measure?.toLowerCase() === 'kg' ? 0.5 : 1);
+                                                         }
+                                                         const webWeightText = webFactorKg >= 1 ? `${webFactorKg} kg` : `${Math.round(webFactorKg * 1000)} gr`;
+                                                         const displayLabel = isWebUnit 
+                                                             ? `Unidad Web (${webUnitName} - ${webWeightText})`
+                                                             : (val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` : val);
 
                                                         return (
                                                             <label 
