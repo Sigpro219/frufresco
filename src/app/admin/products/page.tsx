@@ -32,7 +32,13 @@ import {
     Sparkles,
     ChefHat,
     Plus,
-    Tag
+    Tag,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Check,
+    RotateCcw,
+    SlidersHorizontal
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
@@ -47,6 +53,84 @@ const TYPICAL_RECIPES = [
 ];
 
 const COMMERCIAL_TAGS = ['Promoción', 'Cosecha', 'Oferta', 'Descuento', 'Top Ventas'];
+
+const dropdownBaseStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    width: '230px',
+    backgroundColor: '#FFFFFF',
+    borderRadius: THEME.radius.md,
+    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+    border: `1px solid ${THEME.colors.border}`,
+    padding: '0.5rem',
+    zIndex: 100,
+    textAlign: 'left',
+    fontWeight: 'normal',
+    color: THEME.colors.textMain
+};
+
+const dropdownSectionHeaderStyle: React.CSSProperties = {
+    fontSize: '0.68rem',
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    padding: '4px 8px',
+    marginBottom: '2px'
+};
+
+const dropdownDividerStyle: React.CSSProperties = {
+    height: '1px',
+    backgroundColor: THEME.colors.border,
+    margin: '4px 0'
+};
+
+const dropdownItemStyle = (isSelected: boolean): React.CSSProperties => ({
+    width: '100%',
+    padding: '6px 8px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: isSelected ? THEME.colors.primaryLight : 'transparent',
+    color: isSelected ? THEME.colors.primary : THEME.colors.textMain,
+    fontSize: '0.78rem',
+    fontWeight: isSelected ? '600' : '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    textAlign: 'left',
+    transition: 'background-color 0.1s'
+});
+
+const dropdownResetStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '5px 8px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#F8FAFC',
+    color: THEME.colors.textSecondary,
+    fontSize: '0.72rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '4px',
+    textAlign: 'center'
+};
+
+const activeChipStyle: React.CSSProperties = {
+    backgroundColor: '#DCFCE7',
+    color: '#15803D',
+    border: '1px solid #86EFAC',
+    borderRadius: '4px',
+    padding: '2px 7px',
+    fontWeight: '600',
+    fontSize: '0.75rem',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px'
+};
 
 export default function AdminProductsPage() {
     const { profile } = useAuth();
@@ -154,6 +238,71 @@ export default function AdminProductsPage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'hidden'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+    // Filtros y ordenamiento por encabezados de columna
+    const [openHeaderMenu, setOpenHeaderMenu] = useState<string | null>(null);
+    const [photoFilter, setPhotoFilter] = useState<'all' | 'with_photo' | 'without_photo'>('all');
+    const [recipeTagFilter, setRecipeTagFilter] = useState<'all' | 'with_recipes' | 'without_recipes' | 'with_tags' | 'without_tags'>('all');
+    const [priceFilter, setPriceFilter] = useState<'all' | 'with_price' | 'zero_price'>('all');
+    const [variantFilter, setVariantFilter] = useState<'all' | 'with_variants' | 'without_variants'>('all');
+    const [visibilityColFilter, setVisibilityColFilter] = useState<'all' | 'visible' | 'hidden'>('all');
+    const [devReviewFilter, setDevReviewFilter] = useState<'all' | 'verified' | 'pending'>('all');
+    const [sortConfig, setSortConfig] = useState<{
+        column: 'name' | 'category' | 'price' | null;
+        direction: 'asc' | 'desc';
+        special?: 'zero_first';
+    }>({ column: null, direction: 'asc' });
+
+    // Cerrar menú de columna al hacer click fuera
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('[data-header-dropdown]')) {
+                setOpenHeaderMenu(null);
+            }
+        };
+        if (openHeaderMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [openHeaderMenu]);
+
+    // Restablecer a página 1 cuando cambia cualquier filtro o búsqueda
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [
+        searchQuery,
+        statusFilter,
+        categoryFilter,
+        photoFilter,
+        recipeTagFilter,
+        priceFilter,
+        variantFilter,
+        visibilityColFilter,
+        devReviewFilter,
+        sortConfig
+    ]);
+
+    const resetAllColumnFilters = () => {
+        setPhotoFilter('all');
+        setRecipeTagFilter('all');
+        setPriceFilter('all');
+        setVariantFilter('all');
+        setVisibilityColFilter('all');
+        setDevReviewFilter('all');
+        setCategoryFilter('all');
+        setSortConfig({ column: null, direction: 'asc' });
+    };
+
+    const isAnyColumnFiltered = 
+        photoFilter !== 'all' || 
+        recipeTagFilter !== 'all' || 
+        priceFilter !== 'all' || 
+        variantFilter !== 'all' || 
+        visibilityColFilter !== 'all' || 
+        devReviewFilter !== 'all' ||
+        categoryFilter !== 'all' ||
+        sortConfig.column !== null;
 
     useEffect(() => {
         fetchProducts();
@@ -485,46 +634,170 @@ export default function AdminProductsPage() {
             filtered = filtered.filter(p => p.category === categoryFilter);
         }
 
-        if (!query) return filtered;
+        // --- FILTROS DE ENCABEZADO DE COLUMNA ---
+        // 1. Filtro Foto (Columna Producto)
+        if (photoFilter === 'without_photo') {
+            filtered = filtered.filter(p => !p.image_url || p.image_url.trim() === '');
+        } else if (photoFilter === 'with_photo') {
+            filtered = filtered.filter(p => Boolean(p.image_url && p.image_url.trim() !== ''));
+        }
 
-        // Separar factores por comas
-        const factors = query.split(',').map(f => f.trim()).filter(Boolean);
+        // 2. Filtro Recetas & Tags
+        if (recipeTagFilter === 'with_recipes') {
+            filtered = filtered.filter(p => Boolean(p.keywords && p.keywords.trim() !== ''));
+        } else if (recipeTagFilter === 'without_recipes') {
+            filtered = filtered.filter(p => !p.keywords || p.keywords.trim() === '');
+        } else if (recipeTagFilter === 'with_tags') {
+            filtered = filtered.filter(p => Array.isArray(p.tags) && p.tags.filter(t => t !== 'verified_dev').length > 0);
+        } else if (recipeTagFilter === 'without_tags') {
+            filtered = filtered.filter(p => !p.tags || p.tags.filter(t => t !== 'verified_dev').length === 0);
+        }
 
-        return filtered.filter(p => {
-            return factors.every(factor => {
-                if (factor.startsWith('@')) {
-                    const tag = factor.slice(1);
-                    
-                    // Filtro IVA (@19, @19%, @0...)
-                    if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
-                        const rate = parseInt(tag.replace('%', ''));
-                        return (p.iva_rate ?? 19) === rate;
+        // 3. Filtro Precio
+        if (priceFilter === 'with_price') {
+            filtered = filtered.filter(p => (p.base_price || 0) > 0);
+        } else if (priceFilter === 'zero_price') {
+            filtered = filtered.filter(p => !p.base_price || p.base_price === 0);
+        }
+
+        // 4. Filtro Variantes
+        if (variantFilter === 'with_variants') {
+            filtered = filtered.filter(p => {
+                const hasVariantsArray = Array.isArray(p.variants) && p.variants.length > 0;
+                const hasOptionsConfig = p.options_config && typeof p.options_config === 'object' && Object.keys(p.options_config).length > 0;
+                return hasVariantsArray || hasOptionsConfig;
+            });
+        } else if (variantFilter === 'without_variants') {
+            filtered = filtered.filter(p => {
+                const hasVariantsArray = Array.isArray(p.variants) && p.variants.length > 0;
+                const hasOptionsConfig = p.options_config && typeof p.options_config === 'object' && Object.keys(p.options_config).length > 0;
+                return !hasVariantsArray && !hasOptionsConfig;
+            });
+        }
+
+        // 5. Filtro Presencia
+        if (visibilityColFilter === 'visible') {
+            filtered = filtered.filter(p => p.is_active);
+        } else if (visibilityColFilter === 'hidden') {
+            filtered = filtered.filter(p => !p.is_active);
+        }
+
+        // 6. Filtro Dev Revisión
+        if (devReviewFilter === 'verified') {
+            filtered = filtered.filter(p => p.is_verified_dev || (p.tags && p.tags.includes('verified_dev')));
+        } else if (devReviewFilter === 'pending') {
+            filtered = filtered.filter(p => !p.is_verified_dev && (!p.tags || !p.tags.includes('verified_dev')));
+        }
+
+        // --- FILTRO POR BÚSQUEDA AVANZADA (POWER SEARCH) ---
+        if (query) {
+            // Separar factores por comas
+            const factors = query.split(',').map(f => f.trim()).filter(Boolean);
+
+            filtered = filtered.filter(p => {
+                return factors.every(factor => {
+                    if (factor.startsWith('@')) {
+                        const tag = factor.slice(1).toLowerCase();
+                        
+                        // Filtro Imagen/Foto (@sinfoto, @nofoto, @sin-foto, @sf, @confoto, @foto)
+                        if (['sinfoto', 'nofoto', 'sin-foto', 'sin_foto', 'sf', 'sinimagen', 'no-image'].includes(tag)) {
+                            return !p.image_url || p.image_url.trim() === '';
+                        }
+                        if (['confoto', 'con-foto', 'foto', 'conimagen', 'image'].includes(tag)) {
+                            return Boolean(p.image_url && p.image_url.trim() !== '');
+                        }
+
+                        // Filtro IVA (@19, @19%, @0...)
+                        if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
+                            const rate = parseInt(tag.replace('%', ''));
+                            return (p.iva_rate ?? 19) === rate;
+                        }
+
+                        // Filtro Web/Active (@web, @virtual, @oculto)
+                        if (tag === 'web' || tag === 'virtual' || tag === 'on') return p.show_on_web;
+                        if (tag === 'oculto' || tag === 'hidden' || tag === 'off') return !p.show_on_web;
+
+                        // Filtro Dev Revisión (@revisado, @dev, @pendiente)
+                        if (tag === 'revisado' || tag === 'rev' || tag === 'dev') {
+                            return p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
+                        }
+                        if (tag === 'pendiente' || tag === 'norev' || tag === 'nodev') {
+                            return !p.is_verified_dev && (!p.tags || !p.tags.includes('verified_dev'));
+                        }
+
+                        // Filtro Categoría (@frutas, @despensa...)
+                        const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                            label.toLowerCase().startsWith(tag)
+                        );
+                        if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                        // Filtro Logística/Compras (@alistamiento, @equipo...)
+                        if (p.buying_team?.toLowerCase().includes(tag)) return true;
+                        if (p.procurement_method?.toLowerCase().includes(tag)) return true;
+
+                        return false;
                     }
 
-                    // Filtro Web/Active (@web, @virtual, @oculto)
-                    if (tag === 'web' || tag === 'virtual' || tag === 'on') return p.show_on_web;
-                    if (tag === 'oculto' || tag === 'hidden' || tag === 'off') return !p.show_on_web;
+                    // Palabras clave directas para fotos sin @
+                    if (['sin foto', 'sin fotos', 'sin imagen', 'sin imagenes', 'no foto', 'sinfoto', 'nofoto'].includes(factor)) {
+                        return !p.image_url || p.image_url.trim() === '';
+                    }
+                    if (['con foto', 'con fotos', 'con imagen', 'con imagenes', 'confoto'].includes(factor)) {
+                        return Boolean(p.image_url && p.image_url.trim() !== '');
+                    }
 
-                    // Filtro Categoría (@frutas, @despensa...)
-                    const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
-                        label.toLowerCase().startsWith(tag)
+                    return (
+                        p.name?.toLowerCase().includes(factor) ||
+                        p.sku?.toLowerCase().includes(factor) ||
+                        (p.accounting_id && String(p.accounting_id).toLowerCase().includes(factor))
                     );
-                    if (categoryEntry && p.category === categoryEntry[0]) return true;
-
-                    // Filtro Logística/Compras (@alistamiento, @equipo...)
-                    if (p.buying_team?.toLowerCase().includes(tag)) return true;
-                    if (p.procurement_method?.toLowerCase().includes(tag)) return true;
-
-                    return false;
-                }
-
-                return (
-                    p.name?.toLowerCase().includes(factor) ||
-                    p.sku?.toLowerCase().includes(factor)
-                );
+                });
             });
-        });
-    }, [products, searchQuery, statusFilter, categoryFilter]);
+        }
+
+        // --- ORDENAMIENTO (SORTING) ---
+        if (sortConfig.column) {
+            filtered = [...filtered].sort((a, b) => {
+                if (sortConfig.column === 'name') {
+                    const comp = (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+                    return sortConfig.direction === 'asc' ? comp : -comp;
+                }
+                if (sortConfig.column === 'category') {
+                    const labelA = CATEGORY_MAP[a.category] || a.category || '';
+                    const labelB = CATEGORY_MAP[b.category] || b.category || '';
+                    const comp = labelA.localeCompare(labelB, 'es', { sensitivity: 'base' });
+                    return sortConfig.direction === 'asc' ? comp : -comp;
+                }
+                if (sortConfig.column === 'price') {
+                    if (sortConfig.special === 'zero_first') {
+                        const priceA = a.base_price || 0;
+                        const priceB = b.base_price || 0;
+                        if (priceA === 0 && priceB > 0) return -1;
+                        if (priceB === 0 && priceA > 0) return 1;
+                        return priceA - priceB;
+                    }
+                    const priceA = a.base_price || 0;
+                    const priceB = b.base_price || 0;
+                    return sortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
+                }
+                return 0;
+            });
+        }
+
+        return filtered;
+    }, [
+        products, 
+        searchQuery, 
+        statusFilter, 
+        categoryFilter, 
+        photoFilter, 
+        recipeTagFilter, 
+        priceFilter, 
+        variantFilter, 
+        visibilityColFilter, 
+        devReviewFilter, 
+        sortConfig
+    ]);
 
     const paginatedProducts = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -917,7 +1190,7 @@ export default function AdminProductsPage() {
                             </div>
                             <input
                                 type="text"
-                                placeholder="Buscar por nombre, ID contable o etiqueta estratégica..."
+                                placeholder="Buscar por nombre, SKU, ID o comandos (@sinfoto, @web, @fruta)..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 style={{
@@ -987,7 +1260,7 @@ export default function AdminProductsPage() {
                                     position: 'absolute',
                                     right: 0,
                                     top: '125%',
-                                    width: '300px',
+                                    width: '320px',
                                     backgroundColor: THEME.colors.surface,
                                     borderRadius: THEME.radius.lg,
                                     boxShadow: THEME.shadow.lg,
@@ -1000,6 +1273,8 @@ export default function AdminProductsPage() {
                                     </h4>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                                         {[
+                                            { tag: '@sinfoto', desc: 'Productos sin imagen cargada' },
+                                            { tag: '@confoto', desc: 'Productos con imagen lista' },
                                             { tag: '@web', desc: 'Productos activos en tienda' },
                                             { tag: '@oculto', desc: 'Items en mantenimiento' },
                                             { tag: '@19%', desc: 'Filtrar por tasa de IVA' },
@@ -1013,45 +1288,910 @@ export default function AdminProductsPage() {
                                         ))}
                                     </div>
                                     <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: `1px solid ${THEME.colors.border}`, fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', textAlign: 'center' }}>
-                                        Combinar: &quot;Papa, @web, @fresco&quot;
+                                        Combinar: &quot;Papa, @sinfoto, @web&quot;
                                     </div>
                                 </div>
                             )}
                         </div>
                     </div>
 
+                    {/* Barra de Filtros de Columna Activos */}
+                    {isAnyColumnFiltered && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            flexWrap: 'wrap',
+                            padding: '0.6rem 1rem',
+                            backgroundColor: '#F0FDF4',
+                            border: '1px solid #BBF7D0',
+                            borderRadius: THEME.radius.lg,
+                            fontSize: '0.8rem',
+                            color: '#166534'
+                        }}>
+                            <span style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <SlidersHorizontal size={14} /> Filtros activos:
+                            </span>
+                            {photoFilter === 'without_photo' && (
+                                <span style={activeChipStyle}>
+                                    Sin foto <X size={12} style={{ cursor: 'pointer' }} onClick={() => setPhotoFilter('all')} />
+                                </span>
+                            )}
+                            {photoFilter === 'with_photo' && (
+                                <span style={activeChipStyle}>
+                                    Con foto <X size={12} style={{ cursor: 'pointer' }} onClick={() => setPhotoFilter('all')} />
+                                </span>
+                            )}
+                            {categoryFilter !== 'all' && (
+                                <span style={activeChipStyle}>
+                                    Cat: {CATEGORY_MAP[categoryFilter] || categoryFilter} <X size={12} style={{ cursor: 'pointer' }} onClick={() => setCategoryFilter('all')} />
+                                </span>
+                            )}
+                            {recipeTagFilter !== 'all' && (
+                                <span style={activeChipStyle}>
+                                    {recipeTagFilter === 'with_recipes' ? 'Con recetas' : recipeTagFilter === 'without_recipes' ? 'Sin recetas' : recipeTagFilter === 'with_tags' ? 'Con tags' : 'Sin tags'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setRecipeTagFilter('all')} />
+                                </span>
+                            )}
+                            {priceFilter !== 'all' && (
+                                <span style={activeChipStyle}>
+                                    {priceFilter === 'with_price' ? 'Con precio (> $0)' : 'Sin precio ($0)'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setPriceFilter('all')} />
+                                </span>
+                            )}
+                            {variantFilter !== 'all' && (
+                                <span style={activeChipStyle}>
+                                    {variantFilter === 'with_variants' ? 'Con variantes' : 'Sin variantes'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setVariantFilter('all')} />
+                                </span>
+                            )}
+                            {visibilityColFilter !== 'all' && (
+                                <span style={activeChipStyle}>
+                                    {visibilityColFilter === 'visible' ? 'Visibles' : 'Ocultos'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setVisibilityColFilter('all')} />
+                                </span>
+                            )}
+                            {devReviewFilter !== 'all' && (
+                                <span style={activeChipStyle}>
+                                    {devReviewFilter === 'verified' ? 'Dev Revisado' : 'Dev Pendiente'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setDevReviewFilter('all')} />
+                                </span>
+                            )}
+                            {sortConfig.column && (
+                                <span style={activeChipStyle}>
+                                    Orden: {sortConfig.column === 'name' ? 'Nombre' : sortConfig.column === 'category' ? 'Categoría' : 'Precio'} {sortConfig.special === 'zero_first' ? '($0 primero)' : sortConfig.direction === 'asc' ? '↑' : '↓'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setSortConfig({ column: null, direction: 'asc' })} />
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={resetAllColumnFilters}
+                                style={{
+                                    marginLeft: 'auto',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#15803D',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    fontSize: '0.78rem',
+                                    textDecoration: 'underline',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                <RotateCcw size={12} /> Limpiar todos los filtros
+                            </button>
+                        </div>
+                    )}
+
                     <div style={{
                         backgroundColor: THEME.colors.surface,
                         borderRadius: THEME.radius.lg,
                         boxShadow: THEME.shadow.sm,
-                        overflow: 'hidden',
-                        border: `1px solid ${THEME.colors.border}`
+                        border: `1px solid ${THEME.colors.border}`,
+                        minHeight: '380px'
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
                             <thead>
                                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '50px', textAlign: 'center' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) setSelectedIds(paginatedProducts.map(p => p.id));
-                                                    else setSelectedIds([]);
-                                                }}
-                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                                            />
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setSelectedIds(paginatedProducts.map(p => p.id));
+                                                else setSelectedIds([]);
+                                            }}
+                                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                        />
                                     </th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left' }}>Producto</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Categoría</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Recetas & Tags</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Precio</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Oferta / Var.</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Presencia</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Dev Revisión</th>
+
+                                    {/* COLUMNA PRODUCTO */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', position: 'relative' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                            <span>Producto</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'product' ? null : 'product');
+                                                }}
+                                                title="Filtrar por foto u ordenar"
+                                                style={{
+                                                    background: (photoFilter !== 'all' || sortConfig.column === 'name') ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${(photoFilter !== 'all' || sortConfig.column === 'name') ? THEME.colors.primary : 'transparent'}`,
+                                                    color: (photoFilter !== 'all' || sortConfig.column === 'name') ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                {sortConfig.column === 'name' ? (
+                                                    sortConfig.direction === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                )}
+                                                {photoFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'product' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, left: 0 }}>
+                                                <div style={dropdownSectionHeaderStyle}>Ordenar por Nombre</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'name' && sortConfig.direction === 'asc')}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'name', direction: 'asc' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ArrowUp size={13} /> De la A a la Z
+                                                    {sortConfig.column === 'name' && sortConfig.direction === 'asc' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'name' && sortConfig.direction === 'desc')}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'name', direction: 'desc' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ArrowDown size={13} /> De la Z a la A
+                                                    {sortConfig.column === 'name' && sortConfig.direction === 'desc' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                <div style={dropdownDividerStyle} />
+
+                                                <div style={dropdownSectionHeaderStyle}>Filtro de Foto</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(photoFilter === 'all')}
+                                                    onClick={() => {
+                                                        setPhotoFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todas las fotos
+                                                    {photoFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(photoFilter === 'with_photo')}
+                                                    onClick={() => {
+                                                        setPhotoFilter('with_photo');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ImageIcon size={13} /> Solo con foto
+                                                    {photoFilter === 'with_photo' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={{
+                                                        ...dropdownItemStyle(photoFilter === 'without_photo'),
+                                                        color: photoFilter === 'without_photo' ? '#B91C1C' : '#DC2626',
+                                                        fontWeight: '600'
+                                                    }}
+                                                    onClick={() => {
+                                                        setPhotoFilter('without_photo');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <AlertCircle size={13} /> Solo sin foto (@sinfoto)
+                                                    {photoFilter === 'without_photo' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                {(sortConfig.column === 'name' || photoFilter !== 'all') && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                if (sortConfig.column === 'name') setSortConfig({ column: null, direction: 'asc' });
+                                                                setPhotoFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer columna
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA CATEGORÍA */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Categoría</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'category' ? null : 'category');
+                                                }}
+                                                title="Filtrar por categoría"
+                                                style={{
+                                                    background: (categoryFilter !== 'all' || sortConfig.column === 'category') ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${(categoryFilter !== 'all' || sortConfig.column === 'category') ? THEME.colors.primary : 'transparent'}`,
+                                                    color: (categoryFilter !== 'all' || sortConfig.column === 'category') ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                {sortConfig.column === 'category' ? (
+                                                    sortConfig.direction === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                )}
+                                                {categoryFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'category' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, left: '50%', transform: 'translateX(-50%)', maxHeight: '340px', overflowY: 'auto' }}>
+                                                <div style={dropdownSectionHeaderStyle}>Ordenar por Categoría</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'category' && sortConfig.direction === 'asc')}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'category', direction: 'asc' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ArrowUp size={13} /> De la A a la Z
+                                                    {sortConfig.column === 'category' && sortConfig.direction === 'asc' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'category' && sortConfig.direction === 'desc')}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'category', direction: 'desc' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ArrowDown size={13} /> De la Z a la A
+                                                    {sortConfig.column === 'category' && sortConfig.direction === 'desc' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                <div style={dropdownDividerStyle} />
+
+                                                <div style={dropdownSectionHeaderStyle}>Filtrar Categoría</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(categoryFilter === 'all')}
+                                                    onClick={() => {
+                                                        setCategoryFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todas las categorías
+                                                    {categoryFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                {Object.entries(CATEGORY_MAP).map(([catKey, catLabel]) => {
+                                                    const isSelected = categoryFilter === catKey;
+                                                    return (
+                                                        <button
+                                                            key={catKey}
+                                                            type="button"
+                                                            style={dropdownItemStyle(isSelected)}
+                                                            onClick={() => {
+                                                                setCategoryFilter(isSelected ? 'all' : catKey);
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <span>{catLabel}</span>
+                                                            {isSelected && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                        </button>
+                                                    );
+                                                })}
+
+                                                {(sortConfig.column === 'category' || categoryFilter !== 'all') && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                if (sortConfig.column === 'category') setSortConfig({ column: null, direction: 'asc' });
+                                                                setCategoryFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer categoría
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA RECETAS & TAGS */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Recetas & Tags</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'recipetag' ? null : 'recipetag');
+                                                }}
+                                                title="Filtrar por recetas o tags"
+                                                style={{
+                                                    background: recipeTagFilter !== 'all' ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${recipeTagFilter !== 'all' ? THEME.colors.primary : 'transparent'}`,
+                                                    color: recipeTagFilter !== 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                {recipeTagFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'recipetag' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, left: '50%', transform: 'translateX(-50%)' }}>
+                                                <div style={dropdownSectionHeaderStyle}>Filtro de Recetas & Tags</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(recipeTagFilter === 'all')}
+                                                    onClick={() => {
+                                                        setRecipeTagFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todos los productos
+                                                    {recipeTagFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(recipeTagFilter === 'with_recipes')}
+                                                    onClick={() => {
+                                                        setRecipeTagFilter('with_recipes');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ChefHat size={13} style={{ color: '#15803D' }} /> Con Recetas (Keywords)
+                                                    {recipeTagFilter === 'with_recipes' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(recipeTagFilter === 'without_recipes')}
+                                                    onClick={() => {
+                                                        setRecipeTagFilter('without_recipes');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Sin Recetas asignadas
+                                                    {recipeTagFilter === 'without_recipes' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(recipeTagFilter === 'with_tags')}
+                                                    onClick={() => {
+                                                        setRecipeTagFilter('with_tags');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <Tag size={13} style={{ color: '#B45309' }} /> Con Tags Comerciales
+                                                    {recipeTagFilter === 'with_tags' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(recipeTagFilter === 'without_tags')}
+                                                    onClick={() => {
+                                                        setRecipeTagFilter('without_tags');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Sin Tags Comerciales
+                                                    {recipeTagFilter === 'without_tags' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                {recipeTagFilter !== 'all' && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                setRecipeTagFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer filtro
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA PRECIO */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Precio</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'price' ? null : 'price');
+                                                }}
+                                                title="Ordenar o filtrar precios"
+                                                style={{
+                                                    background: (priceFilter !== 'all' || sortConfig.column === 'price') ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${(priceFilter !== 'all' || sortConfig.column === 'price') ? THEME.colors.primary : 'transparent'}`,
+                                                    color: (priceFilter !== 'all' || sortConfig.column === 'price') ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                {sortConfig.column === 'price' ? (
+                                                    sortConfig.direction === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                )}
+                                                {priceFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'price' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, left: '50%', transform: 'translateX(-50%)' }}>
+                                                <div style={dropdownSectionHeaderStyle}>Ordenar por Precio</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'price' && sortConfig.direction === 'asc' && !sortConfig.special)}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'price', direction: 'asc' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ArrowUp size={13} /> Menor a Mayor ($ ↑)
+                                                    {sortConfig.column === 'price' && sortConfig.direction === 'asc' && !sortConfig.special && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'price' && sortConfig.direction === 'desc')}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'price', direction: 'desc' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <ArrowDown size={13} /> Mayor a Menor ($ ↓)
+                                                    {sortConfig.column === 'price' && sortConfig.direction === 'desc' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(sortConfig.column === 'price' && sortConfig.special === 'zero_first')}
+                                                    onClick={() => {
+                                                        setSortConfig({ column: 'price', direction: 'asc', special: 'zero_first' });
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <DollarSign size={13} /> Precios en $0 primero
+                                                    {sortConfig.column === 'price' && sortConfig.special === 'zero_first' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                <div style={dropdownDividerStyle} />
+
+                                                <div style={dropdownSectionHeaderStyle}>Filtro de Precio</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(priceFilter === 'all')}
+                                                    onClick={() => {
+                                                        setPriceFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todos los precios
+                                                    {priceFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(priceFilter === 'with_price')}
+                                                    onClick={() => {
+                                                        setPriceFilter('with_price');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Solo con precio (&gt; $0)
+                                                    {priceFilter === 'with_price' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(priceFilter === 'zero_price')}
+                                                    onClick={() => {
+                                                        setPriceFilter('zero_price');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Solo sin precio ($0)
+                                                    {priceFilter === 'zero_price' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                {(sortConfig.column === 'price' || priceFilter !== 'all') && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                if (sortConfig.column === 'price') setSortConfig({ column: null, direction: 'asc' });
+                                                                setPriceFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer precio
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA OFERTA / VAR. */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Oferta / Var.</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'variants' ? null : 'variants');
+                                                }}
+                                                title="Filtrar por variantes"
+                                                style={{
+                                                    background: variantFilter !== 'all' ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${variantFilter !== 'all' ? THEME.colors.primary : 'transparent'}`,
+                                                    color: variantFilter !== 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                {variantFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'variants' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, left: '50%', transform: 'translateX(-50%)' }}>
+                                                <div style={dropdownSectionHeaderStyle}>Filtro de Variantes</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(variantFilter === 'all')}
+                                                    onClick={() => {
+                                                        setVariantFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todas las ofertas / variantes
+                                                    {variantFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(variantFilter === 'with_variants')}
+                                                    onClick={() => {
+                                                        setVariantFilter('with_variants');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <Package size={13} /> Con variantes configuradas
+                                                    {variantFilter === 'with_variants' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(variantFilter === 'without_variants')}
+                                                    onClick={() => {
+                                                        setVariantFilter('without_variants');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Sin variantes (SKU Simple)
+                                                    {variantFilter === 'without_variants' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                {variantFilter !== 'all' && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                setVariantFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer filtro
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA PRESENCIA */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Presencia</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'visibility' ? null : 'visibility');
+                                                }}
+                                                title="Filtrar por visibilidad"
+                                                style={{
+                                                    background: visibilityColFilter !== 'all' ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${visibilityColFilter !== 'all' ? THEME.colors.primary : 'transparent'}`,
+                                                    color: visibilityColFilter !== 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                {visibilityColFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'visibility' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, right: 0, left: 'auto' }}>
+                                                <div style={dropdownSectionHeaderStyle}>Filtro de Presencia</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(visibilityColFilter === 'all')}
+                                                    onClick={() => {
+                                                        setVisibilityColFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todos los estados
+                                                    {visibilityColFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(visibilityColFilter === 'visible')}
+                                                    onClick={() => {
+                                                        setVisibilityColFilter('visible');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <Eye size={13} style={{ color: THEME.colors.primary }} /> Solo Visibles (@web)
+                                                    {visibilityColFilter === 'visible' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(visibilityColFilter === 'hidden')}
+                                                    onClick={() => {
+                                                        setVisibilityColFilter('hidden');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <EyeOff size={13} style={{ color: '#DC2626' }} /> Solo Ocultos (@oculto)
+                                                    {visibilityColFilter === 'hidden' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                {visibilityColFilter !== 'all' && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                setVisibilityColFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer filtro
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA DEV REVISIÓN */}
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Dev Revisión</span>
+                                            <button
+                                                type="button"
+                                                data-header-dropdown="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenHeaderMenu(openHeaderMenu === 'devreview' ? null : 'devreview');
+                                                }}
+                                                title="Filtrar por revisión técnica"
+                                                style={{
+                                                    background: devReviewFilter !== 'all' ? THEME.colors.primaryLight : 'transparent',
+                                                    border: `1px solid ${devReviewFilter !== 'all' ? THEME.colors.primary : 'transparent'}`,
+                                                    color: devReviewFilter !== 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                    borderRadius: '6px',
+                                                    padding: '3px 5px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '2px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <SlidersHorizontal size={13} strokeWidth={1.75} />
+                                                {devReviewFilter !== 'all' && (
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {openHeaderMenu === 'devreview' && (
+                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, right: 0, left: 'auto' }}>
+                                                <div style={dropdownSectionHeaderStyle}>Filtro de Dev Revisión</div>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(devReviewFilter === 'all')}
+                                                    onClick={() => {
+                                                        setDevReviewFilter('all');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    Todos
+                                                    {devReviewFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(devReviewFilter === 'verified')}
+                                                    onClick={() => {
+                                                        setDevReviewFilter('verified');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <CheckCircle size={13} style={{ color: '#059669' }} /> Revisados (DEV)
+                                                    {devReviewFilter === 'verified' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={dropdownItemStyle(devReviewFilter === 'pending')}
+                                                    onClick={() => {
+                                                        setDevReviewFilter('pending');
+                                                        setOpenHeaderMenu(null);
+                                                    }}
+                                                >
+                                                    <AlertCircle size={13} style={{ color: '#D97706' }} /> Pendientes (DEV)
+                                                    {devReviewFilter === 'pending' && <Check size={13} style={{ marginLeft: 'auto' }} />}
+                                                </button>
+
+                                                {devReviewFilter !== 'all' && (
+                                                    <>
+                                                        <div style={dropdownDividerStyle} />
+                                                        <button
+                                                            type="button"
+                                                            style={dropdownResetStyle}
+                                                            onClick={() => {
+                                                                setDevReviewFilter('all');
+                                                                setOpenHeaderMenu(null);
+                                                            }}
+                                                        >
+                                                            <RotateCcw size={12} /> Restablecer filtro
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </th>
+
+                                    {/* COLUMNA ACCIÓN */}
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                {paginatedProducts.length === 0 && (
+                                    <tr>
+                                        <td colSpan={9} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+                                                <ImageIcon size={36} strokeWidth={1.5} style={{ opacity: 0.35, color: THEME.colors.textSecondary }} />
+                                                <div style={{ fontWeight: '600', fontSize: '1rem', color: THEME.colors.textMain }}>
+                                                    No se encontraron productos con estos filtros
+                                                </div>
+                                                <div style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary }}>
+                                                    {photoFilter === 'without_photo'
+                                                        ? '¡Excelente! No hay productos pendientes de foto con los criterios seleccionados.'
+                                                        : 'Prueba modificando tu búsqueda o restableciendo los filtros de columna.'}
+                                                </div>
+                                                {isAnyColumnFiltered && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={resetAllColumnFilters}
+                                                        style={{
+                                                            marginTop: '0.5rem',
+                                                            padding: '0.4rem 0.9rem',
+                                                            borderRadius: THEME.radius.md,
+                                                            border: `1px solid ${THEME.colors.border}`,
+                                                            backgroundColor: THEME.colors.surface,
+                                                            color: THEME.colors.primary,
+                                                            fontWeight: '600',
+                                                            fontSize: '0.8rem',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        <RotateCcw size={13} /> Restablecer todos los filtros
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                                 {paginatedProducts.map((product) => (
                                     <tr key={product.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, height: '90px', backgroundColor: selectedIds.includes(product.id) ? THEME.colors.background : 'transparent', transition: 'background-color 0.2s' }}>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
