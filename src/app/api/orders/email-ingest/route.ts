@@ -179,7 +179,7 @@ export async function POST(req: Request) {
             isCorporateSender = false;
           }
 
-          // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
+          // 1. IGNORAR de inmediato si es un correo automático o notificación de sistema
           const isAutoReply = 
             headers['auto-submitted'] || 
             headers['Auto-Submitted'] || 
@@ -192,12 +192,18 @@ export async function POST(req: Request) {
             subject.toLowerCase().includes('failure notice') ||
             senderEmail.includes('mailer-daemon') ||
             senderEmail.includes('noreply') ||
-            senderEmail.includes('no-reply');
+            senderEmail.includes('no-reply') ||
+            senderEmail.includes('github') ||
+            senderEmail.includes('vercel') ||
+            senderEmail.includes('supabase') ||
+            senderEmail.includes('googleplay') ||
+            senderEmail.includes('googleone') ||
+            senderEmail.includes('resend.com');
 
           if (isAutoReply) {
-            console.log(`[Email Inbound] Ignorando correo automático para evitar bucles de respuesta. Emisor: ${senderEmail}, Asunto: ${subject}`);
+            console.log(`[Email Inbound] Ignorando correo automático/spam. Emisor: ${senderEmail}, Asunto: ${subject}`);
             if (mailId) {
-              await supabaseAdmin.from('mail').update({ status: 'ignored' }).eq('id', mailId);
+              await supabaseAdmin.from('order_drafts').delete().eq('id', mailId);
             }
             return;
           }
@@ -336,7 +342,7 @@ export async function POST(req: Request) {
             if (isCorporateRecipient) {
               console.log(`[Email Inbound] Ignorando correo corporativo interno de loop sin adjuntos. De: ${senderEmail} Para: ${recipientEmail}`);
               if (mailId) {
-                await supabaseAdmin.from('mail').update({ status: 'ignored' }).eq('id', mailId);
+                await supabaseAdmin.from('order_drafts').delete().eq('id', mailId);
               }
               return;
             }

@@ -13,6 +13,8 @@ import ProductSkeleton from '../components/ProductSkeleton';
 import HeroActions from '../components/HeroActions';
 import ReorderHeroBanner from '../components/ReorderHeroBanner';
 import TypicalRecipesBar from '../components/TypicalRecipesBar';
+import TrustBadgesBar from '../components/TrustBadgesBar';
+import HorecaShowcase from '../components/HorecaShowcase';
 
 export const revalidate = 60; // Auto-revalidate every 60s fallback, plus on-demand revalidation
 
@@ -427,10 +429,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
         </div>
       </section>
 
+      {/* TRUST & SLA BADGES BAR */}
+      <TrustBadgesBar locale={locale} />
+
       {/* FEATURED SECTION - Streamed */}
       <Suspense fallback={<div style={{ height: '400px' }}><ProductSkeleton /></div>}>
         <FeaturedSection locale={locale} />
       </Suspense>
+
+      {/* HORECA B2B INSTITUTIONAL SHOWCASE */}
+      {isB2bEnabled && <HorecaShowcase locale={locale} />}
       
       {/* CATALOG SECTION */}
       <section id="catalog" className="container" style={{ padding: '1.8rem 1rem 1rem', scrollMarginTop: '80px', position: 'relative' }}>

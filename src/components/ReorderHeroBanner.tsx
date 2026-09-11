@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useCart } from '../lib/cartContext';
-import { ShoppingCart, RotateCcw, Sparkles, X, Loader2, Calendar, CheckCircle2, ChevronRight, History } from 'lucide-react';
+import { ShoppingCart, RotateCcw, Sparkles, X, Loader2, Calendar, CheckCircle2, ChevronRight, History, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function ReorderHeroBanner() {
@@ -75,7 +75,7 @@ export default function ReorderHeroBanner() {
             }
 
             setFeedbackMsg({
-                text: `🎉 ¡Se cargaron ${count} productos de tu mercado al carrito con los precios de HOY!`,
+                text: `¡Se cargaron ${count} productos de tu mercado al carrito con los precios de HOY!`,
                 type: 'success'
             });
 
@@ -364,8 +364,8 @@ export default function ReorderHeroBanner() {
                                             }}
                                         >
                                             <div>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase' }}>
-                                                    {idx === 0 ? '⭐ Tu Última Compra' : `Compra Anterior #${idx + 1}`}
+                                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    {idx === 0 ? <><Star size={13} fill="#059669" color="#059669" /> Tu Última Compra</> : `Compra Anterior #${idx + 1}`}
                                                 </div>
                                                 <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <Calendar size={14} color="#64748B" /> {dateStr}
@@ -433,8 +433,8 @@ export default function ReorderHeroBanner() {
                         textAlign: 'left'
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                🔄 Repetir Pedido Anterior
+                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <RotateCcw size={18} color="#059669" /> Repetir Pedido Anterior
                             </h3>
                             <button
                                 onClick={() => setShowLookupModal(false)}

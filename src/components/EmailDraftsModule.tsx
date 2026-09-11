@@ -5900,14 +5900,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
                     />
                   </th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '12%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '22%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '24%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '15%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>VALOR</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ACCIONES</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '13%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>FECHA Y HORA / CANAL</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '22%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>CLIENTE</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '21%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '18%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>ASUNTO / ORIGEN</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '9%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>ITEMS / PESO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '9%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>VALOR</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '5%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>ESTADO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '3%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}></th>
                 </tr>
               </thead>
             <tbody>
@@ -5918,6 +5918,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const estimatedTotal = draftTotals.total;
                 const estimatedWeight = draftTotals.weight;
 
+                const draftDate = new Date(draft.created_at);
+                const formattedDate = isNaN(draftDate.getTime()) 
+                  ? '--/--' 
+                  : draftDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }).replace('.', '');
+                const formattedTime = isNaN(draftDate.getTime())
+                  ? '--:--'
+                  : draftDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
                 return (
                 <tr 
                   key={draft.id} 
@@ -5925,13 +5933,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   style={{ 
                     borderBottom: '1px solid #F1F5F9', 
                     cursor: 'pointer', 
-                    transition: 'all 0.1s',
+                    transition: 'all 0.12s ease',
                     backgroundColor: 'transparent'
                   }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', width: '40px', borderLeft: draft.status === 'pending' ? '4px solid #D97706' : draft.status === 'rejected' ? '4px solid #EF4444' : '4px solid #059669' }} onClick={(e) => e.stopPropagation()}>
+                  <td style={{ padding: '0.5rem 0.65rem', textAlign: 'center', width: '36px', borderLeft: draft.status === 'pending' ? '3px solid #D97706' : draft.status === 'rejected' ? '3px solid #EF4444' : '3px solid #059669' }} onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedDraftIds.includes(draft.id)}
@@ -5942,112 +5950,120 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           setSelectedDraftIds(prev => prev.filter(id => id !== draft.id));
                         }
                       }}
-                      style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
+                      style={{ cursor: 'pointer', transform: 'scale(1.05)' }}
                     />
                   </td>
-                  <td style={{ padding: '0.8rem 1rem' }}>
-                    <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>
-                      {new Date(draft.created_at).toLocaleDateString()}
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    <div style={{ fontWeight: '700', fontSize: '0.78rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>{formattedDate}</span>
+                      <span style={{ fontSize: '0.70rem', fontWeight: '600', color: '#64748B' }}>· {formattedTime}</span>
                     </div>
-                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: meta.clientType === 'b2b_client' ? '#6366F1' : '#EC4899' }}>
-                      {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
+                    <div style={{ marginTop: '2px' }}>
+                      <span style={{ 
+                        fontSize: '0.60rem', 
+                        fontWeight: '800', 
+                        padding: '1px 5px', 
+                        borderRadius: '4px',
+                        display: 'inline-block',
+                        backgroundColor: meta.clientType === 'b2b_client' ? '#EEF2FF' : '#FDF2F8',
+                        color: meta.clientType === 'b2b_client' ? '#4338CA' : '#BE185D',
+                        border: meta.clientType === 'b2b_client' ? '1px solid #C7D2FE' : '1px solid #FBCFE8'
+                      }}>
+                        {meta.clientType === 'b2b_client' ? 'B2B HORECA' : 'B2C HOGAR'}
+                      </span>
                     </div>
                   </td>
-                  <td style={{ padding: '0.8rem 1rem' }}>
-                    <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    <div style={{ fontWeight: '800', fontSize: '0.80rem', color: '#0F172A', maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={draft.client_detected_name || 'Desconocido'}>
                       {draft.client_detected_name || 'Desconocido'}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                      <Mail size={10} strokeWidth={1.5} /> {draft.source_email}
+                    <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px', maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <Mail size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} /> 
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{draft.source_email}</span>
                       {meta.phone && meta.phone !== 'No detectado' && (
                         <>
-                          <span style={{ margin: '0 4px', color: '#94A3B8' }}>|</span>
-                          <Phone size={10} strokeWidth={1.5} /> {meta.phone}
+                          <span style={{ margin: '0 2px', color: '#CBD5E1' }}>|</span>
+                          <Phone size={9} strokeWidth={1.5} style={{ flexShrink: 0 }} /> 
+                          <span>{meta.phone}</span>
                         </>
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: '0.8rem 1rem' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>
-                      {meta.address !== 'No detectado' ? (meta.address.slice(0, 35) + '...') : '-'}
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    <div 
+                      title={meta.address !== 'No detectado' ? meta.address : ''} 
+                      style={{ fontSize: '0.74rem', color: '#334155', fontWeight: '600', maxWidth: '220px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    >
+                      {meta.address !== 'No detectado' ? meta.address : '-'}
                     </div>
-                    {meta.address !== 'No detectado' ? (
-                      <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <MapPin size={10} color="#059669" /> GPS OK
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <AlertTriangle size={10} color="#9CA3AF" /> SIN GPS
-                      </span>
-                    )}
+                    <div style={{ marginTop: '1px' }}>
+                      {meta.address !== 'No detectado' ? (
+                        <span style={{ fontSize: '0.60rem', color: '#059669', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                          <MapPin size={9} color="#059669" /> GPS OK
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.60rem', color: '#94A3B8', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                          <AlertTriangle size={9} color="#94A3B8" /> SIN GPS
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>
                     <div 
                       title={draft.email_subject || ''} 
-                      style={{ fontSize: '0.82rem', color: '#1E293B', fontWeight: '600', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      style={{ fontSize: '0.74rem', color: '#1E293B', fontWeight: '600', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                     >
                       {cleanSubject(draft.email_subject)}
                     </div>
-                    <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                       {getChannelBadge('email')}
                       {(draft.status === 'approved' || meta.orderId) && meta.orderNumber && (
                         <span style={{ 
-                          fontSize: '0.72rem', 
+                          fontSize: '0.62rem', 
                           fontWeight: '800', 
                           color: '#065F46', 
                           backgroundColor: '#DEF7EC',
                           border: '1px solid #86EFAC',
-                          padding: '1px 6px',
-                          borderRadius: '6px',
+                          padding: '0 4px', 
+                          borderRadius: '4px',
                           display: 'inline-flex', 
                           alignItems: 'center', 
-                          gap: '3px' 
+                          gap: '2px' 
                         }}>
-                          <CheckCircle2 size={11} color="#059669" />
-                          Pedido #{meta.orderNumber.replace(/^#/, '')}
+                          <CheckCircle2 size={9} color="#059669" />
+                          #{meta.orderNumber.replace(/^#/, '')}
                         </span>
                       )}
                     </div>
-                    {(draft.status === 'approved' || meta.orderId) && (
-                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span>Procesado:</span>
-                        <strong style={{ color: '#334155' }}>
-                          {meta.processedAt 
-                            ? new Date(meta.processedAt).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                            : new Date(draft.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </strong>
-                      </div>
-                    )}
                   </td>
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                    <div style={{ fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
-                      {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
+                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
+                      {itemsCount} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>prods</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '700', marginTop: '2px' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '1px' }}>
                       {formatNumber(estimatedWeight, 1)} kg
                     </div>
                   </td>
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: '800', color: '#059669', fontSize: '0.84rem', fontVariantNumeric: 'tabular-nums' }}>
                     {formatMoney(estimatedTotal)}
                   </td>
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
                     {(draft.status === 'approved' || Boolean(meta.orderId)) ? (
                       <div style={{
-                        padding: '4px 9px', borderRadius: '8px', fontSize: '0.70rem', fontWeight: '900',
+                        padding: '2px 6px', borderRadius: '5px', fontSize: '0.62rem', fontWeight: '800',
                         backgroundColor: '#DEF7EC',
                         color: '#03543F',
                         border: '1px solid #86EFAC',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        boxShadow: '0 1px 2px rgba(5, 150, 105, 0.1)'
+                        gap: '3px'
                       }}>
-                        <CheckCircle2 size={12} color="#059669" />
-                        <span>PROCESADO</span>
+                        <CheckCircle2 size={10} color="#059669" />
+                        <span>LISTO</span>
                       </div>
                     ) : draft.status === 'rejected' ? (
                       <div style={{
-                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '900',
+                        padding: '2px 6px', borderRadius: '5px', fontSize: '0.62rem', fontWeight: '800',
                         backgroundColor: '#FDE8E8',
                         color: '#9B1C1C',
                         border: '1px solid #FCA5A5'
@@ -6056,7 +6072,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     ) : (
                       <div style={{
-                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '900',
+                        padding: '2px 6px', borderRadius: '5px', fontSize: '0.62rem', fontWeight: '800',
                         backgroundColor: '#FEF3C7',
                         color: '#92400E',
                         border: '1px solid #FCD34D'
@@ -6065,26 +6081,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                  <td style={{ padding: '0.5rem 0.65rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={(e) => handleDelete(draft.id, e)}
                       style={{ 
                         background: 'none', 
                         border: 'none', 
-                        color: '#EF4444', 
+                        color: '#94A3B8', 
                         cursor: 'pointer', 
-                        padding: '5px', 
+                        padding: '4px', 
                         display: 'inline-flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
                         borderRadius: '4px',
-                        transition: 'background-color 0.2s'
+                        transition: 'all 0.15s ease'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      title="Rechazar"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#FEE2E2';
+                        e.currentTarget.style.color = '#EF4444';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = '#94A3B8';
+                      }}
+                      title="Rechazar pedido"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                   </td>
                 </tr>
