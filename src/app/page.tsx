@@ -130,10 +130,31 @@ async function FeaturedSection({ locale }: { locale: Locale }) {
     return (
         <section style={{ padding: '3.5rem 0 1.5rem', backgroundColor: 'var(--background)', overflow: 'hidden' }}>
             <div className="container">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-                    <Flame size={32} strokeWidth={2.5} style={{ color: 'var(--primary)' }} />
-                    <h2 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.4rem', fontWeight: '900', color: 'var(--primary-dark)', margin: 0 }}>
-                        {t.featuredTitle.replace('🔥', '').trim()}
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.75rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.22em',
+                        color: '#0D7A57',
+                        fontWeight: 800,
+                        marginBottom: '0.45rem'
+                    }}>
+                        <Flame size={14} strokeWidth={2.5} />
+                        <span>{locale === 'en' ? 'CURATED SELECTION · TODAY' : 'COLECCIÓN SELECTA · DE LA MADRUGADA'}</span>
+                    </div>
+                    <h2 style={{ 
+                        fontFamily: 'var(--font-outfit), sans-serif', 
+                        fontSize: '2.5rem', 
+                        fontWeight: '900', 
+                        color: '#081C15', 
+                        margin: 0,
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.15
+                    }}>
+                        {t.featuredTitle.replace('🔥', '').trim()} <span className="editorial-serif" style={{ color: 'var(--secondary, #d4a373)', fontWeight: 400 }}>{locale === 'en' ? 'fresh arrivals' : 'frescura viva'}</span>
                     </h2>
                 </div>
                 <FeaturedProductsCarousel products={featuredProducts} />
@@ -433,9 +454,30 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       </Suspense>
       
       {/* CATALOG SECTION */}
-      <section id="catalog" className="container" style={{ padding: '1.8rem 1rem 1rem', scrollMarginTop: '80px', position: 'relative' }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <h2 className="section-title" style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.8rem', fontWeight: '900' }}>{catalogTitle}</h2>
+      <section id="catalog" className="container" style={{ padding: '2rem 1rem 1rem', scrollMarginTop: '80px', position: 'relative' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+          <span style={{
+            fontSize: '0.78rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.22em',
+            color: '#0D7A57',
+            fontWeight: 800,
+            display: 'inline-block',
+            marginBottom: '0.45rem'
+          }}>
+            {locale === 'en' ? 'DIRECT FARM & MARKET PANTRY' : 'DESPENSA DIRECTA · CALIDAD TIPO EXPORTACIÓN'}
+          </span>
+          <h2 className="section-title" style={{ 
+            fontFamily: 'var(--font-outfit), sans-serif', 
+            fontSize: '3rem', 
+            fontWeight: '900',
+            color: '#081C15',
+            margin: 0,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.15
+          }}>
+            {catalogTitle} <span className="editorial-serif" style={{ color: 'var(--secondary, #d4a373)', fontWeight: 400 }}>{locale === 'en' ? 'in real-time' : 'en tiempo real'}</span>
+          </h2>
         </div>
 
         {/* STICKY SEARCH & CATEGORY FILTERS */}
@@ -445,13 +487,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             position: 'sticky',
             top: '85px',
             zIndex: 45,
-            backgroundColor: 'rgba(251, 250, 245, 0.95)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            padding: '0.5rem 0 0.6rem 0',
-            margin: '0 -1rem 0.85rem -1rem',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-            boxShadow: '0 4px 16px -4px rgba(0, 0, 0, 0.04)'
+            backgroundColor: 'rgba(255, 255, 255, 0.88)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            padding: '0.65rem 0 0.75rem 0',
+            margin: '0 -1rem 1rem -1rem',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 10px 30px -8px rgba(8, 28, 21, 0.05)'
           }}
         >
           <div style={{ maxWidth: '580px', margin: '0 auto', padding: '0 0.5rem' }}>
@@ -489,19 +531,43 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           </div>
           <div className="bento-grid">
             {t.valueProps.map((prop: any, i: number) => {
-              const iconColor = 'var(--primary-light)';
-              const iconBg = 'rgba(26, 77, 46, 0.04)';
+              const iconColor = '#0D7A57';
+              const iconBg = 'linear-gradient(135deg, rgba(13, 122, 87, 0.08) 0%, rgba(212, 163, 115, 0.1) 100%)';
               return (
                 <div 
                   key={i} 
                   className="bento-card"
+                  style={{
+                    borderRadius: '24px',
+                    border: '1px solid rgba(0, 0, 0, 0.05)',
+                    position: 'relative'
+                  }}
                 >
+                  {/* Editorial Watermark Number */}
+                  <span 
+                    className="editorial-serif" 
+                    style={{ 
+                      position: 'absolute', 
+                      top: '1.4rem', 
+                      right: '1.6rem', 
+                      fontSize: '2.8rem', 
+                      color: 'rgba(212, 163, 115, 0.3)', 
+                      fontWeight: 400, 
+                      pointerEvents: 'none', 
+                      lineHeight: 1,
+                      userSelect: 'none'
+                    }}
+                  >
+                    0{i + 1}
+                  </span>
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ 
                         marginBottom: '1.5rem', 
                         color: iconColor, 
-                        backgroundColor: iconBg, 
+                        background: iconBg,
+                        border: '1px solid rgba(13, 122, 87, 0.12)',
                         width: '56px', 
                         height: '56px', 
                         borderRadius: '16px', 
@@ -510,14 +576,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                         justifyContent: 'center',
                         transition: 'transform 0.3s ease'
                       }} className="bento-icon-container">
-                        {i === 0 ? <Timer size={28} strokeWidth={2} /> : i === 1 ? <Sprout size={28} strokeWidth={2} /> : <Coins size={28} strokeWidth={2} />}
+                        {i === 0 ? <Timer size={28} strokeWidth={2.2} /> : i === 1 ? <Sprout size={28} strokeWidth={2.2} /> : <Coins size={28} strokeWidth={2.2} />}
                       </div>
                       <h3 style={{ 
                         fontFamily: 'var(--font-outfit), sans-serif',
                         fontSize: '1.4rem', 
                         fontWeight: '800', 
                         marginBottom: '0.75rem',
-                        color: 'var(--primary-dark)',
+                        color: '#081C15',
                         letterSpacing: '-0.02em'
                       }}>
                         {prop.title}

@@ -49,12 +49,12 @@ export default function ProductCard({ product }: { product: Product }) {
     return (
         <>
             <div style={{
-                backgroundColor: 'var(--surface)',
-                borderRadius: 'var(--radius-md)',
-                boxShadow: isHovered ? 'var(--shadow-premium)' : '0 4px 20px rgba(0,0,0,0.02)',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '20px',
+                boxShadow: isHovered ? '0 20px 40px -10px rgba(8, 28, 21, 0.12), 0 0 0 1px rgba(13, 122, 87, 0.14)' : '0 4px 20px rgba(0,0,0,0.02)',
                 overflow: 'hidden',
                 transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                border: '1px solid var(--border)',
+                border: '1px solid rgba(0, 0, 0, 0.05)',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
@@ -125,24 +125,24 @@ export default function ProductCard({ product }: { product: Product }) {
                             style={{
                                 width: 'fit-content',
                                 alignSelf: 'center',
-                                padding: '0.6rem 2.2rem',
-                                backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                                color: 'var(--primary-dark)',
-                                border: '1px solid rgba(255, 255, 255, 0.5)',
+                                padding: '0.65rem 2rem',
+                                backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                                color: '#081C15',
+                                border: '1px solid rgba(255, 255, 255, 0.9)',
                                 borderRadius: 'var(--radius-full)',
-                                fontWeight: '700',
-                                fontSize: '0.75rem',
+                                fontWeight: '800',
+                                fontSize: '0.74rem',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '8px',
-                                backdropFilter: 'blur(10px)',
-                                WebkitBackdropFilter: 'blur(10px)',
-                                boxShadow: '0 8px 32px rgba(26, 77, 46, 0.08)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                boxShadow: '0 8px 24px rgba(8, 28, 21, 0.14)',
                                 transform: isHovered ? 'translateY(0)' : 'translateY(12px)',
-                                transition: 'all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                                letterSpacing: '0.04em'
+                                transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                                letterSpacing: '0.06em'
                             }}
                         >
                             <Eye size={14} strokeWidth={2.5} /> {t.quickView}
@@ -319,13 +319,27 @@ export default function ProductCard({ product }: { product: Product }) {
                                                 </span>
                                             </div>
                                         ) : (
-                                            <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            <span style={{ 
+                                                fontSize: '1.35rem', 
+                                                fontWeight: '900', 
+                                                color: '#081C15', 
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                fontVariantNumeric: 'tabular-nums'
+                                            }}>
                                                 ${displayPrice.toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                                 {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
                                             </span>
                                         )}
-                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                            / {unitLabel}
+                                        <span style={{ 
+                                            fontSize: '0.75rem', 
+                                            color: '#475569', 
+                                            fontWeight: '700',
+                                            backgroundColor: '#F1F5F3',
+                                            padding: '2px 8px',
+                                            borderRadius: '9999px',
+                                            marginLeft: '4px'
+                                        }}>
+                                            {unitLabel}
                                         </span>
                                     </>
                                 );

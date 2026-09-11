@@ -114,35 +114,35 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 20,
-                    width: '48px',
-                    height: '48px',
+                    width: '46px',
+                    height: '46px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-                    border: '1px solid rgba(255, 255, 255, 0.6)',
-                    boxShadow: '0 8px 32px rgba(26, 77, 46, 0.08)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                    border: '1px solid rgba(255, 255, 255, 0.95)',
+                    boxShadow: '0 8px 24px rgba(8, 28, 21, 0.12)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    color: 'var(--primary)',
-                    transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                    opacity: isHovered ? 1 : 0
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    color: '#081C15',
+                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    opacity: isHovered ? 1 : 0.82
                 }}
                 onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--primary)';
-                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.backgroundColor = '#081C15';
+                    e.currentTarget.style.color = '#FFFFFF';
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1.08)';
-                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(26, 77, 46, 0.2)';
-                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(8, 28, 21, 0.22)';
+                    e.currentTarget.style.borderColor = '#081C15';
                 }}
                 onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.75)';
-                    e.currentTarget.style.color = 'var(--primary)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.88)';
+                    e.currentTarget.style.color = '#081C15';
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
-                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(26, 77, 46, 0.08)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(8, 28, 21, 0.12)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.95)';
                 }}
                 aria-label="Anterior"
             >
@@ -158,35 +158,35 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 20,
-                    width: '48px',
-                    height: '48px',
+                    width: '46px',
+                    height: '46px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-                    border: '1px solid rgba(255, 255, 255, 0.6)',
-                    boxShadow: '0 8px 32px rgba(26, 77, 46, 0.08)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                    border: '1px solid rgba(255, 255, 255, 0.95)',
+                    boxShadow: '0 8px 24px rgba(8, 28, 21, 0.12)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    color: 'var(--primary)',
-                    transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                    opacity: isHovered ? 1 : 0
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    color: '#081C15',
+                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    opacity: isHovered ? 1 : 0.82
                 }}
                 onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--primary)';
-                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.backgroundColor = '#081C15';
+                    e.currentTarget.style.color = '#FFFFFF';
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1.08)';
-                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(26, 77, 46, 0.2)';
-                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(8, 28, 21, 0.22)';
+                    e.currentTarget.style.borderColor = '#081C15';
                 }}
                 onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.75)';
-                    e.currentTarget.style.color = 'var(--primary)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.88)';
+                    e.currentTarget.style.color = '#081C15';
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
-                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(26, 77, 46, 0.08)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(8, 28, 21, 0.12)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.95)';
                 }}
                 aria-label="Siguiente"
             >
