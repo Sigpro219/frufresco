@@ -36,13 +36,27 @@ import {
 import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
 
-export default function PricingSettingsPage({ embedded = false }: { embedded?: boolean } = {}) {
+export default function PricingSettingsPage({ 
+    embedded = false,
+    activeTab: externalActiveTab,
+    onTabChange
+}: { 
+    embedded?: boolean;
+    activeTab?: 'models' | 'templates';
+    onTabChange?: (tab: 'models' | 'templates') => void;
+} = {}) {
     // Data
     const [models, setModels] = useState<any[]>([]);
     const [selectedModel, setSelectedModel] = useState<any>(null);
     const [rules, setRules] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]); // For search
-    const [activeTab, setActiveTab] = useState<'models' | 'templates'>('models');
+    const [internalActiveTab, setInternalActiveTab] = useState<'models' | 'templates'>('models');
+    
+    const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
+    const setActiveTab = (t: 'models' | 'templates') => {
+        setInternalActiveTab(t);
+        onTabChange?.(t);
+    };
 
     // Templates (Preformas) State
     const [templates, setTemplates] = useState<any[]>([]);
@@ -1149,56 +1163,56 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
 
     return (
         <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilyMain }}>
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '0.4rem 2rem 2.5rem 2rem' : '1.25rem 2rem 2rem 2rem' }}>
-                <div style={{ marginBottom: embedded ? '0.75rem' : '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem' }}>
-                    {!embedded ? (
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '0.75rem 2rem 2.5rem 2rem' : '1.25rem 2rem 2rem 2rem' }}>
+                {!embedded && (
+                    <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem' }}>
                         <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
                             <ArrowLeft size={16} /> Volver a Comercial
                         </Link>
-                    ) : <div />}
 
-                    {/* Tab Navigation */}
-                    <div style={{ display: 'flex', gap: '0.75rem' }}>
-                        <button
-                            onClick={() => setActiveTab('models')}
-                            style={{
-                                padding: '0.35rem 0.8rem',
-                                border: 'none',
-                                background: 'none',
-                                fontSize: '0.88rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.15s',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.4rem'
-                            }}
-                        >
-                            <TrendingUp size={15} /> Modelos de Precios
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('templates')}
-                            style={{
-                                padding: '0.35rem 0.8rem',
-                                border: 'none',
-                                background: 'none',
-                                fontSize: '0.88rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.15s',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.4rem'
-                            }}
-                        >
-                            <ClipboardList size={15} /> Listas de Cotización
-                        </button>
+                        {/* Tab Navigation */}
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <button
+                                onClick={() => setActiveTab('models')}
+                                style={{
+                                    padding: '0.35rem 0.8rem',
+                                    border: 'none',
+                                    background: 'none',
+                                    fontSize: '0.88rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                    borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem'
+                                }}
+                            >
+                                <TrendingUp size={15} /> Modelos de Precios
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('templates')}
+                                style={{
+                                    padding: '0.35rem 0.8rem',
+                                    border: 'none',
+                                    background: 'none',
+                                    fontSize: '0.88rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                    borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem'
+                                }}
+                            >
+                                <ClipboardList size={15} /> Listas de Cotización
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {activeTab === 'models' ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2.5fr', gap: '2rem', alignItems: 'start' }}>

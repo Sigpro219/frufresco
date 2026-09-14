@@ -15,7 +15,9 @@ import {
     BarChart2,
     Mail,
     Layers,
-    Loader2
+    Loader2,
+    TrendingUp,
+    ClipboardList
 } from 'lucide-react';
 
 function SubtabSkeleton({ title }: { title: string }) {
@@ -63,6 +65,7 @@ const CampaignsView = dynamic(() => import('./campaigns/page'), {
 export default function CommercialPage() {
     const [activeMainTab, setActiveMainTab] = useState('dashboard');
     const [activeOpSubtab, setActiveOpSubtab] = useState('cost-matrix');
+    const [pricingSettingsTab, setPricingSettingsTab] = useState<'models' | 'templates'>('models');
 
     useEffect(() => {
         const syncParams = () => {
@@ -319,18 +322,72 @@ export default function CommercialPage() {
                             })}
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
-                            <span>Módulo activo:</span>
-                            <span style={{ 
-                                backgroundColor: THEME.colors.primaryLight, 
-                                color: THEME.colors.primary, 
-                                padding: '2px 8px', 
-                                borderRadius: '6px', 
-                                fontWeight: '700' 
+                        {activeOpSubtab === 'settings' ? (
+                            <div style={{
+                                display: 'inline-flex',
+                                backgroundColor: '#F1F5F9',
+                                padding: '3px',
+                                borderRadius: THEME.radius.md,
+                                gap: '3px',
+                                border: `1px solid ${THEME.colors.border}`
                             }}>
-                                {operationsSubtabs.find(s => s.id === activeOpSubtab)?.label}
-                            </span>
-                        </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setPricingSettingsTab('models')}
+                                    style={{
+                                        padding: '0.35rem 0.85rem',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        backgroundColor: pricingSettingsTab === 'models' ? 'white' : 'transparent',
+                                        color: pricingSettingsTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                        fontWeight: pricingSettingsTab === 'models' ? '800' : '600',
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: pricingSettingsTab === 'models' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <TrendingUp size={14} /> Modelos de Precios
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPricingSettingsTab('templates')}
+                                    style={{
+                                        padding: '0.35rem 0.85rem',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        backgroundColor: pricingSettingsTab === 'templates' ? 'white' : 'transparent',
+                                        color: pricingSettingsTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                        fontWeight: pricingSettingsTab === 'templates' ? '800' : '600',
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: pricingSettingsTab === 'templates' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <ClipboardList size={14} /> Listas de Cotización
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
+                                <span>Módulo activo:</span>
+                                <span style={{ 
+                                    backgroundColor: THEME.colors.primaryLight, 
+                                    color: THEME.colors.primary, 
+                                    padding: '2px 8px', 
+                                    borderRadius: '6px', 
+                                    fontWeight: '700' 
+                                }}>
+                                    {operationsSubtabs.find(s => s.id === activeOpSubtab)?.label}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -354,7 +411,11 @@ export default function CommercialPage() {
                     )}
 
                     {activeOpSubtab === 'settings' && (
-                        <PricingSettingsView embedded={true} />
+                        <PricingSettingsView 
+                            embedded={true} 
+                            activeTab={pricingSettingsTab} 
+                            onTabChange={setPricingSettingsTab} 
+                        />
                     )}
 
                     {activeOpSubtab === 'campaigns' && (
