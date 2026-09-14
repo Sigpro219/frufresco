@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { Printer, ArrowLeft, Filter, Calendar, Layers } from 'lucide-react';
+import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow } from '@/components/print';
 
@@ -103,8 +103,7 @@ function normalizeToKg(quantity: number, rawUnit?: string, productUom?: string):
         return {
             kgQty: kg,
             displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG',
-            subNote: '500g'
+            unitStr: 'KG'
         };
     }
 
@@ -114,8 +113,7 @@ function normalizeToKg(quantity: number, rawUnit?: string, productUom?: string):
         return {
             kgQty: kg,
             displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG',
-            subNote: '250g'
+            unitStr: 'KG'
         };
     }
 
@@ -163,9 +161,40 @@ function normalizeToKg(quantity: number, rawUnit?: string, productUom?: string):
 }
 
 /**
+ * Filtro Poka-Yoke de Notas:
+ * Elimina basura de importación técnica de empaques (ej: "1000 gr 1000 gr", "kg kg", "50 und 50 und")
+ * y suprime el "efecto espejo" (repetir el nombre del producto en la nota de su propia columna).
+ * Conserva únicamente especificaciones operativas/culinarias reales (maduro, biche, pintón, tajadas, etc.)
+ */
+function filterMeaningfulNote(rawNote?: string, productName?: string): string {
+    if (!rawNote) return '';
+    const trimmed = rawNote.trim();
+
+    // 1. Eliminar cadenas técnicas de empaque repetidas
+    if (/^(\d+\s*(g|gr|kg|und|lb)\s*)+$/i.test(trimmed)) return '';
+    if (/^(kg\s*)+$/i.test(trimmed)) return '';
+    if (/^(x\s*kg\s*)+$/i.test(trimmed)) return '';
+    if (/^(bca\s*x\s*kg\s*)+$/i.test(trimmed)) return '';
+    if (/^(\d+\s*und\s*)+$/i.test(trimmed)) return '';
+    if (/1000\s*gr\s*1000\s*gr/i.test(trimmed)) return '';
+
+    // 2. Desduplicar palabras consecutivas
+    const clean = trimmed.replace(/\b(\w+)\s+\1\b/gi, '$1').trim();
+
+    // 3. Suprimir si la nota es idéntica o está contenida en el nombre del producto
+    const pNorm = (productName || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const nNorm = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    if (pNorm === nNorm || (pNorm.length > 3 && pNorm.includes(nNorm))) {
+        return '';
+    }
+
+    return clean;
+}
+
+/**
  * Normaliza la sucursal y el cliente para visualización inmediata en piso de bodega.
- * Si es una entidad multisede (Colsubsidio, Aldimark, Yanuba, Peñalisa), destaca la sucursal/sede
- * sin inventar barrios o localidades ajenas.
+ * Elimina duplicidades de nombres y destaca la sede operativa sin confusiones.
  */
 function extractBranchAndClient(orderRaw: any): { branchName: string; parentName: string } {
     const profile = orderRaw.profiles || {};
@@ -180,24 +209,24 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
             const branch = company.split('-').slice(1).join(' - ').trim();
             return {
                 branchName: `COLSUBSIDIO - ${branch.toUpperCase()}`,
-                parentName: 'Colsubsidio'
+                parentName: ''
             };
         }
         if (shipping.toUpperCase().includes('GIRARDOT') || shipping.toUpperCase().includes('RICAURTE')) {
             return {
                 branchName: 'COLSUBSIDIO - RICAURTE / GIRARDOT',
-                parentName: 'Colsubsidio'
+                parentName: ''
             };
         }
         if (contact && !contact.toUpperCase().includes('COLSUBSIDIO')) {
             return {
                 branchName: `COLSUBSIDIO - ${contact.toUpperCase()}`,
-                parentName: 'Colsubsidio'
+                parentName: ''
             };
         }
         return {
             branchName: 'COLSUBSIDIO',
-            parentName: 'Colsubsidio'
+            parentName: ''
         };
     }
 
@@ -206,45 +235,46 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
         if (company.toUpperCase().includes('FUNDACION') || company.toUpperCase().includes('FUNDACIÓN')) {
             return {
                 branchName: 'PUERTO PEÑALISA (FUNDACIÓN)',
-                parentName: 'Corp. Club Puerto Peñalisa'
+                parentName: ''
             };
         }
         if (company.toUpperCase().includes('MONJE')) {
             return {
                 branchName: 'PUERTO PEÑALISA (MONJE)',
-                parentName: 'Corp. Club Puerto Peñalisa'
+                parentName: ''
             };
         }
         if (company.toUpperCase().includes('SEDE')) {
             return {
                 branchName: 'PUERTO PEÑALISA (SEDE)',
-                parentName: 'Corp. Club Puerto Peñalisa'
+                parentName: ''
             };
         }
         return {
             branchName: 'PUERTO PEÑALISA',
-            parentName: 'Corp. Club Puerto Peñalisa'
+            parentName: ''
         };
     }
 
-    // 3. Aldimark
+    // 3. Aldimark: Eliminar doble "ALDIMARK"
     if (company.toUpperCase().includes('ALDIMARK')) {
         if (company.includes('-')) {
-            const branch = company.split('-').slice(1).join(' - ').replace(/^ALDIMARK[- ]*/i, '').trim();
+            const parts = company.split('-').slice(1).join(' - ').trim();
+            const cleanBranch = parts.replace(/^ALDIMARK[- ]*/i, '').trim();
             return {
-                branchName: `ALDIMARK - ${branch.toUpperCase()}`,
-                parentName: 'Aldimark'
+                branchName: `ALDIMARK - ${cleanBranch.toUpperCase()}`,
+                parentName: ''
             };
         }
         if (contact && !contact.toUpperCase().includes('ALDIMARK') && !contact.toUpperCase().includes('BOBADILLA')) {
             return {
                 branchName: `ALDIMARK - ${contact.toUpperCase()}`,
-                parentName: 'Aldimark'
+                parentName: ''
             };
         }
         return {
             branchName: 'ALDIMARK',
-            parentName: 'Aldimark'
+            parentName: ''
         };
     }
 
@@ -253,33 +283,33 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
         if (company.toUpperCase().includes('150') || company.toUpperCase().includes('CEDRITOS')) {
             return {
                 branchName: 'YANUBA - 150 CEDRITOS',
-                parentName: 'Yanuba'
+                parentName: ''
             };
         }
         if (company.toUpperCase().includes('122') || company.toUpperCase().includes('SANTA')) {
             return {
                 branchName: 'YANUBA - 122 SANTA BÁRBARA',
-                parentName: 'Yanuba'
+                parentName: ''
             };
         }
         return {
             branchName: 'YANUBA',
-            parentName: 'Milsen SAS'
+            parentName: ''
         };
     }
 
     // 5. Club del Comercio
     if (company.toUpperCase().includes('CLUB DEL COMERCIO')) {
         if (company.includes('-')) {
-            const branch = company.split('-').slice(1).join(' - ').trim();
+            const branch = company.split('-').slice(1).join(' - ').trim().replace(/^CLUB DEL COMERCIO DE BOGOT[AÁ][- ]*/i, '');
             return {
-                branchName: `CLUB DEL COMERCIO - ${branch.toUpperCase()}`,
-                parentName: 'Club del Comercio'
+                branchName: branch ? `CLUB DEL COMERCIO - ${branch.toUpperCase()}` : 'CLUB DEL COMERCIO',
+                parentName: ''
             };
         }
         return {
             branchName: 'CLUB DEL COMERCIO',
-            parentName: 'Club del Comercio'
+            parentName: ''
         };
     }
 
@@ -288,18 +318,18 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
         if (shipping.toUpperCase().includes('PONTEVEDRA') || shipping.toUpperCase().includes('80')) {
             return {
                 branchName: 'CESNE - PONTEVEDRA',
-                parentName: 'Policía Nacional'
+                parentName: ''
             };
         }
         if (shipping.toUpperCase().includes('63')) {
             return {
                 branchName: 'CESNE - CALLE 63',
-                parentName: 'Policía Nacional'
+                parentName: ''
             };
         }
         return {
             branchName: 'CESNE',
-            parentName: 'Policía Nacional'
+            parentName: ''
         };
     }
 
@@ -489,7 +519,7 @@ export default function AlistamientoSabanaPrintPage() {
             
             // Normalizar a Kilogramos
             const norm = normalizeToKg(it.quantity, it.unit, it.product?.unit_of_measure);
-            const userNote = (it.variant_label || it.nickname || '').trim();
+            const userNote = filterMeaningfulNote(it.variant_label || it.nickname, pName);
             const combinedNote = [userNote, norm.subNote].filter(Boolean).join(' - ');
 
             if (!groups[cell].productsMap.has(pId)) {
@@ -574,6 +604,7 @@ export default function AlistamientoSabanaPrintPage() {
             totalChunksForCell: number;
             chunkProducts: ProductInCell[];
             activeOrdersInCell: OrderInfo[];
+            sheetTotalKg: number;
         }> = [];
 
         filteredCellNames.forEach(cellName => {
@@ -596,6 +627,14 @@ export default function AlistamientoSabanaPrintPage() {
                     return chunkProducts.some(prod => (prod.orderDemand[ord.id]?.kgQuantity || 0) > 0);
                 });
 
+                // Calcular Gran Total de Kilos de la Hoja
+                let sheetTotalKg = 0;
+                chunkProducts.forEach(prod => {
+                    chunkActiveOrders.forEach(ord => {
+                        sheetTotalKg += (prod.orderDemand[ord.id]?.kgQuantity || 0);
+                    });
+                });
+
                 // Si la hoja tiene pedidos reales, añadirla a la impresión
                 if (chunkActiveOrders.length > 0) {
                     sheets.push({
@@ -603,7 +642,8 @@ export default function AlistamientoSabanaPrintPage() {
                         chunkIdx: i,
                         totalChunksForCell: totalChunks,
                         chunkProducts,
-                        activeOrdersInCell: chunkActiveOrders
+                        activeOrdersInCell: chunkActiveOrders,
+                        sheetTotalKg: Number(sheetTotalKg.toFixed(1))
                     });
                 }
             }
@@ -616,7 +656,7 @@ export default function AlistamientoSabanaPrintPage() {
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
             <GoldenPrintStyles />
 
-            {/* Estilos Oficiales Tamaño Oficio (Legal Landscape) y Optimización B&W */}
+            {/* Estilos Oficiales Tamaño Oficio (Legal Landscape) y Optimización B&W Industrial */}
             <style jsx global>{`
                 @media print {
                     @page {
@@ -699,7 +739,7 @@ export default function AlistamientoSabanaPrintPage() {
                             Sábana Maestra de Alistamiento &bull; Tamaño Oficio (Legal)
                         </h1>
                         <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                            {orders.length} pedidos &bull; Matriz ALISTAMIENTO.pdf (ID Contable &bull; Normalizado KG &bull; Sin filas vacías)
+                            {orders.length} pedidos &bull; Matriz Industrial (ID Contable &bull; Normalizado KG &bull; Control Poka-Yoke)
                         </span>
                     </div>
                 </div>
@@ -776,7 +816,7 @@ export default function AlistamientoSabanaPrintPage() {
                     </div>
                 ) : (
                     printableSheets.map((sheet, sheetGlobalIdx) => {
-                        const { cellName, chunkIdx, totalChunksForCell, chunkProducts, activeOrdersInCell } = sheet;
+                        const { cellName, chunkIdx, totalChunksForCell, chunkProducts, activeOrdersInCell, sheetTotalKg } = sheet;
 
                         return (
                             <div
@@ -815,7 +855,7 @@ export default function AlistamientoSabanaPrintPage() {
                                         </div>
                                     </div>
 
-                                    {/* Tag de formato a la derecha */}
+                                    {/* Tag de formato y control a la derecha */}
                                     <div style={{ width: '130px', textAlign: 'right' }}>
                                         <span style={{ fontSize: '6.5pt', fontWeight: 800, border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: '4px', color: '#64748B', textTransform: 'uppercase' }}>
                                             FORMATO OFICIO
@@ -823,7 +863,7 @@ export default function AlistamientoSabanaPrintPage() {
                                     </div>
                                 </div>
 
-                                {/* Tabla Matriz (Filas = Clientes/Bahías, Columnas = Productos) */}
+                                {/* Tabla Matriz Industrial (Filas = Clientes/Bahías, Columnas = Productos) */}
                                 <table style={{
                                     width: '100%',
                                     borderCollapse: 'collapse',
@@ -833,22 +873,22 @@ export default function AlistamientoSabanaPrintPage() {
                                     color: '#000000'
                                 }}>
                                     <thead>
-                                        {/* Fila 1: Encabezados de Columna con ACCOUNTING ID */}
+                                        {/* Fila 1: Encabezados de Columna con ACCOUNTING ID Destacado */}
                                         <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #000000' }}>
-                                            <th style={{ width: '60px', padding: '5px 3px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                            <th style={{ width: '55px', padding: '6px 3px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
                                                 LUGAR
                                             </th>
-                                            <th style={{ width: '230px', padding: '5px 6px', textAlign: 'left', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                            <th style={{ width: '235px', padding: '6px 8px', textAlign: 'left', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
                                                 SUCURSAL / CLIENTE ({activeOrdersInCell.length})
                                             </th>
-                                            <th style={{ width: '38px', padding: '5px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                            <th style={{ width: '38px', padding: '6px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
                                                 TIPO
                                             </th>
                                             {chunkProducts.map((prod) => (
                                                 <th
                                                     key={prod.id}
                                                     style={{
-                                                        padding: '5px 4px',
+                                                        padding: '6px 4px',
                                                         textAlign: 'center',
                                                         fontWeight: 800,
                                                         border: '1px solid #000000',
@@ -868,18 +908,18 @@ export default function AlistamientoSabanaPrintPage() {
                                             const rowBg = oIdx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
 
                                             return (
-                                                <tr key={ord.id} style={{ backgroundColor: rowBg }}>
-                                                    {/* Bahía / Lugar en suelo */}
-                                                    <td style={{ textAlign: 'center', padding: '3.5px 2px', border: '1px solid #CBD5E1', fontWeight: 900, fontSize: '7.6pt', color: '#000000' }}>
+                                                <tr key={ord.id} style={{ backgroundColor: rowBg, minHeight: '32px' }}>
+                                                    {/* Bahía / Lugar en suelo (Numeración clara y centrada) */}
+                                                    <td style={{ textAlign: 'center', padding: '5px 2px', border: '1px solid #94A3B8', fontWeight: 900, fontSize: '8.2pt', color: '#000000' }}>
                                                         {ord.space_label}
                                                     </td>
 
-                                                    {/* Sucursal y Nombre del Cliente */}
-                                                    <td style={{ textAlign: 'left', padding: '3.5px 6px', border: '1px solid #CBD5E1', color: '#000000', maxWidth: '230px' }} title={`${ord.branch_name} ${ord.client_name ? `(${ord.client_name})` : ''}`}>
-                                                        <div style={{ fontWeight: 800, fontSize: '7.3pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
+                                                    {/* Sucursal y Nombre del Cliente (Sin redundancias) */}
+                                                    <td style={{ textAlign: 'left', padding: '5px 8px', border: '1px solid #94A3B8', color: '#000000', maxWidth: '235px' }} title={ord.branch_name}>
+                                                        <div style={{ fontWeight: 800, fontSize: '7.4pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
                                                             {ord.branch_name}
                                                         </div>
-                                                        {ord.client_name && ord.client_name !== ord.branch_name && (
+                                                        {ord.client_name && ord.client_name !== ord.branch_name && !ord.branch_name.includes(ord.client_name) && (
                                                             <div style={{ fontSize: '5.8pt', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                 {ord.client_name}
                                                             </div>
@@ -887,11 +927,11 @@ export default function AlistamientoSabanaPrintPage() {
                                                     </td>
 
                                                     {/* Tipo (I = Institucional, H = Hogar) */}
-                                                    <td style={{ textAlign: 'center', padding: '3.5px 2px', border: '1px solid #CBD5E1', fontWeight: 800, fontSize: '7.5pt', color: '#000000' }}>
+                                                    <td style={{ textAlign: 'center', padding: '5px 2px', border: '1px solid #94A3B8', fontWeight: 800, fontSize: '7.5pt', color: '#000000' }}>
                                                         {ord.client_type}
                                                     </td>
 
-                                                    {/* Columnas de Productos (NORMALIZADO A KG) */}
+                                                    {/* Columnas de Productos (NORMALIZADO A KG + CASILLA CHECK LEAN) */}
                                                     {chunkProducts.map((prod) => {
                                                         const demand = prod.orderDemand[ord.id];
                                                         if (demand && demand.kgQuantity > 0) {
@@ -900,16 +940,25 @@ export default function AlistamientoSabanaPrintPage() {
                                                                     key={prod.id}
                                                                     style={{
                                                                         textAlign: 'center',
-                                                                        padding: '3px 2px',
-                                                                        border: '1px solid #CBD5E1',
-                                                                        color: '#000000'
+                                                                        padding: '4px 3px',
+                                                                        border: '1px solid #94A3B8',
+                                                                        color: '#000000',
+                                                                        position: 'relative'
                                                                     }}
                                                                 >
-                                                                    <div style={{ fontWeight: 900, fontSize: '7.8pt' }}>
+                                                                    {/* Casilla de marcación física con bolígrafo para el alistador [ ] */}
+                                                                    <div style={{ position: 'absolute', top: '2px', right: '3px', fontSize: '6pt', color: '#94A3B8', fontWeight: 400 }}>
+                                                                        [  ]
+                                                                    </div>
+
+                                                                    {/* Cantidad Prominente en KG */}
+                                                                    <div style={{ fontWeight: 900, fontSize: '8.2pt', marginTop: '2px' }}>
                                                                         {demand.displayQty}{demand.unit}
                                                                     </div>
+
+                                                                    {/* Especificación Culinaria/Operativa Limpia */}
                                                                     {demand.note && (
-                                                                        <div style={{ fontSize: '5.8pt', color: '#334155', lineHeight: '1.1', marginTop: '1px' }}>
+                                                                        <div style={{ fontSize: '5.8pt', color: '#334155', lineHeight: '1.1', marginTop: '1px', fontWeight: 600 }}>
                                                                             {demand.note}
                                                                         </div>
                                                                     )}
@@ -921,7 +970,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                                 key={prod.id}
                                                                 style={{
                                                                     border: '1px solid #E2E8F0',
-                                                                    padding: '3px 2px',
+                                                                    padding: '4px 3px',
                                                                     textAlign: 'center'
                                                                 }}
                                                             />
@@ -932,11 +981,16 @@ export default function AlistamientoSabanaPrintPage() {
                                         })}
                                     </tbody>
 
-                                    {/* Fila de Totales por Producto (NORMALIZADO A KG) */}
+                                    {/* Fila de Totales por Producto + GRAN TOTAL DE HOJA POKA-YOKE */}
                                     <tfoot>
                                         <tr style={{ backgroundColor: '#F1F5F9', borderTop: '1.5px solid #000000', fontWeight: 900 }}>
-                                            <td colSpan={3} style={{ textAlign: 'center', padding: '5px 6px', border: '1px solid #000000', fontSize: '7.5pt', color: '#000000', letterSpacing: '0.04em' }}>
-                                                PRODUCTOS ({chunkProducts.length})
+                                            <td colSpan={3} style={{ textAlign: 'left', padding: '6px 8px', border: '1px solid #000000', fontSize: '7.5pt', color: '#000000', letterSpacing: '0.02em' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span>PRODUCTOS ({chunkProducts.length})</span>
+                                                    <span style={{ fontWeight: 900, color: '#0D7A57', backgroundColor: '#E2E8F0', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        TOTAL HOJA: {sheetTotalKg.toLocaleString('es-CO')} KG
+                                                    </span>
+                                                </div>
                                             </td>
                                             {chunkProducts.map((prod) => {
                                                 const colSum = activeOrdersInCell.reduce((sum, ord) => sum + (prod.orderDemand[ord.id]?.kgQuantity || 0), 0);
@@ -949,7 +1003,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                         key={prod.id}
                                                         style={{
                                                             textAlign: 'center',
-                                                            padding: '5px 2px',
+                                                            padding: '6px 2px',
                                                             border: '1px solid #000000',
                                                             fontSize: '7.5pt',
                                                             color: '#000000',
@@ -964,9 +1018,14 @@ export default function AlistamientoSabanaPrintPage() {
                                     </tfoot>
                                 </table>
 
-                                {/* Pie de Página con Numeración */}
-                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '8px', fontSize: '7pt', color: '#475569', fontWeight: '600' }}>
-                                    Pág. {sheetGlobalIdx + 1} / {printableSheets.length}
+                                {/* Pie de Página con Control Relativo por Célula */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', fontSize: '7pt', color: '#475569', fontWeight: '600' }}>
+                                    <div>
+                                        CÉLULA: <strong style={{ color: '#0F172A' }}>{cellName}</strong> &bull; Hoja {chunkIdx + 1} de {totalChunksForCell}
+                                    </div>
+                                    <div>
+                                        Pág. Global {sheetGlobalIdx + 1} de {printableSheets.length}
+                                    </div>
                                 </div>
                             </div>
                         );

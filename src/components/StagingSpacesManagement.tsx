@@ -566,7 +566,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 Distribución Física en Planta (Bahías 1 a 150)
                             </h3>
                             <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                Verde: Bahía Asignada &bull; Blanco/Gris: Bahía libre &bull; Pasa el cursor para ver detalles completos
+                                🟢 Institucional (B2B) &bull; 🔵 Hogar (B2C) &bull; ⚪ Bahía libre &bull; Pasa el cursor para ver detalles
                             </span>
                         </div>
 
@@ -576,7 +576,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 <Search size={13} color={THEME.colors.textSecondary} style={{ position: 'absolute', left: '8px', pointerEvents: 'none' }} />
                                 <input
                                     type="text"
-                                    placeholder="Filtrar bahía o cliente..."
+                                    placeholder="Filtrar bahía, cliente o 'hogar'..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     style={{
@@ -588,7 +588,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                         outline: 'none',
                                         backgroundColor: '#FAFAFA',
                                         color: THEME.colors.textMain,
-                                        width: '175px'
+                                        width: '185px'
                                     }}
                                 />
                                 {searchTerm && (
@@ -623,9 +623,19 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 <span>{isFullMapMode ? 'Vista Dividida' : '100% Plano'}</span>
                             </button>
 
-                            <div style={{ display: 'flex', gap: '6px', fontSize: '0.65rem', alignItems: 'center', fontWeight: '700', marginLeft: '4px' }}>
-                                <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#ECFDF5', border: '1px solid #0D7A57' }}></span> Ocupada
-                                <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#FAFAFA', border: '1px dashed #CBD5E1', marginLeft: '3px' }}></span> Libre
+                            <div style={{ display: 'flex', gap: '8px', fontSize: '0.65rem', alignItems: 'center', fontWeight: '700', marginLeft: '4px' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#065F46' }}>
+                                    <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#ECFDF5', border: '1px solid #0D7A57' }}></span>
+                                    <Building2 size={10} color="#0D7A57" /> B2B
+                                </span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#1E40AF' }}>
+                                    <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#EFF6FF', border: '1px solid #2563EB' }}></span>
+                                    <Home size={10} color="#2563EB" /> Hogar
+                                </span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#64748B' }}>
+                                    <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#FAFAFA', border: '1px dashed #CBD5E1' }}></span>
+                                    Libre
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -640,14 +650,43 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                     }}>
                         {grid150.map(slot => {
                             const isOccupied = slot.occupiedBy !== null;
-                            const matchesSearch = searchTerm.trim() !== '' && (
-                                slot.slotNum.toString() === searchTerm.trim().replace('#', '').toLowerCase() ||
+                            const isHogar = isOccupied && slot.occupiedBy.clientType === 'hogar';
+                            const isInstitucional = isOccupied && !isHogar;
+
+                            const term = searchTerm.trim().toLowerCase();
+                            const matchesType = (term === 'hogar' || term === 'b2c')
+                                ? isHogar
+                                : (term === 'institucional' || term === 'b2b')
+                                ? isInstitucional
+                                : false;
+
+                            const matchesSearch = term !== '' && (
+                                slot.slotNum.toString() === term.replace('#', '') ||
+                                matchesType ||
                                 (slot.occupiedBy && (
-                                    slot.occupiedBy.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                    (slot.occupiedBy.shippingAddress && slot.occupiedBy.shippingAddress.toLowerCase().includes(searchTerm.toLowerCase()))
+                                    slot.occupiedBy.customerName.toLowerCase().includes(term) ||
+                                    (slot.occupiedBy.shippingAddress && slot.occupiedBy.shippingAddress.toLowerCase().includes(term))
                                 ))
                             );
                             const isDimmed = searchTerm.trim() !== '' && !matchesSearch;
+
+                            const slotBorderColor = matchesSearch
+                                ? (isHogar ? '#2563EB' : '#0D7A57')
+                                : isOccupied
+                                ? (isHogar ? '#3B82F6' : '#0D7A57')
+                                : '#CBD5E1';
+
+                            const slotBgColor = matchesSearch
+                                ? (isHogar ? '#DBEAFE' : '#DCFCE7')
+                                : isOccupied
+                                ? (isHogar ? '#EFF6FF' : '#F0FDF4')
+                                : '#FAFAFA';
+
+                            const slotNumberColor = isOccupied
+                                ? (isHogar ? '#2563EB' : '#0D7A57')
+                                : '#94A3B8';
+
+                            const slotBadgeBg = isHogar ? '#2563EB' : '#0D7A57';
 
                             return (
                                 <div
@@ -664,16 +703,8 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                         setTooltipPos(null);
                                     }}
                                     style={{
-                                        border: matchesSearch 
-                                            ? '2px solid #0D7A57' 
-                                            : isOccupied 
-                                            ? '1.5px solid #0D7A57' 
-                                            : '1px dashed #CBD5E1',
-                                        backgroundColor: matchesSearch
-                                            ? '#DCFCE7'
-                                            : isOccupied 
-                                            ? '#F0FDF4' 
-                                            : '#FAFAFA',
+                                        border: isOccupied || matchesSearch ? `1.5px solid ${slotBorderColor}` : '1px dashed #CBD5E1',
+                                        backgroundColor: slotBgColor,
                                         borderRadius: '5px',
                                         padding: '3px 4px',
                                         minHeight: '38px',
@@ -683,9 +714,9 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                         transition: 'all 0.12s ease',
                                         cursor: isOccupied ? 'pointer' : 'default',
                                         boxShadow: matchesSearch
-                                            ? '0 0 8px rgba(13, 122, 87, 0.45)'
+                                            ? `0 0 8px ${isHogar ? 'rgba(37, 99, 235, 0.45)' : 'rgba(13, 122, 87, 0.45)'}`
                                             : isOccupied 
-                                            ? '0 1px 2px rgba(13, 122, 87, 0.10)' 
+                                            ? `0 1px 2px ${isHogar ? 'rgba(37, 99, 235, 0.10)' : 'rgba(13, 122, 87, 0.10)'}` 
                                             : 'none',
                                         minWidth: 0,
                                         width: '100%',
@@ -702,17 +733,22 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                         alignItems: 'center', 
                                         fontSize: '0.58rem', 
                                         fontWeight: 900, 
-                                        color: isOccupied ? '#0D7A57' : '#94A3B8',
+                                        color: slotNumberColor,
                                         minWidth: 0,
                                         width: '100%'
                                     }}>
-                                        <span style={{ fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
+                                        <span style={{ fontFamily: 'monospace', letterSpacing: '-0.02em', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
                                             #{String(slot.slotNum).padStart(2, '0')}
+                                            {isOccupied && (
+                                                isHogar 
+                                                    ? <Home size={9} style={{ color: '#2563EB', opacity: 0.85, flexShrink: 0 }} /> 
+                                                    : <Building2 size={9} style={{ color: '#0D7A57', opacity: 0.85, flexShrink: 0 }} />
+                                            )}
                                         </span>
                                         {isOccupied && (
                                             <span style={{ 
                                                 fontSize: '0.48rem', 
-                                                backgroundColor: '#0D7A57', 
+                                                backgroundColor: slotBadgeBg, 
                                                 color: '#FFF', 
                                                 padding: '1px 3px', 
                                                 borderRadius: '3px', 
@@ -791,8 +827,26 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                             }}
                                         >
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {order.company_name}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <div style={{ fontSize: '0.74rem', fontWeight: 800, color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {order.company_name}
+                                                    </div>
+                                                    <span style={{
+                                                        fontSize: '0.55rem',
+                                                        fontWeight: 800,
+                                                        padding: '1px 5px',
+                                                        borderRadius: '3px',
+                                                        flexShrink: 0,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px',
+                                                        backgroundColor: order.clientType === 'hogar' ? '#EFF6FF' : '#ECFDF5',
+                                                        color: order.clientType === 'hogar' ? '#1E40AF' : '#065F46',
+                                                        border: `1px solid ${order.clientType === 'hogar' ? '#BFDBFE' : '#A7F3D0'}`
+                                                    }}>
+                                                        {order.clientType === 'hogar' ? <Home size={8} /> : <Building2 size={8} />}
+                                                        {order.clientType === 'hogar' ? 'Hogar' : 'B2B'}
+                                                    </span>
                                                 </div>
                                                 <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
                                                     <span><strong>{Math.round(order.total_weight_kg)} kg</strong></span>
@@ -850,7 +904,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                         borderRadius: '12px',
                         boxShadow: '0 16px 36px -4px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.08)',
                         padding: '12px 14px',
-                        width: '280px',
+                        width: '285px',
                         maxWidth: '90vw',
                         fontFamily: THEME.typography?.fontFamilyMain || 'sans-serif'
                     }}
@@ -858,21 +912,53 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                     {/* Encabezado del Tooltip */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${THEME.colors.border}` }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '0.86rem', fontWeight: 900, color: THEME.colors.primary, fontFamily: 'monospace' }}>
+                            <span style={{ 
+                                fontSize: '0.86rem', 
+                                fontWeight: 900, 
+                                color: hoveredSlot.occupiedBy 
+                                    ? (hoveredSlot.occupiedBy.clientType === 'hogar' ? '#2563EB' : THEME.colors.primary) 
+                                    : THEME.colors.primary, 
+                                fontFamily: 'monospace' 
+                            }}>
                                 BAHÍA #{String(hoveredSlot.slotNum).padStart(2, '0')}
                             </span>
                         </div>
-                        <span style={{
-                            fontSize: '0.62rem',
-                            fontWeight: 800,
-                            padding: '2px 7px',
-                            borderRadius: '4px',
-                            backgroundColor: hoveredSlot.occupiedBy ? '#ECFDF5' : '#F1F5F9',
-                            color: hoveredSlot.occupiedBy ? '#065F46' : '#64748B',
-                            border: `1px solid ${hoveredSlot.occupiedBy ? '#A7F3D0' : '#E2E8F0'}`
-                        }}>
-                            {hoveredSlot.occupiedBy ? '🟢 ASIGNADA' : '⚪ LIBRE'}
-                        </span>
+                        {hoveredSlot.occupiedBy ? (
+                            <span style={{
+                                fontSize: '0.62rem',
+                                fontWeight: 800,
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: hoveredSlot.occupiedBy.clientType === 'hogar' ? '#EFF6FF' : '#ECFDF5',
+                                color: hoveredSlot.occupiedBy.clientType === 'hogar' ? '#1E40AF' : '#065F46',
+                                border: `1px solid ${hoveredSlot.occupiedBy.clientType === 'hogar' ? '#BFDBFE' : '#A7F3D0'}`
+                            }}>
+                                {hoveredSlot.occupiedBy.clientType === 'hogar' ? (
+                                    <>
+                                        <Home size={10} /> HOGAR (B2C)
+                                    </>
+                                ) : (
+                                    <>
+                                        <Building2 size={10} /> INSTITUCIONAL (B2B)
+                                    </>
+                                )}
+                            </span>
+                        ) : (
+                            <span style={{
+                                fontSize: '0.62rem',
+                                fontWeight: 800,
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                backgroundColor: '#F1F5F9',
+                                color: '#64748B',
+                                border: '1px solid #E2E8F0'
+                            }}>
+                                ⚪ LIBRE
+                            </span>
+                        )}
                     </div>
 
                     {hoveredSlot.occupiedBy ? (
@@ -885,7 +971,12 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                     {hoveredSlot.occupiedBy.customerName}
                                 </div>
                                 {hoveredSlot.occupiedBy.sequenceId && (
-                                    <div style={{ fontSize: '0.65rem', color: THEME.colors.primary, fontWeight: 700, marginTop: '1px' }}>
+                                    <div style={{ 
+                                        fontSize: '0.65rem', 
+                                        color: hoveredSlot.occupiedBy.clientType === 'hogar' ? '#2563EB' : THEME.colors.primary, 
+                                        fontWeight: 700, 
+                                        marginTop: '1px' 
+                                    }}>
                                         Pedido #{hoveredSlot.occupiedBy.sequenceId}
                                     </div>
                                 )}
@@ -904,7 +995,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 <div>
                                     <div style={{ fontSize: '0.56rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Carga Total</div>
                                     <div style={{ fontSize: '0.82rem', fontWeight: 900, color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-                                        <Scale size={11} color={THEME.colors.primary} /> {Math.round(hoveredSlot.occupiedBy.totalKg)} kg
+                                        <Scale size={11} color={hoveredSlot.occupiedBy.clientType === 'hogar' ? '#2563EB' : THEME.colors.primary} /> {Math.round(hoveredSlot.occupiedBy.totalKg)} kg
                                     </div>
                                 </div>
                                 <div>
@@ -916,7 +1007,16 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                             </div>
 
                             {hoveredSlot.occupiedBy.assignedSlots && hoveredSlot.occupiedBy.assignedSlots.length > 1 && (
-                                <div style={{ fontSize: '0.65rem', color: '#065F46', backgroundColor: '#ECFDF5', padding: '4px 6px', borderRadius: '4px', fontWeight: 700, marginTop: '2px', border: '1px solid #A7F3D0' }}>
+                                <div style={{ 
+                                    fontSize: '0.65rem', 
+                                    color: hoveredSlot.occupiedBy.clientType === 'hogar' ? '#1E40AF' : '#065F46', 
+                                    backgroundColor: hoveredSlot.occupiedBy.clientType === 'hogar' ? '#EFF6FF' : '#ECFDF5', 
+                                    padding: '4px 6px', 
+                                    borderRadius: '4px', 
+                                    fontWeight: 700, 
+                                    marginTop: '2px', 
+                                    border: `1px solid ${hoveredSlot.occupiedBy.clientType === 'hogar' ? '#BFDBFE' : '#A7F3D0'}` 
+                                }}>
                                     Bahías asignadas: {hoveredSlot.occupiedBy.assignedSlots.map((s: number) => `#${s}`).join(', ')} ({hoveredSlot.occupiedBy.spacesCount} requeridas)
                                 </div>
                             )}
