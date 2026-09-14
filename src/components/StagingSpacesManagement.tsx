@@ -25,7 +25,9 @@ import {
     Package,
     Scale,
     X,
-    Info
+    Info,
+    Building2,
+    Home
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -101,8 +103,8 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 .from('orders')
                 .select(`
                     id, sequence_id, status, total, delivery_date, created_at,
-                    shipping_address, warehouse_spaces, profile_id,
-                    profiles:profile_id(id, company_name, contact_name, contact_phone, address),
+                    shipping_address, warehouse_spaces, profile_id, admin_notes, is_b2b,
+                    profiles:profile_id(id, company_name, contact_name, contact_phone, address, role),
                     order_items(id, quantity, unit_price, nickname, products(name, sku, unit_of_measure, weight_kg))
                 `)
                 .neq('status', 'cancelled');
@@ -146,14 +148,44 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 return sum + (qty * unitWeight);
             }, 0);
 
+            // Detección estricta de Cliente Hogar vs Institucional
+            const isHogar = Boolean(
+                o.profiles?.role === 'b2c_client' ||
+                o.is_b2b === false ||
+                (o.admin_notes || '').includes('CLIENTE HOGAR') ||
+                (o.admin_notes || '').includes('origin: web_b2c') ||
+                (o.admin_notes || '').toLowerCase().includes('[origen: web]')
+            );
+
+            const clientType: 'hogar' | 'institucional' = (isHogar && o.profiles?.role !== 'b2b_client') ? 'hogar' : 'institucional';
+
+            // Resolver nombre adecuado (nombre de contacto para persona natural, empresa para B2B)
+            let resolvedName = o.profiles?.company_name;
+            if (clientType === 'hogar') {
+                if (o.admin_notes && o.admin_notes.includes('CLIENTE HOGAR')) {
+                    const nameMatch = o.admin_notes.match(/Nombre: (.*?) \|/);
+                    if (nameMatch) {
+                        resolvedName = nameMatch[1].trim();
+                    } else {
+                        resolvedName = o.profiles?.contact_name || o.profiles?.company_name || 'Cliente Hogar';
+                    }
+                } else {
+                    resolvedName = o.profiles?.contact_name || o.profiles?.company_name || 'Cliente Hogar';
+                }
+            } else {
+                resolvedName = o.profiles?.company_name || o.profiles?.contact_name || 'Cliente Institucional';
+            }
+
             return {
                 id: o.id,
                 sequence_id: o.sequence_id,
                 client_id: o.profiles?.id,
-                company_name: o.profiles?.company_name || 'Cliente sin nombre',
+                customer_name: resolvedName,
+                company_name: resolvedName,
                 shipping_address: o.shipping_address || o.profiles?.address || '',
                 total_weight_kg: totalKg > 0 ? totalKg : 15,
-                existing_spaces: manualSpacesMap[o.id] || o.warehouse_spaces || []
+                existing_spaces: manualSpacesMap[o.id] || o.warehouse_spaces || [],
+                clientType
             };
         });
     }, [orders, manualSpacesMap]);
@@ -253,6 +285,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                         customerName: o.company_name,
                         shippingAddress: o.shipping_address,
                         totalKg: o.total_weight_kg,
+                        clientType: o.clientType || 'institucional',
                         crates,
                         spacesCount: spaces,
                         assignedCount: assigned.length,
@@ -278,12 +311,16 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             return sum + calculateCratesAndSpaces(o.total_weight_kg, avgKgPerCrate, spaceCapacity).crates;
         }, 0);
         const occupiedSlotsCount = grid150.filter(s => s.occupiedBy !== null).length;
+        const institutionalCount = preparedOrders.filter(o => o.clientType === 'institucional').length;
+        const hogarCount = preparedOrders.filter(o => o.clientType === 'hogar').length;
 
         return {
             totalOrders: preparedOrders.length,
             totalKg: Math.round(totalKg),
             totalCrates,
-            occupiedSlotsCount
+            occupiedSlotsCount,
+            institutionalCount,
+            hogarCount
         };
     }, [preparedOrders, grid150, avgKgPerCrate, spaceCapacity]);
 
@@ -454,7 +491,12 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginTop: '1rem', paddingTop: '1rem', borderTop: `1px solid ${THEME.colors.border}` }}>
                     <div style={{ backgroundColor: THEME.colors.background, padding: '8px 12px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
                         <div style={{ fontSize: '0.62rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Pedidos a Alistar</div>
-                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: THEME.colors.textMain }}>{stats.totalOrders}</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                            <span style={{ fontSize: '1.15rem', fontWeight: 900, color: THEME.colors.textMain }}>{stats.totalOrders}</span>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 700, color: THEME.colors.textSecondary }}>
+                                ({stats.institutionalCount} B2B · {stats.hogarCount} Hogar)
+                            </span>
+                        </div>
                     </div>
                     <div style={{ backgroundColor: THEME.colors.background, padding: '8px 12px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
                         <div style={{ fontSize: '0.62rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Kilos Totales</div>

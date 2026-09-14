@@ -26,6 +26,7 @@ export interface OrderStagingInput {
     delivery_slot?: string;
     manual_delivery_time?: string;
     is_manual_delivery?: boolean;
+    clientType?: 'hogar' | 'institucional';
 }
 
 export interface StagingAllocationResult {
@@ -40,6 +41,7 @@ export interface StagingAllocationResult {
     spaces_needed: number;
     assigned_spaces: number[];
     space_label: string; // "21" o "4-5" o "1-3"
+    clientType?: 'hogar' | 'institucional';
 }
 
 export interface StagingAllocatorConfig {
@@ -217,7 +219,8 @@ export function allocateStagingSpacesGeographically(
             estimated_crates: item.crates,
             spaces_needed: item.spacesNeeded,
             assigned_spaces: assigned,
-            space_label: formatSpaceLabel(assigned)
+            space_label: formatSpaceLabel(assigned),
+            clientType: item.raw.clientType
         });
     }
 

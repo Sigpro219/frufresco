@@ -21,6 +21,7 @@ interface OrderItem {
         id: string;
         name: string;
         sku?: string;
+        accounting_id?: number | string | null;
         unit_of_measure?: string;
         buying_team?: string | null;
         category?: string | null;
@@ -45,11 +46,11 @@ interface OrderInfo {
 interface ProductInCell {
     id: string;
     name: string;
-    sku: string;
+    accountingId?: number | string | null;
     unit: string;
     displayName: string;
-    totalQty: number;
-    orderDemand: Record<string, { quantity: number; unit: string; note?: string }>;
+    totalKg: number;
+    orderDemand: Record<string, { kgQuantity: number; displayQty: string; unit: string; note?: string }>;
 }
 
 const KNOWN_CELLS = [
@@ -68,9 +69,103 @@ const KNOWN_CELLS = [
 ];
 
 /**
+ * Normaliza cualquier cantidad y unidad estrictamente a KILOGRAMOS (KG).
+ * - Libras (1 lb = 0.5 kg) -> 4 lb = 2KG, 3 lb = 1.5KG
+ * - Gramos (1000g = 1 kg, 500g = 0.5 kg, 250g = 0.25 kg)
+ * - Mantiene unidades discretas (UN, CJ, DOC) intactas.
+ */
+function normalizeToKg(quantity: number, rawUnit?: string, productUom?: string): { kgQty: number; displayQty: string; unitStr: string; subNote?: string } {
+    const cleanUnit = (rawUnit || productUom || 'KG').trim().toLowerCase();
+
+    // 1. Libras (1 lb = 0.5 kg)
+    if (cleanUnit.includes('libra') || cleanUnit === 'lb' || cleanUnit === 'lbs') {
+        const kg = quantity * 0.5;
+        return {
+            kgQty: kg,
+            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'KG',
+            subNote: `${quantity} lb`
+        };
+    }
+
+    // 2. 1000 Gramos (1000 G = 1 kg)
+    if (/^1000\s*(g|gr|gramos)$/i.test(cleanUnit)) {
+        return {
+            kgQty: quantity,
+            displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'KG'
+        };
+    }
+
+    // 3. 500 Gramos / Paquete 500 gramos (500 G = 0.5 kg)
+    if (/500\s*(g|gr|gramos)/i.test(cleanUnit)) {
+        const kg = quantity * 0.5;
+        return {
+            kgQty: kg,
+            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'KG',
+            subNote: '500g'
+        };
+    }
+
+    // 4. 250 Gramos (250 G = 0.25 kg)
+    if (/250\s*(g|gr|gramos)/i.test(cleanUnit)) {
+        const kg = quantity * 0.25;
+        return {
+            kgQty: kg,
+            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'KG',
+            subNote: '250g'
+        };
+    }
+
+    // 5. Gramos genéricos (ej. "200 g")
+    if (/^(\d+)\s*(g|gr|gramos)$/i.test(cleanUnit)) {
+        const match = cleanUnit.match(/^(\d+)\s*(g|gr|gramos)$/i);
+        const grams = parseFloat(match![1]);
+        const kg = (quantity * grams) / 1000;
+        return {
+            kgQty: kg,
+            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'KG'
+        };
+    }
+
+    // 6. Unidades discretas (Unidad, Caja, Docena)
+    if (cleanUnit.includes('unidad') || cleanUnit === 'un' || cleanUnit === 'und') {
+        return {
+            kgQty: quantity,
+            displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'UN'
+        };
+    }
+    if (cleanUnit.includes('caja')) {
+        return {
+            kgQty: quantity,
+            displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'CJ'
+        };
+    }
+    if (cleanUnit.includes('docena')) {
+        return {
+            kgQty: quantity,
+            displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
+            unitStr: 'DOC'
+        };
+    }
+
+    // 7. Por defecto: Kilos
+    return {
+        kgQty: quantity,
+        displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
+        unitStr: 'KG'
+    };
+}
+
+/**
  * Normaliza la sucursal y el cliente para visualización inmediata en piso de bodega.
  * Si es una entidad multisede (Colsubsidio, Aldimark, Yanuba, Peñalisa), destaca la sucursal/sede
- * en lugar de truncar la razón social matriz.
+ * sin inventar barrios o localidades ajenas.
  */
 function extractBranchAndClient(orderRaw: any): { branchName: string; parentName: string } {
     const profile = orderRaw.profiles || {};
@@ -94,12 +189,6 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
                 parentName: 'Colsubsidio'
             };
         }
-        if (shipping.toUpperCase().includes('CHAPINERO')) {
-            return {
-                branchName: 'COLSUBSIDIO - CHAPINERO',
-                parentName: 'Colsubsidio'
-            };
-        }
         if (contact && !contact.toUpperCase().includes('COLSUBSIDIO')) {
             return {
                 branchName: `COLSUBSIDIO - ${contact.toUpperCase()}`,
@@ -107,12 +196,38 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
             };
         }
         return {
-            branchName: 'COLSUBSIDIO - SEDE PRINCIPAL',
+            branchName: 'COLSUBSIDIO',
             parentName: 'Colsubsidio'
         };
     }
 
-    // 2. Aldimark
+    // 2. Puerto Peñalisa: SIEMPRE limpio como PUERTO PEÑALISA (o Fundación si aplica)
+    if (company.toUpperCase().includes('PENALISA') || company.toUpperCase().includes('PEÑALISA')) {
+        if (company.toUpperCase().includes('FUNDACION') || company.toUpperCase().includes('FUNDACIÓN')) {
+            return {
+                branchName: 'PUERTO PEÑALISA (FUNDACIÓN)',
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        if (company.toUpperCase().includes('MONJE')) {
+            return {
+                branchName: 'PUERTO PEÑALISA (MONJE)',
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        if (company.toUpperCase().includes('SEDE')) {
+            return {
+                branchName: 'PUERTO PEÑALISA (SEDE)',
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        return {
+            branchName: 'PUERTO PEÑALISA',
+            parentName: 'Corp. Club Puerto Peñalisa'
+        };
+    }
+
+    // 3. Aldimark
     if (company.toUpperCase().includes('ALDIMARK')) {
         if (company.includes('-')) {
             const branch = company.split('-').slice(1).join(' - ').replace(/^ALDIMARK[- ]*/i, '').trim();
@@ -128,17 +243,17 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
             };
         }
         return {
-            branchName: 'ALDIMARK - SEDE PRINCIPAL',
+            branchName: 'ALDIMARK',
             parentName: 'Aldimark'
         };
     }
 
-    // 3. Yanuba
+    // 4. Yanuba
     if (company.toUpperCase().includes('YANUBA') || company.toUpperCase().includes('MILSEN')) {
         if (company.toUpperCase().includes('150') || company.toUpperCase().includes('CEDRITOS')) {
             return {
                 branchName: 'YANUBA - 150 CEDRITOS',
-                parentName: 'Yanuba / Milsen SAS'
+                parentName: 'Yanuba'
             };
         }
         if (company.toUpperCase().includes('122') || company.toUpperCase().includes('SANTA')) {
@@ -153,56 +268,12 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
         };
     }
 
-    // 4. Puerto Peñalisa
-    if (company.toUpperCase().includes('PUERTO PENALISA') || company.toUpperCase().includes('PUERTO PEÑALISA')) {
-        if (shipping.toUpperCase().includes('USAQUÉN') || shipping.toUpperCase().includes('USAQUEN')) {
-            return {
-                branchName: 'PUERTO PEÑALISA - USAQUÉN',
-                parentName: 'Corp. Club Puerto Peñalisa'
-            };
-        }
-        if (shipping.toUpperCase().includes('TEUSAQUILLO')) {
-            return {
-                branchName: 'PUERTO PEÑALISA - TEUSAQUILLO',
-                parentName: 'Corp. Club Puerto Peñalisa'
-            };
-        }
-        if (shipping.toUpperCase().includes('PUENTE ARANDA')) {
-            return {
-                branchName: 'PUERTO PEÑALISA - PUENTE ARANDA',
-                parentName: 'Corp. Club Puerto Peñalisa'
-            };
-        }
-        if (shipping.toUpperCase().includes('RICAURTE')) {
-            return {
-                branchName: 'PUERTO PEÑALISA - RICAURTE',
-                parentName: 'Fundación Puerto Peñalisa'
-            };
-        }
+    // 5. Club del Comercio
+    if (company.toUpperCase().includes('CLUB DEL COMERCIO')) {
         if (company.includes('-')) {
             const branch = company.split('-').slice(1).join(' - ').trim();
             return {
-                branchName: `PUERTO PEÑALISA - ${branch.toUpperCase()}`,
-                parentName: 'Corp. Club Puerto Peñalisa'
-            };
-        }
-        return {
-            branchName: 'PUERTO PEÑALISA',
-            parentName: 'Corp. Club Puerto Peñalisa'
-        };
-    }
-
-    // 5. Club del Comercio
-    if (company.toUpperCase().includes('CLUB DEL COMERCIO')) {
-        if (shipping.toUpperCase().includes('SUBA') || shipping.toUpperCase().includes('150')) {
-            return {
-                branchName: 'CLUB DEL COMERCIO - SUBA',
-                parentName: 'Club del Comercio'
-            };
-        }
-        if (shipping.toUpperCase().includes('CL 62') || shipping.toUpperCase().includes('SEDE')) {
-            return {
-                branchName: 'CLUB DEL COMERCIO - SEDE PRINCIPAL',
+                branchName: `CLUB DEL COMERCIO - ${branch.toUpperCase()}`,
                 parentName: 'Club del Comercio'
             };
         }
@@ -227,8 +298,8 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
             };
         }
         return {
-            branchName: 'CESNE - POLICÍA NACIONAL',
-            parentName: 'Centro Social de Suboficiales'
+            branchName: 'CESNE',
+            parentName: 'Policía Nacional'
         };
     }
 
@@ -248,35 +319,6 @@ function extractBranchAndClient(orderRaw: any): { branchName: string; parentName
         branchName: fallback.toUpperCase().replace(/\s+S\.?A\.?S\.?/gi, ' SAS'),
         parentName: ''
     };
-}
-
-/**
- * Normaliza cantidades y unidades para evitar concatenaciones ambiguas como "241000 G"
- * Convierte "1000 G" o "1000 gr" a "KG", y añade espacios si la unidad comienza con dígito.
- */
-function formatQuantityAndUnit(quantity: number, rawUnit?: string): string {
-    const cleanUnit = (rawUnit || 'KG').trim().toUpperCase();
-
-    // 1000 gramos es exactamente 1 Kilogramo
-    if (/^1000\s*(G|GR|GRAMOS)$/i.test(cleanUnit)) {
-        const qtyStr = quantity % 1 === 0 ? quantity.toString() : quantity.toLocaleString('es-CO');
-        return `${qtyStr}KG`;
-    }
-
-    // 500 gramos es 1 Libra
-    if (/^500\s*(G|GR|GRAMOS)$/i.test(cleanUnit)) {
-        const qtyStr = quantity % 1 === 0 ? quantity.toString() : quantity.toLocaleString('es-CO');
-        return `${qtyStr}LB`;
-    }
-
-    const qtyStr = quantity % 1 === 0 ? quantity.toString() : quantity.toLocaleString('es-CO');
-
-    // Si la unidad empieza con dígito (ej: "250 GR", "7000 GR"), separar con espacio legible
-    if (/^\d/.test(cleanUnit)) {
-        return `${qtyStr} (${cleanUnit})`;
-    }
-
-    return `${qtyStr}${cleanUnit}`;
 }
 
 export default function AlistamientoSabanaPrintPage() {
@@ -327,7 +369,7 @@ export default function AlistamientoSabanaPrintPage() {
                     profiles:profile_id(id, company_name, contact_name, address, role),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label,
-                        products(id, name, sku, unit_of_measure, buying_team, category)
+                        products(id, name, sku, accounting_id, unit_of_measure, buying_team, category)
                     )
                 `)
                 .neq('status', 'cancelled');
@@ -391,6 +433,7 @@ export default function AlistamientoSabanaPrintPage() {
                             id: it.products.id,
                             name: it.products.name,
                             sku: it.products.sku,
+                            accounting_id: it.products.accounting_id,
                             unit_of_measure: it.products.unit_of_measure,
                             buying_team: it.products.buying_team,
                             category: it.products.category
@@ -439,32 +482,47 @@ export default function AlistamientoSabanaPrintPage() {
 
             const pId = it.product_id || it.product?.name || 'misc';
             const pName = it.product?.name || it.nickname || 'Producto';
-            const sku = it.product?.sku ? `IN(${it.product.sku}) ` : '';
-            const displayName = `${sku}${pName}`;
-            const unit = (it.unit || it.product?.unit_of_measure || 'KG').toUpperCase();
-            const note = (it.variant_label || it.nickname || '').trim();
+            
+            // En el encabezado superior: Mostrar ACCOUNTING ID (ej. IN(147) Papa criolla), nunca el SKU
+            const accTag = it.product?.accounting_id ? `IN(${it.product.accounting_id}) ` : '';
+            const displayName = `${accTag}${pName}`;
+            
+            // Normalizar a Kilogramos
+            const norm = normalizeToKg(it.quantity, it.unit, it.product?.unit_of_measure);
+            const userNote = (it.variant_label || it.nickname || '').trim();
+            const combinedNote = [userNote, norm.subNote].filter(Boolean).join(' - ');
 
             if (!groups[cell].productsMap.has(pId)) {
                 groups[cell].productsMap.set(pId, {
                     id: pId,
                     name: pName,
-                    sku: it.product?.sku || '',
-                    unit,
+                    accountingId: it.product?.accounting_id,
+                    unit: norm.unitStr,
                     displayName,
-                    totalQty: 0,
+                    totalKg: 0,
                     orderDemand: {}
                 });
             }
 
             const prodRec = groups[cell].productsMap.get(pId)!;
-            prodRec.totalQty += it.quantity;
+            prodRec.totalKg += norm.kgQty;
 
             if (!prodRec.orderDemand[it.order_id]) {
-                prodRec.orderDemand[it.order_id] = { quantity: it.quantity, unit, note };
+                prodRec.orderDemand[it.order_id] = {
+                    kgQuantity: norm.kgQty,
+                    displayQty: norm.displayQty,
+                    unit: norm.unitStr,
+                    note: combinedNote
+                };
             } else {
-                prodRec.orderDemand[it.order_id].quantity += it.quantity;
-                if (note && !prodRec.orderDemand[it.order_id].note?.includes(note)) {
-                    prodRec.orderDemand[it.order_id].note = `${prodRec.orderDemand[it.order_id].note || ''} ${note}`.trim();
+                prodRec.orderDemand[it.order_id].kgQuantity += norm.kgQty;
+                const totalKgOrder = prodRec.orderDemand[it.order_id].kgQuantity;
+                prodRec.orderDemand[it.order_id].displayQty = totalKgOrder % 1 === 0 
+                    ? totalKgOrder.toString() 
+                    : Number(totalKgOrder.toFixed(2)).toLocaleString('es-CO');
+
+                if (combinedNote && !prodRec.orderDemand[it.order_id].note?.includes(combinedNote)) {
+                    prodRec.orderDemand[it.order_id].note = `${prodRec.orderDemand[it.order_id].note || ''} ${combinedNote}`.trim();
                 }
             }
         });
@@ -475,7 +533,7 @@ export default function AlistamientoSabanaPrintPage() {
             const relevantOrderIds = new Set<string>();
             prodMap.forEach(prod => {
                 Object.keys(prod.orderDemand).forEach(oId => {
-                    if (prod.orderDemand[oId].quantity > 0) {
+                    if (prod.orderDemand[oId].kgQuantity > 0) {
                         relevantOrderIds.add(oId);
                     }
                 });
@@ -535,7 +593,7 @@ export default function AlistamientoSabanaPrintPage() {
                 // FILTRO POKA-YOKE: Eliminar completamente las filas vacías
                 // Solo incluir clientes que tengan pedido > 0 en alguno de los productos de ESTA hoja
                 const chunkActiveOrders = allActiveOrders.filter(ord => {
-                    return chunkProducts.some(prod => (prod.orderDemand[ord.id]?.quantity || 0) > 0);
+                    return chunkProducts.some(prod => (prod.orderDemand[ord.id]?.kgQuantity || 0) > 0);
                 });
 
                 // Si la hoja tiene pedidos reales, añadirla a la impresión
@@ -641,7 +699,7 @@ export default function AlistamientoSabanaPrintPage() {
                             Sábana Maestra de Alistamiento &bull; Tamaño Oficio (Legal)
                         </h1>
                         <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                            {orders.length} pedidos &bull; Matriz ALISTAMIENTO.pdf (Sucursal prominente &bull; Sin filas vacías &bull; B&W)
+                            {orders.length} pedidos &bull; Matriz ALISTAMIENTO.pdf (ID Contable &bull; Normalizado KG &bull; Sin filas vacías)
                         </span>
                     </div>
                 </div>
@@ -775,7 +833,7 @@ export default function AlistamientoSabanaPrintPage() {
                                     color: '#000000'
                                 }}>
                                     <thead>
-                                        {/* Fila 1: Encabezados de Columna (Fondo claro / Texto negro) */}
+                                        {/* Fila 1: Encabezados de Columna con ACCOUNTING ID */}
                                         <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #000000' }}>
                                             <th style={{ width: '60px', padding: '5px 3px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
                                                 LUGAR
@@ -833,12 +891,10 @@ export default function AlistamientoSabanaPrintPage() {
                                                         {ord.client_type}
                                                     </td>
 
-                                                    {/* Columnas de Productos */}
+                                                    {/* Columnas de Productos (NORMALIZADO A KG) */}
                                                     {chunkProducts.map((prod) => {
                                                         const demand = prod.orderDemand[ord.id];
-                                                        if (demand && demand.quantity > 0) {
-                                                            const formattedQty = formatQuantityAndUnit(demand.quantity, demand.unit);
-
+                                                        if (demand && demand.kgQuantity > 0) {
                                                             return (
                                                                 <td
                                                                     key={prod.id}
@@ -850,7 +906,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                                     }}
                                                                 >
                                                                     <div style={{ fontWeight: 900, fontSize: '7.8pt' }}>
-                                                                        {formattedQty}
+                                                                        {demand.displayQty}{demand.unit}
                                                                     </div>
                                                                     {demand.note && (
                                                                         <div style={{ fontSize: '5.8pt', color: '#334155', lineHeight: '1.1', marginTop: '1px' }}>
@@ -876,15 +932,17 @@ export default function AlistamientoSabanaPrintPage() {
                                         })}
                                     </tbody>
 
-                                    {/* Fila de Totales por Producto */}
+                                    {/* Fila de Totales por Producto (NORMALIZADO A KG) */}
                                     <tfoot>
                                         <tr style={{ backgroundColor: '#F1F5F9', borderTop: '1.5px solid #000000', fontWeight: 900 }}>
                                             <td colSpan={3} style={{ textAlign: 'center', padding: '5px 6px', border: '1px solid #000000', fontSize: '7.5pt', color: '#000000', letterSpacing: '0.04em' }}>
                                                 PRODUCTOS ({chunkProducts.length})
                                             </td>
                                             {chunkProducts.map((prod) => {
-                                                const colSum = activeOrdersInCell.reduce((sum, ord) => sum + (prod.orderDemand[ord.id]?.quantity || 0), 0);
-                                                const sumStr = colSum > 0 ? formatQuantityAndUnit(colSum, prod.unit) : '-';
+                                                const colSum = activeOrdersInCell.reduce((sum, ord) => sum + (prod.orderDemand[ord.id]?.kgQuantity || 0), 0);
+                                                const sumStr = colSum > 0 
+                                                    ? (colSum % 1 === 0 ? colSum.toString() : Number(colSum.toFixed(2)).toLocaleString('es-CO')) + prod.unit 
+                                                    : '-';
 
                                                 return (
                                                     <td
