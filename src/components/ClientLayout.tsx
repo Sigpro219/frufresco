@@ -13,7 +13,7 @@ import { Suspense } from 'react';
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const isOpsOrAdmin = pathname?.startsWith('/ops') || pathname?.startsWith('/admin');
-    const isPrintPage = pathname?.includes('/print');
+    const isPrintPage = pathname?.includes('/print') || pathname?.includes('-print');
     const isB2BDashboard = pathname === '/b2b/dashboard';
 
     return (

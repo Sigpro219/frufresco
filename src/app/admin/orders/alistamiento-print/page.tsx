@@ -698,15 +698,15 @@ export default function AlistamientoSabanaPrintPage() {
                 }
             `}</style>
 
-            {/* Barra de Control Superior (No Imprimible) */}
+            {/* Barra de Control Superior (No Imprimible) - 100% Sticky */}
             <div className="no-print" style={{
                 position: 'sticky',
                 top: 0,
-                zIndex: 50,
+                zIndex: 9999,
                 backgroundColor: '#FFFFFF',
-                borderBottom: '1px solid #E2E8F0',
+                borderBottom: '1.5px solid #CBD5E1',
                 padding: '0.85rem 1.5rem',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
