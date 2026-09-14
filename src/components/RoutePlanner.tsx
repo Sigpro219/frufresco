@@ -282,7 +282,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 const savedDataStr = localStorage.getItem('frufresco_route_planner_draft');
                 if (savedDataStr) {
                     const savedData = JSON.parse(savedDataStr);
-                    if (savedData.targetDate === targetDate) {
+                    if (savedData.targetDate === selectedDeliveryDate) {
                         const validOrderIds = new Set(mappedOrders.map((o: any) => String(o.id)));
                         const filteredAssignments: Record<string, string[]> = {};
                         

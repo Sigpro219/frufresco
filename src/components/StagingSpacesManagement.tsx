@@ -362,7 +362,7 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                             href="/admin/orders/alistamiento-print"
                             target="_blank"
                             style={{
-                                backgroundColor: THEME.colors.accent,
+                                backgroundColor: '#D97706',
                                 color: '#FFFFFF',
                                 textDecoration: 'none',
                                 padding: '0.5rem 0.95rem',
@@ -396,7 +396,7 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                     </div>
                     <div style={{ backgroundColor: THEME.colors.background, padding: '8px 12px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
                         <div style={{ fontSize: '0.62rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Espacios Ocupados</div>
-                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: stats.occupiedSlotsCount > 150 ? THEME.colors.error : THEME.colors.textMain }}>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: stats.occupiedSlotsCount > 150 ? '#DC2626' : THEME.colors.textMain }}>
                             {stats.occupiedSlotsCount} / 150
                         </div>
                     </div>
@@ -554,7 +554,7 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                                                     fontWeight: 900,
                                                     textAlign: 'center',
                                                     borderRadius: '6px',
-                                                    border: `1.5px solid ${THEME.colors.accent}`,
+                                                    border: `1.5px solid ${THEME.colors.borderActive}`,
                                                     backgroundColor: readOnly ? '#F1F5F9' : '#FFFFFF',
                                                     color: THEME.colors.primary
                                                 }}

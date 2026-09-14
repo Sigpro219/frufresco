@@ -3583,27 +3583,110 @@ export default function OrderLoadingPage() {
                                         </div>
                                     </div>
 
-                                    {/* Mode-Specific Banner */}
+                                    {/* Dispatch Mode Content: Contingency (Guided Linear Pipeline) vs Digital (Cards Grid) */}
                                     {dispatchMode === 'contingency' ? (
                                         <div style={{
-                                            backgroundColor: '#FEF3C7',
-                                            border: '1px solid #FCD34D',
-                                            borderRadius: '12px',
-                                            padding: '10px 14px',
-                                            marginBottom: '1rem',
+                                            backgroundColor: '#0F172A',
+                                            borderRadius: '14px',
+                                            padding: '1.25rem',
+                                            border: '1px solid #334155',
+                                            boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.4)',
                                             display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            gap: '12px',
-                                            flexWrap: 'wrap'
+                                            flexDirection: 'column',
+                                            gap: '1rem'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <ShieldAlert size={20} color="#B45309" style={{ flexShrink: 0 }} />
-                                                <div style={{ fontSize: '0.75rem', color: '#92400E', fontWeight: '700' }}>
-                                                    <strong>PLANTA SIN ENERGÍA / SIN INTERNET:</strong> Genera e imprime el kit físico con casillas de báscula, remisiones de entrega y manifiesto de canastillas para no detener la operación.
+                                            {/* Status & Intent Header */}
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <div style={{
+                                                        width: '34px',
+                                                        height: '34px',
+                                                        borderRadius: '10px',
+                                                        backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                                                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        <ShieldAlert size={18} color="#F59E0B" />
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.82rem', fontWeight: '900', color: '#F8FAFC', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                                                Flujo Secuencial Obligatorio (Poka-Yoke)
+                                                            </span>
+                                                            <span style={{ fontSize: '0.62rem', backgroundColor: '#B45309', color: '#FEF3C7', padding: '2px 7px', borderRadius: '12px', fontWeight: '900', letterSpacing: '0.04em' }}>
+                                                                PISO / CONTINGENCIA
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
+                                                            Para garantizar cero errores en planta, el asistente ejecutará las tareas en orden técnico estricto:
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#E2E8F0', backgroundColor: '#1E293B', padding: '4px 10px', borderRadius: '8px', border: '1px solid #334155' }}>
+                                                    Lote: <strong style={{ color: '#FCD34D' }}>{selectedOrders.size} pedidos</strong>
                                                 </div>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+
+                                            {/* 4-Step Visual Sequence Pipeline */}
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(4, 1fr)',
+                                                gap: '8px',
+                                                backgroundColor: '#1E293B',
+                                                borderRadius: '10px',
+                                                padding: '12px 10px',
+                                                border: '1px solid #334155'
+                                            }}>
+                                                {/* Step 1 */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#F59E0B', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>1</div>
+                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Bahías Muelle</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
+                                                        Asigna y visualiza en piso (1-150) por ventana LIFO.
+                                                    </div>
+                                                </div>
+
+                                                {/* Step 2 */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid #334155', paddingLeft: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#475569', color: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>2</div>
+                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Compras & Báscula</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
+                                                        Planilla Corabastos + recibo ciego en plataforma.
+                                                    </div>
+                                                </div>
+
+                                                {/* Step 3 */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid #334155', paddingLeft: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#475569', color: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>3</div>
+                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Remisiones Carta</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
+                                                        Duplicado cliente con control de canastillas.
+                                                    </div>
+                                                </div>
+
+                                                {/* Step 4 */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid #334155', paddingLeft: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#475569', color: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: '900' }}>4</div>
+                                                        <span style={{ fontSize: '0.73rem', fontWeight: '800', color: '#F8FAFC' }}>Rótulos QR</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', lineHeight: '1.25' }}>
+                                                        Etiquetas térmicas y firma final de salida.
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Primary Single CTA Button */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
                                                 <button
                                                     type="button"
                                                     onClick={() => {
@@ -3611,167 +3694,132 @@ export default function OrderLoadingPage() {
                                                         setShowManualWizard(true);
                                                     }}
                                                     style={{
-                                                        padding: '7px 14px',
-                                                        backgroundColor: '#0F172A',
-                                                        color: 'white',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
+                                                        width: '100%',
+                                                        padding: '12px 18px',
+                                                        backgroundColor: '#F59E0B',
+                                                        color: '#0F172A',
+                                                        borderRadius: '10px',
+                                                        fontSize: '0.88rem',
                                                         fontWeight: '900',
                                                         border: 'none',
                                                         cursor: 'pointer',
-                                                        display: 'inline-flex',
+                                                        display: 'flex',
                                                         alignItems: 'center',
-                                                        gap: '6px',
-                                                        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.35)'
+                                                        justifyContent: 'center',
+                                                        gap: '8px',
+                                                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
+                                                        transition: 'all 0.15s ease'
                                                     }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D97706'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F59E0B'}
                                                 >
-                                                    <Sparkles size={13} color="#FCD34D" /> ABRIR ASISTENTE (PASO A PASO)
+                                                    <Sparkles size={16} />
+                                                    <span>INICIAR ASISTENTE GUIADO (PASO A PASO) ➔</span>
                                                 </button>
-                                                <Link
-                                                    href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                    target="_blank"
-                                                    style={{
-                                                        padding: '7px 14px',
-                                                        backgroundColor: '#B45309',
-                                                        color: 'white',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '900',
-                                                        textDecoration: 'none',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '5px',
-                                                        boxShadow: '0 2px 8px rgba(180, 83, 9, 0.3)'
-                                                    }}
-                                                >
-                                                    <Printer size={13} /> IMPRIMIR KIT COMPLETO (1-CLIC) <ExternalLink size={11} />
-                                                </Link>
-                                                <Link
-                                                    href={`/admin/orders/alistamiento-print?orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                    target="_blank"
-                                                    style={{
-                                                        padding: '7px 12px',
-                                                        backgroundColor: '#FFFFFF',
-                                                        color: '#0D7A57',
-                                                        border: '1px solid #0D7A57',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '800',
-                                                        textDecoration: 'none',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                >
-                                                    Sábana Alistamiento
-                                                </Link>
-                                                <Link
-                                                    href="/admin/logistics/staging-spaces"
-                                                    style={{
-                                                        padding: '7px 12px',
-                                                        backgroundColor: '#FFFFFF',
-                                                        color: '#0F172A',
-                                                        border: '1px solid #CBD5E1',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '800',
-                                                        textDecoration: 'none',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                >
-                                                    Bahías Muelle (1-150)
-                                                </Link>
-                                                <Link
-                                                    href="/admin/orders/contingency-reconciliation"
-                                                    style={{
-                                                        padding: '7px 12px',
-                                                        backgroundColor: '#FFFFFF',
-                                                        color: '#0369A1',
-                                                        border: '1px solid #BAE6FD',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '800',
-                                                        textDecoration: 'none',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}
-                                                >
-                                                    Conciliación
-                                                </Link>
+                                                <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                                                    Te llevará pantalla a pantalla para asignar, imprimir y validar cada documento en orden.
+                                                </span>
+                                            </div>
+
+                                            {/* Discreet Emergency & Auxiliary Tools */}
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                borderTop: '1px solid #334155',
+                                                paddingTop: '8px',
+                                                fontSize: '0.7rem',
+                                                color: '#94A3B8',
+                                                flexWrap: 'wrap',
+                                                gap: '8px'
+                                            }}>
+                                                <span style={{ fontWeight: '700', color: '#CBD5E1' }}>Herramientas auxiliares:</span>
+                                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                                    <Link
+                                                        href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                        target="_blank"
+                                                        style={{ color: '#FCD34D', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}
+                                                    >
+                                                        <Printer size={11} /> Kit 1-Clic <ExternalLink size={9} />
+                                                    </Link>
+                                                    <span style={{ color: '#475569' }}>•</span>
+                                                    <Link
+                                                        href="/admin/logistics/staging-spaces"
+                                                        target="_blank"
+                                                        style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
+                                                    >
+                                                        <Grid size={11} /> Cuadrícula Bahías <ExternalLink size={9} />
+                                                    </Link>
+                                                    <span style={{ color: '#475569' }}>•</span>
+                                                    <Link
+                                                        href={`/admin/orders/alistamiento-print?orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                        target="_blank"
+                                                        style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
+                                                    >
+                                                        <FileText size={11} /> Sábana Alistamiento <ExternalLink size={9} />
+                                                    </Link>
+                                                    <span style={{ color: '#475569' }}>•</span>
+                                                    <Link
+                                                        href="/admin/orders/contingency-reconciliation"
+                                                        target="_blank"
+                                                        style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
+                                                    >
+                                                        Conciliación <ExternalLink size={9} />
+                                                    </Link>
+                                                </div>
                                             </div>
                                         </div>
-                                    ) : null}
-
-                                    {/* Document Cards Grid */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
-                                        {/* Doc 1: Compras */}
-                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <FileText size={15} style={{ color: '#0D7A57' }} />
-                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Compras</span>
+                                    ) : (
+                                        /* Document Cards Grid (MODO DIGITAL NUBE) */
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+                                            {/* Doc 1: Compras */}
+                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <FileText size={15} style={{ color: '#0D7A57' }} />
+                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Compras</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Consolidado Corabastos</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Demanda neta por kilos y mermas</div>
                                                 </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>
-                                                    {dispatchMode === 'contingency' ? 'Planilla de Plaza' : 'Consolidado Corabastos'}
-                                                </div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
-                                                    {dispatchMode === 'contingency' ? 'Demanda neta + precios a mano' : 'Demanda neta por kilos y mermas'}
-                                                </div>
-                                            </div>
-                                            <Link 
-                                                href={dispatchMode === 'contingency' ? `/admin/orders/contingency-print?mode=purchases&orderIds=${Array.from(selectedOrders).join(',')}` : "/ops/compras"} 
-                                                target="_blank"
-                                                style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                            >
-                                                <span>{dispatchMode === 'contingency' ? 'Imprimir Planilla' : 'Ver Módulo'}</span> <ExternalLink size={10} />
-                                            </Link>
-                                        </div>
-
-                                        {/* Doc 2: Rótulos / Etiquetas */}
-                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <Tag size={15} style={{ color: '#4F46E5' }} />
-                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#EEF2FF', color: '#4338CA', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Bodega</span>
-                                                </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Rótulos Térmicos</div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Etiquetas QR de canastilla</div>
-                                            </div>
-                                            <Link 
-                                                href={`/admin/orders/print-labels?orderIds=${Array.from(selectedOrders).join(',')}`}
-                                                target="_blank"
-                                                style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#4F46E5', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                            >
-                                                <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
-                                            </Link>
-                                        </div>
-
-                                        {/* Doc 3: Hojas Picking */}
-                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <Package size={15} style={{ color: '#D97706' }} />
-                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Alistamiento</span>
-                                                </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>
-                                                    {dispatchMode === 'contingency' ? 'Hojas de Báscula' : 'Hojas de Picking'}
-                                                </div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
-                                                    {dispatchMode === 'contingency' ? 'Casillas de peso real y lote' : 'Por zonas: Fruver / Abarrotes'}
-                                                </div>
-                                            </div>
-                                            {dispatchMode === 'contingency' ? (
                                                 <Link 
-                                                    href={`/admin/orders/contingency-print?mode=picking&orderIds=${Array.from(selectedOrders).join(',')}`} 
+                                                    href="/ops/compras" 
                                                     target="_blank"
-                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#B45309', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                >
+                                                    <span>Ver Módulo</span> <ExternalLink size={10} />
+                                                </Link>
+                                            </div>
+
+                                            {/* Doc 2: Rótulos / Etiquetas */}
+                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <Tag size={15} style={{ color: '#4F46E5' }} />
+                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#EEF2FF', color: '#4338CA', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Bodega</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Rótulos Térmicos</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Etiquetas QR de canastilla</div>
+                                                </div>
+                                                <Link 
+                                                    href={`/admin/orders/print-labels?orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                    target="_blank"
+                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#4F46E5', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
                                                 >
                                                     <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
                                                 </Link>
-                                            ) : (
+                                            </div>
+
+                                            {/* Doc 3: Hojas Picking */}
+                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <Package size={15} style={{ color: '#D97706' }} />
+                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Alistamiento</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Hojas de Picking</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Por zonas: Fruver / Abarrotes</div>
+                                                </div>
                                                 <Link 
                                                     href="/ops/picking" 
                                                     target="_blank"
@@ -3779,24 +3827,18 @@ export default function OrderLoadingPage() {
                                                 >
                                                     <span>Ver Terminal</span> <ExternalLink size={10} />
                                                 </Link>
-                                            )}
-                                        </div>
-
-                                        {/* Doc 4: Remisiones & Guías */}
-                                        <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <Truck size={15} style={{ color: '#0284C7' }} />
-                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Ruta</span>
-                                                </div>
-                                                <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>
-                                                    {dispatchMode === 'contingency' ? 'Remisiones Físicas' : 'Remisiones & Guías'}
-                                                </div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
-                                                    {dispatchMode === 'contingency' ? 'Duplicado cliente y canastillas' : 'Manifiestos y remisiones B2B'}
-                                                </div>
                                             </div>
-                                            {dispatchMode === 'contingency' ? (
+
+                                            {/* Doc 4: Remisiones & Guías */}
+                                            <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <Truck size={15} style={{ color: '#0284C7' }} />
+                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>Ruta</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', marginTop: '6px' }}>Remisiones & Guías</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>Manifiestos y remisiones B2B</div>
+                                                </div>
                                                 <Link 
                                                     href={`/admin/orders/contingency-print?mode=remissions&orderIds=${Array.from(selectedOrders).join(',')}`} 
                                                     target="_blank"
@@ -3804,17 +3846,9 @@ export default function OrderLoadingPage() {
                                                 >
                                                     <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
                                                 </Link>
-                                            ) : (
-                                                <Link 
-                                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${Array.from(selectedOrders).join(',')}`} 
-                                                    target="_blank"
-                                                    style={{ marginTop: '8px', fontSize: '0.7rem', fontWeight: '800', color: '#0284C7', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                >
-                                                    <span>Imprimir ({selectedOrders.size})</span> <ExternalLink size={10} />
-                                                </Link>
-                                            )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 {/* Footer Action Buttons */}
@@ -3860,7 +3894,7 @@ export default function OrderLoadingPage() {
                                         ) : dispatchMode === 'contingency' ? (
                                             <>
                                                 <Sparkles size={18} strokeWidth={2} />
-                                                <span>INICIAR DESPACHO MANUAL (PASO A PASO) ➔</span>
+                                                <span>INICIAR ASISTENTE GUIADO (PASO A PASO) ➔</span>
                                             </>
                                         ) : (
                                             <>
