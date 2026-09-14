@@ -1732,24 +1732,29 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                                 borderRadius: THEME.radius.lg, 
                                 boxShadow: THEME.shadow.md, 
                                 border: `1px solid ${THEME.colors.border}`,
-                                overflow: 'hidden',
                                 position: 'relative'
                             }}>
                                 
                                 {/* Search and count header (Sticky Frosted Toolbar) */}
                                 <div style={{ 
-                                    padding: '1.2rem 1.5rem', 
+                                    padding: '0.85rem 1.5rem', 
                                     borderBottom: `1px solid ${THEME.colors.border}`,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
                                     backdropFilter: 'blur(12px)',
                                     position: 'sticky',
                                     top: embedded ? '142px' : '85px',
-                                    zIndex: 20
+                                    zIndex: 40,
+                                    borderTopLeftRadius: THEME.radius.lg,
+                                    borderTopRightRadius: THEME.radius.lg,
+                                    boxSizing: 'border-box',
+                                    minHeight: '66px',
+                                    display: 'flex',
+                                    alignItems: 'center'
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', width: '100%' }}>
                                         <div style={{ flex: 1, minWidth: '280px' }}>
-                                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Matriz de Precios y Utilidades</h3>
-                                            <p style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, margin: '0.2rem 0 0 0' }}>
+                                            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Matriz de Precios y Utilidades</h3>
+                                            <p style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, margin: '0.15rem 0 0 0' }}>
                                                 Listado completo de productos activos. Edita el margen directamente y se guardará automáticamente.
                                             </p>
                                         </div>
@@ -1806,18 +1811,18 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                                         <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Prueba con otros términos de búsqueda.</p>
                                     </div>
                                 ) : (
-                                    <div style={{ overflowX: 'auto', width: '100%', position: 'relative' }}>
+                                    <div style={{ width: '100%', position: 'relative' }}>
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                                            <thead style={{ backgroundColor: '#F8FAFC' }}>
+                                            <thead style={{ position: 'sticky', top: embedded ? '208px' : '151px', zIndex: 30, backgroundColor: '#F8FAFC' }}>
                                                 <tr>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>ID ERP</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Producto</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Categoría</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Costo Base</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Utilidad</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Sug. sin IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 20, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>Precio Final</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>ID ERP</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Producto</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Categoría</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Costo Base</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>IVA</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Utilidad</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Sug. sin IVA</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Precio Final</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
