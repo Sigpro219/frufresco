@@ -50,6 +50,7 @@ interface ProductInCell {
     unit: string;
     displayName: string;
     totalKg: number;
+    inventoryKg: number | null;
     orderDemand: Record<string, { kgQuantity: number; displayQty: string; unit: string; note?: string }>;
 }
 
@@ -373,6 +374,7 @@ export default function AlistamientoSabanaPrintPage() {
     const [items, setItems] = useState<OrderItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [generationTime, setGenerationTime] = useState<string>('');
+    const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({});
     const printDocRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -475,6 +477,18 @@ export default function AlistamientoSabanaPrintPage() {
             // Ordenar pedidos por número de bahía física en suelo
             parsedOrders.sort((a, b) => a.first_space - b.first_space);
 
+            // Fetch existencias de inventario en paralelo
+            const { data: stockRows } = await supabase
+                .from('inventory_stocks')
+                .select('product_id, quantity')
+                .eq('status', 'available');
+
+            const newInventoryMap: Record<string, number> = {};
+            (stockRows || []).forEach((row: { product_id: string; quantity: number }) => {
+                newInventoryMap[row.product_id] = (newInventoryMap[row.product_id] ?? 0) + row.quantity;
+            });
+            setInventoryMap(newInventoryMap);
+
             setOrders(parsedOrders);
             setItems(parsedItems);
 
@@ -530,6 +544,7 @@ export default function AlistamientoSabanaPrintPage() {
                     unit: norm.unitStr,
                     displayName,
                     totalKg: 0,
+                    inventoryKg: inventoryMap[pId] ?? null,
                     orderDemand: {}
                 });
             }
@@ -572,7 +587,7 @@ export default function AlistamientoSabanaPrintPage() {
         });
 
         return groups;
-    }, [items, orders]);
+    }, [items, orders, inventoryMap]);
 
     const availableCellNames = useMemo(() => {
         return Object.keys(cellGroups).sort();
@@ -888,7 +903,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                 <th
                                                     key={prod.id}
                                                     style={{
-                                                        padding: '6px 4px',
+                                                        padding: '4px 4px 5px',
                                                         textAlign: 'center',
                                                         fontWeight: 800,
                                                         border: '1px solid #000000',
@@ -897,7 +912,32 @@ export default function AlistamientoSabanaPrintPage() {
                                                         lineHeight: '1.2'
                                                     }}
                                                 >
-                                                    {prod.displayName}
+                                                    {/* Badge de Existencias en Inventario */}
+                                                    <div style={{
+                                                        display: 'inline-block',
+                                                        marginBottom: '3px',
+                                                        backgroundColor: prod.inventoryKg === null
+                                                            ? '#94A3B8'
+                                                            : prod.inventoryKg === 0
+                                                                ? '#FCA5A5'
+                                                                : '#BBF7D0',
+                                                        color: prod.inventoryKg === null
+                                                            ? '#475569'
+                                                            : prod.inventoryKg === 0
+                                                                ? '#991B1B'
+                                                                : '#14532D',
+                                                        borderRadius: '3px',
+                                                        padding: '1px 5px',
+                                                        fontSize: '6.5pt',
+                                                        fontWeight: 900,
+                                                        letterSpacing: '0.02em',
+                                                        whiteSpace: 'nowrap'
+                                                    }}>
+                                                        {prod.inventoryKg === null
+                                                            ? 'INV: —'
+                                                            : `INV: ${prod.inventoryKg % 1 === 0 ? prod.inventoryKg : prod.inventoryKg.toFixed(1)} kg`}
+                                                    </div>
+                                                    <div>{prod.displayName}</div>
                                                 </th>
                                             ))}
                                         </tr>
