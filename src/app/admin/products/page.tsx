@@ -2326,23 +2326,50 @@ export default function AdminProductsPage() {
                                                 </span>
                                                 
                                                 {/* Cápsula de Jerarquía Minimalista */}
-                                                {product.parent_id && (
-                                                    <div style={{
-                                                        fontSize: '0.6rem',
-                                                        fontWeight: '600',
-                                                        padding: '2px 4px',
-                                                        borderRadius: '3px',
-                                                        backgroundColor: product.parent_id === product.id ? THEME.colors.primary : '#0EA5E9',
-                                                        color: 'white',
-                                                        display: 'inline-flex',
-                                                        minWidth: '14px',
-                                                        justifyContent: 'center',
-                                                        lineHeight: '1',
-                                                        marginTop: '2px'
-                                                    }} title={product.parent_id === product.id ? 'Producto Padre' : 'Producto Hijo'}>
-                                                        {product.parent_id === product.id ? 'P' : 'H'}
-                                                    </div>
-                                                )}
+                                                {(() => {
+                                                    const hasOtherChildren = products.some(other => other.parent_id === product.id && other.id !== product.id);
+                                                    const isP = hasOtherChildren || product.parent_id === product.id;
+                                                    const isH = (product.parent_id && product.parent_id !== product.id) || (product.parent_id === product.id && hasOtherChildren);
+
+                                                    if (!isP && !isH) return null;
+
+                                                    return (
+                                                        <div style={{ display: 'inline-flex', gap: '3px', marginTop: '2px', alignItems: 'center' }}>
+                                                            {isP && (
+                                                                <div style={{
+                                                                    fontSize: '0.6rem',
+                                                                    fontWeight: '700',
+                                                                    padding: '2px 4px',
+                                                                    borderRadius: '3px',
+                                                                    backgroundColor: '#4F46E5',
+                                                                    color: 'white',
+                                                                    display: 'inline-flex',
+                                                                    minWidth: '14px',
+                                                                    justifyContent: 'center',
+                                                                    lineHeight: '1'
+                                                                }} title="Producto Padre (Cabeza de Familia)">
+                                                                    P
+                                                                </div>
+                                                            )}
+                                                            {isH && (
+                                                                <div style={{
+                                                                    fontSize: '0.6rem',
+                                                                    fontWeight: '700',
+                                                                    padding: '2px 4px',
+                                                                    borderRadius: '3px',
+                                                                    backgroundColor: THEME.colors.primary,
+                                                                    color: 'white',
+                                                                    display: 'inline-flex',
+                                                                    minWidth: '14px',
+                                                                    justifyContent: 'center',
+                                                                    lineHeight: '1'
+                                                                }} title={isP ? "Producto Hijo / SKU Base de la Familia" : "Producto Hijo / SKU Fraccionado"}>
+                                                                    H
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center', minWidth: '280px' }}>

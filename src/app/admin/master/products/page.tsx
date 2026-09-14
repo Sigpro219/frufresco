@@ -363,7 +363,7 @@ export default function MasterProductsPage() {
                 ID_PADRE: p.parent_id || '',
                 SKU_PADRE: parent?.sku || '',
                 Nombre_Padre: parent?.name || '',
-                Tipo_Jerarquia: p.parent_id ? (p.parent_id === p.id ? 'PADRE' : 'HIJO') : 'PRINCIPAL',
+                Tipo_Jerarquia: (p.parent_id === p.id && products.some(other => other.parent_id === p.id && other.id !== p.id)) ? 'PADRE E HIJO' : (p.parent_id ? (p.parent_id === p.id ? 'PADRE' : 'HIJO') : (products.some(other => other.parent_id === p.id && other.id !== p.id) ? 'PADRE' : 'PRINCIPAL')),
                 IVA: p.iva_rate ?? 19,
                 URL_Imagen: p.image_url || '',
                 Comprador: p.buying_team || '',
@@ -1114,9 +1114,9 @@ export default function MasterProductsPage() {
 
         // Filtros de Cabeceras de Columna
         if (filterHierarchy === 'padre') {
-            result = result.filter(p => p.parent_id === p.id);
+            result = result.filter(p => p.parent_id === p.id || products.some(other => other.parent_id === p.id && other.id !== p.id));
         } else if (filterHierarchy === 'hijo') {
-            result = result.filter(p => p.parent_id !== null && p.parent_id !== p.id);
+            result = result.filter(p => (p.parent_id !== null && p.parent_id !== '') || products.some(other => other.parent_id === p.id && other.id !== p.id && p.parent_id === p.id));
         }
 
         if (filterCategoryHeader !== 'all') {
@@ -1205,8 +1205,8 @@ export default function MasterProductsPage() {
                     if (tag === 'off' || tag === 'inactivo') return !p.is_active;
 
                     // Filtro Jerarquía (@padre, @hijo)
-                    if (tag === 'padre') return p.parent_id === p.id;
-                    if (tag === 'hijo') return p.parent_id !== null && p.parent_id !== p.id;
+                    if (tag === 'padre') return p.parent_id === p.id || products.some(other => other.parent_id === p.id && other.id !== p.id);
+                    if (tag === 'hijo') return (p.parent_id !== null && p.parent_id !== '') || products.some(other => other.parent_id === p.id && other.id !== p.id && p.parent_id === p.id);
 
                     // Filtro Incompletos (@sindatos)
                     if (tag === 'sindatos' || tag === 'incompleto') {
@@ -2103,23 +2103,50 @@ export default function MasterProductsPage() {
                                                 </span>
                                                 
                                                 {/* Cápsula de Jerarquía en Categoría */}
-                                                {p.parent_id && (
-                                                    <div style={{
-                                                        fontSize: '0.6rem',
-                                                        fontWeight: '700',
-                                                        padding: '1px 4px',
-                                                        borderRadius: '3px',
-                                                        backgroundColor: p.parent_id === p.id ? '#4F46E5' : THEME.colors.primary,
-                                                        color: 'white',
-                                                        display: 'inline-flex',
-                                                        minWidth: '14px',
-                                                        justifyContent: 'center',
-                                                        lineHeight: '1.2',
-                                                        marginTop: '2px'
-                                                    }}>
-                                                        {p.parent_id === p.id ? 'P' : 'H'}
-                                                    </div>
-                                                )}
+                                                {(() => {
+                                                    const hasOtherChildren = products.some(other => other.parent_id === p.id && other.id !== p.id);
+                                                    const isP = hasOtherChildren || p.parent_id === p.id;
+                                                    const isH = (p.parent_id && p.parent_id !== p.id) || (p.parent_id === p.id && hasOtherChildren);
+
+                                                    if (!isP && !isH) return null;
+
+                                                    return (
+                                                        <div style={{ display: 'inline-flex', gap: '3px', marginTop: '2px', alignItems: 'center' }}>
+                                                            {isP && (
+                                                                <div style={{
+                                                                    fontSize: '0.6rem',
+                                                                    fontWeight: '700',
+                                                                    padding: '1px 4px',
+                                                                    borderRadius: '3px',
+                                                                    backgroundColor: '#4F46E5',
+                                                                    color: 'white',
+                                                                    display: 'inline-flex',
+                                                                    minWidth: '14px',
+                                                                    justifyContent: 'center',
+                                                                    lineHeight: '1.2'
+                                                                }} title="Producto Padre (Cabeza de Familia)">
+                                                                    P
+                                                                </div>
+                                                            )}
+                                                            {isH && (
+                                                                <div style={{
+                                                                    fontSize: '0.6rem',
+                                                                    fontWeight: '700',
+                                                                    padding: '1px 4px',
+                                                                    borderRadius: '3px',
+                                                                    backgroundColor: THEME.colors.primary,
+                                                                    color: 'white',
+                                                                    display: 'inline-flex',
+                                                                    minWidth: '14px',
+                                                                    justifyContent: 'center',
+                                                                    lineHeight: '1.2'
+                                                                }} title={isP ? "Producto Hijo / SKU Base de la Familia" : "Producto Hijo / SKU Fraccionado"}>
+                                                                    H
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>

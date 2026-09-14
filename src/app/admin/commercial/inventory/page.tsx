@@ -1383,11 +1383,11 @@ export default function InventoryAdminPage() {
             if (segments.length === 0) {
                 const childrenQty = family.children.reduce((sum, ch) => sum + (ch.quantity || 0), 0);
                 const ownQty = family.parent.quantity || 0;
-                const totalQuantity = family.isParent ? childrenQty : ownQty;
+                const totalQuantity = family.isParent ? (childrenQty + ownQty) : ownQty;
 
                 const childrenVal = family.children.reduce((sum, ch) => sum + ((avgCosts[ch.product_id] || 0) * (ch.quantity || 0)), 0);
                 const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
-                const totalValue = family.isParent ? childrenVal : ownVal;
+                const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
 
                 result.push({
                     ...family,
@@ -1407,11 +1407,11 @@ export default function InventoryAdminPage() {
 
                 const childrenQty = activeChildren.reduce((sum, ch) => sum + (ch.quantity || 0), 0);
                 const ownQty = family.parent.quantity || 0;
-                const totalQuantity = family.isParent ? childrenQty : ownQty;
+                const totalQuantity = family.isParent ? (childrenQty + ownQty) : ownQty;
 
                 const childrenVal = activeChildren.reduce((sum, ch) => sum + ((avgCosts[ch.product_id] || 0) * (ch.quantity || 0)), 0);
                 const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
-                const totalValue = family.isParent ? childrenVal : ownVal;
+                const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
 
                 result.push({
                     ...family,

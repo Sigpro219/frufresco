@@ -330,15 +330,26 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     });
 
     const [localChildren, setLocalChildren] = useState<Product[]>(() => {
-        return (allProducts || []).filter(p => p.parent_id === product.id && p.id !== product.id);
+        const found = (allProducts || []).filter(p => p.parent_id === product.id);
+        if (product.parent_id === product.id && !found.some(p => p.id === product.id)) {
+            return [product, ...found];
+        }
+        return found;
     });
 
     useEffect(() => {
-        setLocalChildren((allProducts || []).filter(p => p.parent_id === product.id && p.id !== product.id));
-    }, [allProducts, product.id]);
+        const found = (allProducts || []).filter(p => p.parent_id === product.id);
+        if (product.parent_id === product.id && !found.some(p => p.id === product.id)) {
+            setLocalChildren([product, ...found]);
+        } else {
+            setLocalChildren(found);
+        }
+    }, [allProducts, product.id, product.parent_id]);
 
     const isChild = !!formData.parent_id && formData.parent_id !== product.id;
-    const isParent = !isChild && (localChildren.length > 0 || product.parent_id === product.id);
+    const isSelfChild = formData.parent_id === product.id || localChildren.some(c => c.id === product.id);
+    const hasOtherChildren = localChildren.some(c => c.id !== product.id);
+    const isParent = !isChild && (hasOtherChildren || product.parent_id === product.id || localChildren.length > 0);
     const hasChildren = localChildren.length > 0;
 
     const [filterOnlyActiveChildren, setFilterOnlyActiveChildren] = useState(true);
@@ -391,7 +402,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
     const handleUnlinkChild = async (childId: string, childName: string) => {
-        if (!window.confirm(`¿Confirmas desvincular "${childName}" de este producto padre? Pasará a ser un SKU independiente.`)) {
+        const isSelf = childId === product.id;
+        const confirmMsg = isSelf
+            ? `¿Confirmas desvincular este producto base ("${childName}") como SKU hijo? Seguirá siendo el producto padre de la familia.`
+            : `¿Confirmas desvincular "${childName}" de este producto padre? Pasará a ser un SKU independiente.`;
+
+        if (!window.confirm(confirmMsg)) {
             return;
         }
         try {
@@ -403,6 +419,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
             if (error) throw error;
 
+            if (isSelf) {
+                setFormData(prev => ({ ...prev, parent_id: null }));
+            }
             setLocalChildren(prev => prev.filter(c => c.id !== childId));
             if (onSave) onSave();
         } catch (err: any) {
@@ -416,9 +435,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         .filter(p => 
             p.is_active &&
             addChildQuery.trim() !== '' &&
-            p.id !== product.id && 
-            p.parent_id !== product.id &&
-            !allProducts.some(other => other.parent_id === p.id && other.id !== p.id) &&
+            (p.id === product.id 
+                ? !localChildren.some(c => c.id === product.id)
+                : (p.parent_id !== product.id && !allProducts.some(other => other.parent_id === p.id && other.id !== p.id))
+            ) &&
             (
                 (p.name || '').toLowerCase().includes(addChildQuery.toLowerCase().trim()) ||
                 (p.accounting_id?.toString() || '').includes(addChildQuery.trim()) ||
@@ -1893,7 +1913,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                         color: 'white',
                                         letterSpacing: '0.04em'
                                     }}>
-                                        PADRE
+                                        {isSelfChild ? 'PADRE E HIJO' : 'PADRE'}
                                     </span>
                                     <span style={{
                                         fontSize: '0.72rem',
@@ -2057,6 +2077,20 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                         }} title={child.name}>
                                                             {child.name}
                                                         </span>
+                                                        {child.id === product.id && (
+                                                            <span style={{
+                                                                fontSize: '0.62rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: '#EDE9FE',
+                                                                color: '#6D28D9',
+                                                                padding: '1px 5px',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid #DDD6FE',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                SKU Base
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', fontSize: '0.68rem', color: '#64748B' }}>
                                                         <span>Unidad: <strong>{child.unit_of_measure || 'Kg'}</strong></span>
@@ -2252,9 +2286,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     <span style={{ fontWeight: '600', color: '#1E293B' }}>
                                                                         {candidate.name}
                                                                     </span>
+                                                                    {candidate.id === product.id && (
+                                                                        <span style={{ marginLeft: '6px', fontSize: '0.65rem', fontWeight: '800', backgroundColor: '#EDE9FE', color: '#6D28D9', padding: '1px 5px', borderRadius: '4px', border: '1px solid #DDD6FE' }}>
+                                                                            SKU Base
+                                                                        </span>
+                                                                    )}
                                                                 </div>
-                                                                <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700' }}>
-                                                                    + Vincular
+                                                                <span style={{ fontSize: '0.7rem', color: candidate.id === product.id ? '#6D28D9' : '#059669', fontWeight: '700' }}>
+                                                                    {candidate.id === product.id ? '+ Vincular como SKU Hijo' : '+ Vincular'}
                                                                 </span>
                                                             </div>
                                                         ))

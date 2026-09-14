@@ -393,27 +393,47 @@ export default function OpsInventoryPage() {
     const families = useMemo(() => {
         if (!products || products.length === 0) return [];
 
-        const parentIdsWithChildren = new Set(
-            products.filter(p => p.parent_id).map(p => p.parent_id as string)
-        );
+        // Identificar cabezas de familia (los que tienen otros productos o a sí mismos como parent_id)
+        const parentIdsWithChildren = new Set<string>();
+        products.forEach(p => {
+            if (p.parent_id) {
+                parentIdsWithChildren.add(p.parent_id);
+            }
+        });
 
         const map: Record<string, ProductFamily> = {};
 
+        // 1. Cabezas de familia primero
         products.forEach(p => {
-            if (!p.parent_id) {
+            if (parentIdsWithChildren.has(p.id)) {
                 map[p.id] = {
                     id: p.id,
                     parent: p,
-                    isParent: parentIdsWithChildren.has(p.id),
+                    isParent: true,
                     children: []
                 };
             }
         });
 
+        // 2. Productos independientes (sin parent_id y que no sean cabeza de familia)
+        products.forEach(p => {
+            if (!p.parent_id && !map[p.id]) {
+                map[p.id] = {
+                    id: p.id,
+                    parent: p,
+                    isParent: false,
+                    children: []
+                };
+            }
+        });
+
+        // 3. Asignar hijos a su respectivo padre (incluyendo a sí mismo si es padre e hijo)
         products.forEach(p => {
             if (p.parent_id) {
                 if (map[p.parent_id]) {
-                    map[p.parent_id].children.push(p);
+                    if (!map[p.parent_id].children.some(c => c.id === p.id)) {
+                        map[p.parent_id].children.push(p);
+                    }
                 } else {
                     // Huérfano: tratar como familia independiente
                     map[p.id] = {
