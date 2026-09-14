@@ -106,7 +106,7 @@ export default function ManualDispatchWizardModal({
     // Asignación calculada automática
     const autoAllocations = useMemo(() => {
         return allocateStagingSpacesGeographically(preparedOrders, {
-            avg_kg_per_crate: 12.52,
+            avg_kg_per_crate: 12.5,
             space_capacity: 36,
             max_spaces: 150
         });

@@ -65,7 +65,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
 
     // Parámetros Logísticos
     const [spaceCapacity, setSpaceCapacity] = useState<number>(36);
-    const [avgKgPerCrate, setAvgKgPerCrate] = useState<number>(12.52);
+    const [avgKgPerCrate, setAvgKgPerCrate] = useState<number>(12.5);
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         return initialDate || queryDate || getTomorrowDateStr();
     });
@@ -95,7 +95,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 const sc = paramData.find((p: any) => p.id === 'space_capacity')?.value;
                 if (sc) setSpaceCapacity(parseFloat(sc) || 36);
                 const avg = paramData.find((p: any) => p.id === 'avg_kg_per_crate')?.value;
-                if (avg) setAvgKgPerCrate(parseFloat(avg) || 12.52);
+                if (avg) setAvgKgPerCrate(parseFloat(avg) || 12.5);
             }
 
             // 2. Cargar pedidos con items y perfiles
@@ -526,27 +526,33 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                         </div>
                     </div>
                     {/* Parámetros Editables */}
-                    <div style={{ backgroundColor: THEME.colors.background, padding: '6px 10px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', fontWeight: 700, color: THEME.colors.textSecondary }}>
+                    <div style={{ backgroundColor: THEME.colors.background, padding: '6px 12px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: '185px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.64rem', fontWeight: 700, color: THEME.colors.textSecondary }}>
                             <span>Cubicaje/Bahía:</span>
-                            <input 
-                                type="number" 
-                                disabled={readOnly}
-                                value={spaceCapacity} 
-                                onChange={e => setSpaceCapacity(parseFloat(e.target.value) || 36)}
-                                style={{ width: '42px', padding: '2px 4px', fontSize: '0.72rem', fontWeight: 800, textAlign: 'center', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white' }}
-                            /> can.
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input 
+                                    type="number" 
+                                    disabled={readOnly}
+                                    value={spaceCapacity} 
+                                    onChange={e => setSpaceCapacity(parseFloat(e.target.value) || 36)}
+                                    style={{ width: '58px', padding: '3px 4px', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center', borderRadius: '5px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white' }}
+                                />
+                                <span style={{ fontSize: '0.68rem', fontWeight: 600 }}>can.</span>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', fontWeight: 700, color: THEME.colors.textSecondary, marginTop: '3px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.64rem', fontWeight: 700, color: THEME.colors.textSecondary, marginTop: '4px' }}>
                             <span>Kg/Canastilla:</span>
-                            <input 
-                                type="number" 
-                                step="0.1"
-                                disabled={readOnly}
-                                value={avgKgPerCrate} 
-                                onChange={e => setAvgKgPerCrate(parseFloat(e.target.value) || 12.52)}
-                                style={{ width: '42px', padding: '2px 4px', fontSize: '0.72rem', fontWeight: 800, textAlign: 'center', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white' }}
-                            /> kg
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input 
+                                    type="number" 
+                                    step="0.1"
+                                    disabled={readOnly}
+                                    value={avgKgPerCrate} 
+                                    onChange={e => setAvgKgPerCrate(parseFloat(e.target.value) || 12.5)}
+                                    style={{ width: '58px', padding: '3px 4px', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center', borderRadius: '5px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white' }}
+                                />
+                                <span style={{ fontSize: '0.68rem', fontWeight: 600 }}>kg</span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -4,7 +4,7 @@
  * 
  * Reglas de Negocio FruFresco:
  * - 150 Espacios físicos en el suelo de la nave central (Muelle).
- * - avg_kg_per_crate = 12.52 kg (estimación de volumen).
+ * - avg_kg_per_crate = 12.5 kg (estimación de volumen).
  * - space_capacity = 36 canastillas apilables por bahía.
  * - Asignación contigua por zona geográfica para que clientes del mismo camión queden juntos.
  */
@@ -45,7 +45,7 @@ export interface StagingAllocationResult {
 }
 
 export interface StagingAllocatorConfig {
-    avg_kg_per_crate?: number;   // Default: 12.52
+    avg_kg_per_crate?: number;   // Default: 12.5
     space_capacity?: number;     // Default: 36
     max_spaces?: number;         // Default: 150
 }
@@ -88,7 +88,7 @@ export function deduceGeographicZone(order: OrderStagingInput): string {
  */
 export function calculateCratesAndSpaces(
     weightKg: number, 
-    avgKgPerCrate: number = 12.52, 
+    avgKgPerCrate: number = 12.5, 
     spaceCapacity: number = 36
 ): { crates: number; spaces: number } {
     const safeWeight = Math.max(0, weightKg);
@@ -156,7 +156,7 @@ export function allocateStagingSpacesGeographically(
     orders: OrderStagingInput[],
     config: StagingAllocatorConfig = {}
 ): StagingAllocationResult[] {
-    const avgKg = config.avg_kg_per_crate || 12.52;
+    const avgKg = config.avg_kg_per_crate || 12.5;
     const capacity = config.space_capacity || 36;
     const maxSpaces = config.max_spaces || 150;
 
