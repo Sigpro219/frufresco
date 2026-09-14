@@ -8,6 +8,7 @@ import { useAuth, checkUserPermission } from '@/lib/authContext';
 import FleetManagement from '@/components/FleetManagement';
 import MaintenanceManagement from '@/components/MaintenanceManagement';
 import RoutePlanner from '@/components/RoutePlanner';
+import StagingSpacesManagement from '@/components/StagingSpacesManagement';
 import ConductorPanel from '@/components/ConductorPanel';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { 
@@ -17,7 +18,9 @@ import {
     AlertTriangle, 
     Globe, 
     Compass, 
+    Grid,
     Users, 
+
     Wrench, 
     TrendingUp, 
     RefreshCw, 
@@ -73,7 +76,7 @@ const MAP_ID = 'bf725916f72f2fd';
 export default function TransportControlTower() {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
-    const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates'>('map');
+    const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'staging' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates'>('map');
     const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
     const [crateProfiles, setCrateProfiles] = useState<any[]>([]);
     const [patioStock, setPatioStock] = useState<number>(420);
@@ -389,6 +392,7 @@ export default function TransportControlTower() {
                         {[
                             { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={2} /> },
                             { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={2} /> },
+                            { id: 'staging', label: 'Muelle / Bahías', icon: <Grid size={14} strokeWidth={2} /> },
                             { id: 'fleet', label: 'Flota', icon: <Truck size={14} strokeWidth={2} /> },
                             { id: 'drivers_panel', label: 'Conductores', icon: <Users size={14} strokeWidth={2} /> },
                             { id: 'maintenance', label: 'Mantenimiento', icon: <Wrench size={14} strokeWidth={2} /> },
@@ -925,6 +929,8 @@ export default function TransportControlTower() {
                         </div>
                     ) : activeTab === 'planner' ? (
                         <RoutePlanner readOnly={!canEdit} />
+                    ) : activeTab === 'staging' ? (
+                        <StagingSpacesManagement readOnly={!canEdit} />
                     ) : activeTab === 'fleet' ? (
                         <FleetManagement readOnly={!canEdit} />
                     ) : activeTab === 'drivers_panel' ? (
