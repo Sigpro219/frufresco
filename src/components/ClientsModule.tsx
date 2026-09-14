@@ -66,7 +66,11 @@ import {
     Gift,
     Zap,
     TrendingUp,
-    Layers
+    Layers,
+    BookOpen,
+    Palette,
+    Tag,
+    Upload
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -8900,6 +8904,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [showGuide, setShowGuide] = useState(false);
     const [focusedProdIndex, setFocusedProdIndex] = useState(-1);
     const [focusedSubIndex, setFocusedSubIndex] = useState(-1);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const fetchData = async () => {
         setLoading(true);
@@ -9181,9 +9186,62 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     };
 
     // Find original product helper
-    const getProductDetails = (id: string) => {
+    const getProductDetails = useCallback((id: string) => {
         return products.find(p => p.id === id);
+    }, [products]);
+
+    const isRealLogisticalException = useCallback((exc: any) => {
+        const origProd = getProductDetails(exc.product_id);
+        const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
+        const hasPickingNote = Boolean(exc.picking_note && exc.picking_note.trim());
+        const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
+        const hasSub = Boolean(exc.substitution_product_id);
+        const hasPreferredOptions = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
+        return hasDiffNickname || hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
+    }, [getProductDetails]);
+
+    const normalizeSearch = (val: any) => {
+        if (!val) return '';
+        return String(val)
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
     };
+
+    const visibleExceptions = useMemo(() => {
+        return exceptions.filter(isRealLogisticalException);
+    }, [exceptions, isRealLogisticalException]);
+
+    const filteredExceptions = useMemo(() => {
+        const cleanQuery = normalizeSearch(searchQuery);
+        if (!cleanQuery) return visibleExceptions;
+
+        const tokens = cleanQuery.split(/\s+/).filter(Boolean);
+
+        return visibleExceptions.filter(exc => {
+            const origProd = getProductDetails(exc.product_id);
+            const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
+            const optionsText = exc.preferred_options 
+                ? Object.entries(exc.preferred_options).map(([k, v]) => `${k} ${v}`).join(' ')
+                : '';
+
+            const searchableBlob = normalizeSearch([
+                origProd?.name,
+                origProd?.accounting_id,
+                origProd?.sku,
+                exc.nickname,
+                exc.picking_note,
+                exc.delivery_note,
+                subProd?.name,
+                subProd?.accounting_id,
+                subProd?.sku,
+                optionsText
+            ].filter(Boolean).join(' '));
+
+            return tokens.every(tok => searchableBlob.includes(tok));
+        });
+    }, [visibleExceptions, searchQuery, getProductDetails]);
 
     const selectedOriginalProd = getProductDetails(newException.product_id);
 
@@ -9221,124 +9279,234 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     </button>
                 </header>
 
-                <div ref={scrollableRef} style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
-                    {/* INSTRUCTIVO DE USO E IMPORTACIÓN/EXPORTACIÓN */}
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: showGuide ? '1rem' : '0' }}>
-                            <button
-                                onClick={() => setShowGuide(!showGuide)}
-                                style={{
-                                    background: '#EFF6FF',
-                                    border: '1px solid #BFDBFE',
-                                    color: '#1D4ED8',
-                                    padding: '8px 16px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    transition: 'all 0.2s',
-                                    fontFamily: THEME.typography.fontFamilySecondary
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                            >
-                                📖 {showGuide ? 'Ocultar Instructivo de Uso' : 'Ver Instructivo (Guía Operativa)'}
-                            </button>
-
-                            {!readOnly && (
-                                <div style={{ display: 'flex', gap: '8px' }}>
+                <div ref={scrollableRef} style={{ padding: '0 2rem 2rem 2rem', flex: 1, overflowY: 'auto' }}>
+                    {/* BARRA SUPERIOR STICKY: BUSCADOR UNIVERSAL Y ACCIONES */}
+                    <div style={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 30,
+                        backgroundColor: 'white',
+                        margin: '0 -2rem 1.25rem -2rem',
+                        padding: '1.25rem 2rem 1rem 2rem',
+                        borderBottom: '1px solid #E2E8F0',
+                        boxShadow: '0 4px 12px -2px rgba(0,0,0,0.03)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            {/* BUSCADOR UNIVERSAL */}
+                            <div style={{ position: 'relative', flex: '1 1 280px' }}>
+                                <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none', color: '#94A3B8' }}>
+                                    <Search size={15} />
+                                </span>
+                                <input 
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Buscar por cualquier criterio (producto, ID, alias, notas, variantes...)"
+                                    style={{
+                                        width: '100%',
+                                        height: '38px',
+                                        padding: '0 2.2rem 0 2.4rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: '#F8FAFC',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '500',
+                                        color: THEME.colors.textMain,
+                                        outline: 'none',
+                                        transition: 'all 0.2s',
+                                        fontFamily: THEME.typography.fontFamilySecondary
+                                    }}
+                                    onFocus={(e) => {
+                                        e.currentTarget.style.borderColor = THEME.colors.primary;
+                                        e.currentTarget.style.backgroundColor = 'white';
+                                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.12)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.currentTarget.style.borderColor = '#CBD5E1';
+                                        e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
+                                />
+                                {searchQuery && (
                                     <button
-                                        onClick={handleExportExcel}
                                         type="button"
+                                        onClick={() => setSearchQuery('')}
                                         style={{
-                                            background: '#ECFDF5',
-                                            border: '1px solid #A7F3D0',
-                                            color: '#047857',
-                                            padding: '8px 16px',
-                                            borderRadius: '8px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: '700',
-                                            cursor: 'pointer',
+                                            position: 'absolute',
+                                            right: '0.65rem',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            border: 'none',
+                                            background: '#E2E8F0',
+                                            color: '#64748B',
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '6px',
-                                            transition: 'all 0.2s',
-                                            fontFamily: THEME.typography.fontFamilySecondary
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            padding: 0
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                        title="Limpiar búsqueda"
                                     >
-                                        📥 Descargar Planilla
+                                        <X size={11} strokeWidth={2.5} />
                                     </button>
+                                )}
+                            </div>
 
-                                    <label
-                                        style={{
-                                            background: '#EEF2FF',
-                                            border: '1px solid #C7D2FE',
-                                            color: '#4F46E5',
-                                            padding: '8px 16px',
-                                            borderRadius: '8px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: '700',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            transition: 'all 0.2s',
-                                            fontFamily: THEME.typography.fontFamilySecondary
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0E7FF'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EEF2FF'}
-                                    >
-                                        📤 Cargar Planilla
-                                        <input 
-                                            type="file" 
-                                            accept=".xlsx, .xls" 
-                                            onChange={handleImportExcel} 
-                                            style={{ display: 'none' }} 
-                                        />
-                                    </label>
-                                </div>
-                            )}
+                            {/* BOTONES DE ACCIÓN: INSTRUCTIVO & IMPORTACIÓN/EXPORTACIÓN */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                <button
+                                    onClick={() => setShowGuide(!showGuide)}
+                                    type="button"
+                                    style={{
+                                        background: showGuide ? '#DBEAFE' : '#EFF6FF',
+                                        border: '1px solid #BFDBFE',
+                                        color: '#1D4ED8',
+                                        padding: '8px 14px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s',
+                                        fontFamily: THEME.typography.fontFamilySecondary
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                    onMouseLeave={(e) => { if (!showGuide) e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
+                                >
+                                    <BookOpen size={14} />
+                                    <span>{showGuide ? 'Ocultar Instructivo' : 'Ver Instructivo (Guía Operativa)'}</span>
+                                </button>
+
+                                {!readOnly && (
+                                    <>
+                                        <button
+                                            onClick={handleExportExcel}
+                                            type="button"
+                                            style={{
+                                                background: '#ECFDF5',
+                                                border: '1px solid #A7F3D0',
+                                                color: '#047857',
+                                                padding: '8px 14px',
+                                                borderRadius: '8px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                transition: 'all 0.2s',
+                                                fontFamily: THEME.typography.fontFamilySecondary
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                        >
+                                            <Download size={14} />
+                                            <span>Descargar Planilla</span>
+                                        </button>
+
+                                        <label
+                                            style={{
+                                                background: '#EEF2FF',
+                                                border: '1px solid #C7D2FE',
+                                                color: '#4F46E5',
+                                                padding: '8px 14px',
+                                                borderRadius: '8px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                transition: 'all 0.2s',
+                                                fontFamily: THEME.typography.fontFamilySecondary
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0E7FF'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EEF2FF'}
+                                        >
+                                            <Upload size={14} />
+                                            <span>Cargar Planilla</span>
+                                            <input 
+                                                type="file" 
+                                                accept=".xlsx, .xls" 
+                                                onChange={handleImportExcel} 
+                                                style={{ display: 'none' }} 
+                                            />
+                                        </label>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
-                        {showGuide && (
-                            <div style={{
-                                marginTop: '8px',
-                                padding: '1.2rem',
-                                backgroundColor: '#F0F9FF',
-                                border: '1px solid #BAE6FD',
-                                borderRadius: THEME.radius.lg,
-                                fontFamily: THEME.typography.fontFamilySecondary,
-                                fontSize: '0.8rem',
-                                color: '#0369A1',
-                                animation: 'fadeSlideDown 0.15s ease-out'
-                            }}>
-                                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', fontWeight: '800', color: '#0284C7', textTransform: 'uppercase' }}>
-                                    Guía de Excepciones y Particularidades del Cliente
-                                </h4>
-                                <p style={{ margin: '0 0 12px 0', lineHeight: '1.4' }}>
-                                    Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en las siguientes particularidades:
-                                </p>
-                                <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <li>
-                                        <strong>🔄 Productos de Reemplazo (Sustitución):</strong> 
-                                        Define qué producto alternativo ofrecer si el original no está disponible. Al agregar el producto original, el sistema <em>propondrá y permitirá cambiarlo</em> de inmediato con un clic.
-                                    </li>
-                                    <li>
-                                        <strong>📦 Notas Logísticas y Alias de Facturación:</strong>
-                                        <ul style={{ margin: '4px 0 0 0', paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <li><u>Alias (Nombre Factura):</u> Sobrescribe el nombre impreso en la factura o remisión.</li>
-                                            <li><u>Nota del cliente:</u> Indicaciones de empaque y preparación solicitadas por el cliente (ej: <em>Bolsa microperforada, 130grs</em>).</li>
-                                        </ul>
-                                    </li>
-                                </ul>
+                        {/* FEEDBACK DE BÚSQUEDA ACTIVA */}
+                        {searchQuery && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                <span>
+                                    Resultados para &quot;<strong style={{ color: THEME.colors.textMain }}>{searchQuery}</strong>&quot;:
+                                </span>
+                                <span style={{
+                                    backgroundColor: filteredExceptions.length > 0 ? '#ECFDF5' : '#FEF2F2',
+                                    color: filteredExceptions.length > 0 ? '#047857' : '#B91C1C',
+                                    border: `1px solid ${filteredExceptions.length > 0 ? '#A7F3D0' : '#FECACA'}`,
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontWeight: '700'
+                                }}>
+                                    {filteredExceptions.length} de {visibleExceptions.length} {visibleExceptions.length === 1 ? 'excepción' : 'excepciones'}
+                                </span>
                             </div>
                         )}
                     </div>
+
+                    {/* INSTRUCTIVO DE USO (DESPLEGABLE) */}
+                    {showGuide && (
+                        <div style={{
+                            marginBottom: '1.5rem',
+                            padding: '1.2rem',
+                            backgroundColor: '#F0F9FF',
+                            border: '1px solid #BAE6FD',
+                            borderRadius: THEME.radius.lg,
+                            fontFamily: THEME.typography.fontFamilySecondary,
+                            fontSize: '0.8rem',
+                            color: '#0369A1',
+                            animation: 'fadeSlideDown 0.15s ease-out'
+                        }}>
+                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', fontWeight: '800', color: '#0284C7', textTransform: 'uppercase' }}>
+                                Guía de Excepciones y Particularidades del Cliente
+                            </h4>
+                            <p style={{ margin: '0 0 12px 0', lineHeight: '1.4' }}>
+                                Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en las siguientes particularidades:
+                            </p>
+                            <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <li>
+                                    <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                        <RefreshCw size={14} style={{ color: '#D97706' }} />
+                                        Productos de Reemplazo (Sustitución):
+                                    </strong> 
+                                    <div style={{ marginTop: '2px' }}>
+                                        Define qué producto alternativo ofrecer si el original no está disponible. Al agregar el producto original, el sistema <em>propondrá y permitirá cambiarlo</em> de inmediato con un clic.
+                                    </div>
+                                </li>
+                                <li>
+                                    <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                        <Package size={14} style={{ color: THEME.colors.primary }} />
+                                        Notas Logísticas y Alias de Facturación:
+                                    </strong>
+                                    <ul style={{ margin: '4px 0 0 0', paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <li><u>Alias (Nombre Factura):</u> Sobrescribe el nombre impreso en la factura o remisión.</li>
+                                        <li><u>Nota del cliente:</u> Indicaciones de empaque y preparación solicitadas por el cliente (ej: <em>Bolsa microperforada, 130grs</em>).</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                    )}
 
                     {!readOnly && !isAdding && (
                         <button 
@@ -9480,7 +9648,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
                                                                 <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>ID: {p.accounting_id || p.sku}</span>
                                                             </div>
-                                                            <span style={{ color: THEME.colors.primary, fontSize: '0.95rem', fontWeight: '600' }}>＋</span>
+                                                            <Plus size={15} style={{ color: THEME.colors.primary }} />
                                                         </div>
                                                     ))
                                                 }
@@ -9564,9 +9732,9 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                             setNewException(prev => ({ ...prev, substitution_product_id: '' }));
                                                             setSubSearchTerm('');
                                                         }}
-                                                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', fontWeight: 'bold' }}
+                                                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center', padding: '2px' }}
                                                     >
-                                                        ✕
+                                                        <X size={12} strokeWidth={2.5} />
                                                     </button>
                                                 </div>
                                             )}
@@ -9613,7 +9781,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
                                                                 <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>ID: {p.accounting_id || p.sku}</span>
                                                             </div>
-                                                            <span style={{ color: '#D97706', fontSize: '0.95rem', fontWeight: '600' }}>🔄</span>
+                                                            <RefreshCw size={14} style={{ color: '#D97706' }} />
                                                         </div>
                                                     ))
                                                 }
@@ -9708,141 +9876,176 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         </div>
                     )}
 
-                    {(() => {
-                        const isRealLogisticalException = (exc: any) => {
-                            const origProd = getProductDetails(exc.product_id);
-                            const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
-                            const hasPickingNote = Boolean(exc.picking_note && exc.picking_note.trim());
-                            const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
-                            const hasSub = Boolean(exc.substitution_product_id);
-                            const hasPreferredOptions = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
-                            return hasDiffNickname || hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
-                        };
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {loading ? (
+                            <div style={{ textAlign: 'center', padding: '2.5rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                <Loader2 size={18} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                                <span>Cargando excepciones...</span>
+                            </div>
+                        ) : visibleExceptions.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '2.5rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                No hay excepciones logísticas configuradas para este cliente.
+                            </div>
+                        ) : filteredExceptions.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
+                                    <Search size={20} />
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
+                                        No se encontraron excepciones para &quot;{searchQuery}&quot;
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '4px' }}>
+                                        Intenta buscar por nombre de producto, ID, SKU, alias de factura, nota o sustituto.
+                                    </div>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    style={{
+                                        marginTop: '6px',
+                                        padding: '6px 14px',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#F8FAFC',
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        color: THEME.colors.textMain,
+                                        fontSize: '0.75rem',
+                                        fontWeight: '600',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Limpiar búsqueda
+                                </button>
+                            </div>
+                        ) : (
+                            filteredExceptions.map(exc => {
+                                const origProd = getProductDetails(exc.product_id);
+                                const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
+                                const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
+                                const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
 
-                        const visibleExceptions = exceptions.filter(isRealLogisticalException);
+                                return (
+                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                        <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
+                                            <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ color: '#1E293B' }}>Original: {origProd?.name || '---'}</span>
+                                                <span style={{ color: '#94A3B8' }}>|</span>
+                                                <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
+                                            </div>
 
-                        return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                {loading ? (
-                                    <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Cargando excepciones...</div>
-                                ) : visibleExceptions.length === 0 ? (
-                                    <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary }}>No hay excepciones logísticas configuradas para este cliente.</div>
-                                ) : (
-                                    visibleExceptions.map(exc => {
-                                        const origProd = getProductDetails(exc.product_id);
-                                        const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
-                                        const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
-                                        const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
-
-                                        return (
-                                            <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                                <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
-                                                    <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                                </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ color: '#1E293B' }}>Original: {origProd?.name || '---'}</span>
-                                                        <span style={{ color: '#94A3B8' }}>|</span>
-                                                        <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
+                                            {/* RENDER DETAILED RULES */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                                                
+                                                {/* Nickname alias (Only when different) */}
+                                                {hasDiffNickname && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Tag size={13} style={{ color: THEME.colors.textSecondary }} />
+                                                            Nombre en Factura (Alias):
+                                                        </span>
+                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                            {exc.nickname}
+                                                        </span>
                                                     </div>
+                                                )}
 
-                                                    {/* RENDER DETAILED RULES */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                                                        
-                                                        {/* Nickname alias (Only when different) */}
-                                                        {hasDiffNickname && (
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🏷️ Nombre en Factura (Alias): </span>
-                                                                <span style={{ fontSize: '0.78rem', color: THEME.colors.textMain, fontWeight: '700' }}>
-                                                                    {exc.nickname}
+                                                {/* Preferred options (Standardized variants) */}
+                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Palette size={13} style={{ color: THEME.colors.textSecondary }} />
+                                                            Variación Requerida:
+                                                        </span>
+                                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                            {Object.entries(exc.preferred_options).map(([key, val]) => (
+                                                                <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                    {key}: {val as string}
                                                                 </span>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Preferred options (Standardized variants) */}
-                                                        {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🎨 Variación Requerida: </span>
-                                                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                                                    {Object.entries(exc.preferred_options).map(([key, val]) => (
-                                                                        <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                                            {key}: {val as string}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Picking notes */}
-                                                        {exc.picking_note && (
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>📋 Nota de Alistamiento: </span>
-                                                                <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Real Delivery note */}
-                                                        {hasRealDeliveryNote && (
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.7rem', color: '#0369A1', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🚚 Nota de Despacho: </span>
-                                                                <span style={{ fontSize: '0.75rem', color: '#0284C7', fontWeight: '700', backgroundColor: '#F0F9FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>
-                                                                    {exc.delivery_note}
-                                                                </span>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Substitution product */}
-                                                        {subProd && (
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
-                                                                <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A' }}>
-                                                                    [{subProd.accounting_id || subProd.sku}] {subProd.name}
-                                                                </span>
-                                                            </div>
-                                                        )}
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                {!readOnly && (
-                                                    <div style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
-                                                        <button 
-                                                            onClick={() => {
-                                                                setEditingId(exc.id);
-                                                                setNewException({
-                                                                    product_id: exc.product_id,
-                                                                    nickname: exc.nickname,
-                                                                    picking_note: exc.picking_note,
-                                                                    substitution_product_id: exc.substitution_product_id || '',
-                                                                    delivery_note: exc.delivery_note && !exc.delivery_note.toLowerCase().includes('pareto demanda:') ? exc.delivery_note : '',
-                                                                    preferred_options: exc.preferred_options || {}
-                                                                });
-                                                                setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
-                                                                setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
-                                                                setIsAdding(true);
-                                                                scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                                                            }} 
-                                                            style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                                        >
-                                                            <Edit2 size={14} />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleDelete(exc.id)} 
-                                                            style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                                                )}
+
+                                                {/* Picking notes */}
+                                                {exc.picking_note && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <ClipboardList size={13} style={{ color: THEME.colors.primary }} />
+                                                            Nota de Alistamiento:
+                                                        </span>
+                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Real Delivery note */}
+                                                {hasRealDeliveryNote && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#0369A1', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Truck size={13} style={{ color: '#0284C7' }} />
+                                                            Nota de Despacho:
+                                                        </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#0284C7', fontWeight: '700', backgroundColor: '#F0F9FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>
+                                                            {exc.delivery_note}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Substitution product */}
+                                                {subProd && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <RefreshCw size={13} style={{ color: '#D97706' }} />
+                                                            Sustituir por:
+                                                        </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A' }}>
+                                                            [{subProd.accounting_id || subProd.sku}] {subProd.name}
+                                                        </span>
                                                     </div>
                                                 )}
                                             </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        );
-                    })()}
+                                        </div>
+                                        {!readOnly && (
+                                            <div style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingId(exc.id);
+                                                        setNewException({
+                                                            product_id: exc.product_id,
+                                                            nickname: exc.nickname,
+                                                            picking_note: exc.picking_note,
+                                                            substitution_product_id: exc.substitution_product_id || '',
+                                                            delivery_note: exc.delivery_note && !exc.delivery_note.toLowerCase().includes('pareto demanda:') ? exc.delivery_note : '',
+                                                            preferred_options: exc.preferred_options || {}
+                                                        });
+                                                        setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
+                                                        setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
+                                                        setIsAdding(true);
+                                                        scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                                                    }} 
+                                                    style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(exc.id)} 
+                                                    style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

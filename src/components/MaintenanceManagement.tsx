@@ -16,7 +16,8 @@ import {
     FileText, 
     Plus, 
     X, 
-    Image
+    Image,
+    Trash2
 } from 'lucide-react';
 
 interface MaintenanceTask {
@@ -155,7 +156,11 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
                 .order('performed_date', { ascending: false })
                 .limit(50);
             
-            if (error) throw error;
+            if (error) {
+                console.warn('Historial de mantenimiento no disponible en BD:', error.message);
+                setHistory([]);
+                return;
+            }
 
             // Fetch drivers to map in memory
             const { data: driversData } = await supabase
@@ -170,8 +175,8 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
 
             setHistory(enhancedHistory || []);
         } catch (err: unknown) {
-            const error = err as { message?: string };
-            console.error('Error fetching history:', error.message || err);
+            console.warn('Error fetching history:', err);
+            setHistory([]);
         } finally {
             setLoadingHistory(false);
         }
@@ -241,32 +246,33 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
                 uploadedUrls.push(publicUrl);
             }
 
-            // 3. Insert History Log
-            const { error: logError } = await supabase
-                .from('maintenance_history_logs')
-                .insert([{
-                    vehicle_id: completingTask.vehicle_id,
-                    schedule_id: completingTask.id,
-                    task_name: completingTask.task_name,
-                    performed_date: completionDate,
-                    performed_km: completionOdometer,
-                    performed_by_driver_id: selectedDriverId || null,
-                    next_due_date: nextDueDate,
-                    next_due_km: nextDueKm,
-                    attachments: uploadedUrls,
-                    notes: completionNotes
-                }]);
-            
-            if (logError) throw logError;
+            // 3. Insert History Log (guard against table not created yet)
+            try {
+                await supabase
+                    .from('maintenance_history_logs')
+                    .insert([{
+                        vehicle_id: completingTask.vehicle_id,
+                        schedule_id: completingTask.id,
+                        task_name: completingTask.task_name,
+                        performed_date: completionDate,
+                        performed_km: completionOdometer,
+                        performed_by_driver_id: selectedDriverId || null,
+                        next_due_date: nextDueDate,
+                        next_due_km: nextDueKm,
+                        attachments: uploadedUrls,
+                        notes: completionNotes
+                    }]);
+            } catch (logErr) {
+                console.warn('Could not insert maintenance_history_log:', logErr);
+            }
 
             // 4. Update Schedule
             const { error: schedError } = await supabase
                 .from('maintenance_schedules')
                 .update({
-                    last_performed_km: completionOdometer,
-                    last_performed_date: completionDate,
-                    next_due_km: nextDueKm,
-                    next_due_date: nextDueDate
+                    next_due_km: completingTask.task_type === 'km' ? nextDueKm : null,
+                    next_due_date: completingTask.task_type === 'date' ? nextDueDate : null,
+                    status: 'pending'
                 })
                 .eq('id', completingTask.id);
 
@@ -312,19 +318,25 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
         }
 
         try {
+            const payload: {
+                vehicle_id: string;
+                task_name: string;
+                task_type: 'km' | 'date';
+                next_due_km: number | null;
+                next_due_date: string | null;
+                status: string;
+            } = {
+                vehicle_id: newTask.vehicle_id,
+                task_name: newTask.task_name,
+                task_type: newTask.task_type,
+                next_due_km: newTask.task_type === 'km' ? nextDueKm : null,
+                next_due_date: newTask.task_type === 'date' ? nextDueDate : null,
+                status: 'pending'
+            };
+
             const { error } = await supabase
                 .from('maintenance_schedules')
-                .insert([{
-                    vehicle_id: newTask.vehicle_id,
-                    task_name: newTask.task_name,
-                    task_type: newTask.task_type,
-                    interval_km: newTask.interval_km,
-                    interval_months: newTask.interval_months || 12,
-                    last_performed_km: newTask.last_performed_km,
-                    last_performed_date: newTask.last_performed_date,
-                    next_due_km: nextDueKm || 9999999, // Hack to not break current order if date-based
-                    next_due_date: nextDueDate
-                }]);
+                .insert([payload]);
 
             if (error) throw error;
             setShowAdd(false);
@@ -333,6 +345,20 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
             const error = err as { message?: string };
             console.error('DATABASE ERROR:', error.message || err);
             alert(`Error al programar mantenimiento: ${error.message || 'Error desconocido'}`);
+        }
+    };
+
+    const handleDeleteTask = async (id: string) => {
+        if (readOnly) return;
+        if (!confirm('¿Estás seguro de eliminar esta tarea de mantenimiento programada?')) return;
+        try {
+            const { error } = await supabase.from('maintenance_schedules').delete().eq('id', id);
+            if (error) throw error;
+            fetchData();
+        } catch (err: unknown) {
+            const error = err as { message?: string };
+            console.error('Error al eliminar tarea:', error.message || err);
+            alert(`Error al eliminar tarea: ${error.message || 'Error desconocido'}`);
         }
     };
 
@@ -547,7 +573,9 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
                                              </div>
                                          </td>
                                          <td style={{ padding: '1.2rem', fontWeight: '600', color: '#475569' }}>
-                                             {t.task_type === 'km' ? `${t.last_performed_km?.toLocaleString()} km` : t.last_performed_date}
+                                             {t.task_type === 'km' 
+                                                 ? (t.last_performed_km != null ? `${t.last_performed_km.toLocaleString()} km` : 'Inicial') 
+                                                 : (t.last_performed_date || 'Inicial')}
                                          </td>
                                          <td style={{ padding: '1.2rem', fontWeight: '900', color: '#0891B2' }}>
                                              {t.task_type === 'km' ? `${t.next_due_km?.toLocaleString()} km` : t.next_due_date}
@@ -566,12 +594,22 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
                                          </td>
                                          {!readOnly && (
                                              <td style={{ padding: '1.2rem', textAlign: 'center' }}>
-                                                 <button 
-                                                     onClick={() => { setCompletingTask(t); setCompletionOdometer(t.vehicle?.current_odometer || 0); setNextDueKmOverride(t.interval_km || 0); setSelectedDriverId(t.vehicle?.driver_id || ''); setCompletionNotes(''); setShowCloseModal(true); }}
-                                                     style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
-                                                 >
-                                                     CERRAR
-                                                 </button>
+                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                                                     <button 
+                                                         onClick={() => { setCompletingTask(t); setCompletionOdometer(t.vehicle?.current_odometer || 0); setNextDueKmOverride(t.interval_km || 0); setSelectedDriverId(t.vehicle?.driver_id || ''); setCompletionNotes(''); setShowCloseModal(true); }}
+                                                         style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
+                                                     >
+                                                         CERRAR
+                                                     </button>
+                                                     <button
+                                                         type="button"
+                                                         onClick={() => handleDeleteTask(t.id)}
+                                                         title="Eliminar tarea programada"
+                                                         style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #FCA5A5', backgroundColor: '#FEF2F2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                                                     >
+                                                         <Trash2 size={14} />
+                                                     </button>
+                                                 </div>
                                              </td>
                                          )}
                                      </tr>

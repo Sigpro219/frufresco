@@ -50,7 +50,9 @@ import {
     AlertCircle,
     FileCheck,
     ShoppingCart,
-    Pin
+    Pin,
+    Search,
+    Truck
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -3080,218 +3082,222 @@ function CreateOrderContent() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-            <style>{hideSpinnersStyle}</style>
+            <style>{`
+                ${hideSpinnersStyle}
+                @media (max-width: 1180px) {
+                    .order-create-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+            `}</style>
             <div style={{
                 width: '100%',
                 maxWidth: '1850px',
                 margin: '0 auto',
-                padding: '1rem 2rem 9rem 2rem',
+                padding: '1rem 1.5rem 3rem 1.5rem',
                 boxSizing: 'border-box'
             }}>
-                <div style={{ marginBottom: '1rem' }}>
-                    <Link href="/admin/orders/loading" style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        textDecoration: 'none',
-                        color: THEME.colors.textSecondary,
-                        fontWeight: '600',
-                        fontSize: '0.85rem',
-                        transition: 'color 0.2s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.color = THEME.colors.primary}
-                    onMouseOut={(e) => e.currentTarget.style.color = THEME.colors.textSecondary}
-                    >
-                        <ArrowLeft size={16} strokeWidth={1.5} />
-                        <span>Volver a Órdenes</span>
-                    </Link>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <Link href="/admin/orders/loading" style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            textDecoration: 'none',
+                            color: THEME.colors.textSecondary,
+                            fontWeight: '600',
+                            fontSize: '0.8rem',
+                            padding: '0.35rem 0.65rem',
+                            borderRadius: '6px',
+                            backgroundColor: 'white',
+                            border: '1px solid #E2E8F0',
+                            transition: 'all 0.15s'
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.color = THEME.colors.primary; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                        onMouseOut={(e) => { e.currentTarget.style.color = THEME.colors.textSecondary; e.currentTarget.style.borderColor = '#E2E8F0'; }}
+                        >
+                            <ArrowLeft size={14} strokeWidth={2} />
+                            <span>Volver a Órdenes</span>
+                        </Link>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '6px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
+                                <FileText size={15} strokeWidth={2} />
+                            </div>
+                            <h1 style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Nuevo Pedido Manual</h1>
+                        </div>
+                    </div>
+                    
+                    {/* CLIENT SEGMENTATION (SLIM COMPACT PILL) */}
+                    <div style={{ display: 'flex', gap: '3px', padding: '2px', backgroundColor: '#E2E8F0', borderRadius: '8px', width: '240px' }}>
+                        <button
+                            onClick={() => setClientType('B2B')}
+                            style={{
+                                flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none',
+                                backgroundColor: clientType === 'B2B' ? THEME.colors.primary : 'transparent',
+                                color: clientType === 'B2B' ? '#ffffff' : '#64748B',
+                                fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                transition: 'all 0.15s', fontSize: '0.75rem',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                            }}
+                        >
+                            <Building2 size={13} strokeWidth={2} />
+                            <span>Institucional</span>
+                        </button>
+                        <button
+                            onClick={() => setClientType('B2C')}
+                            style={{
+                                flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none',
+                                backgroundColor: clientType === 'B2C' ? THEME.colors.primary : 'transparent',
+                                color: clientType === 'B2C' ? '#ffffff' : '#64748B',
+                                fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                transition: 'all 0.15s', fontSize: '0.75rem',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                            }}
+                        >
+                            <Home size={13} strokeWidth={2} />
+                            <span>Hogar</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', alignItems: 'start' }}>
+                <div className="order-create-grid" style={{ display: 'grid', gridTemplateColumns: isStaging ? '1fr' : 'minmax(0, 1fr) 380px', gap: '1.25rem', alignItems: 'start' }}>
 
-                    {/* LEFT COLUMN: FORM */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '2rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
-                                    <FileText size={18} strokeWidth={1.5} />
-                                </div>
-                                <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Nuevo Pedido Manual</h1>
-                            </div>
-                            
-                            {/* CLIENT SEGMENTATION (SLIMMER) */}
-                            <div style={{ display: 'flex', gap: '4px', padding: '3px', backgroundColor: THEME.colors.primaryLight, borderRadius: '12px', width: '320px' }}>
-                                <button
-                                    onClick={() => setClientType('B2B')}
-                                    style={{
-                                        flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
-                                        backgroundColor: clientType === 'B2B' ? THEME.colors.primary : 'transparent',
-                                        color: clientType === 'B2B' ? '#ffffff' : THEME.colors.textSecondary,
-                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? THEME.shadow.sm : 'none',
-                                        transition: 'all 0.2s', fontSize: '0.8rem',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                                    }}
-                                >
-                                    <Building2 size={14} strokeWidth={1.5} />
-                                    <span>Institucional</span>
-                                </button>
-                                <button
-                                    onClick={() => setClientType('B2C')}
-                                    style={{
-                                        flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
-                                        backgroundColor: clientType === 'B2C' ? THEME.colors.primary : 'transparent',
-                                        color: clientType === 'B2C' ? '#ffffff' : THEME.colors.textSecondary,
-                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? THEME.shadow.sm : 'none',
-                                        transition: 'all 0.2s', fontSize: '0.8rem',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                                    }}
-                                >
-                                    <Home size={14} strokeWidth={1.5} />
-                                    <span>Hogar</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* TOP SECTION GRID: CLIENT + LOGISTICS */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
-                            
-                            {/* LEFT: CLIENT FIELDS */}
-                            <div>
-                                <div style={{ padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '1px dashed #D1D5DB', height: '100%' }}>
+                    {/* LEFT COLUMN: FORM & PRODUCTS */}
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1.25rem 1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                        
+                        {/* CLIENT SELECTION SECTION */}
+                        <div style={{ marginBottom: '1.25rem' }}>
                             {clientType === 'B2B' ? (
                                 <div style={{ position: 'relative' }}>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Buscar Empresa (Nombre, NIT, Dir, Tel)</label>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                        Buscar Empresa Institucional
+                                    </label>
 
                                     {selectedClient ? (
                                         <div style={{
-                                            padding: '1.2rem', 
+                                            padding: '0.75rem 1rem', 
                                             backgroundColor: '#F0FDF4', 
                                             border: '1px solid #BBF7D0', 
-                                            borderRadius: '16px',
+                                            borderRadius: '12px',
                                             display: 'flex', 
                                             flexDirection: 'column',
-                                            gap: '0.8rem',
-                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                                            gap: '0.45rem',
+                                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)'
                                         }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
+                                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#166534', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                                         SUCURSAL SELECCIONADA
-                                                    </div>
-                                                    <div style={{ fontWeight: '900', color: '#14532D', fontSize: '1.2rem', lineHeight: '1.2' }}>
+                                                    </span>
+                                                    <span style={{ fontWeight: '800', color: '#14532D', fontSize: '0.95rem' }}>
                                                         {getSelectedClientDetails()?.company_name}
-                                                        {activePricingModel && (
-                                                            <div style={{
-                                                                marginTop: '0.5rem',
-                                                                padding: '0.35rem 0.65rem',
-                                                                borderRadius: '8px',
-                                                                backgroundColor: '#E0F2FE',
-                                                                border: '1px solid #BAE6FD',
-                                                                color: '#0369A1',
-                                                                fontSize: '0.8rem',
-                                                                fontWeight: 'bold',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px',
-                                                                width: 'fit-content'
-                                                            }}>
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Tag size={13} strokeWidth={2} /> {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Modelo: ${activePricingModel?.name || 'General Institucional'}`}</span>
-                                                                {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                    </span>
+                                                    {activePricingModel && (
+                                                        <span style={{
+                                                            padding: '2px 6px',
+                                                            borderRadius: '5px',
+                                                            backgroundColor: '#E0F2FE',
+                                                            border: '1px solid #BAE6FD',
+                                                            color: '#0369A1',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}>
+                                                            <Tag size={11} strokeWidth={2} />
+                                                            {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Modelo: ${activePricingModel?.name || 'General Institucional'}`}
+                                                            {isContractExpired && <span style={{ color: '#DC2626' }}>(Expirado)</span>}
+                                                        </span>
+                                                    )}
                                                     {getSelectedClientDetails()?.parent_id && (
-                                                        <div style={{ fontSize: '0.85rem', color: '#15803D', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            <span style={{ opacity: 0.7 }}>Matriz:</span> 
-                                                            {clients.find(c => c.id === getSelectedClientDetails()?.parent_id)?.company_name || 'Corporativo'}
-                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#15803D', fontWeight: '600' }}>
+                                                            (Matriz: {clients.find(c => c.id === getSelectedClientDetails()?.parent_id)?.company_name || 'Corporativo'})
+                                                        </span>
                                                     )}
                                                 </div>
                                                 <button
                                                     onClick={() => setSelectedClient('')}
                                                     style={{ 
                                                         background: '#DCFCE7', 
-                                                        border: 'none', 
+                                                        border: '1px solid #BBF7D0', 
                                                         color: '#166534', 
-                                                        width: '28px', 
-                                                        height: '28px', 
-                                                        borderRadius: '50%', 
-                                                        display: 'flex', 
+                                                        padding: '3px 8px', 
+                                                        borderRadius: '6px', 
+                                                        display: 'inline-flex', 
                                                         alignItems: 'center', 
-                                                        justifyContent: 'center', 
+                                                        gap: '4px',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.8rem'
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '700'
                                                     }}
+                                                    title="Cambiar cliente"
                                                 >
-                                                    <X size={14} />
+                                                    <X size={12} />
+                                                    <span>Cambiar</span>
                                                 </button>
                                             </div>
 
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px solid #DCFCE7', paddingTop: '0.8rem' }}>
-                                                {/* Fila 1: Dirección Full Width */}
-                                                <div>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} strokeWidth={1.5} /> DIRECCIÓN DE ENTREGA</span></div>
-                                                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532D' }}>
-                                                        {getSelectedClientDetails()?.address}
-                                                        <span style={{ fontSize: '0.8rem', fontWeight: '500', marginLeft: '6px', opacity: 0.8 }}>
-                                                            ({getSelectedClientDetails()?.city || 'Bogotá'})
-                                                        </span>
-                                                    </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.78rem', color: '#166534', flexWrap: 'wrap', borderTop: '1px solid #DCFCE7', paddingTop: '0.4rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <MapPin size={12} strokeWidth={1.5} style={{ color: '#15803D' }} />
+                                                    <span style={{ fontWeight: '600' }}>{getSelectedClientDetails()?.address || 'Sin dirección'}</span>
+                                                    <span style={{ opacity: 0.8 }}>({getSelectedClientDetails()?.city || 'Bogotá'})</span>
                                                 </div>
-
-                                                {/* Fila 2: Grid para Encargado y GPS */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(22, 101, 52, 0.1)', paddingTop: '0.8rem' }}>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><User size={12} strokeWidth={1.5} /> Encargado</span></div>
-                                                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534' }}>{getSelectedClientDetails()?.contact_name || 'No asignado'}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#15803D' }}>{getSelectedClientDetails()?.contact_phone || 'Sin teléfono'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={12} strokeWidth={1.5} /> Estado GPS</span></div>
-                                                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            {getSelectedClientDetails()?.latitude ? 'Confirmado' : 'Pendiente'}
-                                                        </div>
-                                                        {getSelectedClientDetails()?.latitude && (
-                                                            <div style={{ fontSize: '0.7rem', color: '#15803D', opacity: 0.8 }}>
-                                                                {getSelectedClientDetails()?.latitude.toFixed(5)}, {getSelectedClientDetails()?.longitude.toFixed(5)}
-                                                            </div>
+                                                {getSelectedClientDetails()?.contact_name && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <User size={12} strokeWidth={1.5} style={{ color: '#15803D' }} />
+                                                        <span>{getSelectedClientDetails()?.contact_name}</span>
+                                                        {getSelectedClientDetails()?.contact_phone && (
+                                                            <span style={{ opacity: 0.8 }}>• {getSelectedClientDetails()?.contact_phone}</span>
                                                         )}
                                                     </div>
+                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Globe size={12} strokeWidth={1.5} style={{ color: '#15803D' }} />
+                                                    <span style={{ fontWeight: '600' }}>{getSelectedClientDetails()?.latitude ? 'GPS Confirmado' : 'GPS Pendiente'}</span>
                                                 </div>
                                             </div>
                                         </div>
                                     ) : (
                                         <>
-                                            <input
-                                                type="text"
-                                                placeholder="Ej: 'Calle 100' o 'Restaurante'..."
-                                                value={clientSearch}
-                                                onChange={(e) => {
-                                                    setClientSearch(e.target.value);
-                                                    setFocusedClientIndex(-1);
-                                                }}
-                                                onKeyDown={(e) => {
-                                                    if (filteredClients.length === 0) return;
-                                                    if (e.key === 'ArrowDown') {
-                                                        e.preventDefault();
-                                                        setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
-                                                    } else if (e.key === 'ArrowUp') {
-                                                        e.preventDefault();
-                                                        setFocusedClientIndex(prev => Math.max(prev - 1, -1));
-                                                    } else if (e.key === 'Enter' || e.key === 'Tab') {
-                                                        const targetIndex = focusedClientIndex >= 0 ? focusedClientIndex : 0;
-                                                        if (filteredClients[targetIndex]) {
+                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                <div style={{ position: 'absolute', left: '10px', color: '#94A3B8', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                    <Search size={15} />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar por Nombre, NIT, Dirección o Teléfono..."
+                                                    value={clientSearch}
+                                                    onChange={(e) => {
+                                                        setClientSearch(e.target.value);
+                                                        setFocusedClientIndex(-1);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (filteredClients.length === 0) return;
+                                                        if (e.key === 'ArrowDown') {
                                                             e.preventDefault();
-                                                            selectClient(filteredClients[targetIndex]);
+                                                            setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
+                                                        } else if (e.key === 'ArrowUp') {
+                                                            e.preventDefault();
+                                                            setFocusedClientIndex(prev => Math.max(prev - 1, -1));
+                                                        } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                                            const targetIndex = focusedClientIndex >= 0 ? focusedClientIndex : 0;
+                                                            if (filteredClients[targetIndex]) {
+                                                                e.preventDefault();
+                                                                selectClient(filteredClients[targetIndex]);
+                                                                setFocusedClientIndex(-1);
+                                                            }
+                                                        } else if (e.key === 'Escape') {
+                                                            setClientSearch('');
                                                             setFocusedClientIndex(-1);
                                                         }
-                                                    } else if (e.key === 'Escape') {
-                                                        setClientSearch('');
-                                                        setFocusedClientIndex(-1);
-                                                    }
-                                                }}
-                                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                            />
+                                                    }}
+                                                    style={{ width: '100%', padding: '0.55rem 0.85rem 0.55rem 2.2rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.88rem', height: '38px', outline: 'none' }}
+                                                    onFocus={(e) => e.target.style.borderColor = '#0D7A57'}
+                                                    onBlur={(e) => e.target.style.borderColor = '#CBD5E1'}
+                                                />
+                                            </div>
                                             {filteredClients.length > 0 && (
                                                 <div style={{
                                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
@@ -3772,141 +3778,8 @@ function CreateOrderContent() {
                                     )}
                                 </div>
                             )}
-                                </div>
-                            </div>
-
-                            {/* RIGHT: LOGISTICS & DELIVERY */}
-                            <div>
-                                <div style={{ padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', height: '100%' }}>
-                                    <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: '#475569', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Configuración de Entrega
-                                    </h3>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.4rem' }}>CANAL DE VENTA</label>
-                                            <select
-                                                id="origin-source-select"
-                                                value={originSource} onChange={e => setOriginSource(e.target.value)}
-                                                style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '0.9rem' }}
-                                            >
-                                                <option value="phone">Teléfono</option>
-                                                <option value="whatsapp">WhatsApp</option>
-                                                <option value="file_upload">Documento de compra</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.4rem' }}>FECHA DE ENTREGA</label>
-                                            <input
-                                                type="date"
-                                                value={deliveryDate}
-                                                min={minDeliveryDate}
-                                                onChange={e => {
-                                                    const newDate = e.target.value;
-                                                    if (newDate < minDeliveryDate) {
-                                                        showToast(`La fecha mínima de entrega permitida es ${minDeliveryDate}.`, 'error');
-                                                        setDeliveryDate(minDeliveryDate);
-                                                        return;
-                                                    }
-                                                    setDeliveryDate(newDate);
-                                                }}
-                                                style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* INFO FRANJA (Final Refined Version) */}
-                                    {(selectedClient || selectedClientB2C) && (
-                                        <div style={{ 
-                                            marginTop: '1.2rem', 
-                                            padding: '1.2rem 1.5rem', 
-                                            backgroundColor: isManualDelivery ? '#F0FDF4' : '#FFF7ED', 
-                                            borderRadius: '20px', 
-                                            border: isManualDelivery ? '1px solid #BBF7D0' : '1px solid #FFEDD5',
-                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                <div style={{ fontSize: '0.65rem', fontWeight: '900', color: isManualDelivery ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                                    {isManualDelivery ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><AlertTriangle size={12} strokeWidth={1.5} /> OVERRIDE MANUAL ACTIVO</span> : 'FRANJA DE ENTREGA'}
-                                                </div>
-                                                {isManualDelivery && (
-                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#10B981', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                        ESTADO: PRIORITARIO
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: isManualDelivery ? '#14532D' : '#431407', lineHeight: '1.2' }}>
-                                                {isManualDelivery ? (
-                                                    <span>{manualDeliveryTime || '??:??'} (±{manualDeliveryMargin} min)</span>
-                                                ) : (
-                                                    getSelectedClientDetails()?.logistics_data?.days?.length > 0 
-                                                        ? formatTimeWindow(getSelectedClientDetails()?.logistics_data)
-                                                        : (getSelectedClientDetails()?.delivery_restrictions || 'Sin restricciones horarias')
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* MANUAL OVERRIDE TOGGLE */}
-                                    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '1rem' }}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={isManualDelivery} 
-                                                onChange={e => setIsManualDelivery(e.target.checked)}
-                                                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10B981' }}
-                                            />
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#334155' }}>Configuración Manual de Entrega</span>
-                                        </label>
-
-                                        {isManualDelivery && (
-                                            <div style={{ 
-                                                padding: '1rem', 
-                                                backgroundColor: '#F0FDF4', 
-                                                borderRadius: '12px', 
-                                                border: '1px solid #DCFCE7',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '0.8rem',
-                                                animation: 'fadeIn 0.2s ease-out'
-                                            }}>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#166534', marginBottom: '0.3rem' }}>HORA ESPECÍFICA</label>
-                                                        <input 
-                                                            type="time" 
-                                                            value={manualDeliveryTime}
-                                                            onChange={e => setManualDeliveryTime(e.target.value)}
-                                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.85rem' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#166534', marginBottom: '0.3rem' }}>MARGEN (+/- min)</label>
-                                                        <select
-                                                            value={manualDeliveryMargin} onChange={e => setManualDeliveryMargin(Number(e.target.value))}
-                                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.85rem' }}
-                                                        >
-                                                            <option value={15}>15 min</option>
-                                                            <option value={30}>30 min</option>
-                                                            <option value={45}>45 min</option>
-                                                            <option value={60}>60 min</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#166534', marginBottom: '0.3rem' }}>NOTA DE ENTREGA</label>
-                                                    <textarea 
-                                                        placeholder="Instrucciones específicas..."
-                                                        value={manualDeliveryNote}
-                                                        onChange={e => setManualDeliveryNote(e.target.value)}
-                                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.85rem', minHeight: '60px', resize: 'none' }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
                         </div>
+
 
                         {/* PDF UPLOAD FOR SPECIFIC B2B CLIENTS */}
                         {clientType === 'B2B' && selectedClient && getSelectedClientDetails() && (
@@ -4763,19 +4636,68 @@ function CreateOrderContent() {
 
                         {/* 2. PRODUCT SEARCH (Visible only if NOT importing a document) */}
                         {originSource !== 'file_upload' && (
-                            <div style={{ marginBottom: '2rem', position: 'relative' }}>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Agregar Productos Manualmente</label>
-                            <input
-                                ref={productSearchInputRef}
-                                type="text"
-                                placeholder="Escribe para buscar (ej: Tomate)..."
-                                value={productSearch} 
-                                onChange={e => { setProductSearch(e.target.value); setFocusedProductIndex(-1); }}
-                                onKeyDown={handleProductSearchKeyDown}
-                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '2px solid #E2E8F0', fontSize: '1.1rem', outline: 'none' }}
-                                onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
-                                onBlur={(e) => e.target.style.borderColor = '#E2E8F0'}
-                            />
+                            <div style={{ marginBottom: '1.25rem', position: 'relative' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                        Buscar y Agregar Productos
+                                    </label>
+                                    <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '600' }}>
+                                        Navega con <kbd style={{ padding: '1px 4px', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: '0.65rem' }}>↓</kbd> <kbd style={{ padding: '1px 4px', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: '0.65rem' }}>↑</kbd> y pulsa <kbd style={{ padding: '1px 4px', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: '0.65rem' }}>Enter</kbd>
+                                    </span>
+                                </div>
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                    <Search size={16} style={{ position: 'absolute', left: '0.75rem', color: '#94A3B8', pointerEvents: 'none' }} />
+                                    <input
+                                        ref={productSearchInputRef}
+                                        type="text"
+                                        placeholder="Escribe el nombre o código del producto (ej: Tomate Chonto, Papa, Cebolla)..."
+                                        value={productSearch} 
+                                        onChange={e => { setProductSearch(e.target.value); setFocusedProductIndex(-1); }}
+                                        onKeyDown={handleProductSearchKeyDown}
+                                        style={{
+                                            width: '100%',
+                                            height: '40px',
+                                            padding: '0 2.2rem 0 2.3rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: '#F8FAFC',
+                                            fontSize: '0.88rem',
+                                            color: '#1E293B',
+                                            outline: 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = '#0D7A57';
+                                            e.target.style.backgroundColor = '#FFFFFF';
+                                            e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.12)';
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = '#CBD5E1';
+                                            e.target.style.backgroundColor = '#F8FAFC';
+                                            e.target.style.boxShadow = 'none';
+                                        }}
+                                    />
+                                    {productSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setProductSearch(''); productSearchInputRef.current?.focus(); }}
+                                            style={{
+                                                position: 'absolute',
+                                                right: '0.65rem',
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#94A3B8',
+                                                cursor: 'pointer',
+                                                padding: '3px',
+                                                display: 'flex',
+                                                alignItems: 'center'
+                                            }}
+                                            title="Limpiar búsqueda"
+                                        >
+                                            <X size={15} />
+                                        </button>
+                                    )}
+                                </div>
 
                             {filteredProducts.length > 0 && (
                                 <div style={{
@@ -5351,128 +5273,262 @@ function CreateOrderContent() {
                                 </div>
                             )}
                         </div>
-
-                        <div style={{ marginTop: '2rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Notas Administrativas / Observaciones del Pedido</label>
-                            <textarea
-                                value={adminNotes} onChange={e => setAdminNotes(e.target.value)}
-                                rows={3}
-                                placeholder="Ej: Entregar por la puerta trasera. Cliente solicita aguacates verdes."
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                            />
-                        </div>
-
-                    </div>
-                </div>
-
-                {/* --- STICKY FLOATING ISLAND DOCK (PREMIUM GLASSMORPHISM) --- */}
-                <div style={{
-                    position: 'fixed',
-                    bottom: '1.25rem',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'min(calc(100% - 190px), 1360px)',
-                    zIndex: 80,
-                    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-                    backdropFilter: 'blur(20px) saturate(180%)',
-                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                    borderRadius: '24px',
-                    border: '1.5px solid rgba(13, 122, 87, 0.22)',
-                    boxShadow: '0 20px 45px -10px rgba(13, 122, 87, 0.16), 0 8px 24px -6px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.9) inset',
-                    padding: '0.85rem 2.2rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '1.5rem',
-                    boxSizing: 'border-box'
-                }}>
-                    {/* LEFT: Quick Items & Financial Badges */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                        {/* Items Badge */}
-                        <div style={{ 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            gap: '0.55rem', 
-                            backgroundColor: cart.length > 0 ? '#E8F5EE' : '#F1F5F9', 
-                            color: cart.length > 0 ? '#0D7A57' : '#64748B', 
-                            padding: '0.5rem 1.1rem', 
-                            borderRadius: '100px', 
-                            fontWeight: '800', 
-                            fontSize: '0.88rem',
-                            border: `1.5px solid ${cart.length > 0 ? '#A7D7C5' : '#E2E8F0'}`,
-                            boxShadow: cart.length > 0 ? '0 2px 8px rgba(13, 122, 87, 0.1)' : 'none'
-                        }}>
-                            <ShoppingCart size={17} />
-                            <span>{cart.length} {cart.length === 1 ? 'Ítem' : 'Ítems en Pedido'}</span>
-                        </div>
-
-                        {/* Subtotal & IVA */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.1rem', fontSize: '0.88rem', color: '#4B5563' }}>
-                            <span>Subtotal: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(calculateSubtotal())}</strong></span>
-                            <span style={{ color: '#CBD5E1' }}>•</span>
-                            <span>IVA Est.: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(calculateTotalTax())}</strong></span>
-                        </div>
                     </div>
 
-                    {/* RIGHT: Big Total & Action Button */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.8rem' }}>
-                        <div style={{ textAlign: 'right' }}>
-                            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Total a Pagar
-                            </span>
-                            <span style={{ fontSize: '1.55rem', fontWeight: '900', color: '#0D7A57', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
-                                {formatMoney(calculateTotal())}
-                            </span>
-                        </div>
+                    {/* RIGHT COLUMN: LOGISTICS, NOTES & FINANCIAL SUMMARY (STICKY) */}
+                    {!isStaging && (
+                        <div style={{ position: 'sticky', top: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* 1. LOGISTICS CARD */}
+                            <div style={{
+                                backgroundColor: THEME.colors.surface,
+                                padding: '1rem 1.25rem',
+                                borderRadius: THEME.radius.lg,
+                                border: `1px solid ${THEME.colors.border}`,
+                                boxShadow: THEME.shadow.sm
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.85rem' }}>
+                                    <Truck size={16} color={THEME.colors.primary} />
+                                    <h3 style={{ fontSize: '0.8rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+                                        Configuración de Entrega
+                                    </h3>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Canal</label>
+                                        <select
+                                            id="origin-source-select"
+                                            value={originSource} onChange={e => setOriginSource(e.target.value)}
+                                            style={{ width: '100%', height: '36px', padding: '0 0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontSize: '0.82rem', outline: 'none' }}
+                                        >
+                                            <option value="phone">Teléfono</option>
+                                            <option value="whatsapp">WhatsApp</option>
+                                            <option value="file_upload">Documento (PDF/Excel)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Fecha Entrega</label>
+                                        <input
+                                            type="date"
+                                            value={deliveryDate}
+                                            min={minDeliveryDate}
+                                            onChange={e => {
+                                                const newDate = e.target.value;
+                                                if (newDate < minDeliveryDate) {
+                                                    showToast(`La fecha mínima de entrega permitida es ${minDeliveryDate}.`, 'error');
+                                                    setDeliveryDate(minDeliveryDate);
+                                                    return;
+                                                }
+                                                setDeliveryDate(newDate);
+                                            }}
+                                            style={{ width: '100%', height: '36px', padding: '0 0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontSize: '0.82rem', outline: 'none' }}
+                                        />
+                                    </div>
+                                </div>
 
-                        <button
-                            onClick={handleSubmit}
-                            disabled={loading || cart.length === 0}
-                            style={{
-                                padding: '0.9rem 2.2rem',
-                                borderRadius: '16px',
-                                background: cart.length > 0 ? 'linear-gradient(135deg, #0D7A57 0%, #064E3B 100%)' : '#94A3B8',
-                                color: 'white',
-                                border: 'none',
-                                fontWeight: '800',
-                                fontSize: '1.05rem',
-                                letterSpacing: '0.02em',
-                                cursor: (loading || cart.length === 0) ? 'not-allowed' : 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.65rem',
-                                boxShadow: cart.length > 0 ? '0 6px 20px -2px rgba(13, 122, 87, 0.45)' : 'none',
-                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                            onMouseOver={(e) => {
-                                if (cart.length > 0 && !loading) {
-                                    e.currentTarget.style.background = 'linear-gradient(135deg, #0A5F43 0%, #04382A 100%)';
-                                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
-                                    e.currentTarget.style.boxShadow = '0 10px 25px -2px rgba(13, 122, 87, 0.55)';
-                                }
-                            }}
-                            onMouseOut={(e) => {
-                                if (cart.length > 0 && !loading) {
-                                    e.currentTarget.style.background = 'linear-gradient(135deg, #0D7A57 0%, #064E3B 100%)';
-                                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                    e.currentTarget.style.boxShadow = '0 6px 20px -2px rgba(13, 122, 87, 0.45)';
-                                }
-                            }}
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 size={19} style={{ animation: 'spin 1s linear infinite' }} />
-                                    <span>Creando...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle2 size={19} />
-                                    <span>CONFIRMAR PEDIDO</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
+                                {/* FRANJA DE ENTREGA BADGE */}
+                                {(selectedClient || selectedClientB2C) && (
+                                    <div style={{
+                                        marginTop: '0.75rem',
+                                        padding: '0.6rem 0.85rem',
+                                        backgroundColor: isManualDelivery ? '#F0FDF4' : '#FFF7ED',
+                                        borderRadius: '8px',
+                                        border: isManualDelivery ? '1px solid #BBF7D0' : '1px solid #FFEDD5'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', color: isManualDelivery ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                {isManualDelivery ? 'Override Manual Activo' : 'Franja de Entrega'}
+                                            </span>
+                                            {isManualDelivery && (
+                                                <span style={{ fontSize: '0.58rem', backgroundColor: '#10B981', color: 'white', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
+                                                    PRIORITARIO
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ fontSize: '0.88rem', fontWeight: '800', color: isManualDelivery ? '#14532D' : '#431407', lineHeight: '1.2' }}>
+                                            {isManualDelivery ? (
+                                                <span>{manualDeliveryTime || '??:??'} (±{manualDeliveryMargin} min)</span>
+                                            ) : (
+                                                getSelectedClientDetails()?.logistics_data?.days?.length > 0
+                                                    ? formatTimeWindow(getSelectedClientDetails()?.logistics_data)
+                                                    : (getSelectedClientDetails()?.delivery_restrictions || 'Sin restricciones horarias')
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* MANUAL OVERRIDE TOGGLE */}
+                                <div style={{ marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isManualDelivery}
+                                            onChange={e => setIsManualDelivery(e.target.checked)}
+                                            style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: THEME.colors.primary }}
+                                        />
+                                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>Ajuste manual de franja horaria</span>
+                                    </label>
+
+                                    {isManualDelivery && (
+                                        <div style={{
+                                            marginTop: '0.65rem',
+                                            padding: '0.75rem',
+                                            backgroundColor: '#F0FDF4',
+                                            borderRadius: '8px',
+                                            border: '1px solid #DCFCE7',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.5rem'
+                                        }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#166534', marginBottom: '0.2rem' }}>HORA</label>
+                                                    <input
+                                                        type="time"
+                                                        value={manualDeliveryTime}
+                                                        onChange={e => setManualDeliveryTime(e.target.value)}
+                                                        style={{ width: '100%', height: '32px', padding: '0 0.4rem', borderRadius: '6px', border: '1px solid #BBF7D0', fontSize: '0.8rem' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#166534', marginBottom: '0.2rem' }}>MARGEN</label>
+                                                    <select
+                                                        value={manualDeliveryMargin} onChange={e => setManualDeliveryMargin(Number(e.target.value))}
+                                                        style={{ width: '100%', height: '32px', padding: '0 0.4rem', borderRadius: '6px', border: '1px solid #BBF7D0', fontSize: '0.8rem', backgroundColor: 'white' }}
+                                                    >
+                                                        <option value={15}>±15 min</option>
+                                                        <option value={30}>±30 min</option>
+                                                        <option value={45}>±45 min</option>
+                                                        <option value={60}>±60 min</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#166534', marginBottom: '0.2rem' }}>INSTRUCCIÓN</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ej: Recibe don Carlos en bodega..."
+                                                    value={manualDeliveryNote}
+                                                    onChange={e => setManualDeliveryNote(e.target.value)}
+                                                    style={{ width: '100%', height: '32px', padding: '0 0.5rem', borderRadius: '6px', border: '1px solid #BBF7D0', fontSize: '0.8rem' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 2. ADMIN NOTES CARD */}
+                            <div style={{
+                                backgroundColor: THEME.colors.surface,
+                                padding: '1rem 1.25rem',
+                                borderRadius: THEME.radius.lg,
+                                border: `1px solid ${THEME.colors.border}`,
+                                boxShadow: THEME.shadow.sm
+                            }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                    Observaciones del Pedido
+                                </label>
+                                <textarea
+                                    value={adminNotes} onChange={e => setAdminNotes(e.target.value)}
+                                    rows={2}
+                                    placeholder="Instrucciones especiales para alistamiento o entrega..."
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.5rem 0.75rem',
+                                        borderRadius: '6px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.82rem',
+                                        color: '#334155',
+                                        resize: 'vertical',
+                                        minHeight: '52px',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+
+                            {/* 3. FINANCIAL SUMMARY & CONFIRM ORDER CARD */}
+                            <div style={{
+                                backgroundColor: THEME.colors.surface,
+                                padding: '1.25rem',
+                                borderRadius: THEME.radius.lg,
+                                border: `1px solid ${cart.length > 0 ? '#A7D7C5' : THEME.colors.border}`,
+                                boxShadow: THEME.shadow.md,
+                                background: 'linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.75rem', borderBottom: '1px solid #F1F5F9' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: cart.length > 0 ? '#0D7A57' : '#64748B', fontWeight: '800', fontSize: '0.82rem' }}>
+                                        <ShoppingCart size={15} />
+                                        <span>{cart.length} {cart.length === 1 ? 'producto' : 'productos'}</span>
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Resumen de Cuenta</span>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                                        <span>Subtotal</span>
+                                        <span style={{ fontWeight: '700', color: '#1E293B' }}>{formatMoney(calculateSubtotal())}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                                        <span>IVA Estimado</span>
+                                        <span style={{ fontWeight: '700', color: '#1E293B' }}>{formatMoney(calculateTotalTax())}</span>
+                                    </div>
+                                    <div style={{ height: '1px', backgroundColor: '#E2E8F0', margin: '0.25rem 0' }} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                        <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>Total a Pagar</span>
+                                        <span style={{ fontSize: '1.45rem', fontWeight: '900', color: '#0D7A57', letterSpacing: '-0.02em' }}>
+                                            {formatMoney(calculateTotal())}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={loading || cart.length === 0}
+                                    style={{
+                                        width: '100%',
+                                        height: '44px',
+                                        borderRadius: '10px',
+                                        backgroundColor: cart.length > 0 ? '#0D7A57' : '#94A3B8',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        fontWeight: '800',
+                                        fontSize: '0.92rem',
+                                        cursor: (loading || cart.length === 0) ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        boxShadow: cart.length > 0 ? '0 4px 12px rgba(13, 122, 87, 0.3)' : 'none',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        if (cart.length > 0 && !loading) {
+                                            e.currentTarget.style.backgroundColor = '#0A5F43';
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                        }
+                                    }}
+                                    onMouseOut={(e) => {
+                                        if (cart.length > 0 && !loading) {
+                                            e.currentTarget.style.backgroundColor = '#0D7A57';
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                        }
+                                    }}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <Loader2 size={17} style={{ animation: 'spin 1s linear infinite' }} />
+                                            <span>Procesando Pedido...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 size={17} />
+                                            <span>CONFIRMAR PEDIDO</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
