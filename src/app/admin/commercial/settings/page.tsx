@@ -1149,8 +1149,8 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
 
     return (
         <main style={{ minHeight: embedded ? 'auto' : '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilyMain }}>
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '1.5rem 2rem 3rem 2rem' : '2rem' }}>
-                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.75rem' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: embedded ? '0.4rem 2rem 2.5rem 2rem' : '1.25rem 2rem 2rem 2rem' }}>
+                <div style={{ marginBottom: embedded ? '0.75rem' : '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem' }}>
                     {!embedded ? (
                         <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
                             <ArrowLeft size={16} /> Volver a Comercial
@@ -1162,10 +1162,10 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                         <button
                             onClick={() => setActiveTab('models')}
                             style={{
-                                padding: '0.45rem 0.9rem',
+                                padding: '0.35rem 0.8rem',
                                 border: 'none',
                                 background: 'none',
-                                fontSize: '0.9rem',
+                                fontSize: '0.88rem',
                                 fontWeight: '800',
                                 cursor: 'pointer',
                                 color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
@@ -1176,15 +1176,15 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                                 gap: '0.4rem'
                             }}
                         >
-                            <TrendingUp size={16} /> Modelos de Precios
+                            <TrendingUp size={15} /> Modelos de Precios
                         </button>
                         <button
                             onClick={() => setActiveTab('templates')}
                             style={{
-                                padding: '0.45rem 0.9rem',
+                                padding: '0.35rem 0.8rem',
                                 border: 'none',
                                 background: 'none',
-                                fontSize: '0.9rem',
+                                fontSize: '0.88rem',
                                 fontWeight: '800',
                                 cursor: 'pointer',
                                 color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
@@ -1195,7 +1195,7 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                                 gap: '0.4rem'
                             }}
                         >
-                            <ClipboardList size={16} /> Listas de Cotización
+                            <ClipboardList size={15} /> Listas de Cotización
                         </button>
                     </div>
                 </div>
@@ -1210,7 +1210,7 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                         boxShadow: THEME.shadow.md, 
                         border: `1px solid ${THEME.colors.border}`,
                         position: 'sticky',
-                        top: '105px',
+                        top: embedded ? '142px' : '95px',
                         alignSelf: 'start'
                     }}>
                         <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2066,7 +2066,7 @@ export default function PricingSettingsPage({ embedded = false }: { embedded?: b
                             boxShadow: THEME.shadow.md, 
                             border: `1px solid ${THEME.colors.border}`,
                             position: 'sticky',
-                            top: '105px',
+                            top: embedded ? '142px' : '95px',
                             alignSelf: 'start'
                         }}>
                             <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
