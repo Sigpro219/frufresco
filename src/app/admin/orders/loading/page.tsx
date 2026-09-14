@@ -3384,6 +3384,40 @@ export default function OrderLoadingPage() {
                     const unselectedOrdersCount = filteredOrders.length - selectedOrders.size;
                     const uniqueClients = new Set(selectedOrdersList.map(o => (o.customer_name || o.profiles?.company_name || o.profiles?.contact_name || o.id).trim())).size;
 
+                    // Cálculo de destinos físicos reales (paradas de transporte en ruta)
+                    const cleanDestAddress = (addr?: string | null) => {
+                        if (!addr) return '';
+                        return addr
+                            .replace(/valor total del pedido[\s\S]*/i, '')
+                            .toLowerCase()
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .replace(/[^a-z0-9]/g, '')
+                            .trim();
+                    };
+
+                    const isGenericAddr = (addr?: string | null) => {
+                        const norm = cleanDestAddress(addr);
+                        return !norm || norm.includes('registrada') || norm.includes('desconocid');
+                    };
+
+                    const uniqueDestinationsSet = new Set<string>();
+                    selectedOrdersList.forEach(o => {
+                        const clientName = (o.customer_name || o.profiles?.company_name || o.profiles?.contact_name || o.id).trim();
+                        const rawAddr = o.shipping_address || o.profiles?.address || '';
+                        const cleanedAddr = cleanDestAddress(rawAddr);
+
+                        let destKey = '';
+                        if (isGenericAddr(rawAddr)) {
+                            destKey = `generic_${clientName}_${o.id}`;
+                        } else {
+                            // Agrupa por cliente y dirección física normalizada (35 caracteres base para tolerar sufijos de ciudad)
+                            destKey = `${clientName.toLowerCase().replace(/[^a-z0-9]/g, '')}___${cleanedAddr.substring(0, 35)}`;
+                        }
+                        uniqueDestinationsSet.add(destKey);
+                    });
+                    const uniqueDestinations = uniqueDestinationsSet.size;
+
                     const b2bCount = selectedOrdersList.filter(o => o.type?.startsWith('b2b') || o.profiles?.role === 'b2b_client').length;
                     const b2cCount = selectedOrdersList.length - b2bCount;
                     const totalWeight = selectedOrdersList.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
@@ -3457,7 +3491,10 @@ export default function OrderLoadingPage() {
                                                  <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                      <Building2 size={13} style={{ color: '#4F46E5' }} /> Destinos Únicos
                                                  </div>
-                                                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#4338CA', marginTop: '2px' }}>{uniqueClients}</div>
+                                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '2px' }}>
+                                                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#4338CA' }}>{uniqueDestinations}</div>
+                                                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>({uniqueClients} clientes)</div>
+                                                  </div>
                                              </div>
 
                                              <div style={{ backgroundColor: 'white', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -3744,7 +3781,7 @@ export default function OrderLoadingPage() {
                                                     </Link>
                                                     <span style={{ color: '#475569' }}>•</span>
                                                     <Link
-                                                        href="/admin/logistics/staging-spaces"
+                                                        href={`/admin/logistics/staging-spaces?date=${selectedDate || getTomorrowDateStr()}`}
                                                         target="_blank"
                                                         style={{ color: '#CBD5E1', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}
                                                     >

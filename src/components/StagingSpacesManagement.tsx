@@ -20,13 +20,28 @@ import {
     ShieldAlert
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { THEME } from '@/lib/adminTheme';
 
 interface StagingSpacesManagementProps {
     readOnly?: boolean;
+    initialDate?: string;
 }
 
-export default function StagingSpacesManagement({ readOnly = false }: StagingSpacesManagementProps) {
+export default function StagingSpacesManagement({ readOnly = false, initialDate }: StagingSpacesManagementProps) {
+    const searchParams = useSearchParams();
+    const queryDate = searchParams ? searchParams.get('date') : null;
+
+    const getTomorrowDateStr = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
+
+    const getTodayDateStr = () => {
+        return new Date().toISOString().split('T')[0];
+    };
+
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -36,9 +51,16 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
     const [spaceCapacity, setSpaceCapacity] = useState<number>(36);
     const [avgKgPerCrate, setAvgKgPerCrate] = useState<number>(12.52);
     const [selectedDate, setSelectedDate] = useState<string>(() => {
-        const now = new Date();
-        return now.toISOString().split('T')[0];
+        return initialDate || queryDate || getTomorrowDateStr();
     });
+
+    // Sincronizar si cambia el prop o el parámetro de búsqueda en URL
+    useEffect(() => {
+        const targetDate = initialDate || queryDate;
+        if (targetDate && targetDate !== selectedDate) {
+            setSelectedDate(targetDate);
+        }
+    }, [initialDate, queryDate]);
 
     // Mapeo manual de espacios por orderId: { [orderId]: number[] }
     const [manualSpacesMap, setManualSpacesMap] = useState<Record<string, number[]>>({});
@@ -288,7 +310,7 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                             backgroundColor: THEME.colors.background,
                             border: `1px solid ${THEME.colors.border}`,
                             borderRadius: '8px',
-                            padding: '5px 10px'
+                            padding: '4px 8px'
                         }}>
                             <Calendar size={14} color="#64748B" />
                             <span style={{ fontSize: '0.74rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Fecha:</span>
@@ -305,6 +327,38 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                                     outline: 'none'
                                 }}
                             />
+                            <button
+                                type="button"
+                                onClick={() => setSelectedDate(getTodayDateStr())}
+                                style={{
+                                    padding: '2px 8px',
+                                    borderRadius: '5px',
+                                    border: `1px solid ${selectedDate === getTodayDateStr() ? THEME.colors.primary : '#CBD5E1'}`,
+                                    backgroundColor: selectedDate === getTodayDateStr() ? THEME.colors.primaryLight : '#FFFFFF',
+                                    color: selectedDate === getTodayDateStr() ? THEME.colors.primary : '#64748B',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Hoy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedDate(getTomorrowDateStr())}
+                                style={{
+                                    padding: '2px 8px',
+                                    borderRadius: '5px',
+                                    border: `1px solid ${selectedDate === getTomorrowDateStr() ? '#0D7A57' : '#CBD5E1'}`,
+                                    backgroundColor: selectedDate === getTomorrowDateStr() ? '#ECFDF5' : '#FFFFFF',
+                                    color: selectedDate === getTomorrowDateStr() ? '#065F46' : '#64748B',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Mañana (Despacho)
+                            </button>
                         </div>
 
                         {!readOnly && (
@@ -359,7 +413,7 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                         )}
 
                         <Link
-                            href="/admin/orders/alistamiento-print"
+                            href={orders.length > 0 ? `/admin/orders/alistamiento-print?orderIds=${orders.map(o => o.id).join(',')}` : '/admin/orders/alistamiento-print'}
                             target="_blank"
                             style={{
                                 backgroundColor: '#D97706',
@@ -375,7 +429,7 @@ export default function StagingSpacesManagement({ readOnly = false }: StagingSpa
                                 transition: 'all 0.15s'
                             }}
                         >
-                            <Printer size={14} /> Sábana Muelle
+                            <Printer size={14} /> Sábana Oficio
                         </Link>
                     </div>
                 </div>

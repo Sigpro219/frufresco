@@ -5,10 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckCircle2 } from 'lucide-react';
+import { Printer, ArrowLeft, Filter, Calendar, Layers } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import UniversalLetterhead from '@/components/print/UniversalLetterhead';
-import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { printViaNewWindow } from '@/components/print';
 
 interface OrderItem {
@@ -36,9 +34,20 @@ interface OrderInfo {
     delivery_slot?: string;
     warehouse_spaces?: number[];
     client_name: string;
-    client_short: string;
+    client_type: 'I' | 'H';
     order_num: string;
     space_label: string;
+    first_space: number;
+}
+
+interface ProductInCell {
+    id: string;
+    name: string;
+    sku: string;
+    unit: string;
+    displayName: string;
+    totalQty: number;
+    orderDemand: Record<string, { quantity: number; unit: string; note?: string }>;
 }
 
 const KNOWN_CELLS = [
@@ -62,17 +71,32 @@ export default function AlistamientoSabanaPrintPage() {
     const paramDate = searchParams.get('date');
     const paramOrderIds = searchParams.get('orderIds');
 
+    const getTomorrowDateStr = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
+
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         if (paramDate) return paramDate;
-        const now = new Date();
-        return now.toISOString().split('T')[0];
+        return getTomorrowDateStr();
     });
 
     const [selectedCellFilter, setSelectedCellFilter] = useState<string>('ALL');
     const [orders, setOrders] = useState<OrderInfo[]>([]);
     const [items, setItems] = useState<OrderItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [generationTime, setGenerationTime] = useState<string>('');
     const printDocRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const now = new Date();
+        setGenerationTime(now.toLocaleString('es-CO', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: true
+        }));
+    }, []);
 
     // Fetch data
     useEffect(() => {
@@ -85,8 +109,8 @@ export default function AlistamientoSabanaPrintPage() {
             let orderQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, delivery_date, delivery_slot, warehouse_spaces, status, profile_id,
-                    profiles:profile_id(id, company_name, contact_name),
+                    id, sequence_id, delivery_date, delivery_slot, warehouse_spaces, status, profile_id, type,
+                    profiles:profile_id(id, company_name, contact_name, role),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label,
                         products(id, name, sku, unit_of_measure, buying_team, category)
@@ -108,18 +132,21 @@ export default function AlistamientoSabanaPrintPage() {
             const parsedItems: OrderItem[] = [];
 
             (rawOrders || []).forEach((o: any, idx: number) => {
-                const clientName = o.profiles?.company_name || o.profiles?.contact_name || 'Cliente';
-                const clientShort = clientName
-                    .toUpperCase()
-                    .replace('RESTAURANTE', '')
-                    .replace('CORPORACION', '')
-                    .replace('HOTEL', '')
-                    .trim()
-                    .slice(0, 16);
+                const clientRaw = o.profiles?.company_name || o.profiles?.contact_name || o.customer_name || 'CLIENTE';
+                const clientName = clientRaw.toUpperCase().trim();
+
+                const isB2B = (o.type?.toLowerCase().includes('b2b') ?? false) || 
+                              o.profiles?.role === 'b2b_client' || 
+                              o.profiles?.role === 'b2b';
+                const clientType: 'I' | 'H' = isB2B ? 'I' : 'H';
 
                 const spaceLabel = (o.warehouse_spaces && o.warehouse_spaces.length > 0)
                     ? formatSpaceLabel(o.warehouse_spaces)
                     : (o.sequence_id ? `${o.sequence_id}` : `${idx + 1}`);
+
+                const firstSpace = (o.warehouse_spaces && o.warehouse_spaces.length > 0)
+                    ? o.warehouse_spaces[0]
+                    : (o.sequence_id ?? 999);
 
                 const orderNum = getFriendlyOrderId(o);
 
@@ -130,9 +157,10 @@ export default function AlistamientoSabanaPrintPage() {
                     delivery_slot: o.delivery_slot,
                     warehouse_spaces: o.warehouse_spaces,
                     client_name: clientName,
-                    client_short: clientShort,
+                    client_type: clientType,
                     order_num: orderNum,
-                    space_label: spaceLabel
+                    space_label: spaceLabel,
+                    first_space: firstSpace
                 });
 
                 (o.order_items || []).forEach((it: any) => {
@@ -141,7 +169,7 @@ export default function AlistamientoSabanaPrintPage() {
                         order_id: o.id,
                         product_id: it.product_id || it.products?.id,
                         quantity: Number(it.quantity) || 0,
-                        unit: it.unit || it.products?.unit_of_measure || 'KG',
+                        unit: (it.unit || it.products?.unit_of_measure || 'KG').toUpperCase(),
                         nickname: it.nickname,
                         variant_label: it.variant_label,
                         product: it.products ? {
@@ -156,12 +184,8 @@ export default function AlistamientoSabanaPrintPage() {
                 });
             });
 
-            // Sort orders numerically by first warehouse space for logical floor layout!
-            parsedOrders.sort((a, b) => {
-                const spaceA = a.warehouse_spaces?.[0] ?? a.sequence_id ?? 999;
-                const spaceB = b.warehouse_spaces?.[0] ?? b.sequence_id ?? 999;
-                return spaceA - spaceB;
-            });
+            // Ordenar pedidos por número de bahía física en suelo
+            parsedOrders.sort((a, b) => a.first_space - b.first_space);
 
             setOrders(parsedOrders);
             setItems(parsedItems);
@@ -173,22 +197,14 @@ export default function AlistamientoSabanaPrintPage() {
         }
     };
 
-    // Group items by Cell (buying_team)
+    // Agrupamiento por Célula (buying_team)
     const cellGroups = useMemo(() => {
         const groups: Record<string, {
             cellName: string;
-            productsMap: Map<string, {
-                id: string;
-                name: string;
-                sku: string;
-                unit: string;
-                totalQty: number;
-                quantitiesByOrder: Record<string, number>;
-            }>;
+            productsMap: Map<string, ProductInCell>;
             activeOrders: OrderInfo[];
         }> = {};
 
-        // Helper to normalize buying team
         const normalizeCell = (raw?: string | null) => {
             if (!raw || !raw.trim()) return 'SIN ASIGNAR';
             const clean = raw.trim();
@@ -207,32 +223,47 @@ export default function AlistamientoSabanaPrintPage() {
             }
 
             const pId = it.product_id || it.product?.name || 'misc';
-            const pName = it.nickname || it.product?.name || 'Producto';
-            const sku = it.product?.sku || '';
-            const unit = it.unit || it.product?.unit_of_measure || 'KG';
+            const pName = it.product?.name || it.nickname || 'Producto';
+            const sku = it.product?.sku ? `IN(${it.product.sku}) ` : '';
+            const displayName = `${sku}${pName}`;
+            const unit = (it.unit || it.product?.unit_of_measure || 'KG').toUpperCase();
+            const note = (it.variant_label || it.nickname || '').trim();
 
             if (!groups[cell].productsMap.has(pId)) {
                 groups[cell].productsMap.set(pId, {
                     id: pId,
                     name: pName,
-                    sku,
+                    sku: it.product?.sku || '',
                     unit,
+                    displayName,
                     totalQty: 0,
-                    quantitiesByOrder: {}
+                    orderDemand: {}
                 });
             }
 
             const prodRec = groups[cell].productsMap.get(pId)!;
             prodRec.totalQty += it.quantity;
-            prodRec.quantitiesByOrder[it.order_id] = (prodRec.quantitiesByOrder[it.order_id] || 0) + it.quantity;
+
+            if (!prodRec.orderDemand[it.order_id]) {
+                prodRec.orderDemand[it.order_id] = { quantity: it.quantity, unit, note };
+            } else {
+                prodRec.orderDemand[it.order_id].quantity += it.quantity;
+                if (note && !prodRec.orderDemand[it.order_id].note?.includes(note)) {
+                    prodRec.orderDemand[it.order_id].note = `${prodRec.orderDemand[it.order_id].note || ''} ${note}`.trim();
+                }
+            }
         });
 
-        // Determine which orders actually have items in each cell
+        // Filtrar órdenes que tengan demanda en esta célula
         Object.keys(groups).forEach(cell => {
             const prodMap = groups[cell].productsMap;
             const relevantOrderIds = new Set<string>();
             prodMap.forEach(prod => {
-                Object.keys(prod.quantitiesByOrder).forEach(oId => relevantOrderIds.add(oId));
+                Object.keys(prod.orderDemand).forEach(oId => {
+                    if (prod.orderDemand[oId].quantity > 0) {
+                        relevantOrderIds.add(oId);
+                    }
+                });
             });
             groups[cell].activeOrders = orders.filter(o => relevantOrderIds.has(o.id));
         });
@@ -240,12 +271,10 @@ export default function AlistamientoSabanaPrintPage() {
         return groups;
     }, [items, orders]);
 
-    // Available cells for selector
     const availableCellNames = useMemo(() => {
         return Object.keys(cellGroups).sort();
     }, [cellGroups]);
 
-    // Active cells to render
     const filteredCellNames = useMemo(() => {
         if (selectedCellFilter === 'ALL') {
             return availableCellNames;
@@ -253,40 +282,99 @@ export default function AlistamientoSabanaPrintPage() {
         return availableCellNames.filter(c => c === selectedCellFilter);
     }, [availableCellNames, selectedCellFilter]);
 
-    // Chunker for horizontal layout: max 10 clients per sheet
-    const MAX_CLIENTS_PER_PAGE = 10;
+    // Formatear fecha para el encabezado
+    const formatDisplayDate = (dStr: string) => {
+        try {
+            const [y, m, d] = dStr.split('-');
+            return `${d}/${m}/${y}`;
+        } catch {
+            return dStr;
+        }
+    };
+
+    // Estructurar la lista global de hojas (Sheets) para el conteo de páginas total
+    const printableSheets = useMemo(() => {
+        const sheets: Array<{
+            cellName: string;
+            chunkIdx: number;
+            totalChunksForCell: number;
+            chunkProducts: ProductInCell[];
+            activeOrdersInCell: OrderInfo[];
+        }> = [];
+
+        filteredCellNames.forEach(cellName => {
+            const cellData = cellGroups[cellName];
+            if (!cellData) return;
+
+            const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+            const activeOrders = cellData.activeOrders;
+
+            // En Oficio Landscape caben 6 productos con ancho holgado (o 7 si la célula tiene exactamente 7)
+            const chunkSize = productsList.length === 7 ? 7 : 6;
+            const totalChunks = Math.ceil(productsList.length / chunkSize) || 1;
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunkProducts = productsList.slice(i * chunkSize, (i + 1) * chunkSize);
+                sheets.push({
+                    cellName,
+                    chunkIdx: i,
+                    totalChunksForCell: totalChunks,
+                    chunkProducts,
+                    activeOrdersInCell: activeOrders
+                });
+            }
+        });
+
+        return sheets;
+    }, [filteredCellNames, cellGroups]);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
             <GoldenPrintStyles />
 
-            {/* Custom Landscape CSS for print */}
+            {/* Estilos Oficiales Tamaño Oficio (Legal Landscape) y Optimización B&W */}
             <style jsx global>{`
                 @media print {
                     @page {
-                        size: letter landscape !important;
-                        margin: 0.8cm !important;
+                        size: legal landscape !important;
+                        margin: 0.8cm 1.0cm !important;
                     }
-                    body {
+                    html, body {
                         background-color: #FFFFFF !important;
+                        color: #000000 !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
+                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
                     }
                     .no-print {
                         display: none !important;
                     }
-                    .page-break {
+                    .print-sheet {
                         page-break-after: always !important;
                         break-after: page !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
                     }
-                    .avoid-break {
+                    table {
+                        page-break-inside: auto !important;
+                    }
+                    tr {
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
+                    }
+                    thead {
+                        display: table-header-group !important;
+                    }
+                    tfoot {
+                        display: table-row-group !important;
                     }
                 }
             `}</style>
 
-            {/* Control Bar (No Print) */}
+            {/* Barra de Control Superior (No Imprimible) */}
             <div className="no-print" style={{
                 position: 'sticky',
                 top: 0,
@@ -294,7 +382,7 @@ export default function AlistamientoSabanaPrintPage() {
                 backgroundColor: '#FFFFFF',
                 borderBottom: '1px solid #E2E8F0',
                 padding: '0.85rem 1.5rem',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -314,7 +402,7 @@ export default function AlistamientoSabanaPrintPage() {
                             borderRadius: '8px',
                             cursor: 'pointer',
                             fontSize: '0.8rem',
-                            fontWeight: '600',
+                            fontWeight: '700',
                             color: '#334155'
                         }}
                     >
@@ -322,18 +410,18 @@ export default function AlistamientoSabanaPrintPage() {
                     </button>
 
                     <div>
-                        <h1 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h1 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Layers size={20} color="#0D7A57" />
-                            Sábana Maestra de Alistamiento por Células (ALISTAMIENTO.pdf)
+                            Sábana Maestra de Alistamiento &bull; Tamaño Oficio (Legal)
                         </h1>
-                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                            {orders.length} pedidos &bull; {items.length} líneas de picking &bull; Formato Apaisado (Landscape) con Bahías
+                        <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                            {orders.length} pedidos &bull; Matriz ALISTAMIENTO.pdf (Filas = Bahías, Columnas = Productos) &bull; Optimizado Blanco y Negro
                         </span>
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {/* Date Input */}
+                    {/* Selector de Fecha */}
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
                         <Calendar size={14} color="#64748B" />
                         <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Fecha:</span>
@@ -345,7 +433,7 @@ export default function AlistamientoSabanaPrintPage() {
                         />
                     </div>
 
-                    {/* Cell Filter */}
+                    {/* Filtro de Célula */}
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
                         <Filter size={14} color="#64748B" />
                         <select
@@ -360,13 +448,13 @@ export default function AlistamientoSabanaPrintPage() {
                         </select>
                     </div>
 
-                    {/* Print Button */}
+                    {/* Botón de Impresión en Oficio */}
                     <button
                         onClick={() => {
                             printViaNewWindow({
                                 element: printDocRef.current,
-                                title: `Sábana de Alistamiento - ${selectedDate}`,
-                                paperSize: 'letter',
+                                title: `Sábana de Alistamiento (Oficio) - ${selectedDate}`,
+                                paperSize: 'legal',
                                 orientation: 'landscape',
                                 margin: '0.8cm 1.0cm'
                             });
@@ -386,275 +474,215 @@ export default function AlistamientoSabanaPrintPage() {
                             boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)'
                         }}
                     >
-                        <Printer size={16} /> Imprimir Sábana (Ventana Limpia)
+                        <Printer size={16} /> Imprimir Sábana Oficio ({printableSheets.length} Pág.)
                     </button>
                 </div>
             </div>
 
-            {/* Document Body (Landscape View - Wrapped with ref) */}
-            <div ref={printDocRef} style={{ maxWidth: '1100px', margin: '1.5rem auto', padding: '0 1rem' }}>
+            {/* Contenedor del Documento (Proporción Oficio Landscape: 14in x 8.5in) */}
+            <div ref={printDocRef} style={{ maxWidth: '1350px', margin: '1.5rem auto', padding: '0 1rem' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
                         <p style={{ fontWeight: '700' }}>Cargando matriz de alistamiento nocturno...</p>
                     </div>
-                ) : filteredCellNames.length === 0 ? (
+                ) : printableSheets.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                         <p style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>No se encontraron órdenes ni productos para esta fecha.</p>
-                        <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Selecciona otra fecha en el panel superior o verifica pedidos con estado activo.</p>
+                        <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Selecciona otra fecha en el panel superior o verifica que los pedidos estén confirmados.</p>
                     </div>
                 ) : (
-                    filteredCellNames.map((cellName) => {
-                        const cellData = cellGroups[cellName];
-                        const activeOrders = cellData.activeOrders;
-                        const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                    printableSheets.map((sheet, sheetGlobalIdx) => {
+                        const { cellName, chunkIdx, totalChunksForCell, chunkProducts, activeOrdersInCell } = sheet;
 
-                        // Chunk active orders into pages of MAX_CLIENTS_PER_PAGE
-                        const pagesCount = Math.ceil(activeOrders.length / MAX_CLIENTS_PER_PAGE) || 1;
-                        const chunks: OrderInfo[][] = [];
-                        for (let i = 0; i < pagesCount; i++) {
-                            chunks.push(activeOrders.slice(i * MAX_CLIENTS_PER_PAGE, (i + 1) * MAX_CLIENTS_PER_PAGE));
-                        }
+                        return (
+                            <div
+                                key={`${cellName}-sheet-${chunkIdx}`}
+                                className="print-sheet page-break"
+                                style={{
+                                    backgroundColor: '#FFFFFF',
+                                    padding: '16px 20px',
+                                    marginBottom: '28px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #CBD5E1',
+                                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                {/* Encabezado Institucional de la Hoja (Idéntico a ALISTAMIENTO.pdf) */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                    {/* Logo a la izquierda */}
+                                    <div style={{ width: '130px', display: 'flex', alignItems: 'center' }}>
+                                        <img
+                                            src="/logo.png"
+                                            alt="FruFresco"
+                                            style={{ height: '42px', width: 'auto', objectFit: 'contain' }}
+                                        />
+                                    </div>
 
-                        return chunks.map((chunkOrders, chunkIdx) => {
-                            return (
-                                <div
-                                    key={`${cellName}-page-${chunkIdx}`}
-                                    className="page-break"
-                                    style={{
-                                        backgroundColor: '#FFFFFF',
-                                        padding: '12px 16px',
-                                        marginBottom: '20px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #E2E8F0',
-                                        boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
-                                    }}
-                                >
-                                    <UniversalLetterhead
-                                        brand={INVESTMENTS_CORTES_BRAND}
-                                        paperSize="letter"
-                                        meta={{
-                                            title: 'SÁBANA MAESTRA DE ALISTAMIENTO',
-                                            subtitle: `CÉLULA: ${cellName.toUpperCase()} · PESAJE EN PISO`,
-                                            date: selectedDate,
-                                            reference: `FOLIO ${chunkIdx + 1}/${pagesCount}`,
-                                            badge: cellName.toUpperCase(),
-                                            badgeVariant: 'dark'
-                                        }}
-                                    >
-                                        {/* Sub-header with Cell Summary */}
-                                        <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            backgroundColor: '#F8FAFC',
-                                            padding: '4px 8px',
-                                            border: '1px solid #E2E8F0',
-                                            borderRadius: '4px',
-                                            fontSize: '0.66rem',
-                                            marginBottom: '6px'
-                                        }}>
-                                            <div>
-                                                <strong>Instrucciones de Pesaje:</strong> Pese y empaque cada producto en canastilla. Escriba el peso real báscula en la casilla y traslade la canastilla al <strong>LUGAR</strong> indicado en la cabecera.
-                                            </div>
-                                            <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A' }}>
-                                                {productsList.length} SKUs &bull; Clientes: {chunkOrders.length}/{activeOrders.length}
-                                            </div>
+                                    {/* Título Central */}
+                                    <div style={{ textAlign: 'center', flex: 1 }}>
+                                        <div style={{ fontSize: '13.5pt', fontWeight: 900, color: '#0D7A57', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                            INVESTMENTS CORTES SAS
                                         </div>
+                                        <div style={{ fontSize: '6.8pt', color: '#475569', fontWeight: 600, marginTop: '1px' }}>
+                                            GENERADO EL: {generationTime}
+                                        </div>
+                                        <div style={{ fontSize: '10.5pt', fontWeight: 900, color: '#0D7A57', marginTop: '2px', textTransform: 'uppercase' }}>
+                                            FECHA {formatDisplayDate(selectedDate)} - {cellName}. Página: {chunkIdx + 1} de {totalChunksForCell}
+                                        </div>
+                                    </div>
 
-                                        {/* Cross-Tab Matrix Table */}
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.64rem' }}>
-                                            <thead>
-                                                {/* Header Row 1: Space / Bahía numbers in soil */}
-                                                <tr style={{ backgroundColor: '#0F172A', color: '#FFFFFF' }}>
-                                                    <th colSpan={3} style={{ textAlign: 'left', padding: '3px 6px', fontSize: '0.68rem', fontWeight: '900', border: '1px solid #0F172A' }}>
-                                                        ESPECIFICACIÓN DEL PRODUCTO
-                                                    </th>
-                                                    <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '0.62rem', fontWeight: '800', border: '1px solid #0F172A', width: '50px', backgroundColor: '#1E293B' }}>
-                                                        DEMANDA
-                                                    </th>
+                                    {/* Tag de formato a la derecha */}
+                                    <div style={{ width: '130px', textAlign: 'right' }}>
+                                        <span style={{ fontSize: '6.5pt', fontWeight: 800, border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: '4px', color: '#64748B', textTransform: 'uppercase' }}>
+                                            FORMATO OFICIO
+                                        </span>
+                                    </div>
+                                </div>
 
-                                                    {/* Client Space LUGAR columns */}
-                                                    {chunkOrders.map((ord) => (
-                                                        <th
-                                                            key={ord.id}
-                                                            style={{
-                                                                textAlign: 'center',
-                                                                padding: '2px 4px',
-                                                                fontSize: '0.72rem',
-                                                                fontWeight: '900',
-                                                                backgroundColor: '#0D7A57',
-                                                                color: '#FFFFFF',
-                                                                border: '1px solid #0A6044',
-                                                                whiteSpace: 'nowrap'
-                                                            }}
-                                                        >
-                                                            LUGAR [{ord.space_label}]
-                                                        </th>
-                                                    ))}
+                                {/* Tabla Matriz (Filas = Clientes/Bahías, Columnas = Productos) */}
+                                <table style={{
+                                    width: '100%',
+                                    borderCollapse: 'collapse',
+                                    fontSize: '7.2pt',
+                                    border: '1.5px solid #000000',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#000000'
+                                }}>
+                                    <thead>
+                                        {/* Fila 1: Encabezados de Columna (Fondo claro / Texto negro) */}
+                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #000000' }}>
+                                            <th style={{ width: '60px', padding: '5px 3px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                                LUGAR
+                                            </th>
+                                            <th style={{ width: '230px', padding: '5px 6px', textAlign: 'left', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                                CLIENTES ({activeOrdersInCell.length})
+                                            </th>
+                                            <th style={{ width: '38px', padding: '5px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                                TIPO
+                                            </th>
+                                            {chunkProducts.map((prod) => (
+                                                <th
+                                                    key={prod.id}
+                                                    style={{
+                                                        padding: '5px 4px',
+                                                        textAlign: 'center',
+                                                        fontWeight: 800,
+                                                        border: '1px solid #000000',
+                                                        color: '#000000',
+                                                        fontSize: '7.2pt',
+                                                        lineHeight: '1.2'
+                                                    }}
+                                                >
+                                                    {prod.displayName}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
 
-                                                    <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '0.62rem', fontWeight: '900', border: '1px solid #0F172A', width: '60px', backgroundColor: '#334155' }}>
-                                                        TOTAL PESADO
-                                                    </th>
-                                                </tr>
+                                    <tbody>
+                                        {activeOrdersInCell.map((ord, oIdx) => {
+                                            const rowBg = oIdx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
 
-                                                {/* Header Row 2: Client names & Order IDs */}
-                                                <tr style={{ backgroundColor: '#F1F5F9', color: '#334155' }}>
-                                                    <th style={{ width: '22px', textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1' }}>#</th>
-                                                    <th style={{ textAlign: 'left', padding: '3px 6px', border: '1px solid #CBD5E1' }}>Producto Matriz</th>
-                                                    <th style={{ width: '32px', textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1' }}>UM</th>
-                                                    <th style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: '800' }}>Total</th>
-
-                                                    {chunkOrders.map((ord) => (
-                                                        <th
-                                                            key={ord.id}
-                                                            style={{
-                                                                textAlign: 'center',
-                                                                padding: '3px 4px',
-                                                                fontSize: '0.58rem',
-                                                                fontWeight: '800',
-                                                                border: '1px solid #CBD5E1',
-                                                                maxWidth: '75px',
-                                                                overflow: 'hidden',
-                                                                textOverflow: 'ellipsis',
-                                                                whiteSpace: 'nowrap'
-                                                            }}
-                                                            title={ord.client_name}
-                                                        >
-                                                            {ord.client_short}
-                                                            <div style={{ fontSize: '0.52rem', fontWeight: 'normal', color: '#64748B' }}>#{ord.order_num}</div>
-                                                        </th>
-                                                    ))}
-
-                                                    <th style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: '800' }}>Báscula</th>
-                                                </tr>
-                                            </thead>
-
-                                            <tbody>
-                                                {productsList.map((prod, pIdx) => {
-                                                    const bg = pIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-                                                    return (
-                                                        <tr key={prod.id} style={{ backgroundColor: bg }}>
-                                                            <td style={{ textAlign: 'center', padding: '2.5px 2px', border: '1px solid #E2E8F0', fontWeight: '700', color: '#64748B' }}>
-                                                                {pIdx + 1}
-                                                            </td>
-                                                            <td style={{ textAlign: 'left', padding: '2.5px 6px', border: '1px solid #E2E8F0' }}>
-                                                                <strong style={{ color: '#0F172A' }}>{prod.name}</strong>
-                                                                {prod.sku && <span style={{ fontSize: '0.56rem', color: '#64748B', marginLeft: '4px' }}>({prod.sku})</span>}
-                                                            </td>
-                                                            <td style={{ textAlign: 'center', padding: '2.5px 2px', border: '1px solid #E2E8F0', color: '#475569' }}>
-                                                                {prod.unit}
-                                                            </td>
-                                                            <td style={{ textAlign: 'right', padding: '2.5px 5px', border: '1px solid #E2E8F0', fontWeight: '900', color: '#0F172A' }}>
-                                                                {prod.totalQty.toLocaleString('es-CO')}
-                                                            </td>
-
-                                                            {/* Cells for each client */}
-                                                            {chunkOrders.map((ord) => {
-                                                                const qty = prod.quantitiesByOrder[ord.id];
-                                                                if (qty && qty > 0) {
-                                                                    return (
-                                                                        <td
-                                                                            key={ord.id}
-                                                                            style={{
-                                                                                textAlign: 'center',
-                                                                                padding: '2.5px 2px',
-                                                                                border: '1px solid #CBD5E1',
-                                                                                backgroundColor: '#FEF9C3' // yellow tint for active orders to catch eye
-                                                                            }}
-                                                                        >
-                                                                            <div style={{ fontWeight: '900', fontSize: '0.68rem', color: '#0F172A' }}>
-                                                                                {qty.toLocaleString('es-CO')}
-                                                                            </div>
-                                                                            <div style={{ fontSize: '0.50rem', color: '#92400E', borderTop: '0.5px dashed #CA8A04', marginTop: '1px', paddingTop: '1px' }}>
-                                                                                [ _____ ]
-                                                                            </div>
-                                                                        </td>
-                                                                    );
-                                                                }
-                                                                return (
-                                                                    <td
-                                                                        key={ord.id}
-                                                                        style={{
-                                                                            textAlign: 'center',
-                                                                            padding: '2.5px 2px',
-                                                                            border: '1px solid #E2E8F0',
-                                                                            color: '#CBD5E1',
-                                                                            fontSize: '0.6rem'
-                                                                        }}
-                                                                    >
-                                                                        -
-                                                                    </td>
-                                                                );
-                                                            })}
-
-                                                            {/* Real Scale column */}
-                                                            <td style={{ textAlign: 'center', padding: '2.5px 4px', border: '1px solid #CBD5E1', borderLeft: '2px solid #0F172A' }}>
-                                                                ________
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-
-                                                {/* Summary Totals Row */}
-                                                <tr style={{ backgroundColor: '#F1F5F9', fontWeight: '900' }}>
-                                                    <td colSpan={3} style={{ textAlign: 'right', padding: '4px 6px', border: '1px solid #CBD5E1', color: '#0F172A' }}>
-                                                        TOTAL CÉLULA:
-                                                    </td>
-                                                    <td style={{ textAlign: 'right', padding: '4px 5px', border: '1px solid #CBD5E1', color: '#0D7A57' }}>
-                                                        {productsList.reduce((s, p) => s + p.totalQty, 0).toLocaleString('es-CO')}
+                                            return (
+                                                <tr key={ord.id} style={{ backgroundColor: rowBg }}>
+                                                    {/* Bahía / Lugar en suelo */}
+                                                    <td style={{ textAlign: 'center', padding: '3.5px 2px', border: '1px solid #CBD5E1', fontWeight: 900, fontSize: '7.6pt', color: '#000000' }}>
+                                                        {ord.space_label}
                                                     </td>
 
-                                                    {chunkOrders.map((ord) => {
-                                                        const clientCellTotal = productsList.reduce((sum, p) => sum + (p.quantitiesByOrder[ord.id] || 0), 0);
+                                                    {/* Nombre del Cliente */}
+                                                    <td style={{ textAlign: 'left', padding: '3.5px 6px', border: '1px solid #CBD5E1', fontWeight: 700, fontSize: '7.3pt', color: '#000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '230px' }} title={ord.client_name}>
+                                                        {ord.client_name}
+                                                    </td>
+
+                                                    {/* Tipo (I = Institucional, H = Hogar) */}
+                                                    <td style={{ textAlign: 'center', padding: '3.5px 2px', border: '1px solid #CBD5E1', fontWeight: 800, fontSize: '7.5pt', color: '#000000' }}>
+                                                        {ord.client_type}
+                                                    </td>
+
+                                                    {/* Columnas de Productos */}
+                                                    {chunkProducts.map((prod) => {
+                                                        const demand = prod.orderDemand[ord.id];
+                                                        if (demand && demand.quantity > 0) {
+                                                            const qtyStr = demand.quantity % 1 === 0 
+                                                                ? demand.quantity.toString() 
+                                                                : demand.quantity.toLocaleString('es-CO');
+
+                                                            return (
+                                                                <td
+                                                                    key={prod.id}
+                                                                    style={{
+                                                                        textAlign: 'center',
+                                                                        padding: '3px 2px',
+                                                                        border: '1px solid #CBD5E1',
+                                                                        color: '#000000'
+                                                                    }}
+                                                                >
+                                                                    <div style={{ fontWeight: 900, fontSize: '7.8pt' }}>
+                                                                        {qtyStr}{demand.unit}
+                                                                    </div>
+                                                                    {demand.note && (
+                                                                        <div style={{ fontSize: '5.8pt', color: '#334155', lineHeight: '1.1', marginTop: '1px' }}>
+                                                                            {demand.note}
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        }
                                                         return (
                                                             <td
-                                                                key={ord.id}
+                                                                key={prod.id}
                                                                 style={{
-                                                                    textAlign: 'center',
-                                                                    padding: '4px 2px',
-                                                                    border: '1px solid #CBD5E1',
-                                                                    color: '#0F172A',
-                                                                    fontSize: '0.62rem'
+                                                                    border: '1px solid #E2E8F0',
+                                                                    padding: '3px 2px',
+                                                                    textAlign: 'center'
                                                                 }}
-                                                            >
-                                                                {clientCellTotal > 0 ? clientCellTotal.toLocaleString('es-CO') : '-'}
-                                                            </td>
+                                                            />
                                                         );
                                                     })}
-
-                                                    <td style={{ textAlign: 'center', padding: '4px 2px', border: '1px solid #CBD5E1' }}>
-                                                        kg / und
-                                                    </td>
                                                 </tr>
-                                            </tbody>
-                                        </table>
+                                            );
+                                        })}
+                                    </tbody>
 
-                                        {/* Signatures & Auditor footer */}
-                                        <div style={{
-                                            marginTop: '10px',
-                                            paddingTop: '6px',
-                                            borderTop: '1px solid #CBD5E1',
-                                            display: 'grid',
-                                            gridTemplateColumns: '1.2fr 1.2fr 1fr',
-                                            gap: '12px',
-                                            fontSize: '0.62rem'
-                                        }}>
-                                            <div>
-                                                <strong>Líder de Célula:</strong> ___________________________
-                                                <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Firma y responsable de pesaje en báscula</div>
-                                            </div>
-                                            <div>
-                                                <strong>Auditor de Calidad / Despacho:</strong> ___________________________
-                                                <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Verificación aleatoria de canastillas en bahías</div>
-                                            </div>
-                                            <div style={{ textAlign: 'right', fontWeight: 'bold', color: '#0F172A' }}>
-                                                Hora Inicio: ____:____ &bull; Fin: ____:____
-                                            </div>
-                                        </div>
-                                    </UniversalLetterhead>
+                                    {/* Fila de Totales por Producto */}
+                                    <tfoot>
+                                        <tr style={{ backgroundColor: '#F1F5F9', borderTop: '1.5px solid #000000', fontWeight: 900 }}>
+                                            <td colSpan={3} style={{ textAlign: 'center', padding: '5px 6px', border: '1px solid #000000', fontSize: '7.5pt', color: '#000000', letterSpacing: '0.04em' }}>
+                                                PRODUCTOS ({chunkProducts.length})
+                                            </td>
+                                            {chunkProducts.map((prod) => {
+                                                const colSum = activeOrdersInCell.reduce((sum, ord) => sum + (prod.orderDemand[ord.id]?.quantity || 0), 0);
+                                                const sumStr = colSum > 0 
+                                                    ? (colSum % 1 === 0 ? colSum.toString() : Number(colSum.toFixed(2)).toLocaleString('es-CO')) + prod.unit 
+                                                    : '-';
+
+                                                return (
+                                                    <td
+                                                        key={prod.id}
+                                                        style={{
+                                                            textAlign: 'center',
+                                                            padding: '5px 2px',
+                                                            border: '1px solid #000000',
+                                                            fontSize: '7.5pt',
+                                                            color: '#000000',
+                                                            fontWeight: 900
+                                                        }}
+                                                    >
+                                                        {sumStr}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    </tfoot>
+                                </table>
+
+                                {/* Pie de Página con Numeración */}
+                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '8px', fontSize: '7pt', color: '#475569', fontWeight: '600' }}>
+                                    Pág. {sheetGlobalIdx + 1} / {printableSheets.length}
                                 </div>
-                            );
-                        });
+                            </div>
+                        );
                     })
                 )}
             </div>

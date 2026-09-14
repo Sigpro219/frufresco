@@ -162,9 +162,19 @@ export default function ManualDispatchWizardModal({
                     .eq('id', orderId);
             });
 
-            await Promise.all(updates);
+            const results = await Promise.all(updates);
+            const failed = results.find(r => r.error);
+            if (failed?.error) throw failed.error;
+
+            // Mantener coherencia en el objeto de órdenes en memoria
+            selectedOrdersList.forEach(o => {
+                if (manualSpacesMap[o.id]) {
+                    o.warehouse_spaces = manualSpacesMap[o.id];
+                }
+            });
+
             setSpacesSavedSuccess(true);
-            setTimeout(() => setSpacesSavedSuccess(false), 3500);
+            setTimeout(() => setSpacesSavedSuccess(false), 5000);
         } catch (err: any) {
             console.error('Error guardando bahías de muelle:', err);
             alert(`Error al guardar bahías: ${err?.message || 'Error desconocido'}`);
@@ -594,7 +604,7 @@ export default function ManualDispatchWizardModal({
                                         display: 'inline-flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
                                     }}
                                 >
-                                    <Printer size={13} /> Imprimir Sábana Alistamiento (12 Zonas) <ExternalLink size={11} />
+                                    <Printer size={13} /> Imprimir Sábana Alistamiento (Oficio) <ExternalLink size={11} />
                                 </Link>
                                 <Link
                                     href={`/admin/logistics/staging-spaces?date=${deliveryDate}`}

@@ -75,7 +75,7 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
         /* GOLDEN PRINT VIA NEW WINDOW - ISOLATED DOCUMENT STYLES   */
         /* ========================================================= */
         @page {
-            size: ${paperSize} ${orientation};
+            size: ${paperSize === 'oficio' ? 'legal' : paperSize} ${orientation};
             margin: ${margin};
         }
         *, *::before, *::after {

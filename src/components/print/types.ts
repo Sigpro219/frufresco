@@ -1,4 +1,4 @@
-export type PaperSize = 'letter' | 'a4';
+export type PaperSize = 'letter' | 'a4' | 'legal' | 'oficio';
 
 export interface CorporateBrandConfig {
     companyName: string;            // Ej: "Investments Cortes S.A.S." | "Delta CoreTech S.A.S."
