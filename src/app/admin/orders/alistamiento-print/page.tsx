@@ -527,9 +527,8 @@ export default function AlistamientoSabanaPrintPage() {
             const pId = it.product_id || it.product?.name || 'misc';
             const pName = it.product?.name || it.nickname || 'Producto';
             
-            // En el encabezado superior: Mostrar ACCOUNTING ID (ej. IN(147) Papa criolla), nunca el SKU
-            const accTag = it.product?.accounting_id ? `IN(${it.product.accounting_id}) ` : '';
-            const displayName = `${accTag}${pName}`;
+            // displayName = solo nombre limpio; el prefijo INV[kg] se añade al renderizar el <th>
+            const displayName = pName;
             
             // Normalizar a Kilogramos
             const norm = normalizeToKg(it.quantity, it.unit, it.product?.unit_of_measure);
@@ -899,47 +898,36 @@ export default function AlistamientoSabanaPrintPage() {
                                             <th style={{ width: '38px', padding: '6px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
                                                 TIPO
                                             </th>
-                                            {chunkProducts.map((prod) => (
-                                                <th
-                                                    key={prod.id}
-                                                    style={{
-                                                        padding: '4px 4px 5px',
-                                                        textAlign: 'center',
-                                                        fontWeight: 800,
-                                                        border: '1px solid #000000',
-                                                        color: '#000000',
-                                                        fontSize: '7.2pt',
-                                                        lineHeight: '1.2'
-                                                    }}
-                                                >
-                                                    {/* Badge de Existencias en Inventario */}
-                                                    <div style={{
-                                                        display: 'inline-block',
-                                                        marginBottom: '3px',
-                                                        backgroundColor: prod.inventoryKg === null
-                                                            ? '#94A3B8'
-                                                            : prod.inventoryKg === 0
-                                                                ? '#FCA5A5'
-                                                                : '#BBF7D0',
-                                                        color: prod.inventoryKg === null
-                                                            ? '#475569'
-                                                            : prod.inventoryKg === 0
-                                                                ? '#991B1B'
-                                                                : '#14532D',
-                                                        borderRadius: '3px',
-                                                        padding: '1px 5px',
-                                                        fontSize: '6.5pt',
-                                                        fontWeight: 900,
-                                                        letterSpacing: '0.02em',
-                                                        whiteSpace: 'nowrap'
-                                                    }}>
-                                                        {prod.inventoryKg === null
-                                                            ? 'INV: —'
-                                                            : `INV: ${prod.inventoryKg % 1 === 0 ? prod.inventoryKg : prod.inventoryKg.toFixed(1)} kg`}
-                                                    </div>
-                                                    <div>{prod.displayName}</div>
-                                                </th>
-                                            ))}
+                                            {chunkProducts.map((prod) => {
+                                                const invKg = prod.inventoryKg;
+                                                const invStr = invKg === null
+                                                    ? '—'
+                                                    : invKg % 1 === 0
+                                                        ? String(invKg)
+                                                        : invKg.toFixed(1);
+                                                const invColor = invKg === null
+                                                    ? '#64748B'
+                                                    : invKg === 0
+                                                        ? '#B91C1C'
+                                                        : '#15803D';
+                                                return (
+                                                    <th
+                                                        key={prod.id}
+                                                        style={{
+                                                            padding: '5px 4px',
+                                                            textAlign: 'center',
+                                                            fontWeight: 800,
+                                                            border: '1px solid #000000',
+                                                            color: '#000000',
+                                                            fontSize: '7.2pt',
+                                                            lineHeight: '1.3'
+                                                        }}
+                                                    >
+                                                        <span style={{ color: invColor, fontWeight: 900 }}>INV[{invStr}]</span>
+                                                        {' '}{prod.displayName}
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
 
