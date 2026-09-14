@@ -32,8 +32,10 @@ interface OrderInfo {
     sequence_id?: number;
     delivery_date: string;
     delivery_slot?: string;
+    shipping_address?: string;
     warehouse_spaces?: number[];
     client_name: string;
+    branch_name: string;
     client_type: 'I' | 'H';
     order_num: string;
     space_label: string;
@@ -64,6 +66,218 @@ const KNOWN_CELLS = [
     '14. FRUTA BAJA DEMANDA',
     '15. LECHUGA BATAVIA'
 ];
+
+/**
+ * Normaliza la sucursal y el cliente para visualización inmediata en piso de bodega.
+ * Si es una entidad multisede (Colsubsidio, Aldimark, Yanuba, Peñalisa), destaca la sucursal/sede
+ * en lugar de truncar la razón social matriz.
+ */
+function extractBranchAndClient(orderRaw: any): { branchName: string; parentName: string } {
+    const profile = orderRaw.profiles || {};
+    const company = (profile.company_name || '').trim();
+    const contact = (profile.contact_name || '').trim();
+    const shipping = (orderRaw.shipping_address || '').trim();
+    const customer = (orderRaw.customer_name || '').trim();
+
+    // 1. Colsubsidio
+    if (company.toUpperCase().includes('COLSUBSIDIO')) {
+        if (company.includes('-')) {
+            const branch = company.split('-').slice(1).join(' - ').trim();
+            return {
+                branchName: `COLSUBSIDIO - ${branch.toUpperCase()}`,
+                parentName: 'Colsubsidio'
+            };
+        }
+        if (shipping.toUpperCase().includes('GIRARDOT') || shipping.toUpperCase().includes('RICAURTE')) {
+            return {
+                branchName: 'COLSUBSIDIO - RICAURTE / GIRARDOT',
+                parentName: 'Colsubsidio'
+            };
+        }
+        if (shipping.toUpperCase().includes('CHAPINERO')) {
+            return {
+                branchName: 'COLSUBSIDIO - CHAPINERO',
+                parentName: 'Colsubsidio'
+            };
+        }
+        if (contact && !contact.toUpperCase().includes('COLSUBSIDIO')) {
+            return {
+                branchName: `COLSUBSIDIO - ${contact.toUpperCase()}`,
+                parentName: 'Colsubsidio'
+            };
+        }
+        return {
+            branchName: 'COLSUBSIDIO - SEDE PRINCIPAL',
+            parentName: 'Colsubsidio'
+        };
+    }
+
+    // 2. Aldimark
+    if (company.toUpperCase().includes('ALDIMARK')) {
+        if (company.includes('-')) {
+            const branch = company.split('-').slice(1).join(' - ').replace(/^ALDIMARK[- ]*/i, '').trim();
+            return {
+                branchName: `ALDIMARK - ${branch.toUpperCase()}`,
+                parentName: 'Aldimark'
+            };
+        }
+        if (contact && !contact.toUpperCase().includes('ALDIMARK') && !contact.toUpperCase().includes('BOBADILLA')) {
+            return {
+                branchName: `ALDIMARK - ${contact.toUpperCase()}`,
+                parentName: 'Aldimark'
+            };
+        }
+        return {
+            branchName: 'ALDIMARK - SEDE PRINCIPAL',
+            parentName: 'Aldimark'
+        };
+    }
+
+    // 3. Yanuba
+    if (company.toUpperCase().includes('YANUBA') || company.toUpperCase().includes('MILSEN')) {
+        if (company.toUpperCase().includes('150') || company.toUpperCase().includes('CEDRITOS')) {
+            return {
+                branchName: 'YANUBA - 150 CEDRITOS',
+                parentName: 'Yanuba / Milsen SAS'
+            };
+        }
+        if (company.toUpperCase().includes('122') || company.toUpperCase().includes('SANTA')) {
+            return {
+                branchName: 'YANUBA - 122 SANTA BÁRBARA',
+                parentName: 'Yanuba'
+            };
+        }
+        return {
+            branchName: 'YANUBA',
+            parentName: 'Milsen SAS'
+        };
+    }
+
+    // 4. Puerto Peñalisa
+    if (company.toUpperCase().includes('PUERTO PENALISA') || company.toUpperCase().includes('PUERTO PEÑALISA')) {
+        if (shipping.toUpperCase().includes('USAQUÉN') || shipping.toUpperCase().includes('USAQUEN')) {
+            return {
+                branchName: 'PUERTO PEÑALISA - USAQUÉN',
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        if (shipping.toUpperCase().includes('TEUSAQUILLO')) {
+            return {
+                branchName: 'PUERTO PEÑALISA - TEUSAQUILLO',
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        if (shipping.toUpperCase().includes('PUENTE ARANDA')) {
+            return {
+                branchName: 'PUERTO PEÑALISA - PUENTE ARANDA',
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        if (shipping.toUpperCase().includes('RICAURTE')) {
+            return {
+                branchName: 'PUERTO PEÑALISA - RICAURTE',
+                parentName: 'Fundación Puerto Peñalisa'
+            };
+        }
+        if (company.includes('-')) {
+            const branch = company.split('-').slice(1).join(' - ').trim();
+            return {
+                branchName: `PUERTO PEÑALISA - ${branch.toUpperCase()}`,
+                parentName: 'Corp. Club Puerto Peñalisa'
+            };
+        }
+        return {
+            branchName: 'PUERTO PEÑALISA',
+            parentName: 'Corp. Club Puerto Peñalisa'
+        };
+    }
+
+    // 5. Club del Comercio
+    if (company.toUpperCase().includes('CLUB DEL COMERCIO')) {
+        if (shipping.toUpperCase().includes('SUBA') || shipping.toUpperCase().includes('150')) {
+            return {
+                branchName: 'CLUB DEL COMERCIO - SUBA',
+                parentName: 'Club del Comercio'
+            };
+        }
+        if (shipping.toUpperCase().includes('CL 62') || shipping.toUpperCase().includes('SEDE')) {
+            return {
+                branchName: 'CLUB DEL COMERCIO - SEDE PRINCIPAL',
+                parentName: 'Club del Comercio'
+            };
+        }
+        return {
+            branchName: 'CLUB DEL COMERCIO',
+            parentName: 'Club del Comercio'
+        };
+    }
+
+    // 6. CESNE
+    if (company.toUpperCase().includes('CESNE') || company.toUpperCase().includes('SUBOFICIALES')) {
+        if (shipping.toUpperCase().includes('PONTEVEDRA') || shipping.toUpperCase().includes('80')) {
+            return {
+                branchName: 'CESNE - PONTEVEDRA',
+                parentName: 'Policía Nacional'
+            };
+        }
+        if (shipping.toUpperCase().includes('63')) {
+            return {
+                branchName: 'CESNE - CALLE 63',
+                parentName: 'Policía Nacional'
+            };
+        }
+        return {
+            branchName: 'CESNE - POLICÍA NACIONAL',
+            parentName: 'Centro Social de Suboficiales'
+        };
+    }
+
+    // 7. General con guión: "MATRIZ - SUCURSAL"
+    if (company.includes('-')) {
+        const parts = company.split('-').map(s => s.trim());
+        const main = parts[0].replace(/\s+S\.?A\.?S\.?/gi, '').trim();
+        const branch = parts.slice(1).join(' - ').trim();
+        return {
+            branchName: branch.toUpperCase(),
+            parentName: main.toUpperCase()
+        };
+    }
+
+    const fallback = company || contact || customer || 'CLIENTE';
+    return {
+        branchName: fallback.toUpperCase().replace(/\s+S\.?A\.?S\.?/gi, ' SAS'),
+        parentName: ''
+    };
+}
+
+/**
+ * Normaliza cantidades y unidades para evitar concatenaciones ambiguas como "241000 G"
+ * Convierte "1000 G" o "1000 gr" a "KG", y añade espacios si la unidad comienza con dígito.
+ */
+function formatQuantityAndUnit(quantity: number, rawUnit?: string): string {
+    const cleanUnit = (rawUnit || 'KG').trim().toUpperCase();
+
+    // 1000 gramos es exactamente 1 Kilogramo
+    if (/^1000\s*(G|GR|GRAMOS)$/i.test(cleanUnit)) {
+        const qtyStr = quantity % 1 === 0 ? quantity.toString() : quantity.toLocaleString('es-CO');
+        return `${qtyStr}KG`;
+    }
+
+    // 500 gramos es 1 Libra
+    if (/^500\s*(G|GR|GRAMOS)$/i.test(cleanUnit)) {
+        const qtyStr = quantity % 1 === 0 ? quantity.toString() : quantity.toLocaleString('es-CO');
+        return `${qtyStr}LB`;
+    }
+
+    const qtyStr = quantity % 1 === 0 ? quantity.toString() : quantity.toLocaleString('es-CO');
+
+    // Si la unidad empieza con dígito (ej: "250 GR", "7000 GR"), separar con espacio legible
+    if (/^\d/.test(cleanUnit)) {
+        return `${qtyStr} (${cleanUnit})`;
+    }
+
+    return `${qtyStr}${cleanUnit}`;
+}
 
 export default function AlistamientoSabanaPrintPage() {
     const searchParams = useSearchParams();
@@ -109,8 +323,8 @@ export default function AlistamientoSabanaPrintPage() {
             let orderQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, delivery_date, delivery_slot, warehouse_spaces, status, profile_id, type,
-                    profiles:profile_id(id, company_name, contact_name, role),
+                    id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type,
+                    profiles:profile_id(id, company_name, contact_name, address, role),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label,
                         products(id, name, sku, unit_of_measure, buying_team, category)
@@ -132,8 +346,7 @@ export default function AlistamientoSabanaPrintPage() {
             const parsedItems: OrderItem[] = [];
 
             (rawOrders || []).forEach((o: any, idx: number) => {
-                const clientRaw = o.profiles?.company_name || o.profiles?.contact_name || o.customer_name || 'CLIENTE';
-                const clientName = clientRaw.toUpperCase().trim();
+                const { branchName, parentName } = extractBranchAndClient(o);
 
                 const isB2B = (o.type?.toLowerCase().includes('b2b') ?? false) || 
                               o.profiles?.role === 'b2b_client' || 
@@ -155,8 +368,10 @@ export default function AlistamientoSabanaPrintPage() {
                     sequence_id: o.sequence_id,
                     delivery_date: o.delivery_date,
                     delivery_slot: o.delivery_slot,
+                    shipping_address: o.shipping_address,
                     warehouse_spaces: o.warehouse_spaces,
-                    client_name: clientName,
+                    client_name: parentName,
+                    branch_name: branchName,
                     client_type: clientType,
                     order_num: orderNum,
                     space_label: spaceLabel,
@@ -254,7 +469,7 @@ export default function AlistamientoSabanaPrintPage() {
             }
         });
 
-        // Filtrar órdenes que tengan demanda en esta célula
+        // Guardar pedidos activos globales para la célula
         Object.keys(groups).forEach(cell => {
             const prodMap = groups[cell].productsMap;
             const relevantOrderIds = new Set<string>();
@@ -293,6 +508,7 @@ export default function AlistamientoSabanaPrintPage() {
     };
 
     // Estructurar la lista global de hojas (Sheets) para el conteo de páginas total
+    // FILTRANDO CERO FILAS VACÍAS: Cada hoja contiene ÚNICAMENTE los clientes con demanda > 0 en los productos de esa hoja
     const printableSheets = useMemo(() => {
         const sheets: Array<{
             cellName: string;
@@ -307,7 +523,7 @@ export default function AlistamientoSabanaPrintPage() {
             if (!cellData) return;
 
             const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-            const activeOrders = cellData.activeOrders;
+            const allActiveOrders = cellData.activeOrders;
 
             // En Oficio Landscape caben 6 productos con ancho holgado (o 7 si la célula tiene exactamente 7)
             const chunkSize = productsList.length === 7 ? 7 : 6;
@@ -315,13 +531,23 @@ export default function AlistamientoSabanaPrintPage() {
 
             for (let i = 0; i < totalChunks; i++) {
                 const chunkProducts = productsList.slice(i * chunkSize, (i + 1) * chunkSize);
-                sheets.push({
-                    cellName,
-                    chunkIdx: i,
-                    totalChunksForCell: totalChunks,
-                    chunkProducts,
-                    activeOrdersInCell: activeOrders
+
+                // FILTRO POKA-YOKE: Eliminar completamente las filas vacías
+                // Solo incluir clientes que tengan pedido > 0 en alguno de los productos de ESTA hoja
+                const chunkActiveOrders = allActiveOrders.filter(ord => {
+                    return chunkProducts.some(prod => (prod.orderDemand[ord.id]?.quantity || 0) > 0);
                 });
+
+                // Si la hoja tiene pedidos reales, añadirla a la impresión
+                if (chunkActiveOrders.length > 0) {
+                    sheets.push({
+                        cellName,
+                        chunkIdx: i,
+                        totalChunksForCell: totalChunks,
+                        chunkProducts,
+                        activeOrdersInCell: chunkActiveOrders
+                    });
+                }
             }
         });
 
@@ -415,7 +641,7 @@ export default function AlistamientoSabanaPrintPage() {
                             Sábana Maestra de Alistamiento &bull; Tamaño Oficio (Legal)
                         </h1>
                         <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                            {orders.length} pedidos &bull; Matriz ALISTAMIENTO.pdf (Filas = Bahías, Columnas = Productos) &bull; Optimizado Blanco y Negro
+                            {orders.length} pedidos &bull; Matriz ALISTAMIENTO.pdf (Sucursal prominente &bull; Sin filas vacías &bull; B&W)
                         </span>
                     </div>
                 </div>
@@ -555,7 +781,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                 LUGAR
                                             </th>
                                             <th style={{ width: '230px', padding: '5px 6px', textAlign: 'left', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
-                                                CLIENTES ({activeOrdersInCell.length})
+                                                SUCURSAL / CLIENTE ({activeOrdersInCell.length})
                                             </th>
                                             <th style={{ width: '38px', padding: '5px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
                                                 TIPO
@@ -590,9 +816,16 @@ export default function AlistamientoSabanaPrintPage() {
                                                         {ord.space_label}
                                                     </td>
 
-                                                    {/* Nombre del Cliente */}
-                                                    <td style={{ textAlign: 'left', padding: '3.5px 6px', border: '1px solid #CBD5E1', fontWeight: 700, fontSize: '7.3pt', color: '#000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '230px' }} title={ord.client_name}>
-                                                        {ord.client_name}
+                                                    {/* Sucursal y Nombre del Cliente */}
+                                                    <td style={{ textAlign: 'left', padding: '3.5px 6px', border: '1px solid #CBD5E1', color: '#000000', maxWidth: '230px' }} title={`${ord.branch_name} ${ord.client_name ? `(${ord.client_name})` : ''}`}>
+                                                        <div style={{ fontWeight: 800, fontSize: '7.3pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
+                                                            {ord.branch_name}
+                                                        </div>
+                                                        {ord.client_name && ord.client_name !== ord.branch_name && (
+                                                            <div style={{ fontSize: '5.8pt', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {ord.client_name}
+                                                            </div>
+                                                        )}
                                                     </td>
 
                                                     {/* Tipo (I = Institucional, H = Hogar) */}
@@ -604,9 +837,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                     {chunkProducts.map((prod) => {
                                                         const demand = prod.orderDemand[ord.id];
                                                         if (demand && demand.quantity > 0) {
-                                                            const qtyStr = demand.quantity % 1 === 0 
-                                                                ? demand.quantity.toString() 
-                                                                : demand.quantity.toLocaleString('es-CO');
+                                                            const formattedQty = formatQuantityAndUnit(demand.quantity, demand.unit);
 
                                                             return (
                                                                 <td
@@ -619,7 +850,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                                     }}
                                                                 >
                                                                     <div style={{ fontWeight: 900, fontSize: '7.8pt' }}>
-                                                                        {qtyStr}{demand.unit}
+                                                                        {formattedQty}
                                                                     </div>
                                                                     {demand.note && (
                                                                         <div style={{ fontSize: '5.8pt', color: '#334155', lineHeight: '1.1', marginTop: '1px' }}>
@@ -653,9 +884,7 @@ export default function AlistamientoSabanaPrintPage() {
                                             </td>
                                             {chunkProducts.map((prod) => {
                                                 const colSum = activeOrdersInCell.reduce((sum, ord) => sum + (prod.orderDemand[ord.id]?.quantity || 0), 0);
-                                                const sumStr = colSum > 0 
-                                                    ? (colSum % 1 === 0 ? colSum.toString() : Number(colSum.toFixed(2)).toLocaleString('es-CO')) + prod.unit 
-                                                    : '-';
+                                                const sumStr = colSum > 0 ? formatQuantityAndUnit(colSum, prod.unit) : '-';
 
                                                 return (
                                                     <td
