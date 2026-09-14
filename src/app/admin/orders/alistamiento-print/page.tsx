@@ -899,17 +899,10 @@ export default function AlistamientoSabanaPrintPage() {
                                                 TIPO
                                             </th>
                                             {chunkProducts.map((prod) => {
-                                                const invKg = prod.inventoryKg;
-                                                const invStr = invKg === null
-                                                    ? '—'
-                                                    : invKg % 1 === 0
-                                                        ? String(invKg)
-                                                        : invKg.toFixed(1);
-                                                const invColor = invKg === null
-                                                    ? '#64748B'
-                                                    : invKg === 0
-                                                        ? '#B91C1C'
-                                                        : '#15803D';
+                                                // null = sin registro en inventory_stocks → tratar como 0
+                                                const invKg = prod.inventoryKg ?? 0;
+                                                const invStr = invKg % 1 === 0 ? String(invKg) : invKg.toFixed(1);
+                                                const invColor = invKg === 0 ? '#B91C1C' : '#15803D';
                                                 return (
                                                     <th
                                                         key={prod.id}
