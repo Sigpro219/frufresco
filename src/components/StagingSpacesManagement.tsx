@@ -103,7 +103,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 .from('orders')
                 .select(`
                     id, sequence_id, status, total, delivery_date, created_at,
-                    shipping_address, warehouse_spaces, profile_id, admin_notes, is_b2b,
+                    shipping_address, warehouse_spaces, profile_id, admin_notes, type, origin_source,
                     profiles:profile_id(id, company_name, contact_name, contact_phone, address, role),
                     order_items(id, quantity, unit_price, nickname, products(name, sku, unit_of_measure, weight_kg))
                 `)
@@ -149,17 +149,21 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             }, 0);
 
             // Detección estricta de Cliente Hogar vs Institucional
-            const isHogar = Boolean(
-                o.profiles?.role === 'b2c_client' ||
-                o.is_b2b === false ||
+            const pRole = o.profiles?.role;
+            const isHogar = (
+                pRole === 'b2c_client' ||
                 (o.admin_notes || '').includes('CLIENTE HOGAR') ||
-                (o.admin_notes || '').includes('origin: web_b2c') ||
-                (o.admin_notes || '').toLowerCase().includes('[origen: web]')
+                (pRole !== 'b2b_client' && (
+                    o.type === 'b2c' || 
+                    o.origin_source === 'web_b2c' || 
+                    (o.admin_notes || '').includes('origin: web_b2c') || 
+                    (o.admin_notes || '').toLowerCase().includes('[origen: web]')
+                ))
             );
 
-            const clientType: 'hogar' | 'institucional' = (isHogar && o.profiles?.role !== 'b2b_client') ? 'hogar' : 'institucional';
+            const clientType: 'hogar' | 'institucional' = isHogar ? 'hogar' : 'institucional';
 
-            // Resolver nombre adecuado (nombre de contacto para persona natural, empresa para B2B)
+            // Resolver nombre adecuado (nombre de contacto para persona natural, empresa para Institucional)
             let resolvedName = o.profiles?.company_name;
             if (clientType === 'hogar') {
                 if (o.admin_notes && o.admin_notes.includes('CLIENTE HOGAR')) {
@@ -337,8 +341,17 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             
-            {/* Header Superior con Storytelling Operativo */}
-            <div style={{ backgroundColor: THEME.colors.surface, padding: '1.25rem 1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+            {/* Header Superior con Storytelling Operativo - Sticky */}
+            <div style={{ 
+                position: 'sticky',
+                top: '86px',
+                zIndex: 40,
+                backgroundColor: THEME.colors.surface, 
+                padding: '1.1rem 1.5rem', 
+                borderRadius: THEME.radius.xl, 
+                border: `1px solid ${THEME.colors.border}`, 
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)' 
+            }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
@@ -494,7 +507,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                             <span style={{ fontSize: '1.15rem', fontWeight: 900, color: THEME.colors.textMain }}>{stats.totalOrders}</span>
                             <span style={{ fontSize: '0.62rem', fontWeight: 700, color: THEME.colors.textSecondary }}>
-                                ({stats.institutionalCount} B2B · {stats.hogarCount} Hogar)
+                                ({stats.institutionalCount} Institucionales · {stats.hogarCount} Hogar)
                             </span>
                         </div>
                     </div>
@@ -566,7 +579,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 Distribución Física en Planta (Bahías 1 a 150)
                             </h3>
                             <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                🟢 Institucional (B2B) &bull; 🔵 Hogar (B2C) &bull; ⚪ Bahía libre &bull; Pasa el cursor para ver detalles
+                                🟢 Institucional &bull; 🔵 Hogar &bull; ⚪ Bahía libre &bull; Pasa el cursor para ver detalles
                             </span>
                         </div>
 
@@ -576,7 +589,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 <Search size={13} color={THEME.colors.textSecondary} style={{ position: 'absolute', left: '8px', pointerEvents: 'none' }} />
                                 <input
                                     type="text"
-                                    placeholder="Filtrar bahía, cliente o 'hogar'..."
+                                    placeholder="Filtrar bahía, cliente, 'hogar' o 'institucional'..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     style={{
@@ -626,7 +639,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                             <div style={{ display: 'flex', gap: '8px', fontSize: '0.65rem', alignItems: 'center', fontWeight: '700', marginLeft: '4px' }}>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#065F46' }}>
                                     <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#ECFDF5', border: '1px solid #0D7A57' }}></span>
-                                    <Building2 size={10} color="#0D7A57" /> B2B
+                                    <Building2 size={10} color="#0D7A57" /> Institucional
                                 </span>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#1E40AF' }}>
                                     <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', backgroundColor: '#EFF6FF', border: '1px solid #2563EB' }}></span>
