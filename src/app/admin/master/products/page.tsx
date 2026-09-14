@@ -363,7 +363,7 @@ export default function MasterProductsPage() {
                 ID_PADRE: p.parent_id || '',
                 SKU_PADRE: parent?.sku || '',
                 Nombre_Padre: parent?.name || '',
-                Tipo_Jerarquia: (p.parent_id === p.id && products.some(other => other.parent_id === p.id && other.id !== p.id)) ? 'PADRE E HIJO' : (p.parent_id ? (p.parent_id === p.id ? 'PADRE' : 'HIJO') : (products.some(other => other.parent_id === p.id && other.id !== p.id) ? 'PADRE' : 'PRINCIPAL')),
+                Tipo_Jerarquia: (p.parent_id === p.id) ? 'PADRE E HIJO' : (p.parent_id ? 'HIJO' : (products.some(other => other.parent_id === p.id) ? 'PADRE' : 'PRINCIPAL')),
                 IVA: p.iva_rate ?? 19,
                 URL_Imagen: p.image_url || '',
                 Comprador: p.buying_team || '',
@@ -2104,9 +2104,10 @@ export default function MasterProductsPage() {
                                                 
                                                 {/* Cápsula de Jerarquía en Categoría */}
                                                 {(() => {
+                                                    const isSelfParentChild = p.parent_id === p.id;
                                                     const hasOtherChildren = products.some(other => other.parent_id === p.id && other.id !== p.id);
-                                                    const isP = hasOtherChildren || p.parent_id === p.id;
-                                                    const isH = (p.parent_id && p.parent_id !== p.id) || (p.parent_id === p.id && hasOtherChildren);
+                                                    const isP = isSelfParentChild || hasOtherChildren;
+                                                    const isH = isSelfParentChild || Boolean(p.parent_id && p.parent_id !== p.id);
 
                                                     if (!isP && !isH) return null;
 

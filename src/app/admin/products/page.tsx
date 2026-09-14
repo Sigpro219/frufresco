@@ -2327,9 +2327,10 @@ export default function AdminProductsPage() {
                                                 
                                                 {/* Cápsula de Jerarquía Minimalista */}
                                                 {(() => {
+                                                    const isSelfParentChild = product.parent_id === product.id;
                                                     const hasOtherChildren = products.some(other => other.parent_id === product.id && other.id !== product.id);
-                                                    const isP = hasOtherChildren || product.parent_id === product.id;
-                                                    const isH = (product.parent_id && product.parent_id !== product.id) || (product.parent_id === product.id && hasOtherChildren);
+                                                    const isP = isSelfParentChild || hasOtherChildren;
+                                                    const isH = isSelfParentChild || Boolean(product.parent_id && product.parent_id !== product.id);
 
                                                     if (!isP && !isH) return null;
 
