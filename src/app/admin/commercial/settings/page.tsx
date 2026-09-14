@@ -1808,14 +1808,14 @@ export default function PricingSettingsPage({
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                             <thead style={{ position: 'sticky', top: embedded ? '208px' : '151px', zIndex: 30, backgroundColor: '#F8FAFC' }}>
                                                 <tr>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>ID ERP</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Producto</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Categoría</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Costo Base</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Utilidad</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Sug. sin IVA</th>
-                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Precio Final</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>ID ERP</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '35%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Producto</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '15%', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Categoría</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Costo Base</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '8%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>IVA</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '12%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Utilidad</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Sug. sin IVA</th>
+                                                    <th style={{ ...THEME.typography.tableHeader, padding: '0.65rem 1.25rem', width: '10%', textAlign: 'right', position: 'sticky', top: embedded ? '208px' : '151px', backgroundColor: '#F8FAFC', zIndex: 30, borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>Precio Final</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1840,24 +1840,19 @@ export default function PricingSettingsPage({
                                                             transition: 'background-color 0.2s'
                                                         }}>
                                                             {/* ERP ID */}
-                                                            <td style={{ padding: '0.9rem 1.25rem', fontSize: '0.85rem', fontFamily: 'monospace', color: '#475569', fontWeight: 'bold' }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', fontFamily: 'monospace', color: '#475569', fontWeight: 'bold' }}>
                                                                 {p.accounting_id || p.sku || '-'}
                                                             </td>
                                                             
                                                             {/* Product Name */}
-                                                            <td style={{ padding: '0.9rem 1.25rem' }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem' }}>
                                                                 <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>
                                                                     {p.name}
                                                                 </div>
-                                                                {isModified && (
-                                                                    <span style={{ fontSize: '0.7rem', color: '#047857', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', marginTop: '2px' }}>
-                                                                        <TrendingUp size={10} /> Margen personalizado (ajuste: {p.margin_adjustment > 0 ? `+${formatNumber(p.margin_adjustment, 1)}` : formatNumber(p.margin_adjustment, 1)}%)
-                                                                    </span>
-                                                                )}
                                                             </td>
                                                             
                                                             {/* Category and unit */}
-                                                            <td style={{ padding: '0.9rem 1.25rem' }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem' }}>
                                                                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
                                                                     <span style={{ 
                                                                         fontSize: '0.7rem', 
@@ -1885,17 +1880,17 @@ export default function PricingSettingsPage({
                                                             </td>
                                                             
                                                             {/* Base Cost */}
-                                                            <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain }}>
                                                                 {formatMoney(p.base_cost)}
                                                             </td>
                                                             
                                                             {/* IVA */}
-                                                            <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
                                                                 {p.iva_rate}%
                                                             </td>
                                                             
                                                             {/* Utilidad / Margen Input Inline */}
-                                                            <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right' }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem' }}>
                                                                     {savingMargins[p.product_id] === 'saving' && (
                                                                         <RefreshCw size={12} className="animate-spin" style={{ color: THEME.colors.primary }} />
@@ -1907,7 +1902,10 @@ export default function PricingSettingsPage({
                                                                         <AlertCircle size={14} style={{ color: '#EF4444' }} />
                                                                     )}
 
-                                                                    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                                                                    <div 
+                                                                        title={isModified ? `Margen personalizado (ajuste: ${p.margin_adjustment > 0 ? `+${formatNumber(p.margin_adjustment, 1)}` : formatNumber(p.margin_adjustment, 1)}%)` : undefined}
+                                                                        style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                                                                    >
                                                                         <input 
                                                                             type="text"
                                                                             value={displayMarginValue}
@@ -1940,12 +1938,12 @@ export default function PricingSettingsPage({
                                                             </td>
                                                             
                                                             {/* Sugerido sin IVA */}
-                                                            <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
                                                                 {formatMoney(priceBeforeTax)}
                                                             </td>
                                                             
                                                             {/* Precio Final (con IVA, redondeado a 50) */}
-                                                            <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right', fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.primary }}>
+                                                            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.primary }}>
                                                                 {formatMoney(finalPriceRounded)}
                                                             </td>
                                                         </tr>
