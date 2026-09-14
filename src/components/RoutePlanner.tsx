@@ -75,6 +75,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [aiReportText, setAiReportText] = useState('');
     const [debugInfo, setDebugInfo] = useState({ targetDate: '', count: 0, cutoff: false, driversFound: '' });
 
+    const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string>(() => {
+        const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+        return now.toISOString().split('T')[0];
+    });
+    const [showAllDates, setShowAllDates] = useState<boolean>(false);
+
     const [showSettings, setShowSettings] = useState(false);
     const [params, setParams] = useState<Record<string, any>>({
         b2b_kg_min: 10,
@@ -102,7 +108,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         isMounted.current = true;
         fetchInitialData();
         return () => { isMounted.current = false; };
-    }, []);
+    }, [selectedDeliveryDate, showAllDates]);
 
     const fetchInitialData = async () => {
         try {
@@ -125,17 +131,10 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 }
             }
 
-            // 2. Fetch Orders (with conditional cutoff)
-            const { data: settings } = await supabase.from('app_settings').select('value').eq('key', 'enable_cutoff_rules').single();
-            const cutoffEnabled = settings?.value !== 'false';
-
-
-            const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-            const targetDate = now.toISOString().split('T')[0];
-
+            // 2. Fetch Orders (with date filter or all dates)
             let apiUrl = '/api/transport/orders';
-            if (cutoffEnabled) {
-                apiUrl += `?date=${targetDate}&t=${Date.now()}`;
+            if (!showAllDates && selectedDeliveryDate) {
+                apiUrl += `?date=${selectedDeliveryDate}&t=${Date.now()}`;
             } else {
                 apiUrl += `?t=${Date.now()}`;
             }
@@ -161,9 +160,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
             if (isMounted.current) {
                 setDebugInfo({ 
-                    targetDate: cutoffEnabled ? targetDate : 'TODOS', 
+                    targetDate: showAllDates ? 'TODOS' : selectedDeliveryDate, 
                     count: (orderData || []).length,
-                    cutoff: cutoffEnabled,
+                    cutoff: !showAllDates,
                     driversFound: 'Sincronizado con FLOTA'
                 });
             }
@@ -778,18 +777,51 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#1F2937', letterSpacing: '-0.02em' }}>PEDIDOS PICKING</h3>
-                            <div style={{ fontSize: '0.62rem', color: '#6B7280', fontWeight: '800', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span><Calendar size={12} strokeWidth={1.5} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Despacho: {(() => {
-                                    const dateStr = debugInfo.targetDate;
-                                    if (!dateStr || dateStr === 'TODOS') return 'Todos';
-                                    try {
-                                        const parts = dateStr.split('-');
-                                        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                                        return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
-                                    } catch {
-                                        return dateStr;
-                                    }
-                                })()}</span>
+                            <div style={{ fontSize: '0.62rem', color: '#6B7280', fontWeight: '800', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    backgroundColor: '#FFFFFF',
+                                    border: '1px solid #D1D5DB',
+                                    borderRadius: '6px',
+                                    padding: '2px 6px'
+                                }}>
+                                    <Calendar size={12} color="#6B7280" />
+                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#4B5563' }}>Despacho:</span>
+                                    <input
+                                        type="date"
+                                        value={selectedDeliveryDate}
+                                        disabled={showAllDates}
+                                        onChange={(e) => setSelectedDeliveryDate(e.target.value)}
+                                        style={{
+                                            border: 'none',
+                                            background: 'transparent',
+                                            fontSize: '0.68rem',
+                                            fontWeight: '800',
+                                            color: showAllDates ? '#9CA3AF' : '#111827',
+                                            outline: 'none',
+                                            cursor: showAllDates ? 'not-allowed' : 'pointer'
+                                        }}
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllDates(prev => !prev)}
+                                    style={{
+                                        border: '1px solid #E5E7EB',
+                                        borderRadius: '6px',
+                                        padding: '2px 6px',
+                                        fontSize: '0.60rem',
+                                        fontWeight: '800',
+                                        backgroundColor: showAllDates ? '#EDE9FE' : '#FFFFFF',
+                                        color: showAllDates ? '#6D28D9' : '#6B7280',
+                                        cursor: 'pointer'
+                                    }}
+                                    title={showAllDates ? "Filtrar por fecha específica" : "Mostrar todos los pedidos sin filtro de fecha"}
+                                >
+                                    {showAllDates ? "Ver Solo Fecha" : "Ver Todos"}
+                                </button>
                                 <span style={{ color: '#E5E7EB' }}>•</span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#0D9488' }}>
                                     <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
