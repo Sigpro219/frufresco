@@ -10,6 +10,7 @@ import { ShieldAlert, Loader2 } from 'lucide-react';
 import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
 import VariantModal from '@/components/VariantModal';
+import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
 import { 
     MessageSquare, 
     Phone, 
@@ -244,6 +245,7 @@ export default function OrderLoadingPage() {
     // Bulk Selection State
     const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [showManualWizard, setShowManualWizard] = useState(false);
     const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
     const [dispatchMode, setDispatchMode] = useState<'digital' | 'contingency'>('digital');
 
@@ -3602,6 +3604,29 @@ export default function OrderLoadingPage() {
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowConfirmModal(false);
+                                                        setShowManualWizard(true);
+                                                    }}
+                                                    style={{
+                                                        padding: '7px 14px',
+                                                        backgroundColor: '#0F172A',
+                                                        color: 'white',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '900',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.35)'
+                                                    }}
+                                                >
+                                                    <Sparkles size={13} color="#FCD34D" /> ABRIR ASISTENTE (PASO A PASO)
+                                                </button>
                                                 <Link
                                                     href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
                                                     target="_blank"
@@ -3806,8 +3831,13 @@ export default function OrderLoadingPage() {
                                     </button>
                                     <button 
                                         onClick={() => {
-                                            setShowConfirmModal(false);
-                                            handleBulkAction(targetStatusToConfirm, true);
+                                            if (dispatchMode === 'contingency') {
+                                                setShowConfirmModal(false);
+                                                setShowManualWizard(true);
+                                            } else {
+                                                setShowConfirmModal(false);
+                                                handleBulkAction(targetStatusToConfirm, true);
+                                            }
                                         }}
                                         disabled={updateLoading}
                                         style={{
@@ -3829,8 +3859,8 @@ export default function OrderLoadingPage() {
                                             </>
                                         ) : dispatchMode === 'contingency' ? (
                                             <>
-                                                <FileText size={18} strokeWidth={2} />
-                                                <span>FIRMAR Y CONFIRMAR CONTINGENCIA EN PISO</span>
+                                                <Sparkles size={18} strokeWidth={2} />
+                                                <span>INICIAR DESPACHO MANUAL (PASO A PASO) ➔</span>
                                             </>
                                         ) : (
                                             <>
@@ -3845,6 +3875,19 @@ export default function OrderLoadingPage() {
                         </div>
                     );
                 })()}
+
+                {/* Asistente Guiado de Despacho Manual (Poka-Yoke) */}
+                <ManualDispatchWizardModal
+                    isOpen={showManualWizard}
+                    onClose={() => setShowManualWizard(false)}
+                    selectedOrderIds={selectedOrders}
+                    orders={orders}
+                    deliveryDate={selectedDate || getTomorrowDateStr()}
+                    onSuccess={() => {
+                        setSelectedOrders(new Set());
+                        setRefreshTrigger(prev => prev + 1);
+                    }}
+                />
 
 
                 {/* Order Details Modal */}

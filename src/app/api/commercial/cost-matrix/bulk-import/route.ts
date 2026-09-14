@@ -1,5 +1,6 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -47,6 +48,39 @@ export async function POST(req: NextRequest) {
             updatedCount += batch.length;
         }
 
+        const file = fileName || 'Archivo Excel';
+
+        // Ingestar cada recotización autorizada como una observación real con sello temporal en purchases
+        // Esto alimenta la serie temporal del Motor Adaptativo FruFresco
+        const purchaseRecords = cleanUpdates.map((item: any) => ({
+            product_id: item.product_id,
+            quantity: 1,
+            unit_price: item.manual_cost,
+            total_cost: item.manual_cost,
+            payment_method: 'market_quote',
+            raw_data_source: `RECOTIZACION_MERCADO_EXCEL (${file})`,
+            purchase_unit: 'Kg',
+            notes: `Recotización de mercado autorizada (${file})`,
+            created_at: item.updated_at || nowIso,
+            status: 'completed'
+        }));
+
+        for (let i = 0; i < purchaseRecords.length; i += BATCH_SIZE) {
+            const pBatch = purchaseRecords.slice(i, i + BATCH_SIZE);
+            const { error: purErr } = await supabaseAdmin.from('purchases').insert(pBatch);
+            if (purErr) {
+                console.warn('[Bulk Import Cost Matrix] Warning: Could not insert purchase signal:', purErr);
+            }
+        }
+
+        // Propagar inmediatamente los nuevos costos a los 5 modelos de precios y catálogo de venta
+        const productIds = cleanUpdates.map((item: any) => item.product_id);
+        try {
+            await batchRecalculateAndSyncPrices(supabaseAdmin, productIds);
+        } catch (syncErr) {
+            console.warn('[Bulk Import Cost Matrix] Pricing sync warning:', syncErr);
+        }
+
         // Resolve valid collaborator_id for foreign key constraint in audit_logs (references collaborators.id)
         let validCollabId = null;
         if (collaboratorId) {
@@ -61,7 +95,6 @@ export async function POST(req: NextRequest) {
         }
 
         const colName = collaboratorName || 'Administrador Comercial';
-        const file = fileName || 'Archivo Excel';
 
         // Insert audit log automatically with safe FK fallback
         let { error: auditError } = await supabaseAdmin

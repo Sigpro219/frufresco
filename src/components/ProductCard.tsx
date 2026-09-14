@@ -285,12 +285,49 @@ export default function ProductCard({ product }: { product: Product }) {
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.2rem 0', flexWrap: 'wrap' }}>
                         {product.base_price > 0 ? (
                             (() => {
-                                const rawUnit = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                const isKgUnit = ['kg', 'kilo', 'kilos'].includes(rawUnit);
-                                const conversionFactor = isKgUnit ? 0.5 : (product.web_conversion_factor || 1);
-                                const unitLabel = isKgUnit ? (locale === 'en' ? 'Pound 500g' : 'Libra 500g') : (product.web_unit || product.unit_of_measure || 'Un');
+                                const rawWebUnit = (product.web_unit || '').trim().toLowerCase();
+                                const rawBaseUnit = (product.unit_of_measure || '').trim().toLowerCase();
+                                const isKgBase = ['kg', 'kilo', 'kilos'].includes(rawBaseUnit);
+                                
+                                let conversionFactor = 1;
+                                let unitLabel = product.web_unit || product.unit_of_measure || 'Un';
+                                
+                                if (rawWebUnit.includes('libra') || rawWebUnit.includes('pound') || rawWebUnit === 'lb') {
+                                    conversionFactor = 0.5;
+                                    unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
+                                } else if (product.web_conversion_factor && product.web_conversion_factor > 0) {
+                                    conversionFactor = product.web_conversion_factor;
+                                    if (rawWebUnit === 'unidad') {
+                                        if (conversionFactor >= 1) {
+                                            const formattedKg = conversionFactor % 1 === 0 ? conversionFactor : (conversionFactor.toFixed(1)).replace('.', ',');
+                                            unitLabel = locale === 'en' ? `Unit (±${conversionFactor % 1 === 0 ? conversionFactor : conversionFactor.toFixed(1)} kg)` : `Unidad (±${formattedKg} kg)`;
+                                        } else {
+                                            const formattedG = Math.round(conversionFactor * 1000);
+                                            unitLabel = locale === 'en' ? `Unit (±${formattedG}g)` : `Unidad (±${formattedG}g)`;
+                                        }
+                                    } else {
+                                        unitLabel = product.web_unit || 'Un';
+                                    }
+                                } else if (isKgBase) {
+                                    conversionFactor = 0.5;
+                                    unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
+                                }
+
                                 const displayPrice = Math.ceil(((product.pricing_model_prices?.[0]?.price || product.base_price || 0) * conversionFactor) / 50) * 50;
                                 const originalDisplayPrice = product.campaign_info ? Math.ceil((product.campaign_info.originalPrice * conversionFactor) / 50) * 50 : displayPrice;
+
+                                // Bimodal detection (Libra + Unidad)
+                                const presOpt = (product.options_config || []).find((o: any) => (o.name || '').toLowerCase().includes('presentaci'));
+                                const presValues: string[] = presOpt?.values || [];
+                                const hasLibraPres = presValues.some(v => v.toLowerCase().includes('libra') || v.includes('|500'));
+                                const unitPres = presValues.find(v => !v.toLowerCase().includes('libra') && !v.includes('|500'));
+                                let bimodalUnitGrams: number | null = null;
+                                if (hasLibraPres && unitPres) {
+                                    if (unitPres.includes('|')) {
+                                        const g = parseFloat(unitPres.split('|')[1]);
+                                        if (!isNaN(g) && g > 0) bimodalUnitGrams = Math.round(g);
+                                    }
+                                }
 
                                 return (
                                     <>
@@ -341,6 +378,24 @@ export default function ProductCard({ product }: { product: Product }) {
                                         }}>
                                             {unitLabel}
                                         </span>
+                                        {bimodalUnitGrams && (
+                                            <div style={{ width: '100%', marginTop: '3px' }}>
+                                                <span style={{ 
+                                                    fontSize: '0.68rem', 
+                                                    color: '#047857', 
+                                                    backgroundColor: '#ECFDF5', 
+                                                    border: '1px solid #A7F3D0', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '9999px', 
+                                                    fontWeight: '800',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px'
+                                                }}>
+                                                    {locale === 'en' ? `Also by unit (±${bimodalUnitGrams}g)` : `También por unidad (±${bimodalUnitGrams}g)`}
+                                                </span>
+                                            </div>
+                                        )}
                                     </>
                                 );
                             })()

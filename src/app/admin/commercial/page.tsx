@@ -65,13 +65,19 @@ export default function CommercialPage() {
     const [activeOpSubtab, setActiveOpSubtab] = useState('cost-matrix');
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const tab = params.get('tab');
-            const subtab = params.get('subtab');
-            if (tab) setActiveMainTab(tab);
-            if (subtab) setActiveOpSubtab(subtab);
-        }
+        const syncParams = () => {
+            if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const tab = params.get('tab');
+                const subtab = params.get('subtab');
+                if (tab) setActiveMainTab(tab);
+                if (subtab) setActiveOpSubtab(subtab);
+            }
+        };
+
+        syncParams();
+        window.addEventListener('popstate', syncParams);
+        return () => window.removeEventListener('popstate', syncParams);
     }, []);
 
     const handleSelectMainTab = (tab: string) => {
@@ -95,6 +101,32 @@ export default function CommercialPage() {
             url.searchParams.set('tab', 'operations');
             url.searchParams.set('subtab', subtab);
             window.history.replaceState({}, '', url.toString());
+        }
+    };
+
+    const handleNavigateToCostMatrix = () => {
+        setActiveMainTab('operations');
+        setActiveOpSubtab('cost-matrix');
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'operations');
+            url.searchParams.set('subtab', 'cost-matrix');
+            window.history.pushState({}, '', url.toString());
+        }
+    };
+
+    const handleNavigateToTab = (tab: string, subtab?: string) => {
+        setActiveMainTab(tab);
+        if (subtab) setActiveOpSubtab(subtab);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', tab);
+            if (subtab) {
+                url.searchParams.set('subtab', subtab);
+            } else if (tab !== 'operations') {
+                url.searchParams.delete('subtab');
+            }
+            window.history.pushState({}, '', url.toString());
         }
     };
 
@@ -305,7 +337,10 @@ export default function CommercialPage() {
 
             {/* TAB CONTENT */}
             {activeMainTab === 'dashboard' && (
-                <CommercialUnifiedDashboard />
+                <CommercialUnifiedDashboard 
+                    onNavigateToCostMatrix={handleNavigateToCostMatrix}
+                    onNavigateToTab={handleNavigateToTab}
+                />
             )}
 
             {activeMainTab === 'operations' && (

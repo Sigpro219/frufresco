@@ -23,6 +23,9 @@ export interface OrderStagingInput {
     lng?: number | null;
     total_weight_kg: number;
     existing_spaces?: number[];
+    delivery_slot?: string;
+    manual_delivery_time?: string;
+    is_manual_delivery?: boolean;
 }
 
 export interface StagingAllocationResult {
@@ -31,6 +34,7 @@ export interface StagingAllocationResult {
     customer_name: string;
     shipping_address: string;
     zone_name: string;
+    delivery_window_label?: string;
     total_weight_kg: number;
     estimated_crates: number;
     spaces_needed: number;
@@ -102,8 +106,49 @@ export function formatSpaceLabel(spaces: number[]): string {
 }
 
 /**
+ * Parsea y normaliza la hora de entrega a minutos del día (0..1439)
+ * para contrastar la asignación de bahías con la ventana horaria (LIFO de cargue)
+ */
+export function parseDeliveryWindowMinutes(order: OrderStagingInput): { minutes: number; label: string } {
+    if (order.manual_delivery_time) {
+        const parts = order.manual_delivery_time.split(':').map(Number);
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            return {
+                minutes: parts[0] * 60 + parts[1],
+                label: order.manual_delivery_time
+            };
+        }
+    }
+
+    const slot = (order.delivery_slot || '').trim();
+    if (!slot) {
+        return { minutes: 7 * 60, label: 'Flexible (07:00)' };
+    }
+
+    const matchTime = slot.match(/(\d{1,2}):(\d{2})/);
+    if (matchTime) {
+        const h = parseInt(matchTime[1], 10);
+        const m = parseInt(matchTime[2], 10);
+        return { minutes: h * 60 + m, label: slot };
+    }
+
+    const upper = slot.toUpperCase();
+    if (upper.includes('MADRUGADA') || upper.includes('05:') || upper.includes('06:')) {
+        return { minutes: 5 * 60 + 30, label: slot || 'Madrugada (05:30)' };
+    }
+    if (upper === 'AM' || upper.includes('MAÑANA')) {
+        return { minutes: 7 * 60, label: 'AM (07:00)' };
+    }
+    if (upper === 'PM' || upper.includes('TARDE')) {
+        return { minutes: 14 * 60, label: 'PM (14:00)' };
+    }
+
+    return { minutes: 7 * 60, label: slot };
+}
+
+/**
  * Algoritmo determinístico de asignación de bahías en suelo (1 a 150)
- * con clusterización por zona geográfica para Modo Manual
+ * con clusterización por zona geográfica y ventanas de entrega para Modo Manual
  */
 export function allocateStagingSpacesGeographically(
     orders: OrderStagingInput[],
@@ -113,26 +158,31 @@ export function allocateStagingSpacesGeographically(
     const capacity = config.space_capacity || 36;
     const maxSpaces = config.max_spaces || 150;
 
-    // 1. Enriquecer cada pedido con su zona calculada y cubicaje
+    // 1. Enriquecer cada pedido con su zona calculada, ventana horaria y cubicaje
     const enriched = orders.map(o => {
         const zone = deduceGeographicZone(o);
         const { crates, spaces } = calculateCratesAndSpaces(o.total_weight_kg, avgKg, capacity);
         const customerName = o.company_name || o.customer_name || 'Cliente sin nombre';
+        const deliveryInfo = parseDeliveryWindowMinutes(o);
         return {
             raw: o,
             zone,
             customerName,
+            deliveryInfo,
             crates,
             spacesNeeded: spaces
         };
     });
 
-    // 2. Ordenar por Clúster Geográfico y dentro de cada zona por volumen (mayor a menor)
+    // 2. Ordenar por Clúster Geográfico, luego por Ventana de Entrega (temprana primero para LIFO), y luego por volumen
     enriched.sort((a, b) => {
         if (a.zone !== b.zone) {
             return a.zone.localeCompare(b.zone);
         }
-        // Dentro de la misma zona, los clientes más grandes primero para consolidar
+        if (a.deliveryInfo.minutes !== b.deliveryInfo.minutes) {
+            return a.deliveryInfo.minutes - b.deliveryInfo.minutes;
+        }
+        // Dentro de la misma ventana, los clientes más grandes primero para consolidar estiba
         return b.raw.total_weight_kg - a.raw.total_weight_kg;
     });
 
@@ -141,7 +191,6 @@ export function allocateStagingSpacesGeographically(
     const results: StagingAllocationResult[] = [];
 
     for (const item of enriched) {
-        // Si el pedido ya tenía espacios asignados manualmente y queremos respetarlos:
         let assigned: number[] = [];
 
         if (currentSlot + item.spacesNeeded - 1 <= maxSpaces) {
@@ -163,6 +212,7 @@ export function allocateStagingSpacesGeographically(
             customer_name: item.customerName,
             shipping_address: item.raw.shipping_address || 'Sin dirección',
             zone_name: item.zone,
+            delivery_window_label: item.deliveryInfo.label,
             total_weight_kg: item.raw.total_weight_kg,
             estimated_crates: item.crates,
             spaces_needed: item.spacesNeeded,

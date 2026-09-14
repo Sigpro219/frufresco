@@ -156,21 +156,27 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         if (val.includes('|')) {
             const parts = val.split('|');
             const rawUnit = parts[0].trim();
-            const unitName = isEn ? (rawUnit.toLowerCase() === 'unidad' ? 'Unit' : rawUnit) : rawUnit;
             const rawWeight = parts[1]?.trim();
             if (rawWeight) {
                 const grams = parseFloat(rawWeight);
                 if (!isNaN(grams) && grams > 0) {
                     if (grams === 500 || rawUnit.toLowerCase().includes('libra') || rawUnit.toLowerCase().includes('pound')) {
-                        return `${unitName} 500g`;
+                        return isEn ? 'Pound 500g' : 'Libra 500g';
+                    }
+                    let cleanBase = rawUnit.replace(/\s*\d+[\s]*(?:gr|g|grs|gramos|kg|kilo|kilos)?/gi, '').trim();
+                    if (!cleanBase) cleanBase = rawUnit;
+                    const unitName = isEn ? (cleanBase.toLowerCase() === 'unidad' ? 'Unit' : cleanBase) : cleanBase;
+
+                    if (grams < 1000) {
+                        return `${unitName} ±${grams} g`;
                     }
                     const kg = grams / 1000;
                     const formattedKg = kg % 1 === 0 ? kg.toString() : (isEn ? kg.toFixed(1) : kg.toFixed(1).replace('.', ','));
                     return `${unitName} ±${formattedKg} kg`;
                 }
-                return `${unitName} ±${rawWeight}`;
+                return `${rawUnit} ±${rawWeight}`;
             }
-            return unitName;
+            return rawUnit;
         }
         if (clean.includes('libra') || clean.includes('pound')) {
             return isEn ? 'Pound 500g' : 'Libra 500g';
@@ -215,8 +221,25 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
 
     const visibleVariants = (product.variants || []).filter(v => v.show_on_web !== false);
 
+    const nonPresentationEntries = Object.entries(selections).filter(
+        ([key]) => !key.toLowerCase().includes('presentaci')
+    );
+
     const currentVariant = visibleVariants.find(v =>
-        Object.entries(selections).every(([key, value]) => v.options[key] === value)
+        v.options && Object.entries(selections).every(([key, value]) => {
+            const vVal = v.options[key];
+            if (!vVal) return false;
+            if (vVal === value) return true;
+            const cleanV = vVal.split('|')[0].trim().toLowerCase();
+            const cleanS = value.split('|')[0].trim().toLowerCase();
+            return cleanV === cleanS;
+        })
+    ) || (
+        nonPresentationEntries.length > 0
+            ? visibleVariants.find(v =>
+                v.options && nonPresentationEntries.every(([key, value]) => v.options[key] === value)
+            )
+            : visibleVariants[0]
     );
 
     // Obtener la presentación seleccionada
@@ -234,7 +257,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : (isBaseInKg ? (locale === 'en' ? 'Pound 500g' : 'Libra 500g') : ((product as any).web_unit || product.unit_of_measure));
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
-    const isAvailable = product.variants && product.variants.length > 0 ? (isSelectedPresentationLibra ? true : !!currentVariant) : true;
+    const isAvailable = product.variants && product.variants.length > 0
+        ? (isSelectedPresentationLibra || !!currentVariant)
+        : true;
     
     // Aplicar factor de conversión y redondeo a 50
     const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price || 0) : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);

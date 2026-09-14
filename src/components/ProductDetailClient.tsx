@@ -130,21 +130,27 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         if (val.includes('|')) {
             const parts = val.split('|');
             const rawUnit = parts[0].trim();
-            const unitName = isEn ? (rawUnit.toLowerCase() === 'unidad' ? 'Unit' : rawUnit) : rawUnit;
             const rawWeight = parts[1]?.trim();
             if (rawWeight) {
                 const grams = parseFloat(rawWeight);
                 if (!isNaN(grams) && grams > 0) {
                     if (grams === 500 || rawUnit.toLowerCase().includes('libra') || rawUnit.toLowerCase().includes('pound')) {
-                        return `${unitName} 500g`;
+                        return isEn ? 'Pound 500g' : 'Libra 500g';
+                    }
+                    let cleanBase = rawUnit.replace(/\s*\d+[\s]*(?:gr|g|grs|gramos|kg|kilo|kilos)?/gi, '').trim();
+                    if (!cleanBase) cleanBase = rawUnit;
+                    const unitName = isEn ? (cleanBase.toLowerCase() === 'unidad' ? 'Unit' : cleanBase) : cleanBase;
+
+                    if (grams < 1000) {
+                        return `${unitName} ±${grams} g`;
                     }
                     const kg = grams / 1000;
                     const formattedKg = kg % 1 === 0 ? kg.toString() : (isEn ? kg.toFixed(1) : kg.toFixed(1).replace('.', ','));
                     return `${unitName} ±${formattedKg} kg`;
                 }
-                return `${unitName} ±${rawWeight}`;
+                return `${rawUnit} ±${rawWeight}`;
             }
-            return unitName;
+            return rawUnit;
         }
         if (clean.includes('libra') || clean.includes('pound')) {
             return isEn ? 'Pound 500g' : 'Libra 500g';
@@ -192,9 +198,29 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     // Solo considerar variantes que estén marcadas para mostrarse en web
     const visibleVariants = (product.variants || []).filter(v => (v as any).show_on_web !== false);
 
+    // Separar selecciones de atributos físicos (ej: Maduración, Calidad, Corte) vs comerciales (Presentación)
+    const nonPresentationEntries = Object.entries(selections).filter(
+        ([key]) => !key.toLowerCase().includes('presentaci')
+    );
+
     // Calcular el precio actual basado en la variante seleccionada (solo de las visibles)
+    // 1) Intentar coincidencia exacta o flexible (ignorando pipes de calibre)
+    // 2) Si la presentación difiere pero los atributos físicos (Maduración) coinciden, usar esa variante
     const currentVariant = visibleVariants.find(v =>
-        Object.entries(selections).every(([key, value]) => v.options[key] === value)
+        v.options && Object.entries(selections).every(([key, value]) => {
+            const vVal = v.options[key];
+            if (!vVal) return false;
+            if (vVal === value) return true;
+            const cleanV = vVal.split('|')[0].trim().toLowerCase();
+            const cleanS = value.split('|')[0].trim().toLowerCase();
+            return cleanV === cleanS;
+        })
+    ) || (
+        nonPresentationEntries.length > 0
+            ? visibleVariants.find(v =>
+                v.options && nonPresentationEntries.every(([key, value]) => v.options[key] === value)
+            )
+            : visibleVariants[0]
     );
 
     // Aplicar factor de conversión comercial
@@ -213,7 +239,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
     const isPriceValid = (currentPrice || 0) > 0;
-    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? isPriceValid : (!!currentVariant && isPriceValid)) : isPriceValid;
+    const isAvailable = product.variants && product.variants.length > 0
+        ? (isDefaultSelected || isSelectedPresentationLibra || !!currentVariant) && isPriceValid
+        : isPriceValid;
 
     const getFormattedOptionName = (name: string, isEn?: boolean) => {
         const lower = name.toLowerCase();
@@ -443,9 +471,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     })()}
 
                     {/* BADGES DE TAGS ARRIBA DEL TÍTULO (ÚNICO BADGE PRINCIPAL CON LUCIDE ICONS) */}
-                    {product.tags && product.tags.length > 0 && (
+                    {(product as any).tags && (product as any).tags.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '0.75rem' }}>
-                            {product.tags.map((tag, i) => {
+                            {((product as any).tags as string[]).map((tag, i) => {
                                 const lower = (tag || '').toLowerCase();
                                 const isPromo = lower.includes('promo') || lower.includes('descuento');
                                 const isFlash = lower.includes('oferta') || lower.includes('flash') || lower.includes('rayo');

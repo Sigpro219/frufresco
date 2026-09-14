@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Map as GoogleMap, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
+import { evaluateCostFreshness, getFreshnessSLA } from '@/lib/commercial/costFreshnessPolicy';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month' | 'all';
 
@@ -366,7 +367,7 @@ interface CostTrendItem {
 
 interface CommercialAlertItem {
     id: string;
-    type: 'quote_expiring' | 'quote_expired' | 'agreement_expiring' | 'lead_pending' | 'churn_risk';
+    type: 'quote_expiring' | 'quote_expired' | 'agreement_expiring' | 'lead_pending' | 'churn_risk' | 'cost_expired' | 'cost_expiring';
     severity: 'critical' | 'warning' | 'info';
     title: string;
     subtitle: string;
@@ -415,7 +416,15 @@ interface FunnelMetrics {
     globalConversionPct: number;
 }
 
-export default function CommercialUnifiedDashboard() {
+export interface CommercialUnifiedDashboardProps {
+    onNavigateToCostMatrix?: () => void;
+    onNavigateToTab?: (tab: string, subtab?: string) => void;
+}
+
+export default function CommercialUnifiedDashboard({ 
+    onNavigateToCostMatrix, 
+    onNavigateToTab 
+}: CommercialUnifiedDashboardProps = {}) {
     const [timeRange, setTimeRange] = useState<TimeRange>('30d');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -465,7 +474,17 @@ export default function CommercialUnifiedDashboard() {
 
     // Commercial Alerts state
     const [alertsList, setAlertsList] = useState<CommercialAlertItem[]>([]);
-    const [alertFilter, setAlertFilter] = useState<'all' | 'critical' | 'quotes' | 'leads'>('all');
+    const [alertFilter, setAlertFilter] = useState<'all' | 'critical' | 'costs' | 'quotes' | 'leads'>('all');
+
+    // Cost Freshness & Urgent Recotization Alerts state
+    const [costAlertStats, setCostAlertStats] = useState({
+        expiredCount: 0,
+        dueSoonCount: 0,
+        freshCount: 0,
+        noRefCount: 0,
+        totalCount: 0,
+        criticalExpiredNames: [] as string[]
+    });
 
     // Geographic Zones & Client Pins state
     const [geoZones, setGeoZones] = useState<GeoZoneItem[]>([]);
@@ -544,7 +563,7 @@ export default function CommercialUnifiedDashboard() {
                     .eq('is_active', true),
                 supabase
                     .from('commercial_cost_matrix')
-                    .select('product_id, manual_cost, is_active')
+                    .select('product_id, manual_cost, updated_at, is_active')
                     .eq('is_active', true),
                 supabase
                     .from('app_settings')
@@ -553,7 +572,7 @@ export default function CommercialUnifiedDashboard() {
                     .maybeSingle(),
                 supabase
                     .from('purchases')
-                    .select('product_id, unit_price, created_at')
+                    .select('product_id, unit_price, created_at, payment_method, raw_data_source')
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('leads')
@@ -571,13 +590,19 @@ export default function CommercialUnifiedDashboard() {
             (productsRes.data || []).forEach(p => productMap.set(p.id, p));
 
             const matrixCostMap = new Map<string, number>();
-            (matrixRes.data || []).forEach(m => matrixCostMap.set(m.product_id, Number(m.manual_cost || 0)));
+            const matrixRecordMap = new Map<string, any>();
+            (matrixRes.data || []).forEach(m => {
+                matrixCostMap.set(m.product_id, Number(m.manual_cost || 0));
+                matrixRecordMap.set(m.product_id, m);
+            });
 
             // Latest purchase fallback map
             const latestPurchaseMap = new Map<string, number>();
+            const latestPurchaseRecordMap = new Map<string, any>();
             (purchasesRes.data || []).forEach(pc => {
                 if (!latestPurchaseMap.has(pc.product_id)) {
                     latestPurchaseMap.set(pc.product_id, Number(pc.unit_price || 0));
+                    latestPurchaseRecordMap.set(pc.product_id, pc);
                 }
             });
 
@@ -949,9 +974,99 @@ export default function CommercialUnifiedDashboard() {
                 globalConversionPct
             });
 
+            // --- COST MATRIX FRESHNESS & URGENT QUOTATION EVALUATION ---
+            let expiredCount = 0;
+            let dueSoonCount = 0;
+            let freshCount = 0;
+            let noRefCount = 0;
+            const criticalExpiredItems: Array<{ id: string; name: string; category: string; daysOld: number; quantity: number }> = [];
+
+            (productsRes.data || []).forEach(prod => {
+                const mat = matrixRecordMap.get(prod.id);
+                const pur = latestPurchaseRecordMap.get(prod.id);
+                let latestDate: string | Date | null = null;
+                let currentCost = 0;
+                let source: 'COMPRAS' | 'MANUAL' | 'SIN_SEÑAL' = 'SIN_SEÑAL';
+
+                const mDate = mat?.updated_at ? new Date(mat.updated_at) : null;
+                const pDate = pur?.created_at ? new Date(pur.created_at) : null;
+
+                if (mDate && pDate) {
+                    if (mDate >= pDate) {
+                        latestDate = mat.updated_at;
+                        currentCost = Number(mat.manual_cost || 0);
+                        source = 'MANUAL';
+                    } else {
+                        latestDate = pur.created_at;
+                        currentCost = Number(pur.unit_price || 0);
+                        source = 'COMPRAS';
+                    }
+                } else if (mDate) {
+                    latestDate = mat.updated_at;
+                    currentCost = Number(mat.manual_cost || 0);
+                    source = 'MANUAL';
+                } else if (pDate) {
+                    latestDate = pur.created_at;
+                    currentCost = Number(pur.unit_price || 0);
+                    source = 'COMPRAS';
+                } else if (mat?.manual_cost) {
+                    currentCost = Number(mat.manual_cost || 0);
+                }
+
+                const lifecycle = evaluateCostFreshness(latestDate, prod.category, currentCost, source);
+
+                if (lifecycle.status === 'VIGENTE') {
+                    freshCount++;
+                } else if (lifecycle.status === 'POR_VENCER') {
+                    dueSoonCount++;
+                } else if (lifecycle.status === 'VENCIDO') {
+                    expiredCount++;
+                    const soldQty = productAgg.get(prod.id)?.quantity || 0;
+                    criticalExpiredItems.push({
+                        id: prod.id,
+                        name: prod.name,
+                        category: formatCategoryName(prod.category),
+                        daysOld: lifecycle.daysOld,
+                        quantity: soldQty
+                    });
+                } else {
+                    noRefCount++;
+                }
+            });
+
+            // Ordenar los vencidos: primero los que tienen mayor volumen vendido en el periodo
+            criticalExpiredItems.sort((a, b) => b.quantity - a.quantity);
+            const criticalNames = criticalExpiredItems.map(it => it.name);
+
+            setCostAlertStats({
+                expiredCount,
+                dueSoonCount,
+                freshCount,
+                noRefCount,
+                totalCount: productsRes.data?.length || 0,
+                criticalExpiredNames: criticalNames
+            });
+
             // --- COMMERCIAL ALERTS & EXPIRATIONS (CENTRO DE ALERTAS ACTIVAS) ---
             const generatedAlerts: CommercialAlertItem[] = [];
             const today = new Date();
+
+            // 1. Alertas de costos vencidos con alta prioridad
+            if (expiredCount > 0) {
+                const highVolumeExpired = criticalExpiredItems.filter(i => i.quantity > 0);
+                generatedAlerts.push({
+                    id: 'alert-cost-matrix-expired-urgent',
+                    type: 'cost_expired',
+                    severity: 'critical',
+                    title: `⚠️ ${expiredCount} SKUs Requieren Recotización Urgente`,
+                    subtitle: highVolumeExpired.length > 0
+                        ? `Alerta de margen: ${highVolumeExpired.slice(0, 3).map(x => `${x.name} (${x.quantity} Kg)`).join(', ')} tienen costo desactualizado.`
+                        : `Productos con costo de compra vencido (>SLA de perecibilidad). Requieren actualizar precio de Corabastos.`,
+                    dateInfo: `${expiredCount} SKUs fuera de SLA`,
+                    linkUrl: '/admin/commercial?tab=operations&subtab=cost-matrix',
+                    linkText: 'Recotizar en Matriz'
+                });
+            }
 
             quotesRaw.forEach(q => {
                 if (!q.valid_until) return;
@@ -1239,6 +1354,7 @@ export default function CommercialUnifiedDashboard() {
     // Filter Commercial Alerts
     const filteredAlerts = useMemo(() => {
         if (alertFilter === 'critical') return alertsList.filter(a => a.severity === 'critical');
+        if (alertFilter === 'costs') return alertsList.filter(a => a.type.startsWith('cost'));
         if (alertFilter === 'quotes') return alertsList.filter(a => a.type.startsWith('quote') || a.type.startsWith('agreement'));
         if (alertFilter === 'leads') return alertsList.filter(a => a.type.startsWith('lead') || a.type === 'churn_risk');
         return alertsList;
@@ -1320,6 +1436,87 @@ export default function CommercialUnifiedDashboard() {
                     </button>
                 </div>
             </div>
+
+            {/* OPERATIONAL BANNER: ALERTAS DE RECOTIZACIÓN URGENTE */}
+            {costAlertStats.expiredCount > 0 && (
+                <div style={{
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    borderLeft: '5px solid #DC2626',
+                    borderRadius: THEME.radius.lg,
+                    padding: '0.9rem 1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '280px', flex: 1 }}>
+                        <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            backgroundColor: '#FEE2E2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                        }}>
+                            <AlertTriangle size={20} color="#DC2626" />
+                        </div>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.88rem', fontWeight: '900', color: '#991B1B' }}>
+                                    Alerta Operativa: {costAlertStats.expiredCount} productos requieren recotización inmediata de mercado
+                                </span>
+                                <span style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: '800',
+                                    backgroundColor: '#DC2626',
+                                    color: 'white',
+                                    padding: '2px 7px',
+                                    borderRadius: '6px'
+                                }}>
+                                    SLA Vencido
+                                </span>
+                            </div>
+                            <p style={{ margin: '3px 0 0 0', fontSize: '0.76rem', color: '#B91C1C', fontWeight: '500' }}>
+                                {costAlertStats.criticalExpiredNames.length > 0
+                                    ? `Prioridad alta en venta: ${costAlertStats.criticalExpiredNames.slice(0, 4).join(', ')}${costAlertStats.criticalExpiredNames.length > 4 ? ` y ${costAlertStats.criticalExpiredNames.length - 4} más.` : '.'} Precios de compra fuera de vigencia según perecibilidad.`
+                                    : 'Precios de compra sin vigencia según el SLA de perecibilidad. Riesgo de margen en ventas activas.'}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (onNavigateToCostMatrix) {
+                                onNavigateToCostMatrix();
+                            } else {
+                                window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
+                            }
+                        }}
+                        style={{
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: '#DC2626',
+                            color: 'white',
+                            fontWeight: '800',
+                            fontSize: '0.8rem',
+                            padding: '0.5rem 1.1rem',
+                            borderRadius: '8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        Recotizar en Matriz <ExternalLink size={13} />
+                    </button>
+                </div>
+            )}
 
             {/* 2. HERO KPI CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
@@ -1471,34 +1668,136 @@ export default function CommercialUnifiedDashboard() {
                     </div>
                 </div>
 
-                {/* CARD 5: CONTROL DE ESCASEZ POKA-YOKE */}
-                <div style={{ backgroundColor: Object.keys(scarcityLockedMap).length > 0 ? '#FEF2F2' : '#F0FDFA', padding: '1.15rem 1.25rem', minHeight: '148px', borderRadius: THEME.radius.lg, border: `1px solid ${Object.keys(scarcityLockedMap).length > 0 ? '#FCA5A5' : '#99F6E4'}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                {/* CARD 5: ALERTAS DE COTIZACIÓN URGENTE (COSTOS VENCIDOS) */}
+                <div style={{ 
+                    backgroundColor: costAlertStats.expiredCount > 0 ? '#FEF2F2' : '#F0FDF4', 
+                    padding: '1.15rem 1.25rem', 
+                    minHeight: '148px', 
+                    borderRadius: THEME.radius.lg, 
+                    border: `1px solid ${costAlertStats.expiredCount > 0 ? '#FCA5A5' : '#86EFAC'}`, 
+                    boxShadow: THEME.shadow.sm, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justifyContent: 'space-between' 
+                }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: '900', color: Object.keys(scarcityLockedMap).length > 0 ? '#B91C1C' : '#0D7A57', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Quiebre de Abastos (Escasez)
-                            </span>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '0.35rem 0 0 0', flexWrap: 'nowrap' }}>
-                                <span style={{ fontSize: '1.75rem', fontWeight: '900', color: Object.keys(scarcityLockedMap).length > 0 ? '#991B1B' : '#065F46', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                                    {loading ? '...' : Object.keys(scarcityLockedMap).length}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ 
+                                    fontSize: '0.72rem', 
+                                    fontWeight: '900', 
+                                    color: costAlertStats.expiredCount > 0 ? '#991B1B' : '#065F46', 
+                                    textTransform: 'uppercase', 
+                                    letterSpacing: '0.05em' 
+                                }}>
+                                    Recotización Urgente
                                 </span>
-                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: Object.keys(scarcityLockedMap).length > 0 ? '#B91C1C' : '#0D7A57', whiteSpace: 'nowrap' }}>
-                                    SKUs
+                                {costAlertStats.expiredCount > 0 ? (
+                                    <span style={{ 
+                                        fontWeight: '800', 
+                                        color: '#B91C1C', 
+                                        backgroundColor: '#FEE2E2', 
+                                        padding: '1px 6px', 
+                                        borderRadius: '8px', 
+                                        fontSize: '0.67rem', 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '2px', 
+                                        whiteSpace: 'nowrap' 
+                                    }}>
+                                        SLA Vencido
+                                    </span>
+                                ) : (
+                                    <span style={{ 
+                                        fontWeight: '800', 
+                                        color: '#15803D', 
+                                        backgroundColor: '#DCFCE7', 
+                                        padding: '1px 6px', 
+                                        borderRadius: '8px', 
+                                        fontSize: '0.67rem', 
+                                        whiteSpace: 'nowrap' 
+                                    }}>
+                                        Al Día
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '0.35rem 0 0 0', flexWrap: 'nowrap' }}>
+                                <span style={{ 
+                                    fontSize: '1.75rem', 
+                                    fontWeight: '900', 
+                                    color: costAlertStats.expiredCount > 0 ? '#DC2626' : '#15803D', 
+                                    letterSpacing: '-0.02em', 
+                                    lineHeight: 1.2 
+                                }}>
+                                    {loading ? '...' : costAlertStats.expiredCount}
+                                </span>
+                                <span style={{ 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: '800', 
+                                    color: costAlertStats.expiredCount > 0 ? '#B91C1C' : '#065F46', 
+                                    whiteSpace: 'nowrap' 
+                                }}>
+                                    SKUs por Recotizar
                                 </span>
                             </div>
                         </div>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: Object.keys(scarcityLockedMap).length > 0 ? '#FEE2E2' : '#CCFBF1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <ShieldAlert size={20} color={Object.keys(scarcityLockedMap).length > 0 ? '#DC2626' : '#0D7A57'} />
+                        <div style={{ 
+                            width: '38px', 
+                            height: '38px', 
+                            borderRadius: '10px', 
+                            backgroundColor: costAlertStats.expiredCount > 0 ? '#FEE2E2' : '#DCFCE7', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            flexShrink: 0 
+                        }}>
+                            {costAlertStats.expiredCount > 0 ? (
+                                <AlertTriangle size={20} color="#DC2626" />
+                            ) : (
+                                <CheckCircle2 size={20} color="#15803D" />
+                            )}
                         </div>
                     </div>
                     
-                    <div style={{ marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: `1px solid ${Object.keys(scarcityLockedMap).length > 0 ? '#FEE2E2' : '#E6FFFA'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
-                        <span style={{ color: Object.keys(scarcityLockedMap).length > 0 ? '#B91C1C' : '#065F46', fontWeight: '700' }}>
-                            {Object.keys(scarcityLockedMap).length > 0 ? 'Bloqueo Activo en Mercado' : 'Abastecimiento Normal'}
+                    <div style={{ 
+                        marginTop: '0.75rem', 
+                        paddingTop: '0.65rem', 
+                        borderTop: `1px solid ${costAlertStats.expiredCount > 0 ? '#FECACA' : '#BBF7D0'}`, 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        fontSize: '0.72rem' 
+                    }}>
+                        <span style={{ 
+                            color: costAlertStats.expiredCount > 0 ? '#991B1B' : '#14532D', 
+                            fontWeight: '700' 
+                        }}>
+                            {costAlertStats.freshCount} vigentes ({costAlertStats.totalCount > 0 ? Math.round((costAlertStats.freshCount / costAlertStats.totalCount) * 100) : 0}%)
                         </span>
-                        <Link href="/admin/commercial?tab=clients" style={{ textDecoration: 'none', color: THEME.colors.primary, fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            Gestionar <ExternalLink size={12} />
-                        </Link>
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                if (onNavigateToCostMatrix) {
+                                    onNavigateToCostMatrix();
+                                } else {
+                                    window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
+                                }
+                            }}
+                            style={{ 
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: 0,
+                                color: costAlertStats.expiredCount > 0 ? '#DC2626' : THEME.colors.primary, 
+                                fontWeight: '800', 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '3px',
+                                fontSize: '0.72rem'
+                            }}
+                        >
+                            Recotizar en Matriz <ChevronRight size={13} />
+                        </button>
                     </div>
                 </div>
 
@@ -1711,6 +2010,7 @@ export default function CommercialUnifiedDashboard() {
                                 [
                                     { id: 'all', label: `Todas (${alertsList.length})` },
                                     { id: 'critical', label: `Críticas (${criticalAlertsCount})` },
+                                    { id: 'costs', label: `Costos Vencidos (${costAlertStats.expiredCount})` },
                                     { id: 'quotes', label: 'Cotizaciones / Acuerdos' },
                                     { id: 'leads', label: 'Prospectos / Fugas' }
                                 ] as const
@@ -1787,25 +2087,77 @@ export default function CommercialUnifiedDashboard() {
                                             <div style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                                                 {alert.subtitle}
                                             </div>
-                                            <Link
-                                                href={alert.linkUrl}
-                                                style={{
-                                                    textDecoration: 'none',
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: '800',
-                                                    padding: '0.28rem 0.65rem',
-                                                    borderRadius: '6px',
-                                                    backgroundColor: isCrit ? '#DC2626' : THEME.colors.primary,
-                                                    color: 'white',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    whiteSpace: 'nowrap',
-                                                    flexShrink: 0
-                                                }}
-                                            >
-                                                {alert.linkText} <ChevronRight size={11} />
-                                            </Link>
+                                            {alert.linkUrl.includes('subtab=cost-matrix') ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (onNavigateToCostMatrix) {
+                                                            onNavigateToCostMatrix();
+                                                        } else {
+                                                            window.location.href = alert.linkUrl;
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '800',
+                                                        padding: '0.28rem 0.65rem',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: isCrit ? '#DC2626' : THEME.colors.primary,
+                                                        color: 'white',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0
+                                                    }}
+                                                >
+                                                    {alert.linkText} <ChevronRight size={11} />
+                                                </button>
+                                            ) : alert.linkUrl.includes('tab=clients') && onNavigateToTab ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onNavigateToTab('clients')}
+                                                    style={{
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '800',
+                                                        padding: '0.28rem 0.65rem',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: isCrit ? '#DC2626' : THEME.colors.primary,
+                                                        color: 'white',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0
+                                                    }}
+                                                >
+                                                    {alert.linkText} <ChevronRight size={11} />
+                                                </button>
+                                            ) : (
+                                                <Link
+                                                    href={alert.linkUrl}
+                                                    style={{
+                                                        textDecoration: 'none',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '800',
+                                                        padding: '0.28rem 0.65rem',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: isCrit ? '#DC2626' : THEME.colors.primary,
+                                                        color: 'white',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0
+                                                    }}
+                                                >
+                                                    {alert.linkText} <ChevronRight size={11} />
+                                                </Link>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -2445,25 +2797,32 @@ export default function CommercialUnifiedDashboard() {
                             Detección temprana de variaciones de costos en Corabastos: Alzas críticas (riesgo de margen) vs Bajas (oportunidades comerciales).
                         </p>
                     </div>
-                    <Link
-                        href="/admin/commercial/cost-matrix"
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (onNavigateToCostMatrix) {
+                                onNavigateToCostMatrix();
+                            } else {
+                                window.location.href = '/admin/commercial?tab=operations&subtab=cost-matrix';
+                            }
+                        }}
                         style={{
-                            textDecoration: 'none',
+                            border: '1px solid #BBF7D0',
+                            backgroundColor: '#F0FDF4',
+                            cursor: 'pointer',
                             color: THEME.colors.primary,
                             fontSize: '0.78rem',
                             fontWeight: '800',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '5px',
-                            backgroundColor: '#F0FDF4',
                             padding: '0.4rem 0.85rem',
                             borderRadius: '8px',
-                            border: '1px solid #BBF7D0',
                             transition: 'all 0.15s ease'
                         }}
                     >
                         Gestionar Matriz de Costos <ExternalLink size={13} />
-                    </Link>
+                    </button>
                 </div>
 
                 {/* 2-COLUMN SPLIT: ALZAS (ROJO/ÁMBAR) VS BAJAS (VERDE) */}
