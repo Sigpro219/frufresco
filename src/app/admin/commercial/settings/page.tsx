@@ -31,7 +31,8 @@ import {
     Pause,
     ClipboardList,
     BarChart2,
-    ArrowLeftCircle
+    ArrowLeftCircle,
+    Clock
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
@@ -1227,26 +1228,26 @@ export default function PricingSettingsPage({
                         top: embedded ? '142px' : '95px',
                         alignSelf: 'start'
                     }}>
-                        <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Modelos de Precios</h2>
+                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Modelos de Precios</h2>
                             <button 
                                 onClick={() => setIsCreating(true)} 
                                 style={{ 
-                                    padding: '0.4rem 0.6rem', 
+                                    padding: '0.35rem 0.55rem', 
                                     borderRadius: '6px', 
                                     border: 'none', 
                                     backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     cursor: 'pointer', 
                                     fontWeight: 'bold',
-                                    fontSize: '1rem',
+                                    fontSize: '0.9rem',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     boxShadow: '0 2px 4px rgba(13, 122, 87, 0.15)'
                                 }}
                             >
-                                <Plus size={16} />
+                                <Plus size={15} />
                             </button>
                         </div>
 
@@ -1289,7 +1290,7 @@ export default function PricingSettingsPage({
                                     key={m.id}
                                     onClick={() => setSelectedModel(m)}
                                     style={{
-                                        padding: '1.25rem',
+                                        padding: '0.85rem 1.15rem',
                                         borderBottom: `1px solid ${THEME.colors.border}`,
                                         cursor: 'pointer',
                                         backgroundColor: selectedModel?.id === m.id ? '#F0FDF4' : 'white',
@@ -1297,12 +1298,12 @@ export default function PricingSettingsPage({
                                         transition: 'background 0.2s'
                                     }}
                                 >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <div style={{ flex: 1, paddingRight: '1rem' }}>
-                                            <div style={{ fontWeight: '800', fontSize: '1.05rem', color: THEME.colors.textMain, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={14} color="#10B981" /></span>}
-                                                {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={14} color="#F59E0B" /></span>}
-                                                {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={14} color="#EF4444" /></span>}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ flex: 1, paddingRight: '0.75rem' }}>
+                                            <div style={{ fontWeight: '800', fontSize: '0.98rem', color: THEME.colors.textMain, marginBottom: '0.15rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#10B981" /></span>}
+                                                {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#F59E0B" /></span>}
+                                                {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ display: 'inline-flex' }}><CircleDot size={13} color="#EF4444" /></span>}
                                                 <div>
                                                     {(() => {
                                                         const parts = m.name.split(/(\d+\s*días)/i);
@@ -1318,7 +1319,7 @@ export default function PricingSettingsPage({
                                                 </div>
                                             </div>
                                             {m.description && (
-                                                <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
+                                                <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
                                                     {m.description}
                                                 </div>
                                             )}
@@ -1327,10 +1328,10 @@ export default function PricingSettingsPage({
                                         <div style={{
                                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                                             backgroundColor: selectedModel?.id === m.id ? '#D1FAE5' : '#F3F4F6',
-                                            padding: '0.4rem 0.65rem', borderRadius: '8px', minWidth: '70px'
+                                            padding: '0.35rem 0.6rem', borderRadius: '8px', minWidth: '65px'
                                         }}>
-                                            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === m.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.15rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
+                                            <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === m.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
+                                            <span style={{ fontWeight: '900', fontSize: '1.1rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
                                                 {formatNumber(modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0), 1)}%
                                             </span>
                                         </div>
@@ -1479,77 +1480,40 @@ export default function PricingSettingsPage({
                             ) : (
                                 <div style={{ 
                                     backgroundColor: 'white', 
-                                    padding: '1.5rem', 
+                                    padding: '0.85rem 1.25rem', 
                                     borderRadius: THEME.radius.lg, 
-                                    boxShadow: THEME.shadow.md, 
+                                    boxShadow: THEME.shadow.sm, 
                                     border: `1px solid ${THEME.colors.border}`,
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    gap: '1.25rem'
+                                    gap: '0.65rem'
                                 }}>
-                                    {/* Header Info & Actions Row */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1.5rem', flexWrap: 'wrap' }}>
-                                        {/* Left Column: Title, Description & Badges */}
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: '1 1 450px' }}>
-                                            <div>
-                                                <h1 style={{ fontSize: '1.75rem', fontWeight: '900', margin: 0, color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                                                    {(() => {
-                                                        const parts = selectedModel.name.split(/(\d+\s*días)/i);
-                                                        return parts.map((part, i) => (
-                                                            <span key={i} style={{ color: /(\d+\s*días)/i.test(part) ? THEME.colors.primary : 'inherit' }}>
-                                                                {part}
-                                                            </span>
-                                                        ));
-                                                    })()}
-                                                </h1>
-                                                <p style={{ color: THEME.colors.textSecondary, margin: '0.3rem 0 0 0', fontWeight: '500', fontSize: '0.9rem' }}>
-                                                    {selectedModel.description}
-                                                </p>
-                                            </div>
-                                            
-                                            {/* Badges Block */}
-                                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.3rem 0.6rem', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                    <TrendingUp size={12} /> Margen Base: {selectedModel.base_margin_percent}%
+                                    {/* Top Row: Title, Base Margin Badge & Actions */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                        {/* Left: Title & Inline Margen Base */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                            <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                {(() => {
+                                                    const parts = selectedModel.name.split(/(\d+\s*días)/i);
+                                                    return parts.map((part, i) => (
+                                                        <span key={i} style={{ color: /(\d+\s*días)/i.test(part) ? THEME.colors.primary : 'inherit' }}>
+                                                            {part}
+                                                        </span>
+                                                    ));
+                                                })()}
+                                            </h1>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EAFDF4', color: '#0D7A57', padding: '0.25rem 0.6rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                <TrendingUp size={12} /> Margen Base: {selectedModel.base_margin_percent}%
+                                            </span>
+                                            {selectedModel.name === 'Clientes B2C' && (
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '700', backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '0.25rem 0.6rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                    <Globe size={12} /> Web B2C
                                                 </span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '0.3rem 0.6rem', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                    <BarChart2 size={12} /> Promedio: {formatNumber(avgMargin, 1)}%
-                                                </span>
-                                                <span style={{ 
-                                                    fontSize: '0.75rem', 
-                                                    fontWeight: '700', 
-                                                    backgroundColor: selectedModel.name === 'Clientes B2C' ? '#EFF6FF' : '#F1F5F9', 
-                                                    color: selectedModel.name === 'Clientes B2C' ? '#1D4ED8' : '#475569', 
-                                                    padding: '0.3rem 0.6rem', 
-                                                    borderRadius: '20px',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.2rem'
-                                                }}>
-                                                    {selectedModel.name === 'Clientes B2C' ? (
-                                                        <><Globe size={12} /> Canal: Web / B2C</>
-                                                    ) : (
-                                                        <><Building size={12} /> Canal: B2B / Distribución</>
-                                                    )}
-                                                </span>
-                                                <span style={{ 
-                                                    fontSize: '0.75rem', 
-                                                    fontWeight: '700', 
-                                                    backgroundColor: selectedModel.b2c_autosync_enabled ? '#ECFDF5' : '#F3F4F6', 
-                                                    color: selectedModel.b2c_autosync_enabled ? '#047857' : '#64748B', 
-                                                    padding: '0.3rem 0.6rem', 
-                                                    borderRadius: '20px',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.2rem'
-                                                }}>
-                                                    {selectedModel.b2c_autosync_enabled ? (<><RefreshCw size={12} /> Auto-recálculo Activo</>) : (<><Pause size={12} /> Recálculo Manual</>)}
-                                                </span>
-                                            </div>
+                                            )}
                                         </div>
 
-                                        {/* Right Column: Actions (Buttons) */}
-                                        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        {/* Right: Actions */}
+                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                             {selectedModel.name === 'Clientes B2C' && (
                                                 <button
                                                     onClick={syncPricesToCatalog}
@@ -1558,19 +1522,19 @@ export default function PricingSettingsPage({
                                                         backgroundColor: THEME.colors.primary, 
                                                         color: 'white', 
                                                         border: 'none', 
-                                                        padding: '0.55rem 1.1rem', 
-                                                        borderRadius: '8px', 
+                                                        padding: '0.45rem 0.9rem', 
+                                                        borderRadius: '6px', 
                                                         fontWeight: '800', 
                                                         cursor: isSyncing ? 'not-allowed' : 'pointer',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        gap: '0.4rem',
-                                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)',
+                                                        gap: '0.35rem',
+                                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.15)',
                                                         opacity: isSyncing ? 0.7 : 1,
-                                                        fontSize: '0.8rem'
+                                                        fontSize: '0.78rem'
                                                     }}
                                                 >
-                                                    {isSyncing ? <RefreshCw size={14} className="animate-spin" style={{ color: 'white' }} /> : <Rocket size={14} />} 
+                                                    {isSyncing ? <RefreshCw size={13} className="animate-spin" style={{ color: 'white' }} /> : <Rocket size={13} />} 
                                                     {isSyncing ? 'Fijando...' : 'Fijar Precios'}
                                                 </button>
                                             )}
@@ -1578,20 +1542,20 @@ export default function PricingSettingsPage({
                                             <button
                                                 onClick={() => setShowExcelModal(true)}
                                                 style={{ 
-                                                    backgroundColor: '#EAFDF4', 
+                                                    backgroundColor: '#F0FDF4', 
                                                     color: '#0D7A57', 
                                                     border: '1px solid #BBF7D0', 
-                                                    padding: '0.55rem 1.1rem', 
-                                                    borderRadius: '8px', 
-                                                    fontWeight: '800', 
+                                                    padding: '0.45rem 0.9rem', 
+                                                    borderRadius: '6px', 
+                                                    fontWeight: '700', 
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '0.4rem',
-                                                    fontSize: '0.8rem'
+                                                    gap: '0.35rem',
+                                                    fontSize: '0.78rem'
                                                 }}
                                             >
-                                                <FileDown size={14} /> Cargar / Descargar
+                                                <FileDown size={13} /> Cargar / Descargar
                                             </button>
 
                                             <button
@@ -1605,36 +1569,44 @@ export default function PricingSettingsPage({
                                                     setIsEditingModel(true);
                                                 }}
                                                 style={{ 
-                                                    color: '#2563EB', 
-                                                    backgroundColor: '#F0F7FF', 
-                                                    border: '1px solid #DBEAFE', 
-                                                    padding: '0.55rem 1.1rem', 
-                                                    borderRadius: '8px', 
+                                                    color: '#475569', 
+                                                    backgroundColor: '#F8FAFC', 
+                                                    border: '1px solid #E2E8F0', 
+                                                    padding: '0.45rem 0.9rem', 
+                                                    borderRadius: '6px', 
                                                     cursor: 'pointer', 
                                                     fontWeight: '700', 
                                                     display: 'flex', 
                                                     alignItems: 'center', 
-                                                    gap: '0.4rem',
-                                                    fontSize: '0.8rem'
+                                                    gap: '0.35rem',
+                                                    fontSize: '0.78rem',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                                onMouseOver={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                                    e.currentTarget.style.borderColor = '#CBD5E1';
+                                                }}
+                                                onMouseOut={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                                    e.currentTarget.style.borderColor = '#E2E8F0';
                                                 }}
                                             >
-                                                <Edit3 size={14} /> Editar
+                                                <Edit3 size={13} /> Editar
                                             </button>
 
                                             <button 
                                                 onClick={() => deleteModel(selectedModel.id, selectedModel.name)} 
                                                 style={{ 
                                                     color: '#9CA3AF', 
-                                                    background: 'none', 
-                                                    border: `1px solid ${THEME.colors.border}`, 
-                                                    padding: '0.55rem', 
-                                                    borderRadius: '8px', 
+                                                    background: '#F8FAFC', 
+                                                    border: '1px solid #E2E8F0', 
+                                                    padding: '0.45rem', 
+                                                    borderRadius: '6px', 
                                                     cursor: 'pointer', 
-                                                    display: 'flex',
-                                                    alignItems: 'center',
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
                                                     justifyContent: 'center',
-                                                    backgroundColor: 'white',
-                                                    transition: 'all 0.2s'
+                                                    transition: 'all 0.15s'
                                                 }}
                                                 onMouseOver={(e) => {
                                                     e.currentTarget.style.color = '#EF4444';
@@ -1643,58 +1615,64 @@ export default function PricingSettingsPage({
                                                 }}
                                                 onMouseOut={(e) => {
                                                     e.currentTarget.style.color = '#9CA3AF';
-                                                    e.currentTarget.style.borderColor = THEME.colors.border;
-                                                    e.currentTarget.style.backgroundColor = 'white';
+                                                    e.currentTarget.style.borderColor = '#E2E8F0';
+                                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
                                                 }}
+                                                title="Eliminar Modelo"
                                             >
-                                                <Trash2 size={16} />
+                                                <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Autosync scheduler row */}
+                                    {/* Bottom Row: Description & Inline Scheduler */}
                                     <div style={{ 
-                                        borderTop: `1px solid ${THEME.colors.border}`, 
-                                        paddingTop: '1rem', 
                                         display: 'flex', 
                                         justifyContent: 'space-between', 
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
-                                        gap: '1.5rem'
+                                        alignItems: 'center', 
+                                        flexWrap: 'wrap', 
+                                        gap: '0.75rem',
+                                        paddingTop: '0.5rem',
+                                        borderTop: `1px solid ${THEME.colors.borderLight || '#F1F5F9'}`
                                     }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                                            <div style={{ fontSize: '0.85rem', color: THEME.colors.textMain, fontWeight: '800' }}>
-                                                Programación de Recálculo Automático
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
-                                                Días activos para recálculo automático a la medianoche: <strong style={{ color: THEME.colors.primary }}>{getAutosyncDaysSummary(selectedModel.autosync_days)}</strong>
-                                            </div>
-                                        </div>
+                                        {/* Description */}
+                                        <p style={{ color: THEME.colors.textSecondary, margin: 0, fontWeight: '500', fontSize: '0.82rem', maxWidth: '650px', lineHeight: 1.3 }}>
+                                            {selectedModel.description}
+                                        </p>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                                        {/* Inline Autosync scheduler */}
+                                        <div 
+                                            title={`Días activos para recálculo automático a la medianoche: ${getAutosyncDaysSummary(selectedModel.autosync_days)}`}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}
+                                        >
+                                            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <Clock size={12} color="#64748B" /> Recálculo medianoche:
+                                            </span>
+
                                             {/* Days circles */}
-                                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                                            <div style={{ display: 'flex', gap: '0.25rem' }}>
                                                 {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((dayName, idx) => {
                                                     const isSelected = (selectedModel.autosync_days || [0, 1, 2, 3, 4, 5, 6]).includes(idx);
                                                     return (
                                                         <button
                                                             key={idx}
                                                             onClick={() => toggleAutosyncDay(idx)}
+                                                            title={`Recalcular día ${dayName}`}
                                                             style={{
-                                                                width: '26px',
-                                                                height: '26px',
+                                                                width: '22px',
+                                                                height: '22px',
                                                                 borderRadius: '50%',
                                                                 border: 'none',
-                                                                backgroundColor: isSelected ? THEME.colors.primary : '#E5E7EB',
-                                                                color: isSelected ? 'white' : '#475569',
+                                                                backgroundColor: isSelected ? THEME.colors.primary : '#E2E8F0',
+                                                                color: isSelected ? 'white' : '#64748B',
                                                                 fontWeight: 'bold',
-                                                                fontSize: '0.7rem',
+                                                                fontSize: '0.65rem',
                                                                 cursor: 'pointer',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
                                                                 transition: 'all 0.15s',
-                                                                boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.2)' : 'none'
+                                                                boxShadow: isSelected ? '0 1px 3px rgba(13, 122, 87, 0.25)' : 'none'
                                                             }}
                                                         >
                                                             {dayName}
@@ -1704,13 +1682,14 @@ export default function PricingSettingsPage({
                                             </div>
 
                                             {/* Switch toggle */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderLeft: `1px solid ${THEME.colors.border}`, paddingLeft: '1rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderLeft: `1px solid ${THEME.colors.border}`, paddingLeft: '0.75rem' }}>
                                                 <button
                                                     onClick={toggleAutosyncEnabled}
+                                                    title={selectedModel.b2c_autosync_enabled ? 'Desactivar recálculo automático' : 'Activar recálculo automático'}
                                                     style={{
-                                                        width: '38px',
-                                                        height: '20px',
-                                                        borderRadius: '10px',
+                                                        width: '32px',
+                                                        height: '18px',
+                                                        borderRadius: '9px',
                                                         border: 'none',
                                                         backgroundColor: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : '#CBD5E1',
                                                         position: 'relative',
@@ -1720,18 +1699,18 @@ export default function PricingSettingsPage({
                                                     }}
                                                 >
                                                     <span style={{
-                                                        width: '16px',
-                                                        height: '16px',
+                                                        width: '14px',
+                                                        height: '14px',
                                                         borderRadius: '50%',
                                                         backgroundColor: 'white',
                                                         position: 'absolute',
                                                         top: '2px',
-                                                        left: selectedModel.b2c_autosync_enabled ? '20px' : '2px',
+                                                        left: selectedModel.b2c_autosync_enabled ? '16px' : '2px',
                                                         transition: 'left 0.2s',
-                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.15)'
                                                     }} />
                                                 </button>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: selectedModel.b2c_autosync_enabled ? THEME.colors.primary : THEME.colors.textSecondary }}>
                                                     {selectedModel.b2c_autosync_enabled ? 'Activo' : 'Inactivo'}
                                                 </span>
                                             </div>
