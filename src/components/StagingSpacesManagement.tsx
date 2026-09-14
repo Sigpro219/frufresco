@@ -858,7 +858,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                         border: `1px solid ${order.clientType === 'hogar' ? '#BFDBFE' : '#A7F3D0'}`
                                                     }}>
                                                         {order.clientType === 'hogar' ? <Home size={8} /> : <Building2 size={8} />}
-                                                        {order.clientType === 'hogar' ? 'Hogar' : 'B2B'}
+                                                        {order.clientType === 'hogar' ? 'Hogar' : 'Institucional'}
                                                     </span>
                                                 </div>
                                                 <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
@@ -951,11 +951,11 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                             }}>
                                 {hoveredSlot.occupiedBy.clientType === 'hogar' ? (
                                     <>
-                                        <Home size={10} /> HOGAR (B2C)
+                                        <Home size={10} /> HOGAR
                                     </>
                                 ) : (
                                     <>
-                                        <Building2 size={10} /> INSTITUCIONAL (B2B)
+                                        <Building2 size={10} /> INSTITUCIONAL
                                     </>
                                 )}
                             </span>
