@@ -461,15 +461,6 @@ export default function Navbar() {
                                                 </Link>
                                             )}
                                             {hasPermission('orders') && (
-                                                <Link href="/admin/logistics/staging-spaces"
-                                                    onClick={() => setOperationsOpen(false)}
-                                                    style={dropdownLinkStyle}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                    <Layers size={15} strokeWidth={1.5} style={dropdownIconStyle} /> Muelle y Bahías (1-150)
-                                                </Link>
-                                            )}
-                                            {hasPermission('orders') && (
                                                 <Link href="/admin/orders/contingency-reconciliation"
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle}
