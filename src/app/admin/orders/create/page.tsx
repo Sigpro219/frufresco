@@ -261,6 +261,7 @@ function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
+    const [isConfirmingImport, setIsConfirmingImport] = useState(false);
     const [showFormulaTooltip, setShowFormulaTooltip] = useState(false);
 
     // Safe math expression evaluator for Excel-style formulas (+900/24, =900/24, 15*12, etc.)
@@ -2468,107 +2469,114 @@ function CreateOrderContent() {
     };
 
     const handleConfirmImport = async () => {
-        // 1. Subida silenciosa del archivo original al bucket order-attachments para persistencia permanente
-        if (uploadedFile) {
-            try {
-                const fileExt = uploadedFile.name.split('.').pop() || 'pdf';
-                const cleanFileName = `${Date.now()}_${uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-                const filePath = `${cleanFileName}`;
+        setIsConfirmingImport(true);
+        try {
+            // 1. Subida silenciosa del archivo original al bucket order-attachments para persistencia permanente
+            if (uploadedFile) {
+                try {
+                    const fileExt = uploadedFile.name.split('.').pop() || 'pdf';
+                    const cleanFileName = `${Date.now()}_${uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                    const filePath = `${cleanFileName}`;
 
-                const { data: uploadData, error: uploadError } = await supabase
-                    .storage
-                    .from('order-attachments')
-                    .upload(filePath, uploadedFile, { upsert: true });
-
-                if (uploadError) {
-                    console.warn('Silent upload warning in handleConfirmImport:', uploadError);
-                } else {
-                    const { data: publicUrlData } = supabase
+                    const { data: uploadData, error: uploadError } = await supabase
                         .storage
                         .from('order-attachments')
-                        .getPublicUrl(filePath);
-                    if (publicUrlData?.publicUrl) {
-                        setPermanentDocumentUrl(publicUrlData.publicUrl);
-                        console.log('Documento persistido con éxito:', publicUrlData.publicUrl);
+                        .upload(filePath, uploadedFile, { upsert: true });
+
+                    if (uploadError) {
+                        console.warn('Silent upload warning in handleConfirmImport:', uploadError);
+                    } else {
+                        const { data: publicUrlData } = supabase
+                            .storage
+                            .from('order-attachments')
+                            .getPublicUrl(filePath);
+                        if (publicUrlData?.publicUrl) {
+                            setPermanentDocumentUrl(publicUrlData.publicUrl);
+                            console.log('Documento persistido con éxito:', publicUrlData.publicUrl);
+                        }
                     }
+                } catch (upErr) {
+                    console.warn('Error subiendo adjunto a storage:', upErr);
                 }
-            } catch (upErr) {
-                console.warn('Error subiendo adjunto a storage:', upErr);
             }
-        }
 
-        // Inyectamos los items validados al carrito real
-        const itemsToInject = stagedItems
-            .filter(item => item.suggestedProduct)
-            .map(item => {
-                const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
-                const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
-                return {
-                    product: item.suggestedProduct,
-                    qty: item.quantity,
-                    variant_label: variantLabel,
-                    selected_options: item.selected_options,
-                    originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
-                    originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
-                    conversion_factor: item.conversion_factor || 1,
-                    price: item.price || item.suggestedProduct?.base_price || 1000
-                };
-            });
+            // Inyectamos los items validados al carrito real
+            const itemsToInject = stagedItems
+                .filter(item => item.suggestedProduct)
+                .map(item => {
+                    const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
+                    const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+                    return {
+                        product: item.suggestedProduct,
+                        qty: item.quantity,
+                        variant_label: variantLabel,
+                        selected_options: item.selected_options,
+                        originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
+                        originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
+                        conversion_factor: item.conversion_factor || 1,
+                        price: item.price || item.suggestedProduct?.base_price || 1000
+                    };
+                });
 
-        // Guardar/Actualizar la memoria de aprendizaje del cliente vía Motor Unificado
-        const activeClientId = selectedClient;
-        if (activeClientId && stagedItems.length > 0) {
-            for (const item of stagedItems) {
-                if (item.suggestedProduct && item.originalName) {
-                    await recordLearningMemory(
+            // Guardar/Actualizar la memoria de aprendizaje del cliente en paralelo
+            const activeClientId = selectedClient;
+            if (activeClientId && stagedItems.length > 0) {
+                const learningPromises = stagedItems
+                    .filter(item => item.suggestedProduct && item.originalName)
+                    .map(item => recordLearningMemory(
                         supabase,
                         activeClientId,
                         item.originalName,
                         item.suggestedProduct.id,
                         item.originalUnit || item.suggestedProduct.unit_of_measure
+                    ));
+                await Promise.allSettled(learningPromises);
+            }
+
+            let mergedCount = 0;
+            setCart(prev => {
+                const result = [...prev];
+                for (const newItem of itemsToInject) {
+                    const cleanLabel = (newItem.variant_label || '').trim().toLowerCase();
+                    const cleanUnit = (newItem.originalUnit || newItem.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                    const existingIdx = result.findIndex(item =>
+                        item.product.id === newItem.product.id &&
+                        (item.variant_label || '').trim().toLowerCase() === cleanLabel &&
+                        (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit
                     );
+
+                    if (existingIdx >= 0) {
+                        const existingItem = { ...result[existingIdx] };
+                        const addQty = newItem.originalQty !== undefined ? newItem.originalQty : newItem.qty;
+                        const newOrigQty = parseFloat(((existingItem.originalQty || 0) + addQty).toFixed(3));
+                        const factor = existingItem.conversion_factor || newItem.conversion_factor || 1;
+                        existingItem.originalQty = newOrigQty;
+                        existingItem.qty = parseFloat((newOrigQty * factor).toFixed(3));
+                        result[existingIdx] = existingItem;
+                        mergedCount++;
+                    } else {
+                        result.unshift(newItem);
+                    }
                 }
+                return result;
+            });
+
+            setIsStaging(false);
+            setStagedItems([]);
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+                setUploadedFileUrl(null);
             }
-        }
-
-        let mergedCount = 0;
-        setCart(prev => {
-            const result = [...prev];
-            for (const newItem of itemsToInject) {
-                const cleanLabel = (newItem.variant_label || '').trim().toLowerCase();
-                const cleanUnit = (newItem.originalUnit || newItem.product?.unit_of_measure || 'Kg').trim().toLowerCase();
-                const existingIdx = result.findIndex(item =>
-                    item.product.id === newItem.product.id &&
-                    (item.variant_label || '').trim().toLowerCase() === cleanLabel &&
-                    (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit
-                );
-
-                if (existingIdx >= 0) {
-                    const existingItem = { ...result[existingIdx] };
-                    const addQty = newItem.originalQty !== undefined ? newItem.originalQty : newItem.qty;
-                    const newOrigQty = parseFloat(((existingItem.originalQty || 0) + addQty).toFixed(3));
-                    const factor = existingItem.conversion_factor || newItem.conversion_factor || 1;
-                    existingItem.originalQty = newOrigQty;
-                    existingItem.qty = parseFloat((newOrigQty * factor).toFixed(3));
-                    result[existingIdx] = existingItem;
-                    mergedCount++;
-                } else {
-                    result.unshift(newItem);
-                }
+            if (mergedCount > 0) {
+                showToast(`✅ Se inyectaron ${itemsToInject.length - mergedCount} productos y se consolidaron ${mergedCount} cantidades duplicadas.`, 'success');
+            } else {
+                showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
             }
-            return result;
-        });
-
-        setIsStaging(false);
-        setStagedItems([]);
-        if (uploadedFileUrl) {
-            URL.revokeObjectURL(uploadedFileUrl);
-            setUploadedFileUrl(null);
-        }
-        if (mergedCount > 0) {
-            showToast(`✅ Se inyectaron ${itemsToInject.length - mergedCount} productos y se consolidaron ${mergedCount} cantidades duplicadas.`, 'success');
-        } else {
-            showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
+        } catch (err: any) {
+            console.error('Error al confirmar importación:', err);
+            showToast('Hubo un error al inyectar los productos al pedido.', 'error');
+        } finally {
+            setIsConfirmingImport(false);
         }
     };
 
@@ -4679,22 +4687,37 @@ function CreateOrderContent() {
                                             <button 
                                                 id="confirm-inject-button"
                                                 onClick={handleConfirmImport}
+                                                disabled={isConfirmingImport}
                                                 style={{ 
                                                     padding: '12px 28px', 
                                                     borderRadius: '14px', 
                                                     border: 'none', 
-                                                    backgroundColor: '#059669', 
+                                                    backgroundColor: isConfirmingImport ? '#047857' : '#059669', 
                                                     color: 'white', 
                                                     fontWeight: '800', 
                                                     fontSize: '1rem',
-                                                    cursor: 'pointer',
+                                                    cursor: isConfirmingImport ? 'not-allowed' : 'pointer',
+                                                    opacity: isConfirmingImport ? 0.85 : 1,
                                                     boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.3)',
-                                                    transition: 'transform 0.2s'
+                                                    transition: 'all 0.2s',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
                                                 }}
-                                                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
-                                                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                                                onMouseEnter={e => { if (!isConfirmingImport) e.currentTarget.style.transform = 'scale(1.02)'; }}
+                                                onMouseLeave={e => { if (!isConfirmingImport) e.currentTarget.style.transform = 'scale(1)'; }}
                                             >
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={14} strokeWidth={1.5} /> Confirmar e Inyectar al Pedido</span>
+                                                {isConfirmingImport ? (
+                                                    <>
+                                                        <Loader2 size={16} className="animate-spin" />
+                                                        <span>Inyectando y Procesando...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Sparkles size={16} strokeWidth={2} />
+                                                        <span>Confirmar e Inyectar al Pedido</span>
+                                                    </>
+                                                )}
                                             </button>
                                         </div>
                                     </div>
@@ -5585,8 +5608,8 @@ function CreateOrderContent() {
                                 >
                                     {loading ? (
                                         <>
-                                            <Loader2 size={17} style={{ animation: 'spin 1s linear infinite' }} />
-                                            <span>Procesando Pedido...</span>
+                                            <Loader2 size={18} className="animate-spin" />
+                                            <span>Guardando y Procesando Pedido...</span>
                                         </>
                                     ) : (
                                         <>
