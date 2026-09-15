@@ -57,6 +57,7 @@ import {
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
+import ExcelTableViewer from '@/components/ExcelTableViewer';
 import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
 
 export const normalizeDocUnit = (unitStr: string): string => {
@@ -2154,16 +2155,53 @@ function CreateOrderContent() {
             const formData = new FormData();
             formData.append('file', file);
 
-            // Obtener el token de sesión activo para enviar como Bearer token
-            const { data: sessionData } = await supabase.auth.getSession();
+            // Obtener el token de sesión activo, o intentar refrescarlo automáticamente si expiró
+            let token: string | null = null;
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                if (sessionData?.session?.access_token) {
+                    token = sessionData.session.access_token;
+                } else {
+                    const { data: refreshData } = await supabase.auth.refreshSession();
+                    token = refreshData?.session?.access_token || null;
+                }
+            } catch (authErr) {
+                console.warn('Error al verificar sesión con Supabase Auth:', authErr);
+            }
+
+            // Respaldo secundario: buscar token en almacenamiento local si aún no se hidrató
+            if (!token && typeof window !== 'undefined') {
+                try {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && (k.includes('sb-') || k.includes('supabase.auth.token'))) {
+                            const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+                            const found = parsed?.access_token || parsed?.currentSession?.access_token || null;
+                            if (found) {
+                                token = found;
+                                break;
+                            }
+                        }
+                    }
+                } catch {}
+            }
+
+            // Si definitivamente no hay sesión ni cookies de sesión
+            if (!token && typeof document !== 'undefined' && !document.cookie.includes('auth-token')) {
+                showToast('Tu sesión ha expirado. Por favor recarga la página o inicia sesión de nuevo.', 'error');
+                setParsingFile(false);
+                return;
+            }
+
             const headers: Record<string, string> = {};
-            if (sessionData?.session?.access_token) {
-                headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
 
             const response = await fetch('/api/ai/extract-order', {
                 method: 'POST',
                 headers,
+                credentials: 'include',
                 body: formData
             });
 
@@ -2411,8 +2449,19 @@ function CreateOrderContent() {
             setIsStaging(true);
             showToast(`⚡ Documento procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
         } catch (error: any) {
-            console.error('AI Parsing Error:', error);
-            showToast(`Error: ${error.message}`, 'error');
+            const isAuthErr = error.message?.includes('Auth session missing') || 
+                              error.message?.includes('Unauthorized') || 
+                              error.message?.includes('401') ||
+                              error.message?.includes('token') ||
+                              error.message?.includes('JWT');
+
+            if (isAuthErr) {
+                console.warn('AI Parsing Session Warning:', error.message);
+                showToast('Tu sesión ha expirado o no es válida. Por favor recarga la página o inicia sesión de nuevo.', 'error');
+            } else {
+                console.error('AI Parsing Error:', error);
+                showToast(`Error al procesar documento: ${error.message}`, 'error');
+            }
         } finally {
             setParsingFile(false);
         }
@@ -3981,7 +4030,13 @@ function CreateOrderContent() {
                                                         transition: 'all 0.2s'
                                                     }}
                                                 >
-                                                    <FileText size={14} /> {showSideDocPreview ? 'Ocultar Visor PDF' : `Ver ${importValidation.documentType || 'PDF'} Lado a Lado`}
+                                                    <FileText size={14} /> {(() => {
+                                                        const fileName = uploadedFile?.name?.toLowerCase() || '';
+                                                        const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
+                                                        const isImg = fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp');
+                                                        const label = isExcel ? 'Excel' : (isImg ? 'Imagen' : (importValidation.documentType || 'PDF'));
+                                                        return showSideDocPreview ? `Ocultar Visor ${label}` : `Ver ${label} Lado a Lado`;
+                                                    })()}
                                                 </button>
                                             )}
                                         </div>
@@ -3990,31 +4045,45 @@ function CreateOrderContent() {
                                     {/* Mesa de Trabajo Body: Split Screen (Side-by-Side) */}
                                     <div style={{ display: 'flex', gap: '0', padding: '0', alignItems: 'stretch', maxHeight: '650px', overflow: 'hidden' }}>
                                         {/* Left Side: Document Preview */}
-                                        {uploadedFileUrl && showSideDocPreview && (
-                                            <div style={{ 
-                                                width: '48%', 
-                                                minWidth: '420px', 
-                                                borderRight: '2px solid #E2E8F0', 
-                                                backgroundColor: '#F8FAFC', 
-                                                padding: '1rem', 
-                                                display: 'flex', 
-                                                flexDirection: 'column' 
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                                                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <FileText size={14} /> Documento Original
-                                                    </span>
-                                                    <a href={uploadedFileUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                                                        <button style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            <Maximize2 size={11} /> Abrir Pestaña
-                                                        </button>
-                                                    </a>
+                                        {uploadedFileUrl && showSideDocPreview && (() => {
+                                            const fileName = uploadedFile?.name?.toLowerCase() || '';
+                                            const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
+                                            const isImg = fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp');
+
+                                            return (
+                                                <div style={{ 
+                                                    width: '48%', 
+                                                    minWidth: '420px', 
+                                                    borderRight: '2px solid #E2E8F0', 
+                                                    backgroundColor: '#F8FAFC', 
+                                                    padding: '1rem', 
+                                                    display: 'flex', 
+                                                    flexDirection: 'column' 
+                                                }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <FileText size={14} /> {isExcel ? 'Hoja de Cálculo Original' : (isImg ? 'Imagen Original' : 'Documento Original')}
+                                                        </span>
+                                                        <a href={uploadedFileUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                                                            <button style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Maximize2 size={11} /> Abrir Pestaña
+                                                            </button>
+                                                        </a>
+                                                    </div>
+                                                    <div style={{ flex: 1, minHeight: '560px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
+                                                        {isExcel ? (
+                                                            <ExcelTableViewer file={uploadedFile} fileUrl={uploadedFileUrl} />
+                                                        ) : isImg ? (
+                                                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '10px' }}>
+                                                                <img src={uploadedFileUrl} alt="Documento Original" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }} />
+                                                            </div>
+                                                        ) : (
+                                                            <PdfCanvasViewer file={uploadedFile} fileUrl={uploadedFileUrl} />
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div style={{ flex: 1, minHeight: '560px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC' }}>
-                                                    <PdfCanvasViewer file={uploadedFile} fileUrl={uploadedFileUrl} />
-                                                </div>
-                                            </div>
-                                        )}
+                                            );
+                                        })()}
 
                                         {/* Right Side: Table Mapping */}
                                         <div 

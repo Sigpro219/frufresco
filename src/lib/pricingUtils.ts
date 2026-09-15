@@ -154,14 +154,25 @@ export async function recalculateAndSyncProductPrices(
             rulesMap.set(r.model_id, Number(r.margin_adjustment));
         });
 
+        const baseModelRuleMargin = rulesMap.get(GENERAL_INSTITUCIONAL_ID);
+
         const ivaRate = (Number(prod.iva_rate) || 0) / 100;
         let hogarFinalPrice: number | undefined;
 
         const pmpUpdates: Array<{ model_id: string; product_id: string; price: number; updated_at: string }> = [];
 
         models.forEach((m: any) => {
-            const ruleMargin = rulesMap.get(m.id);
-            const marginPct = ruleMargin !== undefined ? ruleMargin : (Number(m.base_margin_percent) || 0);
+            const explicitRuleMargin = rulesMap.get(m.id);
+            let marginPct: number;
+
+            if (explicitRuleMargin !== undefined) {
+                marginPct = explicitRuleMargin;
+            } else if (baseModelRuleMargin !== undefined && m.id !== GENERAL_INSTITUCIONAL_ID) {
+                // Cascading delta from General Institucional baseline
+                marginPct = baseModelRuleMargin + (Number(m.base_margin_percent) || 0);
+            } else {
+                marginPct = Number(m.base_margin_percent) || 0;
+            }
 
             const priceBeforeTax = baseCost * (1 + marginPct / 100);
             const priceWithTax = priceBeforeTax * (1 + ivaRate);
@@ -175,7 +186,7 @@ export async function recalculateAndSyncProductPrices(
                 updated_at: new Date().toISOString()
             });
 
-            if (m.id === CLIENTES_HOGAR_ID || m.is_base_model) {
+            if (m.id === CLIENTES_HOGAR_ID) {
                 hogarFinalPrice = finalPrice;
             }
         });
@@ -308,10 +319,20 @@ export async function batchRecalculateAndSyncPrices(
 
             const ivaRate = (Number(prod.iva_rate) || 0) / 100;
             let hogarPrice: number | undefined;
+            const baseRuleMargin = rulesMap.get(`${GENERAL_INSTITUCIONAL_ID}:${prod.id}`);
 
             for (const m of models) {
-                const ruleMargin = rulesMap.get(`${m.id}:${prod.id}`);
-                const marginPct = ruleMargin !== undefined ? ruleMargin : (Number(m.base_margin_percent) || 0);
+                const explicitRuleMargin = rulesMap.get(`${m.id}:${prod.id}`);
+                let marginPct: number;
+
+                if (explicitRuleMargin !== undefined) {
+                    marginPct = explicitRuleMargin;
+                } else if (baseRuleMargin !== undefined && m.id !== GENERAL_INSTITUCIONAL_ID) {
+                    // Cascading delta from General Institucional baseline
+                    marginPct = baseRuleMargin + (Number(m.base_margin_percent) || 0);
+                } else {
+                    marginPct = Number(m.base_margin_percent) || 0;
+                }
 
                 const priceBeforeTax = baseCost * (1 + marginPct / 100);
                 const priceWithTax = priceBeforeTax * (1 + ivaRate);
@@ -324,7 +345,7 @@ export async function batchRecalculateAndSyncPrices(
                     updated_at: new Date().toISOString()
                 });
 
-                if (m.id === CLIENTES_HOGAR_ID || m.is_base_model) {
+                if (m.id === CLIENTES_HOGAR_ID) {
                     hogarPrice = finalPrice;
                 }
             }

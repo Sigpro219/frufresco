@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
+import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { 
@@ -32,7 +32,8 @@ import {
     ClipboardList,
     BarChart2,
     ArrowLeftCircle,
-    Clock
+    Clock,
+    Crown
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
@@ -230,16 +231,22 @@ export default function PricingSettingsPage({
                 }
             }
 
-            // 2. Fetch exception rules for this model
+            // 2. Fetch exception rules for this model and General Institucional baseline
+            const modelIdsToFetch = modelId === GENERAL_INSTITUCIONAL_ID ? [modelId] : [modelId, GENERAL_INSTITUCIONAL_ID];
             const { data: rulesData, error: rulesErr } = await supabase
                 .from('pricing_rules')
                 .select('*')
-                .eq('model_id', modelId);
+                .in('model_id', modelIdsToFetch);
             if (rulesErr) throw rulesErr;
             
             const rulesMap = new Map();
+            const giRulesMap = new Map();
             rulesData?.forEach(r => {
-                rulesMap.set(r.product_id, r);
+                if (r.model_id === modelId) {
+                    rulesMap.set(r.product_id, r);
+                } else if (r.model_id === GENERAL_INSTITUCIONAL_ID) {
+                    giRulesMap.set(r.product_id, r);
+                }
             });
 
             // 3. Fetch overrides
@@ -310,10 +317,25 @@ export default function PricingSettingsPage({
                     baseCost = prod.base_price || 0;
                 }
 
-                // Margin adjustment rule if exists
+                // Margin adjustment rule if exists, or cascade from General Institucional baseline
                 const rule = rulesMap.get(prod.id);
-                const adjustment = rule ? rule.margin_adjustment : 0;
-                const absoluteMargin = modelData.base_margin_percent + adjustment;
+                const giRule = giRulesMap.get(prod.id);
+                
+                let absoluteMargin: number;
+                let adjustment: number = 0;
+                let isInherited = false;
+
+                if (rule) {
+                    absoluteMargin = Number(rule.margin_adjustment);
+                    adjustment = absoluteMargin;
+                } else if (giRule && modelId !== GENERAL_INSTITUCIONAL_ID) {
+                    absoluteMargin = Number(giRule.margin_adjustment) + (Number(modelData.base_margin_percent) || 0);
+                    adjustment = absoluteMargin;
+                    isInherited = true;
+                } else {
+                    absoluteMargin = Number(modelData.base_margin_percent) || 0;
+                    adjustment = 0;
+                }
 
                 return {
                     product_id: prod.id,
@@ -327,6 +349,7 @@ export default function PricingSettingsPage({
                     rule_id: rule ? rule.id : null,
                     margin_adjustment: adjustment,
                     margin: absoluteMargin,
+                    is_inherited: isInherited,
                     utility_deviation_pct: prod.utility_deviation_pct || 0
                 };
             });

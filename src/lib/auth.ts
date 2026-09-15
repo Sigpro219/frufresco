@@ -76,11 +76,30 @@ export async function verifySessionAndRole(request: Request, allowedRoles?: stri
 
 async function checkTokenDirectly(token: string, allowedRoles?: string[]): Promise<AuthResult> {
   try {
-    const supabase = getAnonClient();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    let user: any = null;
+    let authError: any = null;
 
-    if (error || !user) {
-      return { authorized: false, error: error?.message || 'Invalid authentication token' };
+    try {
+      const supabase = getAnonClient();
+      const res = await supabase.auth.getUser(token);
+      user = res.data?.user;
+      authError = res.error;
+    } catch (e: any) {
+      authError = e;
+    }
+
+    // Si falló con el anon client, intentar verificar con admin client
+    if (!user) {
+      try {
+        const adminClient = getAdminClient();
+        const res = await adminClient.auth.getUser(token);
+        user = res.data?.user;
+        if (user) authError = null;
+      } catch (e: any) {}
+    }
+
+    if (!user) {
+      return { authorized: false, error: authError?.message || 'Invalid or expired authentication token' };
     }
 
     return await checkUserRole(user, allowedRoles);
@@ -91,11 +110,30 @@ async function checkTokenDirectly(token: string, allowedRoles?: string[]): Promi
 
 async function checkPermissionDirectly(token: string, requiredPermission: string): Promise<AuthResult> {
   try {
-    const supabase = getAnonClient();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    let user: any = null;
+    let authError: any = null;
 
-    if (error || !user) {
-      return { authorized: false, error: error?.message || 'Invalid authentication token' };
+    try {
+      const supabase = getAnonClient();
+      const res = await supabase.auth.getUser(token);
+      user = res.data?.user;
+      authError = res.error;
+    } catch (e: any) {
+      authError = e;
+    }
+
+    // Si falló con el anon client, intentar verificar con admin client
+    if (!user) {
+      try {
+        const adminClient = getAdminClient();
+        const res = await adminClient.auth.getUser(token);
+        user = res.data?.user;
+        if (user) authError = null;
+      } catch (e: any) {}
+    }
+
+    if (!user) {
+      return { authorized: false, error: authError?.message || 'Invalid or expired authentication token' };
     }
 
     return await checkUserPermissionBackend(user, requiredPermission);
