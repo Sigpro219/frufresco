@@ -325,6 +325,43 @@ interface PQR {
     } | null;
 }
 
+export const getReplacementOrderUrl = (
+    pqr: PQR | null | undefined, 
+    selItemId?: string | null, 
+    items: any[] = [], 
+    novQty: number = 0
+): string => {
+    if (!pqr) return '/admin/orders/create';
+    const params = new URLSearchParams();
+    if (pqr.client_id) params.set('clientId', pqr.client_id);
+    params.set('type', pqr.profiles?.role === 'b2c_client' ? 'B2C' : 'B2B');
+    params.set('pqrId', pqr.id);
+    params.set('replacement', 'true');
+
+    const selItem = items.find(i => i.id === selItemId);
+    if (selItem && selItem.products) {
+        params.set('productId', selItem.product_id);
+        params.set('productQuery', selItem.products.name || '');
+        params.set('quantity', String(novQty > 0 ? novQty : selItem.quantity || 1));
+    } else {
+        const combined = `${pqr.subject || ''} ${pqr.description || ''}`;
+        const qtyMatch = combined.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilos?|kls?|und|unidades?|libras?|paquetes?|bolsas?)/i);
+        if (qtyMatch) {
+            params.set('quantity', qtyMatch[1].replace(',', '.'));
+        }
+        const cleanKeyword = (pqr.subject || '')
+            .replace(/\[[^\]]+\]/g, '')
+            .replace(/(de mala calidad|mala calidad|calidad|averiado|averia|danado|dano|dañado|daño|faltante|reclamo|queja|novedad|en mal estado|mal estado|podrido|inconforme|no llego|no llego el|no llegaron)/gi, '')
+            .trim();
+        if (cleanKeyword) {
+            params.set('productQuery', cleanKeyword);
+        }
+    }
+    const shortId = pqr.id ? pqr.id.substring(0, 8) : '';
+    params.set('notes', `Reposición prioritaria D+1 autorizada por PQR #${shortId} (${pqr.subject || ''})`);
+    return `/admin/orders/create?${params.toString()}`;
+};
+
 export default function CustomerServicePage() {
     const [pqrs, setPqrs] = useState<PQR[]>([]);
     const [novelties, setNovelties] = useState<any[]>([]);
@@ -3343,6 +3380,30 @@ export default function CustomerServicePage() {
                                                     <p style={{ margin: 0, fontSize: '0.72rem', color: isCurrentSelectedPqrReplacement ? '#B45309' : '#64748B', lineHeight: '1.35' }}>
                                                         {isCurrentSelectedPqrReplacement ? 'Bloqueado: Corte de bucle anti-ping-pong activo.' : 'Alistar nuevo despacho prioritario con siguiente entrega.'}
                                                     </p>
+                                                    {!isCurrentSelectedPqrReplacement && (
+                                                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #BFDBFE' }}>
+                                                            <Link
+                                                                href={getReplacementOrderUrl(selectedPqr, selectedItemId, orderItems, noveltyQty)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
+                                                                    fontSize: '0.72rem',
+                                                                    fontWeight: '800',
+                                                                    color: '#1D4ED8',
+                                                                    backgroundColor: '#DBEAFE',
+                                                                    padding: '4px 8px',
+                                                                    borderRadius: '6px',
+                                                                    textDecoration: 'none'
+                                                                }}
+                                                            >
+                                                                <ShoppingBag size={12} /> Montar Pedido D+1 ↗
+                                                            </Link>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Card 3: Nota Crédito */}
@@ -3587,6 +3648,44 @@ export default function CustomerServicePage() {
                                                         style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.82rem', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' }}
                                                     />
                                                 </div>
+
+                                                {/* Reponer D+1 Direct Action Card */}
+                                                {resolutionOption === 'opt2' && !isCurrentSelectedPqrReplacement && (
+                                                    <div style={{ backgroundColor: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <RotateCcw size={18} color="#2563EB" />
+                                                            <div>
+                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1E40AF' }}>
+                                                                    Montar Reposición Prioritaria D+1
+                                                                </div>
+                                                                <div style={{ fontSize: '0.7rem', color: '#3B82F6' }}>
+                                                                    Abre el módulo de creación de pedidos pre-cargando el cliente, producto a reponer y notas del PQR.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <Link
+                                                            href={getReplacementOrderUrl(selectedPqr, selectedItemId, orderItems, noveltyQty)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px',
+                                                                backgroundColor: '#2563EB',
+                                                                color: '#FFFFFF',
+                                                                padding: '8px 14px',
+                                                                borderRadius: '8px',
+                                                                fontSize: '0.76rem',
+                                                                fontWeight: '800',
+                                                                textDecoration: 'none',
+                                                                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >
+                                                            <ExternalLink size={13} /> Montar Nuevo Pedido D+1 ↗
+                                                        </Link>
+                                                    </div>
+                                                )}
 
                                                 {/* Action Buttons */}
                                                 <div style={{ display: 'flex', gap: '10px' }}>

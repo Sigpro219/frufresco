@@ -1493,6 +1493,94 @@ function CreateOrderContent() {
                     }
                 }
             }
+
+            // 4. Cargar Parámetros de Reposición / PQR (si viene clientId o pqrId o replacement)
+            const paramClientId = searchParams.get('clientId') || searchParams.get('profile_id') || searchParams.get('client_id');
+            const paramPqrId = searchParams.get('pqrId');
+            const paramProductId = searchParams.get('productId');
+            const paramProductQuery = searchParams.get('productQuery');
+            const paramQty = searchParams.get('quantity');
+            const paramNotes = searchParams.get('notes');
+            const isReplacement = searchParams.get('replacement') === 'true' || searchParams.get('isReplacement') === 'true';
+
+            if (paramClientId) {
+                const b2bMatch = (resB2B.data || []).find(c => c.id === paramClientId);
+                if (b2bMatch) {
+                    setClientType('B2B');
+                    setSelectedClient(b2bMatch.id);
+                    if (b2bMatch.latitude && b2bMatch.longitude) {
+                        setLatitude(b2bMatch.latitude);
+                        setLongitude(b2bMatch.longitude);
+                    }
+                } else {
+                    const b2cMatch = (resB2C.data || []).find(c => c.id === paramClientId);
+                    if (b2cMatch) {
+                        setClientType('B2C');
+                        setB2CMode('search');
+                        setSelectedClientB2C(b2cMatch.id);
+                        setGuestInfo({
+                            name: b2cMatch.contact_name || b2cMatch.company_name || '',
+                            phone: b2cMatch.phone || b2cMatch.contact_phone || '',
+                            address: b2cMatch.address || '',
+                            city: b2cMatch.city || 'Bogotá',
+                            email: b2cMatch.email || '',
+                            nit: b2cMatch.nit || '',
+                            saveToDirectory: true
+                        });
+                        if (b2cMatch.latitude && b2cMatch.longitude) {
+                            setLatitude(b2cMatch.latitude);
+                            setLongitude(b2cMatch.longitude);
+                        }
+                    }
+                }
+            }
+
+            if (paramNotes) {
+                setAdminNotes(prev => prev ? `${prev}\n${paramNotes}` : paramNotes);
+            }
+
+            if (isReplacement) {
+                setOriginSource('phone');
+            }
+
+            // Auto-sugerir / precargar producto a reponer en el carrito
+            if (prods && prods.length > 0 && (paramProductId || paramProductQuery)) {
+                let matchedProd = null;
+                if (paramProductId) {
+                    matchedProd = prods.find(p => p.id === paramProductId);
+                }
+                if (!matchedProd && paramProductQuery) {
+                    const cleanQ = paramProductQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                    const queryTokens = cleanQ.split(/\s+/).filter(Boolean);
+                    matchedProd = prods.find(p => {
+                        const n = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        return queryTokens.every(tok => n.includes(tok));
+                    });
+                    if (!matchedProd) {
+                        matchedProd = prods.find(p => {
+                            const n = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                            return queryTokens.some(tok => n.includes(tok));
+                        });
+                    }
+                }
+
+                if (matchedProd) {
+                    const qtyNum = paramQty ? parseFloat(paramQty) || 1 : 1;
+                    const baseUnit = matchedProd.unit_of_measure || 'Kg';
+                    setCart(prev => {
+                        if (prev.some(item => item.product.id === matchedProd.id)) return prev;
+                        return [...prev, {
+                            product: matchedProd,
+                            qty: qtyNum,
+                            originalQty: qtyNum,
+                            originalUnit: baseUnit,
+                            conversion_factor: 1,
+                            price: isReplacement ? 0 : (matchedProd.base_price || 0),
+                            observations: isReplacement ? `Reposición por PQR #${paramPqrId ? paramPqrId.substring(0, 8) : ''}` : ''
+                        }];
+                    });
+                }
+            }
         } catch (e) {
             console.error("Excepción en loadData:", e);
         }
