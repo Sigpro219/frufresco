@@ -27,7 +27,8 @@ import {
     Truck,
     PackageOpen,
     Printer,
-    ExternalLink
+    ExternalLink,
+    FileText
 } from 'lucide-react';
 import { normalizeAddress } from '@/lib/orderDuplicates';
 
@@ -374,6 +375,7 @@ export default function OrderDetailPage() {
                     delivery_date: editForm.delivery_date,
                     delivery_slot: editForm.delivery_slot,
                     shipping_address: editForm.shipping_address,
+                    admin_notes: editForm.admin_notes !== undefined ? editForm.admin_notes : order?.admin_notes,
                     total: newTotal,
                     total_weight_kg: editForm.total_weight_kg,
                     status: editForm.status
@@ -860,6 +862,60 @@ export default function OrderDetailPage() {
                                 </>
                             ) : (
                                 <div style={{ color: '#6B7280', fontStyle: 'italic' }}>Invitado / Sin Perfil</div>
+                            )}
+                        </div>
+
+                        {/* --- OBSERVACIONES DEL PEDIDO (ADMIN_NOTES) --- */}
+                        <div style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                            <h3 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <FileText size={15} strokeWidth={1.8} /> Observaciones del Pedido
+                            </h3>
+                            {isEditing ? (
+                                <div>
+                                    <textarea
+                                        value={editForm.admin_notes || ''}
+                                        onChange={e => setEditForm({ ...editForm, admin_notes: e.target.value })}
+                                        placeholder="Escribe notas operativas, referencias de entrega o instrucciones especiales..."
+                                        rows={4}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.75rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #D1D5DB',
+                                            fontSize: '0.875rem',
+                                            lineHeight: '1.4',
+                                            fontFamily: 'inherit',
+                                            resize: 'vertical',
+                                            outline: 'none',
+                                            backgroundColor: '#FFFFFF',
+                                            color: '#111827',
+                                            boxSizing: 'border-box'
+                                        }}
+                                    />
+                                    <p style={{ fontSize: '0.7rem', color: '#6B7280', marginTop: '4px' }}>
+                                        * Visible en remisión de entrega, app de conductores y servicio al cliente.
+                                    </p>
+                                </div>
+                            ) : (
+                                order.admin_notes ? (
+                                    <div style={{
+                                        backgroundColor: '#FFFBEB',
+                                        border: '1px solid #FDE68A',
+                                        borderRadius: '8px',
+                                        padding: '0.85rem 1rem',
+                                        color: '#92400E',
+                                        fontSize: '0.875rem',
+                                        lineHeight: '1.45',
+                                        whiteSpace: 'pre-wrap',
+                                        fontWeight: '500'
+                                    }}>
+                                        {order.admin_notes}
+                                    </div>
+                                ) : (
+                                    <div style={{ color: '#9CA3AF', fontSize: '0.85rem', fontStyle: 'italic', padding: '0.25rem 0' }}>
+                                        Sin observaciones registradas para este pedido.
+                                    </div>
+                                )
                             )}
                         </div>
 
