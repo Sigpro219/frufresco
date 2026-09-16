@@ -7240,7 +7240,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   flexDirection: 'column',
                   overflow: 'hidden',
                   transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  flexShrink: 0 
+                  flexShrink: 0,
+                  height: '100%',
+                  minHeight: 0
                 }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -7346,7 +7348,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
 
                   {/* Document Content Viewport */}
-                  <div style={{ flex: 1, minHeight: '520px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ flex: 1, minHeight: 0, height: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
                     {(() => {
                       const metadata = getDraftMetadata(selectedDraft);
                       
@@ -7421,7 +7423,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         };
 
                         const wrapContent = (content: React.ReactNode) => (
-                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0, height: '100%' }}>
                             {renderSelector()}
                             {content}
                           </div>
@@ -7430,7 +7432,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         // PDF
                         if (ext === 'pdf') {
                           return wrapContent(
-                            <div style={{ flex: 1, backgroundColor: '#F8FAFC', position: 'relative', overflow: 'hidden' }}>
+                            <div style={{ flex: 1, backgroundColor: '#F8FAFC', position: 'relative', overflow: 'hidden', minHeight: 0, height: '100%' }}>
                               <PdfCanvasViewer file={null} fileUrl={currentUrl} />
                             </div>
                           );
@@ -7440,7 +7442,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         if (ext === 'xlsx' || ext === 'xls') {
                           if (loadingAttachment) {
                             return wrapContent(
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC', minHeight: 0 }}>
                                 <Loader2 size={32} color="#2563EB" className="animate-spin" />
                                 <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Cargando tabla Excel...</span>
                               </div>
@@ -7460,7 +7462,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             });
 
                             return wrapContent(
-                              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, backgroundColor: '#FFFFFF', overflow: 'hidden', minHeight: 0, height: '100%' }}>
                                 {/* Excel Toolbar */}
                                 <div style={{
                                   padding: '8px 12px',
@@ -7470,7 +7472,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   flexWrap: 'wrap',
-                                  gap: '8px'
+                                  gap: '8px',
+                                  flexShrink: 0
                                 }}>
                                   {/* Sheet selector tabs */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -7560,7 +7563,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 </div>
 
                                 {/* Modern Google Sheets Table */}
-                                <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC' }}>
+                                <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', minHeight: 0 }}>
                                   <table style={{
                                     borderCollapse: 'collapse',
                                     width: '100%',
@@ -7687,8 +7690,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </tbody>
                                     <tfoot>
                                       <tr>
-                                        <td colSpan={10} style={{ padding: '12px 16px', textAlign: 'center', backgroundColor: '#F1F5F9', color: '#64748B', fontSize: '0.72rem', fontWeight: 600, borderTop: '2px solid #CBD5E1' }}>
-                                          Fin de la hoja · {currentSheet.countWithQty} ítems con cantidad encontrados ({filteredRows.length} filas en total)
+                                        <td colSpan={currentSheet.activeCols ? currentSheet.activeCols.length + 2 : 12} style={{ padding: '16px 20px 32px 20px', textAlign: 'center', backgroundColor: '#F1F5F9', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, borderTop: '2px solid #CBD5E1' }}>
+                                          ✓ Fin del documento · {currentSheet.countWithQty} ítems con cantidad de {filteredRows.length} filas totales
                                         </td>
                                       </tr>
                                     </tfoot>
