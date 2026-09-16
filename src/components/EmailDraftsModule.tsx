@@ -2422,10 +2422,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setIsReparsingDraft(true);
     try {
       showToast("Extrayendo productos con Gemini...", "info");
+      const rawMeta = Array.isArray(selectedDraft.extracted_items)
+        ? selectedDraft.extracted_items.find((it: any) => it?.isMetadata || it?.attachmentUrl || it?.attachments)
+        : null;
+      const attachments = rawMeta?.attachments || [];
+      const attachmentUrl = rawMeta?.attachmentUrl || (selectedDraft as any)?.document_url;
+      const attachmentName = rawMeta?.attachmentName || (selectedDraft as any)?.document_name;
+
       const res = await fetch('/api/orders/reparse-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftId: selectedDraft.id })
+        body: JSON.stringify({
+          draftId: selectedDraft.id,
+          attachmentUrl,
+          attachmentName,
+          attachments
+        })
       });
       const data = await res.json();
       if (!res.ok || data.error) {

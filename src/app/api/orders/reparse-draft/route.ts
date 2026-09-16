@@ -15,7 +15,8 @@ export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    const { draftId } = await req.json();
+    const body = await req.json();
+    const { draftId, attachmentUrl: reqAttUrl, attachmentName: reqAttName, attachments: reqAtts } = body;
     if (!draftId) {
       return NextResponse.json({ error: "draftId is required" }, { status: 400 });
     }
@@ -32,9 +33,16 @@ export async function POST(req: Request) {
     }
 
     const rawItems = draft.extracted_items || [];
-    const metadata = (Array.isArray(rawItems) ? rawItems.find((it: any) => it.isMetadata) : {}) || {};
-    const attachmentUrl = metadata.attachments?.[0]?.url || metadata.attachmentUrl;
-    const attachmentName = metadata.attachments?.[0]?.name || metadata.attachmentName || 'documento.pdf';
+    let metadata: any = {};
+    if (Array.isArray(rawItems)) {
+      metadata = rawItems.find((it: any) => it && (it.isMetadata || it.attachmentUrl || it.attachments || it.clientInDocument)) || rawItems[0] || {};
+    } else if (rawItems && typeof rawItems === 'object') {
+      metadata = rawItems;
+    }
+    metadata.isMetadata = true;
+
+    const attachmentUrl = reqAttUrl || metadata.attachments?.[0]?.url || metadata.attachmentUrl || draft.document_url || null;
+    const attachmentName = reqAttName || metadata.attachments?.[0]?.name || metadata.attachmentName || 'documento.xlsx';
     const emailBodyText = draft.email_body || metadata.emailHtml || metadata.rawText || '';
     const emailSubject = draft.email_subject || '';
 
@@ -54,12 +62,24 @@ export async function POST(req: Request) {
     let parsedSuccessfully = false;
 
     const attachmentsList: Array<{ url: string; name: string }> = [];
-    if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+    if (Array.isArray(reqAtts) && reqAtts.length > 0) {
+      reqAtts.forEach((att: any) => {
+        if (att && att.url) attachmentsList.push({ url: att.url, name: att.name || 'documento.xlsx' });
+      });
+    } else if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
       metadata.attachments.forEach((att: any) => {
-        if (att.url) attachmentsList.push({ url: att.url, name: att.name || 'documento' });
+        if (att && att.url) attachmentsList.push({ url: att.url, name: att.name || 'documento.xlsx' });
       });
     } else if (attachmentUrl) {
       attachmentsList.push({ url: attachmentUrl, name: attachmentName });
+    }
+
+    if (attachmentsList.length === 0 && Array.isArray(rawItems)) {
+      rawItems.forEach((it: any) => {
+        if (it?.attachmentUrl && !attachmentsList.some(a => a.url === it.attachmentUrl)) {
+          attachmentsList.push({ url: it.attachmentUrl, name: it.attachmentName || 'documento.xlsx' });
+        }
+      });
     }
 
     // 1. Process each attachment with Gemini Multimodal / Structured LLM Engine
@@ -289,14 +309,18 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     });
 
     // Update metadata
+    metadata.isMetadata = true;
     if (extractedData.clientName) metadata.clientInDocument = extractedData.clientName;
     if (extractedData.nit) metadata.nit = extractedData.nit;
     if (extractedData.address) metadata.address = extractedData.address;
     if (extractedData.deliveryDate) metadata.deliveryDate = extractedData.deliveryDate;
-    if (metadata.attachments && Array.isArray(metadata.attachments)) {
-      metadata.attachments.forEach((att: any, attIdx: number) => {
-        att.items = cleanItems.filter(ci => ci.attachment_index === attIdx || ci.source_attachment_name === att.name);
-      });
+    if (attachmentsList.length > 0) {
+      metadata.attachments = attachmentsList.map((att: any, attIdx: number) => ({
+        ...att,
+        items: cleanItems.filter(ci => ci.attachment_index === attIdx || ci.source_attachment_name === att.name)
+      }));
+      metadata.attachmentUrl = attachmentsList[0].url;
+      metadata.attachmentName = attachmentsList[0].name;
     }
 
     const finalExtracted = [metadata, ...cleanItems];
