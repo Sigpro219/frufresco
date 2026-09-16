@@ -53,7 +53,10 @@ import {
     ShoppingCart,
     Pin,
     Search,
-    Truck
+    Truck,
+    Eye,
+    ExternalLink,
+    Link2
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -941,8 +944,18 @@ function CreateOrderContent() {
         isMatch: boolean,
         documentType: 'PDF' | 'EXCEL' | 'CSV' | null,
         poNumber?: string | null,
+        solpedNumber?: string | null,
+        orderTypeLabel?: string | null,
+        referencedCodes?: string[],
         deliveryDateInDocument?: string | null
     }>({ clientInDocument: '', isMatch: true, documentType: null });
+    const [duplicateOrderMatch, setDuplicateOrderMatch] = useState<{
+        order: any;
+        matchedCode: string;
+        matchType: 'OC' | 'SOLPED' | 'REFERENCE';
+    } | null>(null);
+    const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+    const [isLinkingDuplicate, setIsLinkingDuplicate] = useState(false);
     const [showMultiOrderModal, setShowMultiOrderModal] = useState(false);
     const [multiOrderDate1, setMultiOrderDate1] = useState('');
     const [multiOrderDate2, setMultiOrderDate2] = useState('');
@@ -2221,6 +2234,192 @@ function CreateOrderContent() {
         return null;
     };
 
+    // Helper para detección de duplicidad y referencias cruzadas (OC / SOLPED / OP)
+    const checkForDuplicateOrders = async (
+        profileId: string | null,
+        poNumber: string | null,
+        solpedNumber: string | null,
+        referencedCodes: string[] = []
+    ) => {
+        try {
+            const rawTokens: string[] = [];
+            if (poNumber) rawTokens.push(poNumber);
+            if (solpedNumber) rawTokens.push(solpedNumber);
+            if (Array.isArray(referencedCodes)) {
+                referencedCodes.forEach(c => { if (c) rawTokens.push(c); });
+            }
+
+            const uniqueCodes = new Set<string>();
+            rawTokens.forEach(t => {
+                const clean = String(t).trim();
+                if (clean.length >= 3) {
+                    uniqueCodes.add(clean);
+                    const numMatch = clean.match(/\d{4,}/g);
+                    if (numMatch) {
+                        numMatch.forEach(n => uniqueCodes.add(n));
+                    }
+                }
+            });
+
+            if (uniqueCodes.size === 0) {
+                setDuplicateOrderMatch(null);
+                return;
+            }
+
+            setIsCheckingDuplicates(true);
+
+            // Perfiles de la misma matriz o NIT
+            let profileIdsToSearch: string[] = [];
+            if (profileId) {
+                profileIdsToSearch.push(profileId);
+                const targetProfile = clients.find(c => c.id === profileId);
+                if (targetProfile?.parent_id) {
+                    const siblings = clients.filter(c => c.parent_id === targetProfile.parent_id || c.id === targetProfile.parent_id);
+                    siblings.forEach(s => profileIdsToSearch.push(s.id));
+                } else if (targetProfile?.nit) {
+                    const nitMatch = clients.filter(c => c.nit && c.nit.trim() === targetProfile.nit.trim());
+                    nitMatch.forEach(s => profileIdsToSearch.push(s.id));
+                }
+                profileIdsToSearch = Array.from(new Set(profileIdsToSearch));
+            }
+
+            const sixtyDaysAgo = new Date();
+            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+            let query = supabase
+                .from('orders')
+                .select('id, sequence_id, created_at, total, status, delivery_date, admin_notes, document_url, profile_id')
+                .gte('created_at', sixtyDaysAgo.toISOString())
+                .neq('status', 'cancelled')
+                .order('created_at', { ascending: false })
+                .limit(80);
+
+            if (profileIdsToSearch.length > 0) {
+                query = query.in('profile_id', profileIdsToSearch);
+            }
+
+            const { data: recentOrders, error } = await query;
+            if (error || !recentOrders || recentOrders.length === 0) {
+                setDuplicateOrderMatch(null);
+                return;
+            }
+
+            const codesArray = Array.from(uniqueCodes);
+            let foundMatch: { order: any; matchedCode: string; matchType: 'OC' | 'SOLPED' | 'REFERENCE' } | null = null;
+
+            for (const ord of recentOrders) {
+                const notes = (ord.admin_notes || '').toUpperCase();
+                const docUrl = (ord.document_url || '').toUpperCase();
+                const ordIdStr = String(ord.sequence_id || ord.id).toUpperCase();
+
+                for (const code of codesArray) {
+                    const upperCode = code.toUpperCase();
+                    if (['COLSUBSIDIO', 'BOGOTA', 'PEDIDO', 'ORDEN', 'FRUFRESCO', 'CLIENTE', 'PRINCIPAL'].includes(upperCode)) continue;
+
+                    const matchInNotes = notes.includes(upperCode);
+                    const matchInUrl = docUrl.includes(upperCode);
+                    const matchInId = ordIdStr.includes(upperCode);
+
+                    if (matchInNotes || matchInUrl || matchInId) {
+                        let matchType: 'OC' | 'SOLPED' | 'REFERENCE' = 'REFERENCE';
+                        if (solpedNumber && (solpedNumber.toUpperCase().includes(upperCode) || upperCode.includes(solpedNumber.toUpperCase()))) {
+                            matchType = 'SOLPED';
+                        } else if (poNumber && (poNumber.toUpperCase().includes(upperCode) || upperCode.includes(poNumber.toUpperCase()))) {
+                            matchType = 'OC';
+                        }
+
+                        foundMatch = {
+                            order: ord,
+                            matchedCode: code,
+                            matchType
+                        };
+                        break;
+                    }
+                }
+                if (foundMatch) break;
+            }
+
+            setDuplicateOrderMatch(foundMatch);
+        } catch (err) {
+            console.warn('Error checking order duplicates:', err);
+            setDuplicateOrderMatch(null);
+        } finally {
+            setIsCheckingDuplicates(false);
+        }
+    };
+
+    const handleLinkDuplicateOrder = async () => {
+        if (!duplicateOrderMatch) return;
+        const targetOrder = duplicateOrderMatch.order;
+        setIsLinkingDuplicate(true);
+        try {
+            let finalDocUrl = permanentDocumentUrl;
+            if (!finalDocUrl && uploadedFile) {
+                try {
+                    const cleanFileName = `${Date.now()}_${uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                    const { error: uploadError } = await supabase
+                        .storage
+                        .from('order-attachments')
+                        .upload(cleanFileName, uploadedFile, { upsert: true });
+
+                    if (!uploadError) {
+                        const { data: publicUrlData } = supabase
+                            .storage
+                            .from('order-attachments')
+                            .getPublicUrl(cleanFileName);
+                        if (publicUrlData?.publicUrl) {
+                            finalDocUrl = publicUrlData.publicUrl;
+                            setPermanentDocumentUrl(finalDocUrl);
+                        }
+                    }
+                } catch (upErr) {
+                    console.warn('Error subiendo adjunto:', upErr);
+                }
+            }
+
+            const todayStr = new Date().toLocaleDateString('es-CO');
+            const ocText = importValidation?.poNumber ? `OC: ${importValidation.poNumber}` : '';
+            const solpedText = importValidation?.solpedNumber ? `SOLPED: ${importValidation.solpedNumber}` : '';
+            const refDetails = [ocText, solpedText].filter(Boolean).join(' | ');
+
+            const existingNotes = targetOrder.admin_notes || '';
+            const regularizedNote = `[Regularizado con Documento ${refDetails ? `(${refDetails})` : ''} el ${todayStr}]`;
+            const updatedAdminNotes = existingNotes.includes(regularizedNote) 
+                ? existingNotes 
+                : `${existingNotes} | ${regularizedNote}`.trim();
+
+            const updatePayload: any = {
+                admin_notes: updatedAdminNotes
+            };
+            if (finalDocUrl) {
+                updatePayload.document_url = finalDocUrl;
+            }
+
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update(updatePayload)
+                .eq('id', targetOrder.id);
+
+            if (updateError) throw updateError;
+
+            showToast(`✅ ¡Pedido #${targetOrder.sequence_id || targetOrder.id.slice(0, 8)} vinculado y actualizado correctamente con la OC!`, 'success');
+            
+            setIsStaging(false);
+            setStagedItems([]);
+            setDuplicateOrderMatch(null);
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+                setUploadedFileUrl(null);
+            }
+            setUploadedFile(null);
+        } catch (err: any) {
+            console.error('Error al vincular orden duplicada:', err);
+            showToast(`❌ Error al vincular el pedido: ${err.message || err}`, 'error');
+        } finally {
+            setIsLinkingDuplicate(false);
+        }
+    };
+
     const parseOrderWithAI = async (file: File) => {
         setParsingFile(true);
         const startTime = performance.now();
@@ -2542,6 +2741,9 @@ function CreateOrderContent() {
             setDigestionModel(data._modelUsed || 'gemini-2.5-flash');
 
             const detectedPo = data.poNumber || null;
+            const detectedSolped = data.solpedNumber || null;
+            const detectedOrderType = data.orderTypeLabel || null;
+            const detectedCodes = Array.isArray(data.referencedCodes) ? data.referencedCodes : [];
             const detectedDate = data.deliveryDateInDocument || null;
 
             // Inicializar fechas para pedidos relacionados si se detecta entrega diferida
@@ -2558,8 +2760,15 @@ function CreateOrderContent() {
                 isMatch: !!isMatch,
                 documentType: data.documentType || (file.name.endsWith('.pdf') ? 'PDF' : 'Documento'),
                 poNumber: detectedPo,
+                solpedNumber: detectedSolped,
+                orderTypeLabel: detectedOrderType,
+                referencedCodes: detectedCodes,
                 deliveryDateInDocument: detectedDate
             });
+
+            // Disparar chequeo de duplicidad y referencias cruzadas en tiempo real
+            const targetProfileId = autoMatchedProfile?.id || selectedClient || null;
+            checkForDuplicateOrders(targetProfileId, detectedPo, detectedSolped, detectedCodes);
 
             setStagedItems(suggested);
             setIsStaging(true);
@@ -2729,6 +2938,18 @@ function CreateOrderContent() {
                 URL.revokeObjectURL(uploadedFileUrl);
                 setUploadedFileUrl(null);
             }
+            if (importValidation?.poNumber || importValidation?.solpedNumber) {
+                const poTokens: string[] = [];
+                if (importValidation.poNumber) poTokens.push(`OC: ${importValidation.poNumber}`);
+                if (importValidation.solpedNumber) poTokens.push(`SOLPED: ${importValidation.solpedNumber}`);
+                const poPrefix = poTokens.join(' | ');
+                setAdminNotes(prev => {
+                    if (!prev) return poPrefix;
+                    if (prev.includes(poPrefix)) return prev;
+                    return `${poPrefix} | ${prev}`;
+                });
+            }
+
             if (mergedCount > 0) {
                 showToast(`✅ Se inyectaron ${itemsToInject.length - mergedCount} productos y se consolidaron ${mergedCount} cantidades duplicadas.`, 'success');
             } else {
@@ -2790,7 +3011,10 @@ function CreateOrderContent() {
 
             const targetClient = getSelectedClientDetails();
             const clientName = targetClient?.company_name || targetClient?.contact_name || 'Cliente';
-            const poNum = importValidation?.poNumber ? `OC: ${importValidation.poNumber}` : 'OC S/N';
+            const poTokens: string[] = [];
+            if (importValidation?.poNumber) poTokens.push(`OC: ${importValidation.poNumber}`);
+            if (importValidation?.solpedNumber) poTokens.push(`SOLPED: ${importValidation.solpedNumber}`);
+            const poNum = poTokens.length > 0 ? poTokens.join(' | ') : 'OC S/N';
             const secondarySchedule = group2Items[0]?.deliverySchedule || 'Entrega Diferida';
 
             const buildOrderPayload = (itemsGroup: any[], targetDate: string, deliveryLabel: string) => {
@@ -3331,6 +3555,18 @@ function CreateOrderContent() {
     };
 
     // Filters & Helpers
+    // Re-evaluar duplicidad si el analista cambia el cliente seleccionado mientras la Mesa de Trabajo está activa
+    useEffect(() => {
+        if (isStaging && selectedClient && (importValidation?.poNumber || importValidation?.solpedNumber || (importValidation?.referencedCodes && importValidation.referencedCodes.length > 0))) {
+            checkForDuplicateOrders(
+                selectedClient, 
+                importValidation.poNumber || null, 
+                importValidation.solpedNumber || null, 
+                importValidation.referencedCodes || []
+            );
+        }
+    }, [selectedClient, isStaging]);
+
     const filteredProducts = useMemo(() => {
         if (!productSearch || productSearch.trim().length < 2) return [];
 
@@ -4702,6 +4938,110 @@ function CreateOrderContent() {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Banner Inteligente de Detección de Duplicidad / Regularización Institucional */}
+                                    {duplicateOrderMatch && (
+                                        <div style={{
+                                            margin: '0.75rem 1.5rem',
+                                            padding: '1.25rem 1.5rem',
+                                            backgroundColor: '#FEF2F2',
+                                            border: '2px solid #EF4444',
+                                            borderRadius: '16px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: '1.25rem',
+                                            flexWrap: 'wrap',
+                                            boxShadow: '0 4px 16px rgba(239, 68, 68, 0.12)'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: '1 1 500px' }}>
+                                                <div style={{ backgroundColor: '#FEE2E2', padding: '12px', borderRadius: '14px', color: '#B91C1C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <AlertTriangle size={28} strokeWidth={2.5} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontWeight: '900', color: '#991B1B', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <span>🚨 Posible Duplicidad o Regularización Detectada</span>
+                                                        <span style={{ backgroundColor: '#FECACA', color: '#991B1B', padding: '2px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '800' }}>
+                                                            {duplicateOrderMatch.matchType}: {duplicateOrderMatch.matchedCode}
+                                                        </span>
+                                                        {isCheckingDuplicates && (
+                                                            <span style={{ fontSize: '0.75rem', color: '#B91C1C', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Validando...
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.88rem', color: '#7F1D1D', marginTop: '4px', lineHeight: 1.4 }}>
+                                                        El documento referencia el código <b>{duplicateOrderMatch.matchedCode}</b>, el cual ya fue registrado previamente en el <b>Pedido #{duplicateOrderMatch.order.sequence_id || duplicateOrderMatch.order.id.slice(0, 8)}</b> (${(duplicateOrderMatch.order.total || 0).toLocaleString('es-CO')}) creado el <b>{new Date(duplicateOrderMatch.order.created_at).toLocaleDateString('es-CO')}</b> (Estado: <i>{duplicateOrderMatch.order.status}</i>).
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                <a
+                                                    href={`/admin/orders/${duplicateOrderMatch.order.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{
+                                                        backgroundColor: '#FFFFFF',
+                                                        color: '#991B1B',
+                                                        border: '1.5px solid #F87171',
+                                                        borderRadius: '10px',
+                                                        padding: '8px 14px',
+                                                        fontSize: '0.84rem',
+                                                        fontWeight: '800',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                                    }}
+                                                >
+                                                    <Eye size={15} /> Ver Pedido #{duplicateOrderMatch.order.sequence_id || duplicateOrderMatch.order.id.slice(0, 6)}
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    disabled={isLinkingDuplicate}
+                                                    onClick={handleLinkDuplicateOrder}
+                                                    style={{
+                                                        backgroundColor: '#DC2626',
+                                                        color: '#FFFFFF',
+                                                        border: 'none',
+                                                        borderRadius: '10px',
+                                                        padding: '8px 16px',
+                                                        fontSize: '0.84rem',
+                                                        fontWeight: '900',
+                                                        cursor: isLinkingDuplicate ? 'not-allowed' : 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)'
+                                                    }}
+                                                >
+                                                    <Link2 size={15} /> {isLinkingDuplicate ? 'Vinculando...' : `Vincular a Pedido #${duplicateOrderMatch.order.sequence_id || duplicateOrderMatch.order.id.slice(0, 6)}`}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (window.confirm(`¿Confirmas que deseas ignorar la advertencia y crear un pedido nuevo e independiente para ${duplicateOrderMatch.matchedCode}?`)) {
+                                                            setDuplicateOrderMatch(null);
+                                                            showToast('Advertencia de duplicidad ignorada por el operador.', 'info');
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        backgroundColor: 'transparent',
+                                                        color: '#9CA3AF',
+                                                        border: '1px solid #E5E7EB',
+                                                        borderRadius: '10px',
+                                                        padding: '8px 12px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Ignorar y Crear Nuevo
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Banner Inteligente de Detección Multi-Entrega */}
                                     {(() => {

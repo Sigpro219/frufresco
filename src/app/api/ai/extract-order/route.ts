@@ -83,9 +83,11 @@ export async function POST(req: Request) {
       4. Identifica si hay un TELÉFONO de contacto.
       5. Identifica si hay un número de CÉDULA o NIT.
       6. Determina el tipo de documento.
-      7. Identifica el NÚMERO DE ORDEN DE COMPRA (PO Number / Orden de Compra N°), frecuentemente en la cabecera (ej. "Y001 2208", "OC-5542", etc.).
-      8. Identifica la FECHA DE ENTREGA principal mencionada en la cabecera (ej. "FECHA DE ENTREGA: 12/09/2026").
-      9. DETECCIÓN CRÍTICA DE ENTREGAS DIFERIDAS O DÍAS ESPECÍFICOS:
+      7. Identifica el NÚMERO DE ORDEN DE COMPRA (PO Number / Orden de Compra N° / Orden de Pedido), frecuentemente en la cabecera (ej. "Y001 2208", "OC-5542", "4500123456", "90023451", etc.).
+      8. Identifica el NÚMERO DE SOLICITUD DE PEDIDO (SOLPED / Solicitud de Compra / Requerimiento), comúnmente etiquetado como "SOLPED", "Sol. Pedido", "Requerimiento", etc. (ej. "1008745", "4100987").
+      9. Identifica TODOS LOS CÓDIGOS DE REFERENCIA (referencedCodes): Extrae una lista de cadenas con todos los números de documento, OC, SOLPED o pedidos cruzados encontrados en el encabezado, notas, cuerpo o pie de página (ej. ["90023451", "1008745", "Y001 2208"]).
+      10. Identifica la FECHA DE ENTREGA principal mencionada en la cabecera (ej. "FECHA DE ENTREGA: 12/09/2026").
+      11. DETECCIÓN CRÍTICA DE ENTREGAS DIFERIDAS O DÍAS ESPECÍFICOS:
          - Revisa detenidamente la columna de "ESPECIFICACIONES", "OBSERVACIONES" o notas de cada fila.
          - Si una fila dice expresamente que es para otro día o fecha (ej. "PARA MARTES", "PARA EL LUNES", "ENTREGA MIÉRCOLES", "15/09", etc.), extrae el nombre del día en mayúsculas en el campo "deliverySchedule" (ej. "MARTES"). Si no indica un día diferente, deja "deliverySchedule" en null.
          - Mantén la observación completa en el campo "observations" (ej. "PARA MARTES Amarillo", "Bonito, amarillo", "medianas, maduras").
@@ -99,6 +101,9 @@ export async function POST(req: Request) {
       {
         "clientInDocument": "Nombre del Cliente Detectado",
         "poNumber": "Número de Orden de Compra o null",
+        "solpedNumber": "Número de SOLPED / Solicitud de Pedido o null",
+        "orderTypeLabel": "ORDEN DE COMPRA / SOLICITUD DE PEDIDO / ORDEN DE PEDIDO / OTRO",
+        "referencedCodes": ["Código 1", "Código 2"],
         "deliveryDateInDocument": "Fecha de Entrega de cabecera o null",
         "addressInDocument": "Dirección Extraída o null",
         "phoneInDocument": "Teléfono Extraído o null",

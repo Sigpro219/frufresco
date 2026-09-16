@@ -522,15 +522,12 @@ export async function POST(req: Request) {
           try {
             const buffer = Buffer.from(base64Data, 'base64');
             const workbook = XLSX.read(buffer, { type: 'buffer' });
-            let allRows: any[] = [];
+            let csvContent = '';
             for (const sheetName of workbook.SheetNames) {
-              const worksheet = workbook.Sheets[sheetName];
-              const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-              const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
-              if (validRows.length > 0) allRows = allRows.concat([[`--- HOJA: ${sheetName} ---`]], validRows);
+              csvContent += `\n--- HOJA: ${sheetName} ---\n`;
+              csvContent += XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
             }
-            const aiRows = allRows.slice(0, 30);
-            attExcelTextContext = JSON.stringify(aiRows);
+            attExcelTextContext = csvContent;
 
             // ═══════════════════════════════════════════════════════════════
             // MOTOR INTELIGENTE DE PARSING DE EXCEL (Multi-Estrategia)
@@ -905,9 +902,14 @@ export async function POST(req: Request) {
           """
           CONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:
           ${attExcelTextContext}
+
           TAREA:
-          1. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el correo y el Excel.
-          2. IMPORTANTE EN EXCEL: Extrae la lista completa de productos del Excel/CSV en la propiedad 'items' (con 'originalName', 'quantity', 'unit' y 'observations' si aplica) para que sirva como respaldo por si nuestro lector automático rápido llega a fallar. Además, extrae los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType').
+          1. Identifica el nombre o empresa del CLIENTE matriz, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega.
+          2. Extrae la lista completa de productos del Excel/CSV en la propiedad 'items':
+             - "originalName": Nombre comercial del alimento en español limpio (ej. "AGUACATE", "AJO", "APIO", "BANANO CRIOLLO", "CEBOLLA CABEZONA BLANCA", "CILANTRO"). NUNCA uses columnas de códigos PLU, ID, CÓDIGO o números como el nombre del producto; extrae SIEMPRE la descripción o nombre del producto en español.
+             - "quantity": Cantidad numérica solicitada mayor a cero. Si hay columnas para una sede o destino específico (ej. "JARDIN RICAURTE"), toma la cantidad indicada para ese destino.
+             - "unit": Unidad de medida o presentación exacta ("KG", "UND", "UNIDAD", "KILO", "BOLSA", etc.).
+             - "observations": Código PLU, especificación de calidad o corte si existe.
           3. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
           4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
           5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" o null.
@@ -922,7 +924,7 @@ export async function POST(req: Request) {
             "deliveryDate": "YYYY-MM-DD o null",
             "clientType": "b2b_client o b2c_client",
             "items": [
-              { "originalName": "Nombre del producto", "quantity": 10, "unit": "Kg", "observations": null, "deliveryDate": "YYYY-MM-DD o null" }
+              { "originalName": "AGUACATE", "quantity": 4, "unit": "KILO", "observations": "PLU 33", "deliveryDate": "YYYY-MM-DD o null" }
             ]
           }
           `;
@@ -944,10 +946,10 @@ export async function POST(req: Request) {
               });
             };
 
-            if (attProgrammaticExcelItems.length > 0) {
-              attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
-            } else if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
+            if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
               attExtractedData.items = filterExcelItems(attExtractedData.items, attExtractedData.clientInDocument || '');
+            } else if (attProgrammaticExcelItems.length > 0) {
+              attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
             } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
                 attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));

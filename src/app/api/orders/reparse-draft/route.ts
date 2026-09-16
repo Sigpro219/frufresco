@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
+import { fetchGeminiExtraction, findBestProductMatchDetails } from '@/lib/orders/order-parser-engine';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       attachmentsList.push({ url: attachmentUrl, name: attachmentName });
     }
 
-    // 1. Process each attachment independently
+    // 1. Process each attachment with Gemini Multimodal / Structured LLM Engine
     for (let attIdx = 0; attIdx < attachmentsList.length; attIdx++) {
       const att = attachmentsList[attIdx];
       try {
@@ -72,128 +72,85 @@ export async function POST(req: Request) {
         const fileBuf = await fileRes.arrayBuffer();
         const ext = (att.name || '').split('.').pop()?.toLowerCase() || '';
 
-        if (ext === 'xlsx' || ext === 'xls') {
+        if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
           const workbook = XLSX.read(fileBuf, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 }) as any[][];
-          if (!rawData || rawData.length === 0) continue;
+          let csvContent = "";
+          workbook.SheetNames.forEach(sheetName => {
+            csvContent += `\n--- Hoja: ${sheetName} ---\n`;
+            csvContent += XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+          });
 
-          let poNumber = '';
-          let headerRowIdx = -1;
-          const qtyCandidates: number[] = [];
-          let nameCol = -1;
-          let unitCol = -1;
-          let obsCol = -1;
-          let pluCol = -1;
+          const prompt = `Eres un asistente experto en logística para FruFresco.
+Analiza este archivo Excel adjunto ("${att.name}") y extrae la orden de compra de alimentos (Fruver y abarrotes).
 
-          // Scan top rows for metadata (PEDIDO, OC, DIRECCION, etc.)
-          for (let r = 0; r < Math.min(15, rawData.length); r++) {
-            const rowStr = (rawData[r] || []).map(c => String(c || '')).join(' ');
-            const poMatch = rowStr.match(/PEDIDO:\s*([0-9A-Za-z-]+)/i) || rowStr.match(/OC:\s*([0-9A-Za-z-]+)/i);
-            if (poMatch && !poNumber) poNumber = poMatch[1].trim();
+TAREA:
+1. Identifica el nombre o razón social del CLIENTE comprador principal en "clientName" (frecuentemente en encabezado o sucursal matriz).
+2. Identifica si hay un número de NIT o Cédula en "nit".
+3. Identifica la DIRECCIÓN de entrega o envío en "address".
+4. Identifica la FECHA DE ENTREGA principal en "deliveryDate".
+5. Identifica el NÚMERO DE ORDEN DE COMPRA (OC / OP / SOLPED / Pedido) en "purchaseOrder".
+6. Extrae todos los productos solicitados en "items":
+   - "name": Nombre comercial del producto en español limpio (ej. "AGUACATE", "AJO", "APIO", "BANANO CRIOLLO", "CEBOLLA CABEZONA BLANCA", "CILANTRO"). NUNCA uses códigos numéricos (como columnas PLU, ID, CÓDIGO o EAN) como el nombre del producto; extrae SIEMPRE la descripción o nombre en español del alimento.
+   - "quantity": Cantidad numérica mayor a cero (ej. 4, 0.5, 70, 6). Si hay columnas para una sede o destino específico (ej. "JARDIN RICAURTE"), toma la cantidad indicada para ese destino.
+   - "unit": Unidad de medida o presentación exacta (ej. "KG", "UND", "UNIDAD", "KILO", "BOLSA", "LBS", etc.).
+   - "observations": Cualquier nota de especificación, calidad, corte, madurez, código PLU/código del cliente o entrega diferida.
 
-            if (headerRowIdx === -1) {
-              const rowLower = rowStr.toLowerCase();
-              if ((rowLower.includes('plu') || rowLower.includes('prod') || rowLower.includes('articulo')) && 
-                  (rowLower.includes('cant') || rowLower.includes('total') || rowLower.includes('pedido') || rowLower.includes('ubm'))) {
-                headerRowIdx = r;
-                const headerRow = rawData[r] || [];
-                headerRow.forEach((c: any, cIdx: number) => {
-                  const s = String(c || '').toLowerCase().trim();
-                  if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s === 'qty' || s === 'total' || s.includes('total') || s.includes('solic')) {
-                    qtyCandidates.push(cIdx);
-                  } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo') || s.includes('item')) {
-                    nameCol = cIdx;
-                  } else if (s === 'ubm' || s.includes('unidad') || s === 'und' || s === 'u.m' || s.includes('medida')) {
-                    unitCol = cIdx;
-                  } else if (s.includes('observ') || s.includes('nota')) {
-                    obsCol = cIdx;
-                  } else if (s.includes('plu') || s.includes('codigo') || s.includes('cod') || s === 'id') {
-                    pluCol = cIdx;
-                  }
+REGLAS CRÍTICAS:
+- Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
+- Las cantidades deben ser números.
+- Ignora filas de totales, resúmenes o productos con cantidad 0 o vacía.
+
+FORMATO DE RESPUESTA ESPERADO:
+{
+  "clientName": "...",
+  "nit": "...",
+  "address": "...",
+  "deliveryDate": "...",
+  "purchaseOrder": "...",
+  "items": [
+    { "name": "AGUACATE", "quantity": 4, "unit": "KILO", "observations": "PLU 33" }
+  ]
+}
+
+CONTENIDO DEL ARCHIVO EXCEL EN FORMATO CSV:
+${csvContent}`;
+
+          const gJson = await fetchGeminiExtraction(apiKey, prompt);
+          if (gJson && Array.isArray(gJson.items) && gJson.items.length > 0) {
+            if (!extractedData.clientName && gJson.clientName) extractedData.clientName = gJson.clientName;
+            if (!extractedData.nit && gJson.nit) extractedData.nit = gJson.nit;
+            if (!extractedData.address && gJson.address) extractedData.address = gJson.address;
+            if (!extractedData.deliveryDate && gJson.deliveryDate) extractedData.deliveryDate = gJson.deliveryDate;
+
+            gJson.items.forEach((it: any) => {
+              if (it && it.name && !isNaN(Number(it.quantity)) && Number(it.quantity) > 0) {
+                extractedData.items.push({
+                  name: String(it.name).trim(),
+                  quantity: Number(it.quantity),
+                  unit: it.unit || 'Kg',
+                  observations: it.observations || '',
+                  source_attachment_name: att.name,
+                  purchase_order: gJson.purchaseOrder || undefined,
+                  attachment_index: attIdx
                 });
-              }
-            }
-          }
-
-          // Auto-select best qty column with positive numbers
-          let qtyCol = -1;
-          if (qtyCandidates.length > 0) {
-            let bestCount = -1;
-            qtyCandidates.forEach(candCol => {
-              let posCount = 0;
-              for (let r = (headerRowIdx !== -1 ? headerRowIdx + 1 : 0); r < rawData.length; r++) {
-                const val = rawData[r]?.[candCol];
-                if (val !== undefined && val !== null && String(val).trim() !== '') {
-                  const num = parseFloat(String(val).replace(',', '.').replace(/[^0-9.]/g, ''));
-                  if (!isNaN(num) && num > 0) posCount++;
-                }
-              }
-              if (posCount > bestCount) {
-                bestCount = posCount;
-                qtyCol = candCol;
+                parsedSuccessfully = true;
               }
             });
-          }
-
-          if (headerRowIdx !== -1 && nameCol !== -1) {
-            for (let r = headerRowIdx + 1; r < rawData.length; r++) {
-              const row = rawData[r] || [];
-              let qtyNum: number | null = null;
-
-              if (qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
-                const rawVal = String(row[qtyCol]).trim();
-                const num = parseFloat(rawVal.replace(',', '.').replace(/[^0-9.]/g, ''));
-                if (!isNaN(num) && num > 0) qtyNum = num;
-              }
-
-              if (qtyNum === null) {
-                for (const candCol of qtyCandidates) {
-                  if (candCol === qtyCol) continue;
-                  const cVal = row[candCol];
-                  if (cVal !== undefined && cVal !== null && String(cVal).trim() !== '') {
-                    const num = parseFloat(String(cVal).replace(',', '.').replace(/[^0-9.]/g, ''));
-                    if (!isNaN(num) && num > 0) {
-                      qtyNum = num;
-                      break;
-                    }
-                  }
-                }
-              }
-
-              if (qtyNum !== null && qtyNum > 0) {
-                const rawName = String(row[nameCol] || '').trim();
-                const rawUnit = unitCol !== -1 ? String(row[unitCol] || '').trim() : 'Kg';
-                const rawObs = obsCol !== -1 ? String(row[obsCol] || '').trim() : '';
-                if (rawName) {
-                  extractedData.items.push({
-                    name: rawName,
-                    quantity: qtyNum,
-                    unit: rawUnit || 'Kg',
-                    observations: rawObs,
-                    source_attachment_name: att.name,
-                    purchase_order: poNumber || undefined,
-                    attachment_index: attIdx
-                  } as any);
-                  parsedSuccessfully = true;
-                }
-              }
-            }
           }
         } else if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
           const base64 = Buffer.from(fileBuf).toString('base64');
           const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
-          const prompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
-Extrae la información del documento "${att.name}" en formato JSON estricto:
-- clientName: Razón social del cliente o empresa compradora.
+          const prompt = `Eres un asistente experto en digitalización de órdenes de compra B2B de alimentos para FruFresco.
+Analiza este documento adjunto ("${att.name}") y extrae la orden de compra en formato JSON estricto:
+- clientName: Razón social del cliente o empresa compradora matriz.
 - nit: NIT o documento de identificación fiscal.
 - address: Dirección de entrega completa.
 - deliveryDate: Fecha de entrega solicitada (formato YYYY-MM-DD o DD/MM/YYYY).
-- purchaseOrder: Número de orden de compra o pedido si está presente.
+- purchaseOrder: Número de orden de compra (OC, OP, SOLPED) si está presente.
 - items: Lista de productos ordenados. Ignora filas con cantidad 0 o vacías.
 Cada item debe tener:
-  * name: Nombre comercial del producto limpio.
+  * name: Nombre comercial del producto limpio en español. NUNCA uses códigos PLU o IDs como nombre.
   * quantity: Número decimal o entero mayor a cero.
   * unit: Unidad de medida (Kg, Uds, Atado, Bandeja, etc.).
   * observations: Notas, especificaciones (madurez, corte, calibre) si existen.
@@ -218,14 +175,19 @@ Responde ÚNICAMENTE en JSON válido:
             if (!extractedData.deliveryDate && gJson.deliveryDate) extractedData.deliveryDate = gJson.deliveryDate;
 
             gJson.items.forEach((it: any) => {
-              extractedData.items.push({
-                ...it,
-                source_attachment_name: att.name,
-                purchase_order: gJson.purchaseOrder || undefined,
-                attachment_index: attIdx
-              });
+              if (it && it.name && !isNaN(Number(it.quantity)) && Number(it.quantity) > 0) {
+                extractedData.items.push({
+                  name: String(it.name).trim(),
+                  quantity: Number(it.quantity),
+                  unit: it.unit || 'Kg',
+                  observations: it.observations || '',
+                  source_attachment_name: att.name,
+                  purchase_order: gJson.purchaseOrder || undefined,
+                  attachment_index: attIdx
+                });
+                parsedSuccessfully = true;
+              }
             });
-            parsedSuccessfully = true;
           }
         }
       } catch (attErr) {
@@ -241,7 +203,7 @@ Responde ÚNICAMENTE en JSON válido:
         }, { status: 400 });
       }
 
-      const textPrompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
+      const textPrompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos para FruFresco.
 FECHA ACTUAL: ${new Date().toISOString().split('T')[0]}
 
 ASUNTO DEL CORREO: "${emailSubject}"
@@ -256,9 +218,10 @@ Extrae la información en formato JSON estricto:
 - nit: NIT o documento fiscal si está presente.
 - address: Dirección física de entrega limpia.
 - deliveryDate: Fecha de entrega solicitada (formato YYYY-MM-DD o DD/MM/YYYY).
+- purchaseOrder: Número de orden de compra o pedido si existe.
 - items: Lista de productos solicitados con cantidad mayor a cero.
 Cada item debe tener:
-  * name: Nombre comercial del producto limpio.
+  * name: Nombre comercial del producto limpio en español.
   * quantity: Número decimal o entero mayor a cero.
   * unit: Unidad de medida (Kg, Uds, Atado, Bandeja, etc.).
   * observations: Notas o especificaciones de calidad si existen.
@@ -269,6 +232,7 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
   "nit": "...",
   "address": "...",
   "deliveryDate": "...",
+  "purchaseOrder": "...",
   "items": [
     { "name": "...", "quantity": 10, "unit": "Kg", "observations": "..." }
   ]
@@ -284,40 +248,40 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     // Load active products catalog for automatic SKU matching
     const { data: allProducts } = await supabase
       .from('products')
-      .select('id, name, sku, unit_of_measure');
+      .select('id, name, sku, unit_of_measure, base_price, weight_kg, options_config')
+      .eq('is_active', true);
 
     const productCatalog = allProducts || [];
 
+    // Load client exceptions / nicknames memory if profile is assigned
+    let learnedMemory: any[] = [];
+    if (draft.profile_id) {
+      const { data: memData } = await supabase
+        .from('product_nicknames')
+        .select('*')
+        .eq('customer_id', draft.profile_id);
+      if (memData) learnedMemory = memData;
+    }
+
     const cleanItems = (extractedData.items || []).filter(it => it.quantity > 0).map(it => {
       const itName = it.name.trim();
-      let bestMatch: any = null;
-      let bestScore = 0;
-
-      for (const p of productCatalog) {
-        const pName = p.name.toLowerCase();
-        const search = itName.toLowerCase();
-        if (pName === search) {
-          bestMatch = p;
-          bestScore = 100;
-          break;
-        }
-        if (pName.includes(search) || search.includes(pName)) {
-          bestMatch = p;
-          bestScore = 90;
-        }
-      }
+      const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory);
+      const matchedProd = matchResult.product;
 
       return {
         originalName: itName,
-        name: bestMatch ? bestMatch.name : itName,
+        name: matchedProd ? matchedProd.name : itName,
         quantity: it.quantity,
-        unit: it.unit || bestMatch?.unit_of_measure || 'Kg',
-        matched_product_id: bestMatch ? bestMatch.id : null,
-        confidenceScore: bestScore,
+        unit: it.unit || matchedProd?.unit_of_measure || 'Kg',
+        matched_product_id: matchedProd ? matchedProd.id : null,
+        confidenceScore: matchResult.confidenceScore,
+        confidence: matchResult.confidence,
+        matchSource: matchResult.matchSource,
+        matchReason: matchResult.matchReason,
         observations: it.observations || '',
         searchQuery: itName,
-        skuQuery: bestMatch ? bestMatch.id : '',
-        isConfirmed: !!bestMatch,
+        skuQuery: matchedProd ? matchedProd.id : '',
+        isConfirmed: !!matchedProd,
         source_attachment_name: (it as any).source_attachment_name,
         purchase_order: (it as any).purchase_order,
         attachment_index: (it as any).attachment_index
