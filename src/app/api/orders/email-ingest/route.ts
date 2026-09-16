@@ -208,6 +208,43 @@ export async function POST(req: Request) {
             return;
           }
 
+          // 2. DEDUPLICACIÓN INTELIGENTE (Anti-rebote de 5 minutos)
+          // Si ya existe un borrador reciente para este mismo remitente y asunto similar,
+          // ignorar este envío duplicado para no crear registros dobles.
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          const cleanSubjectForDedupe = (cleanSubject || subject || '').trim();
+
+          const { data: existingRecentDrafts } = await supabaseAdmin
+            .from('order_drafts')
+            .select('id, email_subject, created_at')
+            .eq('source_email', senderEmail)
+            .gte('created_at', fiveMinutesAgo)
+            .neq('id', mailId || '');
+
+          if (existingRecentDrafts && existingRecentDrafts.length > 0) {
+            const isDuplicate = existingRecentDrafts.some((d: any) => {
+              const prevSub = (d.email_subject || '')
+                .replace(/^\[EML-[A-Z0-9]+\]\s*/i, '')
+                .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
+                .replace(/^\[Adjunto\s+\d+\/\d+\]\s*/i, '')
+                .replace(/^\[Pedido\s+\d+\/\d+\]\s*/i, '')
+                .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
+                .trim();
+              const currSub = cleanSubjectForDedupe
+                .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
+                .trim();
+              return prevSub.toLowerCase() === currSub.toLowerCase();
+            });
+
+            if (isDuplicate) {
+              console.log(`[Email Inbound] Deduplicación: Se detectó correo duplicado reciente de ${senderEmail} con asunto "${cleanSubjectForDedupe}". Abortando creación.`);
+              if (mailId) {
+                await supabaseAdmin.from('order_drafts').delete().eq('id', mailId);
+              }
+              return;
+            }
+          }
+
           // Determine if the email was sent to our corporate email address (which is normal for orders)
           let recipientEmail = toField;
           const matchTo = toField.match(/<([^>]+)>/);

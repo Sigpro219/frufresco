@@ -43,92 +43,99 @@ function procesarPedidosEntrantes() {
     const thread = threads[t];
     const messages = thread.getMessages();
 
-    for (let m = 0; m < messages.length; m++) {
-      const message = messages[m];
+    // Encontrar el mensaje no leído más reciente (o el que traiga adjuntos)
+    const unreadMessages = messages.filter(function(m) { return m.isUnread(); });
+    if (unreadMessages.length === 0) {
+      thread.addLabel(label);
+      continue;
+    }
 
-      // Procesar solo mensajes no leídos
-      if (!message.isUnread()) {
-        continue;
+    // Si hay varios mensajes no leídos en el hilo, priorizar el que tenga adjuntos o el último
+    let message = unreadMessages[unreadMessages.length - 1];
+    for (let u = 0; u < unreadMessages.length; u++) {
+      if (unreadMessages[u].getAttachments().length > 0) {
+        message = unreadMessages[u];
+        break;
       }
+    }
 
-      const subject = message.getSubject() || 'Sin Asunto';
-      const from = message.getFrom();
-      const to = message.getTo();
-      const plainBody = message.getPlainBody() || '';
-      const htmlBody = message.getBody() || '';
-      const rawAttachments = message.getAttachments();
+    const subject = message.getSubject() || 'Sin Asunto';
+    const from = message.getFrom();
+    const to = message.getTo();
+    const plainBody = message.getPlainBody() || '';
+    const htmlBody = message.getBody() || '';
+    const rawAttachments = message.getAttachments();
 
-      console.log('Procesando correo de: ' + from + ' | Asunto: "' + subject + '" | Adjuntos: ' + rawAttachments.length);
+    console.log('Procesando correo de: ' + from + ' | Asunto: "' + subject + '" | Adjuntos: ' + rawAttachments.length);
 
-      // 3. Ignorar automáticamente spam técnico o newsletters antes de gastar recursos
-      const ignorePattern = /noreply|no-reply|mailer-daemon|github|vercel|supabase|googleplay|googleone|resend\.com/i;
-      if (ignorePattern.test(from) || ignorePattern.test(subject)) {
-        console.log('Ignorando correo de notificación/sistema: ' + from);
-        message.markRead();
-        thread.addLabel(label);
-        continue;
+    // 3. Ignorar automáticamente spam técnico o newsletters antes de gastar recursos
+    const ignorePattern = /noreply|no-reply|mailer-daemon|github|vercel|supabase|googleplay|googleone|resend\.com/i;
+    if (ignorePattern.test(from) || ignorePattern.test(subject)) {
+      console.log('Ignorando correo de notificación/sistema: ' + from);
+      thread.markRead();
+      thread.addLabel(label);
+      continue;
+    }
+
+    // 4. Convertir archivos adjuntos (PDFs, Excels, imágenes) a Base64
+    const attachments = [];
+    for (let a = 0; a < rawAttachments.length; a++) {
+      const att = rawAttachments[a];
+      try {
+        const base64Content = Utilities.base64Encode(att.getBytes());
+        attachments.push({
+          filename: att.getName(),
+          file_name: att.getName(),
+          content_type: att.getContentType(),
+          content: base64Content
+        });
+        console.log(' - Adjunto codificado: ' + att.getName() + ' (' + Math.round(att.getSize() / 1024) + ' KB)');
+      } catch (attErr) {
+        console.error('Error codificando adjunto ' + att.getName() + ': ' + attErr.message);
       }
+    }
 
-      // 4. Convertir archivos adjuntos (PDFs, Excels, imágenes) a Base64
-      const attachments = [];
-      for (let a = 0; a < rawAttachments.length; a++) {
-        const att = rawAttachments[a];
-        try {
-          const base64Content = Utilities.base64Encode(att.getBytes());
-          attachments.push({
-            filename: att.getName(),
-            file_name: att.getName(),
-            content_type: att.getContentType(),
-            content: base64Content
-          });
-          console.log(' - Adjunto codificado: ' + att.getName() + ' (' + Math.round(att.getSize() / 1024) + ' KB)');
-        } catch (attErr) {
-          console.error('Error codificando adjunto ' + att.getName() + ': ' + attErr.message);
-        }
-      }
+    // 5. Estructurar payload en formato compatible con /api/orders/email-ingest
+    const payload = {
+      headers: {
+        subject: subject,
+        from: from,
+        to: to,
+        date: message.getDate().toISOString()
+      },
+      envelope: {
+        from: from,
+        to: to
+      },
+      plain: plainBody,
+      html: htmlBody,
+      attachments: attachments
+    };
 
-      // 5. Estructurar payload en formato compatible con /api/orders/email-ingest
-      const payload = {
-        headers: {
-          subject: subject,
-          from: from,
-          to: to,
-          date: message.getDate().toISOString()
-        },
-        envelope: {
-          from: from,
-          to: to
-        },
-        plain: plainBody,
-        html: htmlBody,
-        attachments: attachments
+    // 6. Enviar HTTP POST a FruFresco
+    try {
+      const options = {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
       };
 
-      // 6. Enviar HTTP POST a FruFresco
-      try {
-        const options = {
-          method: 'post',
-          contentType: 'application/json',
-          payload: JSON.stringify(payload),
-          muteHttpExceptions: true
-        };
+      const response = UrlFetchApp.fetch(FRUFRESCO_WEBHOOK_URL, options);
+      const statusCode = response.getResponseCode();
+      const responseText = response.getContentText();
 
-        const response = UrlFetchApp.fetch(FRUFRESCO_WEBHOOK_URL, options);
-        const statusCode = response.getResponseCode();
-        const responseText = response.getContentText();
+      console.log('Respuesta de FruFresco: HTTP ' + statusCode);
 
-        console.log('Respuesta de FruFresco: HTTP ' + statusCode);
-
-        if (statusCode >= 200 && statusCode < 300) {
-          console.log('✅ Pedido procesado exitosamente por FruFresco.');
-          message.markRead();
-          thread.addLabel(label);
-        } else {
-          console.error('⚠️ FruFresco devolvió error ' + statusCode + ': ' + responseText);
-        }
-      } catch (postErr) {
-        console.error('Error enviando petición a FruFresco: ' + postErr.message);
+      if (statusCode >= 200 && statusCode < 300) {
+        console.log('✅ Pedido procesado exitosamente por FruFresco.');
+        thread.markRead();
+        thread.addLabel(label);
+      } else {
+        console.error('⚠️ FruFresco devolvió error ' + statusCode + ': ' + responseText);
       }
+    } catch (postErr) {
+      console.error('Error enviando petición a FruFresco: ' + postErr.message);
     }
   }
 }
