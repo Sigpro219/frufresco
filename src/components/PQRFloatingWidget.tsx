@@ -94,29 +94,35 @@ export default function PQRFloatingWidget() {
         }
     }, [isOpen]);
 
-    // Upload photo to Supabase Storage
+    // Upload photo to Supabase Storage with resilient fallback
     const uploadImage = async (file: File): Promise<string | null> => {
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+            const fileExt = file.name.split('.').pop() || 'jpg';
+            const fileName = `pqr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
             const filePath = `evidence/${fileName}`;
 
-            const { error: uploadError } = await supabase.storage
-                .from('evidence-photos')
-                .upload(filePath, file);
+            const buckets = ['product-images', 'evidence-photos', 'order-attachments'];
+            for (const bucket of buckets) {
+                try {
+                    const { error: uploadError } = await supabase.storage
+                        .from(bucket)
+                        .upload(filePath, file, { contentType: file.type, upsert: true });
 
-            if (uploadError) {
-                console.warn('Evidence bucket upload failed, trying fallback:', uploadError);
-                return null;
+                    if (!uploadError) {
+                        const { data } = supabase.storage
+                            .from(bucket)
+                            .getPublicUrl(filePath);
+                        if (data?.publicUrl) return data.publicUrl;
+                    } else {
+                        console.warn(`Upload to ${bucket} failed:`, uploadError);
+                    }
+                } catch (bErr) {
+                    console.warn(`Error trying bucket ${bucket}:`, bErr);
+                }
             }
-
-            const { data } = supabase.storage
-                .from('evidence-photos')
-                .getPublicUrl(filePath);
-
-            return data?.publicUrl || null;
+            return null;
         } catch (e) {
-            console.error('Image upload error:', e);
+            console.error('Image upload exception:', e);
             return null;
         }
     };
