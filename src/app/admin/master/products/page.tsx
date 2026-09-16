@@ -366,7 +366,7 @@ export default function MasterProductsPage() {
                 Tipo_Jerarquia: (p.parent_id === p.id) ? 'PADRE E HIJO' : (p.parent_id ? 'HIJO' : (products.some(other => other.parent_id === p.id) ? 'PADRE' : 'PRINCIPAL')),
                 IVA: p.iva_rate ?? 19,
                 URL_Imagen: p.image_url || '',
-                Comprador: p.buying_team || '',
+                Grupo_Alistamiento: p.buying_team || '',
                 Metodo_Compra: p.procurement_method || '',
                 Activo: p.is_active ? 'SI' : 'NO',
                 Web: p.show_on_web ? 'SI' : 'NO',
@@ -421,7 +421,7 @@ export default function MasterProductsPage() {
             ["1. Productos", "Unidad", "SÍ", "Texto", "Unidad base física (ej: Kg, G, Lb, Lt, Un, Atado, Bulto)"],
             ["1. Productos", "IVA", "SÍ", "Número", "Porcentaje de IVA aplicable (0, 5, 19)"],
             ["1. Productos", "URL_Imagen", "NO", "Texto", "Enlace público HTTP de la foto principal"],
-            ["1. Productos", "Comprador", "NO", "Texto", "Equipo de alistamiento asignado (ej: EQUIPO B FRUTAS Y OTROS)"],
+            ["1. Productos", "Grupo_Alistamiento", "NO", "Texto", "Equipo de alistamiento asignado (ej: ALISTAMIENTO FRUTAS DE ALTA DEMANDA, ALISTAMIENTO VERDURAS)"],
             ["1. Productos", "Metodo_Compra", "NO", "Texto", "Tipo de compra: 'COMPRAS GENERALES', 'COMPRAS MENORES', 'COMPRAS NOCHE'"],
             ["1. Productos", "Activo", "SÍ", "SI/NO", "Estado de disponibilidad maestro en el ERP"],
             ["1. Productos", "Web", "SÍ", "SI/NO", "Estado de publicación en el e-commerce B2C"],
@@ -961,7 +961,7 @@ export default function MasterProductsPage() {
                             base_price: parseNum(row.Costo_Base || row.base_price, 0),
                             iva_rate: parseIntNum(row.IVA || row.iva_rate, 19),
                             image_url: (row.URL_Imagen && row.URL_Imagen.toString() !== '0') ? row.URL_Imagen.toString() : null,
-                            buying_team: (row.Comprador || row.buying_team || '').toString() || null,
+                            buying_team: (row.Grupo_Alistamiento || row['Grupo de Alistamiento'] || row.Grupo_alistamiento || row.Comprador || row.buying_team || '').toString() || null,
                             procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString() || null,
                             is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
                             show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
@@ -1022,7 +1022,7 @@ export default function MasterProductsPage() {
         // Tab 1: Productos Base (sin campos de precio estáticos)
         const headers = [
             "SKU", "ID_CONTABLE", "Nombre", "Nombre_EN", "Descripcion", "Descripcion_EN", 
-            "Categoria", "Unidad", "IVA", "URL_Imagen", "Comprador", 
+            "Categoria", "Unidad", "IVA", "URL_Imagen", "Grupo_Alistamiento", 
             "Metodo_Compra", "Activo", "Web", "Nombre_Web", "Unidad_Web", "Factor_Web", 
             "Peso_Logistico_Kg", "Requiere_Etiqueta", "Min_Inventario", "ID_PADRE", "Merma_Teorica_Pct", "Razones_Desperdicio", 
             "Grupo_Inventario", "Sublista_Compra", "Tags", "Keywords", "Desviacion_Utilidad_Pct", 
@@ -1031,7 +1031,7 @@ export default function MasterProductsPage() {
         
         const sample1 = [
             "M-FR-MNZ-K", "101", "Manzana Roja", "Red Apple", "Manzana fresca seleccionada de alta calidad", "Fresh red apple selected...", 
-            "FR", "Kg", 0, "https://images.com/manzana.jpg", "EQUIPO B FRUTAS Y OTROS", 
+            "FR", "Kg", 0, "https://images.com/manzana.jpg", "ALISTAMIENTO FRUTAS DE ALTA DEMANDA", 
             "COMPRAS GENERALES", "SI", "SI", "Manzana Roja Web", "Kg", 1.0, 
             0.1, "NO", 10, "", 2.5, "Daño por transporte,Madurez excesiva", 
             "INVENTARIO DE FRUTAS Y OTROS", "FRUTA SELECCIONADA", "frescos,fruta,roja", "manzana,apple,red", 0, 
@@ -1040,7 +1040,7 @@ export default function MasterProductsPage() {
 
         const sample2 = [
             "M-VE-CBL-K", "102", "Cebolla Cabezona", "White Onion", "Cebolla cabezona blanca seleccionada", "Fresh white onion...", 
-            "VE", "Kg", 0, "", "LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO", 
+            "VE", "Kg", 0, "", "ALISTAMIENTO VERDURAS", 
             "COMPRAS GENERALES", "SI", "SI", "Cebolla Cabezona Web", "Kg", 1.0, 
             0.1, "NO", 20, "", 1.8, "Deshidratación", 
             "INVENTARIO DE VERDURAS", "VERDURAS", "verduras,cebolla", "cebolla,onion", 0, 
@@ -1062,7 +1062,7 @@ export default function MasterProductsPage() {
             ["Unidad", "SÍ", "Texto", "Unidad base física (ej: Kg, G, Lb, Lt, Un, Atado, Bulto)"],
             ["IVA", "SÍ", "Número", "Porcentaje de IVA aplicable (0, 5, 19)"],
             ["URL_Imagen", "NO", "Texto", "Enlace público HTTP de la foto principal"],
-            ["Comprador", "NO", "Texto", "Equipo de alistamiento asignado (ej: EQUIPO B FRUTAS Y OTROS, HIERBAS Y HORTALIZAS)"],
+            ["Grupo_Alistamiento", "NO", "Texto", "Equipo de alistamiento asignado (ej: ALISTAMIENTO FRUTAS DE ALTA DEMANDA, ALISTAMIENTO VERDURAS, ALISTAMIENTO HORTALIZAS)"],
             ["Metodo_Compra", "NO", "Texto", "Tipo de compra: 'COMPRAS GENERALES', 'COMPRAS MENORES', 'COMPRAS NOCHE'"],
             ["Activo", "SÍ", "SI/NO", "Estado de disponibilidad maestro en el ERP"],
             ["Web", "SÍ", "SI/NO", "Estado de publicación en el e-commerce B2C"],
@@ -1223,18 +1223,28 @@ export default function MasterProductsPage() {
                     );
                     if (categoryEntry && p.category === categoryEntry[0]) return true;
 
-                    // Filtro Logística/Compras (@alistamiento, @equipo...)
+                    // Filtro Logística, Inventario, Compras y Clasificación (@inventario..., @alistamiento..., @sublista...)
+                    if (p.inventory_group?.toLowerCase().includes(tag)) return true;
+                    if (p.purchase_sublist?.toLowerCase().includes(tag)) return true;
                     if (p.buying_team?.toLowerCase().includes(tag)) return true;
                     if (p.procurement_method?.toLowerCase().includes(tag)) return true;
+                    if (p.keywords?.toLowerCase().includes(tag)) return true;
+                    if (Array.isArray(p.tags) && p.tags.some(t => t?.toLowerCase().includes(tag))) return true;
 
                     return false;
                 }
 
-                // 3. Lógica de TEXTO normal
+                // 3. Lógica de TEXTO normal (búsqueda por nombre, sku, ID, inventario, alistamiento, sublista)
                 return (
                     p.name?.toLowerCase().includes(factor) ||
                     p.sku?.toLowerCase().includes(factor) ||
-                    p.accounting_id?.toString().includes(factor)
+                    p.accounting_id?.toString().includes(factor) ||
+                    p.inventory_group?.toLowerCase().includes(factor) ||
+                    p.buying_team?.toLowerCase().includes(factor) ||
+                    p.purchase_sublist?.toLowerCase().includes(factor) ||
+                    p.procurement_method?.toLowerCase().includes(factor) ||
+                    p.display_name?.toLowerCase().includes(factor) ||
+                    p.keywords?.toLowerCase().includes(factor)
                 );
             });
 

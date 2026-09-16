@@ -572,21 +572,19 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
                                         <option value="">SELECCIONAR EQUIPO...</option>
-                                        <option value="AGUACATES">AGUACATES</option>
-                                        <option value="ALISTAMIENTO ABARROTES">ALISTAMIENTO ABARROTES</option>
+                                        <option value="ALISTAMIENTO ABARROTES Y FRUTOS SECOS">ALISTAMIENTO ABARROTES Y FRUTOS SECOS</option>
+                                        <option value="ALISTAMIENTO AGUACATES">ALISTAMIENTO AGUACATES</option>
                                         <option value="ALISTAMIENTO BATAVIA">ALISTAMIENTO BATAVIA</option>
-                                        <option value="ALISTAMIENTO EN SECO PAPAS">ALISTAMIENTO EN SECO PAPAS</option>
-                                        <option value="ALISTAMIENTO EN SECO PLATANOS">ALISTAMIENTO EN SECO PLATANOS</option>
-                                        <option value="ALISTAMIENTO EN SECO TOMATE">ALISTAMIENTO EN SECO TOMATE</option>
-                                        <option value="ALISTAMIENTO FRUTOS SECOS">ALISTAMIENTO FRUTOS SECOS</option>
+                                        <option value="ALISTAMIENTO FRESAS Y MORAS">ALISTAMIENTO FRESAS Y MORAS</option>
+                                        <option value="ALISTAMIENTO FRUTAS DE ALTA DEMANDA">ALISTAMIENTO FRUTAS DE ALTA DEMANDA</option>
+                                        <option value="ALISTAMIENTO FRUTAS DE BAJA DEMANDA">ALISTAMIENTO FRUTAS DE BAJA DEMANDA</option>
+                                        <option value="ALISTAMIENTO HORTALIZAS">ALISTAMIENTO HORTALIZAS</option>
+                                        <option value="ALISTAMIENTO LACTEOS Y REFRIGERADOS">ALISTAMIENTO LACTEOS Y REFRIGERADOS</option>
+                                        <option value="ALISTAMIENTO PAPAS Y TUBERCULOS">ALISTAMIENTO PAPAS Y TUBERCULOS</option>
+                                        <option value="ALISTAMIENTO PLATANOS">ALISTAMIENTO PLATANOS</option>
                                         <option value="ALISTAMIENTO PROCESADOS">ALISTAMIENTO PROCESADOS</option>
-                                        <option value="EQUIPO A VEGETALES">EQUIPO A VEGETALES</option>
-                                        <option value="EQUIPO B FRUTAS Y OTROS">EQUIPO B FRUTAS Y OTROS</option>
-                                        <option value="FRESAS Y MORA">FRESAS Y MORA</option>
-                                        <option value="FRUTA BAJA DEMANDA">FRUTA BAJA DEMANDA</option>
-                                        <option value="HIERBAS Y HORTALIZAS">HIERBAS Y HORTALIZAS</option>
-                                        <option value="LACTEOS Y REFRIGERADOS">LACTEOS Y REFRIGERADOS</option>
-                                        <option value="LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO">LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO</option>
+                                        <option value="ALISTAMIENTO TOMATES">ALISTAMIENTO TOMATES</option>
+                                        <option value="ALISTAMIENTO VERDURAS">ALISTAMIENTO VERDURAS</option>
                                     </select>
                                 </div>
                                 <div>
@@ -634,6 +632,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     >
                                         <option value="">SELECCIONAR GRUPO...</option>
                                         <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
+                                        <option value="INVENTARIO DE FRESAS Y MORAS">INVENTARIO DE FRESAS Y MORAS</option>
                                         <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
                                         <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
                                         <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>

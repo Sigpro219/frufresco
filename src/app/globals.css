@@ -311,3 +311,17 @@ input:-webkit-autofill:active {
   }
 }
 
+/* Hide duplicate native browser date picker icons */
+.hide-native-date-picker-indicator::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  cursor: pointer;
+}
+.hide-native-date-picker-indicator::-webkit-inner-spin-button {
+  display: none !important;
+  -webkit-appearance: none !important;
+}
+

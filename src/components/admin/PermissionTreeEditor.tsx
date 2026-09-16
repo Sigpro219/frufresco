@@ -201,21 +201,19 @@ export const permissionTree: TreeNode[] = [
         children: [
           { id: 'ops.picking.terminal', label: '2.5.1 Terminal de Alistamiento (Básculas)', level: 3 },
           { id: 'ops.picking.dashboard', label: '2.5.2 Tablero de Eficiencia del Equipo', level: 3 },
-          { id: 'ops.picking.category:AGUACATES', label: '2.5.3 Mesa: Aguacates', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO ABARROTES', label: '2.5.4 Mesa: Abarrotes', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO ABARROTES Y FRUTOS SECOS', label: '2.5.3 Mesa: Abarrotes y Frutos Secos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO AGUACATES', label: '2.5.4 Mesa: Aguacates', level: 4 },
           { id: 'ops.picking.category:ALISTAMIENTO BATAVIA', label: '2.5.5 Mesa: Batavia', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PAPAS', label: '2.5.6 Mesa: Seco Papas', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PLATANOS', label: '2.5.7 Mesa: Seco Plátanos', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO EN SECO TOMATE', label: '2.5.8 Mesa: Seco Tomate', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO FRUTOS SECOS', label: '2.5.9 Mesa: Frutos Secos', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO PROCESADOS', label: '2.5.10 Mesa: Procesados', level: 4 },
-          { id: 'ops.picking.category:EQUIPO A VEGETALES', label: '2.5.11 Mesa: Equipo A Vegetales', level: 4 },
-          { id: 'ops.picking.category:EQUIPO B FRUTAS Y OTROS', label: '2.5.12 Mesa: Equipo B Frutas', level: 4 },
-          { id: 'ops.picking.category:FRESAS Y MORA', label: '2.5.13 Mesa: Fresas y Mora', level: 4 },
-          { id: 'ops.picking.category:FRUTA BAJA DEMANDA', label: '2.5.14 Mesa: Fruta Baja Demanda', level: 4 },
-          { id: 'ops.picking.category:HIERBAS Y HORTALIZAS', label: '2.5.15 Mesa: Hierbas y Hortalizas', level: 4 },
-          { id: 'ops.picking.category:LACTEOS Y REFRIGERADOS', label: '2.5.16 Mesa: Lácteos y Refrigerados', level: 4 },
-          { id: 'ops.picking.category:LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO', label: '2.5.17 Mesa: Lavado / Cebolla / Pepino', level: 4 }
+          { id: 'ops.picking.category:ALISTAMIENTO FRESAS Y MORAS', label: '2.5.6 Mesa: Fresas y Moras', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO FRUTAS DE ALTA DEMANDA', label: '2.5.7 Mesa: Frutas de Alta Demanda', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO FRUTAS DE BAJA DEMANDA', label: '2.5.8 Mesa: Frutas de Baja Demanda', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO HORTALIZAS', label: '2.5.9 Mesa: Hortalizas', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO LACTEOS Y REFRIGERADOS', label: '2.5.10 Mesa: Lácteos y Refrigerados', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO PAPAS Y TUBERCULOS', label: '2.5.11 Mesa: Papas y Tubérculos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO PLATANOS', label: '2.5.12 Mesa: Plátanos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO PROCESADOS', label: '2.5.13 Mesa: Procesados', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO TOMATES', label: '2.5.14 Mesa: Tomates', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO VERDURAS', label: '2.5.15 Mesa: Verduras', level: 4 }
         ]
       },
       {

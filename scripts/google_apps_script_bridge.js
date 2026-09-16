@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ============================================================================
  * PUENTE DE INGESTA ILIMITADA DE PEDIDOS - FRUFRESCO
  * ============================================================================
@@ -28,10 +28,9 @@ function procesarPedidosEntrantes() {
     label = GmailApp.createLabel(LABEL_PROCESSED);
   }
 
-  // 2. Buscar correos no leídos en la bandeja de entrada
-  // Filtra correos no leídos que NO tengan aún la etiqueta de procesado
-  const searchQuery = 'label:inbox is:unread -label:' + LABEL_PROCESSED;
-  const threads = GmailApp.search(searchQuery, 0, 15);
+  // 2. Buscar SOLO correos no leídos de las últimas 24 horas que NO tengan la etiqueta
+  const searchQuery = 'label:inbox is:unread newer_than:1d -label:' + LABEL_PROCESSED;
+  const threads = GmailApp.search(searchQuery, 0, 10);
 
   if (threads.length === 0) {
     console.log('No hay correos nuevos pendientes por procesar.');

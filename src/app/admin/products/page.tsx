@@ -744,7 +744,9 @@ export default function AdminProductsPage() {
                         );
                         if (categoryEntry && p.category === categoryEntry[0]) return true;
 
-                        // Filtro Logística/Compras (@alistamiento, @equipo...)
+                        // Filtro Logística, Inventario y Compras (@inventario..., @alistamiento..., @sublista...)
+                        if (p.inventory_group?.toLowerCase().includes(tag)) return true;
+                        if (p.purchase_sublist?.toLowerCase().includes(tag)) return true;
                         if (p.buying_team?.toLowerCase().includes(tag)) return true;
                         if (p.procurement_method?.toLowerCase().includes(tag)) return true;
 
@@ -762,7 +764,10 @@ export default function AdminProductsPage() {
                     return (
                         p.name?.toLowerCase().includes(factor) ||
                         p.sku?.toLowerCase().includes(factor) ||
-                        (p.accounting_id && String(p.accounting_id).toLowerCase().includes(factor))
+                        (p.accounting_id && String(p.accounting_id).toLowerCase().includes(factor)) ||
+                        p.inventory_group?.toLowerCase().includes(factor) ||
+                        p.buying_team?.toLowerCase().includes(factor) ||
+                        p.purchase_sublist?.toLowerCase().includes(factor)
                     );
                 });
             });

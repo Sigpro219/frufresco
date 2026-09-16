@@ -4,11 +4,9 @@ const nextConfig = {
     // !! URGENTE: Ignorar errores de tipos para desbloquear despliegue inicial !!
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     formats: ['image/avif', 'image/webp'],
+    qualities: [70, 75],
     minimumCacheTTL: 2592000,
     deviceSizes: [360, 480, 640, 750, 828, 1080, 1200],
     imageSizes: [32, 64, 96, 128, 256, 384],

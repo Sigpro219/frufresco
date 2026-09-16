@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { 
@@ -783,6 +783,282 @@ const GmailMessageViewer = ({
   );
 };
 
+const formatFilterDateLabel = (dateStr: string) => {
+  if (!dateStr) return 'Todas las fechas';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const d = new Date(year, month, day);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(year, month, day);
+  target.setHours(0, 0, 0, 0);
+
+  const isToday = target.getTime() === today.getTime();
+  const monthName = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+  
+  if (isToday) {
+    return `Hoy (${day} ${monthName})`;
+  }
+  return `${day} ${monthName} ${year !== today.getFullYear() ? year : ''}`.trim();
+};
+
+const formatDeliveryDateLabel = (dateStr: string) => {
+  if (!dateStr) return 'Seleccionar fecha';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const d = new Date(year, month, day);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const target = new Date(year, month, day);
+  target.setHours(0, 0, 0, 0);
+
+  const isToday = target.getTime() === today.getTime();
+  const isTomorrow = target.getTime() === tomorrow.getTime();
+
+  const weekdayName = d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '');
+  const monthName = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+  const capitalizedWeekday = weekdayName.charAt(0).toUpperCase() + weekdayName.slice(1);
+
+  if (isToday) return `Hoy (${day} ${monthName})`;
+  if (isTomorrow) return `Mañana (${day} ${monthName})`;
+  return `${capitalizedWeekday}, ${day} ${monthName}`;
+};
+
+interface ClientSearchComboboxProps {
+  initialQuery?: string;
+  profiles: any[];
+  parentMatrixIds: Set<string>;
+  matrixClientsMap: Map<string, any>;
+  onSelectClient: (profile: any) => void;
+  onClose: () => void;
+}
+
+const ClientSearchCombobox = React.memo(function ClientSearchCombobox({
+  initialQuery = '',
+  profiles,
+  parentMatrixIds,
+  matrixClientsMap,
+  onSelectClient,
+  onClose
+}: ClientSearchComboboxProps) {
+  const [query, setQuery] = useState(initialQuery);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  const filteredClients = useMemo(() => {
+    if (!query || query.trim().length < 2) {
+      return profiles.filter(c => !parentMatrixIds.has(c.id)).slice(0, 15);
+    }
+    const q = query.toLowerCase().trim();
+
+    const matchedParentMatrixIds = new Set<string>();
+    profiles.forEach(c => {
+      if (parentMatrixIds.has(c.id)) {
+        const nameMatch = (c.company_name?.toLowerCase() || '').includes(q);
+        const nitMatch = (c.nit?.toString() || '').includes(q);
+        if (nameMatch || nitMatch) matchedParentMatrixIds.add(c.id);
+      }
+    });
+
+    const deliverableClients = profiles.filter(c => !parentMatrixIds.has(c.id));
+
+    const groupA: any[] = [];
+    const groupB: any[] = [];
+
+    deliverableClients.forEach(c => {
+      const isDirectMatch = (c.company_name?.toLowerCase() || '').includes(q) ||
+                            (c.contact_name?.toLowerCase() || '').includes(q) ||
+                            (c.nit?.toString() || '').includes(q) ||
+                            (c.address?.toLowerCase() || '').includes(q) ||
+                            (c.phone?.toString() || '').includes(q) ||
+                            (c.contact_phone?.toString() || '').includes(q);
+
+      if (c.parent_id && matchedParentMatrixIds.has(c.parent_id)) {
+        groupA.push({ ...c, isDirectSearchedBranch: isDirectMatch });
+      } else if (isDirectMatch) {
+        groupB.push(c);
+      }
+    });
+
+    return [...groupA, ...groupB].slice(0, 25);
+  }, [profiles, query, parentMatrixIds]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (filteredClients.length === 0) {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIndex(prev => {
+        const next = Math.min(prev + 1, filteredClients.length - 1);
+        document.getElementById(`client-search-item-${next}`)?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIndex(prev => {
+        const next = Math.max(prev - 1, 0);
+        document.getElementById(`client-search-item-${next}`)?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      const target = filteredClients[focusedIndex >= 0 ? focusedIndex : 0];
+      if (target) {
+        e.preventDefault();
+        onSelectClient(target);
+      }
+    } else if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  return (
+    <div 
+      ref={containerRef}
+      style={{
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        marginTop: '8px',
+        width: '460px',
+        maxHeight: '390px',
+        backgroundColor: 'white',
+        borderRadius: '14px',
+        boxShadow: '0 20px 40px -8px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.08)',
+        border: '1px solid #CBD5E1',
+        zIndex: 10000,
+        padding: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1.5px solid #3B82F6' }}>
+        <Search size={16} color="#3B82F6" />
+        <input
+          ref={inputRef}
+          type="text"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="Buscar Empresa, Sucursal, NIT, Dirección..."
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value);
+            setFocusedIndex(0);
+          }}
+          onKeyDown={handleKeyDown}
+          style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.88rem', fontWeight: 600, color: '#0F172A' }}
+        />
+        {query && (
+          <button 
+            type="button" 
+            onClick={() => {
+              setQuery('');
+              setFocusedIndex(0);
+              inputRef.current?.focus();
+            }} 
+            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center', padding: '2px' }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      <div style={{ overflowY: 'auto', maxHeight: '310px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {filteredClients.length === 0 ? (
+          <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '0.84rem' }}>
+            No se encontraron clientes para &quot;{query}&quot;
+          </div>
+        ) : (
+          filteredClients.map((p: any, pIdx: number) => {
+            const isFocused = pIdx === focusedIndex;
+            const parentMatrix = p.parent_id ? matrixClientsMap.get(p.parent_id) : null;
+            const isDirectBranch = Boolean(p.isDirectSearchedBranch && parentMatrix);
+
+            return (
+              <div
+                key={p.id}
+                id={`client-search-item-${pIdx}`}
+                onClick={() => onSelectClient(p)}
+                onMouseEnter={() => setFocusedIndex(pIdx)}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  backgroundColor: isFocused ? '#DBEAFE' : (isDirectBranch ? '#F0FDF4' : 'transparent'),
+                  borderLeft: isFocused ? '4px solid #2563EB' : '4px solid transparent',
+                  borderBottom: '1px solid #F1F5F9',
+                  transition: 'all 0.1s ease'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ fontWeight: isFocused ? 800 : 700, color: isFocused ? '#1E3A8A' : '#0F172A', fontSize: '0.86rem' }}>
+                    {p.company_name || p.contact_name}
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {p.is_active === false && (
+                      <span style={{ fontSize: '0.66rem', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                        Inactiva
+                      </span>
+                    )}
+                    {parentMatrix && (
+                      <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                        Sucursal
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {parentMatrix && (
+                  <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600, marginTop: '2px' }}>
+                    Matriz: {parentMatrix.company_name}
+                  </div>
+                )}
+
+                <div style={{ fontSize: '0.74rem', color: isFocused ? '#1E40AF' : '#64748B', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {p.nit && <span><strong>NIT:</strong> {p.nit}</span>}
+                  {p.address && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><MapPin size={11} color="#64748B" /> {p.address} {p.city ? `(${p.city})` : ''}</span>}
+                  {p.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Phone size={11} color="#64748B" /> {p.phone}</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+});
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -1406,8 +1682,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [profiles, setProfiles] = useState<any[]>([]);
-  const [clientSearchQuery, setClientSearchQuery] = useState('');
-  const [focusedClientSearchIndex, setFocusedClientSearchIndex] = useState<number>(-1);
+  const mainDateInputRef = useRef<HTMLInputElement>(null);
+  const deliveryDateInputRef = useRef<HTMLInputElement>(null);
 
   const matchedProfile = selectedDraft ? profiles.find(p => p.id === selectedDraft.profile_id) : null;
 
@@ -1426,44 +1702,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
     return map;
   }, [profiles]);
-
-  const filteredClientProfiles = useMemo(() => {
-    if (!clientSearchQuery || clientSearchQuery.trim().length < 2) {
-      return profiles.filter(c => !parentMatrixIds.has(c.id)).slice(0, 15);
-    }
-    const query = clientSearchQuery.toLowerCase().trim();
-
-    const matchedParentMatrixIds = new Set<string>();
-    profiles.forEach(c => {
-      if (parentMatrixIds.has(c.id)) {
-        const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
-        const nitMatch = (c.nit?.toString() || '').includes(query);
-        if (nameMatch || nitMatch) matchedParentMatrixIds.add(c.id);
-      }
-    });
-
-    const deliverableClients = profiles.filter(c => !parentMatrixIds.has(c.id));
-
-    const groupA: any[] = [];
-    const groupB: any[] = [];
-
-    deliverableClients.forEach(c => {
-      const isDirectMatch = (c.company_name?.toLowerCase() || '').includes(query) ||
-                            (c.contact_name?.toLowerCase() || '').includes(query) ||
-                            (c.nit?.toString() || '').includes(query) ||
-                            (c.address?.toLowerCase() || '').includes(query) ||
-                            (c.phone?.toString() || '').includes(query) ||
-                            (c.contact_phone?.toString() || '').includes(query);
-
-      if (c.parent_id && matchedParentMatrixIds.has(c.parent_id)) {
-        groupA.push({ ...c, isDirectSearchedBranch: isDirectMatch });
-      } else if (isDirectMatch) {
-        groupB.push(c);
-      }
-    });
-
-    return [...groupA, ...groupB].slice(0, 20);
-  }, [profiles, clientSearchQuery, parentMatrixIds]);
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const quantityInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const firstModalSelectRef = useRef<HTMLSelectElement | null>(null);
@@ -1484,7 +1722,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [tempDeliveryMargin, setTempDeliveryMargin] = useState(30);
   const [showFormulaTooltip, setShowFormulaTooltip] = useState(false);
 
-  // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 1 (Tope Absoluto, 0px)
+  // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 2 (dejando 1 fila de contexto arriba)
   const scrollToDraftRow = (targetIdx: number) => {
     setTimeout(() => {
       const container = document.getElementById('email-draft-scroll-container');
@@ -1496,10 +1734,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return;
       }
 
-      // Anclaje al Tope Absoluto (Renglón 1) usando offsetTop físico de la fila
+      // Anclaje al Renglón 2 (dejando 1 fila de contexto arriba para ergonomía operativa)
       const thead = container.querySelector('thead');
       const theadHeight = thead ? thead.clientHeight : 35;
-      const targetScroll = Math.max(0, row.offsetTop - theadHeight);
+      const prevRow = document.getElementById(`draft-row-${targetIdx - 1}`);
+      const slotOffset = prevRow ? prevRow.offsetHeight : 68;
+      const targetScroll = Math.max(0, row.offsetTop - theadHeight - slotOffset);
 
       container.scrollTo({
         top: targetScroll,
@@ -1528,14 +1768,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   }, [activeDropdownRowIndex, focusedDropdownItemIndex]);
 
-  useEffect(() => {
-    if (isClientSearchOpen && focusedClientSearchIndex >= 0) {
-      const el = document.getElementById(`client-search-item-${focusedClientSearchIndex}`);
-      if (el) {
-        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    }
-  }, [isClientSearchOpen, focusedClientSearchIndex]);
 
   useEffect(() => {
     if (selectedDraft) {
@@ -1952,6 +2184,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     newEdits[rowIndex].selected_options = autoSelectedOptions;
     newEdits[rowIndex].observations = finalObservations;
     
+    // Guardar preferencia inmediata para este cliente y término
+    if (typeof window !== 'undefined' && product?.id) {
+      const clientName = selectedDraft?.client_detected_name || 'default';
+      let cleanName = rawOriginalName;
+      if (cleanName) {
+        cleanName = cleanName
+          .replace(/^[0-9]+(?:[\.,][0-9]+)?(?:\s*(?:kg|kls?|kilos?|g|gr|gramos?|litros?|l|lbs?|libras?|unidades?|uds?|unds?|paquetes?))?\s+(?:de\s+)?/i, '')
+          .replace(/^(libras?\s+de\s+|libra\s+de\s+|unidades?\s+de\s+|litros?\s+de\s+|paquetes?\s+de\s+)/i, '')
+          .trim();
+      }
+      if (cleanName) {
+        localStorage.setItem(`frufresco_pref_${clientName}_${cleanName}`, product.id);
+        localStorage.setItem(`frufresco_pref_${clientName}_${rawOriginalName.toLowerCase().trim()}`, product.id);
+      }
+    }
+
     setEditableItems(newEdits);
     setActiveSearchRowIndex(null);
   };
@@ -2494,7 +2742,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setEditableClientEmail(profile.email || profile.contact_email || '');
     }
     setIsClientSearchOpen(false);
-    setClientSearchQuery('');
     showToast(`Cliente asignado: ${clientName}`, 'success');
   };
 
@@ -3465,10 +3712,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const fetchDrafts = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
+      // Regla de retención: Solo cargar borradores de los últimos 30 días para máxima velocidad y limpieza
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const minDateIso = thirtyDaysAgo.toISOString();
+
       const { data, error } = await supabase
         .from('order_drafts')
         .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
         .in('status', ['pending', 'approved', 'rejected'])
+        .gte('created_at', minDateIso)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -3570,9 +3823,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         setEditableAddress(meta.address || '');
       }
       
-      const initialClientName = matchedProfile ? (matchedProfile.company_name || matchedProfile.contact_name || '') : (selectedDraft.client_detected_name || '');
-      setClientSearchQuery(initialClientName);
-      
       setEditableClientName(selectedDraft.client_detected_name || '');
       setEditableClientPhone(meta.phone && meta.phone !== 'No detectado' ? meta.phone : '');
       setEditableClientNit(meta.nit && meta.nit !== 'No detectado' ? meta.nit : '');
@@ -3599,8 +3849,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         let matchedId = item.matched_product_id || null;
         
-        // Load preference from memory/localStorage first
-        if (typeof window !== 'undefined') {
+        // Si el ítem no viene previamente emparejado, buscar en preferencias de memoria o predicción
+        if (!matchedId && typeof window !== 'undefined') {
           const clientName = selectedDraft.client_detected_name || 'default';
           const prefKey = `frufresco_pref_${clientName}_${cleanName}`;
           const savedPrefId = localStorage.getItem(prefKey);
@@ -3698,7 +3948,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }
         }
 
-        let finalQty = parseFloat((initialQty * conversionFactor).toFixed(3));
+        let finalQty = item.quantity !== undefined && item.quantity !== null && item.matched_product_id
+          ? parseFloat(Number(item.quantity).toFixed(3))
+          : parseFloat((initialQty * conversionFactor).toFixed(3));
 
         return {
             ...item,
@@ -3709,10 +3961,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             originalUnit: parsedUnit,
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
+            isConfirmed: item.isConfirmed || Boolean(item.matched_product_id),
             name: prod ? prod.name : cleanName,
             searchQuery: prod ? `${prod.name} (${getAccountingIdDisplay(prod)})` : '',
             skuQuery: prod?.sku || '',
-            unit: finalUnit,
+            unit: item.unit || finalUnit,
             observations: (() => {
               let extraDescription = '';
               if (prod && prod.name) {
@@ -4860,22 +5113,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       // 3. Update the draft's extracted_items to include our manual edits
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
       
+      const formattedCurrentItems = editableItems.map(itm => ({
+        name: itm.name || itm.originalName,
+        originalName: itm.originalName,
+        quantity: itm.quantity,
+        unit: itm.unit,
+        matched_product_id: itm.matched_product_id,
+        observations: itm.observations,
+        selected_options: itm.selected_options,
+        isDeleted: itm.isDeleted,
+        deliveryDate: itm.deliveryDate || deliveryDate
+      }));
+
       let updatedAttachments = metaItem.attachments && Array.isArray(metaItem.attachments) ? [...metaItem.attachments] : [];
       if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
         updatedAttachments[selectedAttachmentIndex] = {
           ...updatedAttachments[selectedAttachmentIndex],
           deliveryDate: deliveryDate,
           deliverySlot: editableDeliverySlot || metaItem.deliverySlot || 'AM',
-          items: editableItems.map(itm => ({
-            name: itm.name || itm.originalName,
-            originalName: itm.originalName,
-            quantity: itm.quantity,
-            unit: itm.unit,
-            matched_product_id: itm.matched_product_id,
-            observations: itm.observations,
-            selected_options: itm.selected_options,
-            isDeleted: itm.isDeleted
-          }))
+          items: formattedCurrentItems
         };
       }
 
@@ -4892,12 +5148,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         attachments: updatedAttachments.length > 0 ? updatedAttachments : undefined
       };
       
-      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
-        if (itm.isMetadata) {
-          return updatedMetaItem;
-        }
-        return itm;
-      });
+      // Si el borrador no usa attachments divididos, actualizamos directamente los items planos
+      const updatedExtractedItems = [
+        updatedMetaItem,
+        ...formattedCurrentItems
+      ];
 
       await supabase
         .from('order_drafts')
@@ -5215,75 +5470,59 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   };
 
-  const filteredDrafts = drafts.filter(draft => {
-    // 1. Search Query
-    const matchesSearch = searchQuery === '' || 
-      draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.email_subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.email_body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getDraftMetadata(draft).address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.id.toLowerCase().includes(searchQuery.toLowerCase());
+  const { draftsBeforeStatusFilter, filteredDrafts, countAll, countPending, countApproved, countRejected } = useMemo(() => {
+    const beforeStatus = drafts.filter(draft => {
+      const matchesSearch = searchQuery === '' || 
+        draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        draft.email_subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        draft.email_body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        getDraftMetadata(draft).address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        draft.id.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // 2. Date Filter
-    let matchesDate = true;
-    if (selectedDate) {
-      const draftDate = new Date(draft.created_at).toISOString().split('T')[0];
-      matchesDate = draftDate === selectedDate;
-    }
+      let matchesDate = true;
+      if (selectedDate) {
+        const draftDate = new Date(draft.created_at).toISOString().split('T')[0];
+        matchesDate = draftDate === selectedDate;
+      }
 
-    // 3. Channel Filter
-    let matchesChannel = true;
-    if (selectedChannel === 'email') {
-      matchesChannel = true; // All are email inbound
-    }
+      let matchesChannel = true;
+      if (selectedChannel === 'email') {
+        matchesChannel = true;
+      }
 
-    // 4. Status Filter
-    let matchesStatus = true;
-    const meta = getDraftMetadata(draft);
-    const isDraftApproved = draft.status === 'approved' || Boolean(meta.orderId);
-    const isDraftPending = draft.status === 'pending' && !meta.orderId;
-    const isDraftRejected = draft.status === 'rejected';
+      return matchesSearch && matchesDate && matchesChannel;
+    });
 
-    if (selectedStatus === 'pending') {
-      matchesStatus = isDraftPending;
-    } else if (selectedStatus === 'approved') {
-      matchesStatus = isDraftApproved;
-    } else if (selectedStatus === 'rejected') {
-      matchesStatus = isDraftRejected;
-    }
+    let pendingCount = 0;
+    let approvedCount = 0;
+    let rejectedCount = 0;
 
-    return matchesSearch && matchesDate && matchesChannel && matchesStatus;
-  });
+    const filtered = beforeStatus.filter(draft => {
+      const meta = getDraftMetadata(draft);
+      const isDraftApproved = draft.status === 'approved' || Boolean(meta.orderId);
+      const isDraftPending = draft.status === 'pending' && !meta.orderId;
+      const isDraftRejected = draft.status === 'rejected';
 
-  // Calculate status counts ignoring status filter itself to show counts dynamically in sidebar cards
-  const draftsBeforeStatusFilter = drafts.filter(draft => {
-    const matchesSearch = searchQuery === '' || 
-      draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.email_subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.email_body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getDraftMetadata(draft).address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.id.toLowerCase().includes(searchQuery.toLowerCase());
+      if (isDraftPending) pendingCount++;
+      if (isDraftApproved) approvedCount++;
+      if (isDraftRejected) rejectedCount++;
 
-    let matchesDate = true;
-    if (selectedDate) {
-      const draftDate = new Date(draft.created_at).toISOString().split('T')[0];
-      matchesDate = draftDate === selectedDate;
-    }
+      if (selectedStatus === 'pending') return isDraftPending;
+      if (selectedStatus === 'approved') return isDraftApproved;
+      if (selectedStatus === 'rejected') return isDraftRejected;
+      return true;
+    });
 
-    let matchesChannel = true;
-    if (selectedChannel === 'email') {
-      matchesChannel = true;
-    }
-
-    return matchesSearch && matchesDate && matchesChannel;
-  });
-
-  const countAll = draftsBeforeStatusFilter.length;
-  const countPending = draftsBeforeStatusFilter.filter(d => d.status === 'pending' && !getDraftMetadata(d).orderId).length;
-  const countApproved = draftsBeforeStatusFilter.filter(d => d.status === 'approved' || Boolean(getDraftMetadata(d).orderId)).length;
-  const countRejected = draftsBeforeStatusFilter.filter(d => d.status === 'rejected').length;
+    return {
+      draftsBeforeStatusFilter: beforeStatus,
+      filteredDrafts: filtered,
+      countAll: beforeStatus.length,
+      countPending: pendingCount,
+      countApproved: approvedCount,
+      countRejected: rejectedCount
+    };
+  }, [drafts, searchQuery, selectedDate, selectedChannel, selectedStatus]);
 
   const STATUS_PRIORITY: Record<string, number> = {
     pending: 1,
@@ -5550,47 +5789,89 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         ) : (
           <>
-        {/* Date Filter */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          backgroundColor: 'white', 
-          border: `1px solid ${THEME.colors.border}`, 
-          borderRadius: THEME.radius.md,
-          padding: '0.4rem 0.8rem',
-          gap: '8px'
-        }}>
-          <Calendar size={16} color={THEME.colors.textSecondary} />
+        {/* Date Filter Pill */}
+        <div 
+          onClick={() => {
+            try {
+              mainDateInputRef.current?.showPicker();
+            } catch {
+              mainDateInputRef.current?.focus();
+            }
+          }}
+          style={{ 
+            position: 'relative',
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            backgroundColor: selectedDate ? '#ECFDF5' : 'white', 
+            border: selectedDate ? '1.5px solid #10B981' : `1.5px solid ${THEME.colors.border}`, 
+            borderRadius: THEME.radius.md,
+            padding: '0.42rem 0.85rem',
+            gap: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            boxShadow: selectedDate ? '0 1px 3px rgba(16, 185, 129, 0.15)' : 'none',
+            userSelect: 'none'
+          }}
+          title={selectedDate ? `Filtro activo: ${selectedDate}. Clic para cambiar.` : 'Filtrar por fecha'}
+        >
+          <Calendar size={16} color={selectedDate ? '#059669' : THEME.colors.textSecondary} />
+          
+          <span style={{ 
+            fontSize: '0.85rem', 
+            fontWeight: 800, 
+            color: selectedDate ? '#065F46' : '#475569',
+            letterSpacing: '-0.01em',
+            whiteSpace: 'nowrap'
+          }}>
+            {formatFilterDateLabel(selectedDate)}
+          </span>
+
+          {selectedDate ? (
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedDate('');
+              }}
+              title="Quitar filtro de fecha"
+              style={{
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                cursor: 'pointer',
+                color: '#065F46',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                marginLeft: '2px',
+                transition: 'background 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)'}
+            >
+              <X size={12} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <ChevronDown size={14} color="#94A3B8" />
+          )}
+
           <input 
+            ref={mainDateInputRef}
             type="date"
+            className="hide-native-date-picker-indicator"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             style={{
-              border: 'none',
-              outline: 'none',
-              fontWeight: 800,
-              fontSize: '0.85rem',
-              color: THEME.colors.textMain,
-              fontFamily: 'inherit',
-              cursor: 'pointer'
+              position: 'absolute',
+              opacity: 0,
+              width: 0,
+              height: 0,
+              pointerEvents: 'none'
             }}
           />
-          {selectedDate && (
-            <button 
-              onClick={() => setSelectedDate('')}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: THEME.colors.textSecondary,
-                padding: '2px',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <X size={14} />
-            </button>
-          )}
         </div>
 
         {/* Search Input */}
@@ -5873,7 +6154,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>Cargando correos...</div>
+        <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+          <Loader2 size={40} className="animate-spin" style={{ color: THEME.colors.primary }} />
+          <div style={{ fontSize: '0.95rem', fontWeight: '700', color: THEME.colors.textMain }}>Cargando bandeja de pedidos...</div>
+          <p style={{ margin: 0, fontSize: '0.82rem', color: THEME.colors.textSecondary }}>Sincronizando correos con la base de datos</p>
+        </div>
       ) : sortedFilteredDrafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
           <Mail size={32} style={{ opacity: 0.3, marginBottom: '1rem', color: '#9CA3AF' }} />
@@ -5900,14 +6185,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
                     />
                   </th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '13%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>FECHA Y HORA / CANAL</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '22%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>CLIENTE</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '21%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '18%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>ASUNTO / ORIGEN</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '9%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>ITEMS / PESO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '9%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>VALOR</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '5%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}>ESTADO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.55rem 0.75rem', width: '3%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.68rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.04em' }}></th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '38%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ASUNTO / FECHA & REMITENTE</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '20%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>CLIENTE / CANAL</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '17%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '9%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ITEMS / PESO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '10%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>VALOR</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '6%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ESTADO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.5rem', width: '3%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}></th>
                 </tr>
               </thead>
             <tbody>
@@ -5926,6 +6210,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   ? '--:--'
                   : draftDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+                const rawSubject = cleanSubject(draft.email_subject) || 'Sin Asunto';
+
                 return (
                 <tr 
                   key={draft.id} 
@@ -5939,7 +6225,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  <td style={{ padding: '0.5rem 0.65rem', textAlign: 'center', width: '36px', borderLeft: draft.status === 'pending' ? '3px solid #D97706' : draft.status === 'rejected' ? '3px solid #EF4444' : '3px solid #059669' }} onClick={(e) => e.stopPropagation()}>
+                  <td style={{ padding: '0.85rem 0.65rem', textAlign: 'center', width: '36px', borderLeft: draft.status === 'pending' ? '4px solid #D97706' : draft.status === 'rejected' ? '4px solid #EF4444' : '4px solid #059669' }} onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedDraftIds.includes(draft.id)}
@@ -5950,20 +6236,95 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           setSelectedDraftIds(prev => prev.filter(id => id !== draft.id));
                         }
                       }}
-                      style={{ cursor: 'pointer', transform: 'scale(1.05)' }}
+                      style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
                     />
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    <div style={{ fontWeight: '700', fontSize: '0.78rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span>{formattedDate}</span>
-                      <span style={{ fontSize: '0.70rem', fontWeight: '600', color: '#64748B' }}>· {formattedTime}</span>
+
+                  {/* 1. ASUNTO DEL PEDIDO / FECHA & REMITENTE (PROTAGONISTA) */}
+                  <td style={{ padding: '0.85rem 0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span 
+                        title={draft.email_subject || ''}
+                        style={{ 
+                          fontWeight: '800', 
+                          fontSize: '0.92rem', 
+                          color: '#0F172A', 
+                          letterSpacing: '-0.01em',
+                          lineHeight: '1.3'
+                        }}
+                      >
+                        {rawSubject}
+                      </span>
                     </div>
-                    <div style={{ marginTop: '2px' }}>
+
+                    <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.74rem' }}>
+                      {/* Fecha y Hora */}
                       <span style={{ 
-                        fontSize: '0.60rem', 
+                        fontWeight: '700', 
+                        color: '#475569', 
+                        backgroundColor: '#F1F5F9', 
+                        padding: '2px 7px', 
+                        borderRadius: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <Clock size={11} strokeWidth={2.2} style={{ color: '#64748B' }} />
+                        <span>{formattedDate}</span>
+                        <span style={{ color: '#94A3B8' }}>•</span>
+                        <span>{formattedTime}</span>
+                      </span>
+
+                      {/* Email de Origen */}
+                      <span style={{ 
+                        color: '#475569', 
+                        fontWeight: '600',
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                        padding: '2px 7px',
+                        borderRadius: '6px'
+                      }} title={draft.source_email}>
+                        <Mail size={11} strokeWidth={2} style={{ color: '#0D7A57', flexShrink: 0 }} /> 
+                        <span style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {draft.source_email}
+                        </span>
+                      </span>
+
+                      {/* Badge si fue gestionado con número de orden */}
+                      {(draft.status === 'approved' || meta.orderId) && meta.orderNumber && (
+                        <span style={{ 
+                          fontSize: '0.70rem', 
+                          fontWeight: '800', 
+                          color: '#065F46', 
+                          backgroundColor: '#DEF7EC',
+                          border: '1px solid #86EFAC',
+                          padding: '2px 6px', 
+                          borderRadius: '6px',
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          gap: '3px' 
+                        }}>
+                          <CheckCircle2 size={11} color="#059669" />
+                          #{meta.orderNumber.replace(/^#/, '')}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* 2. CLIENTE / CANAL */}
+                  <td style={{ padding: '0.85rem 0.85rem' }}>
+                    <div style={{ fontWeight: '800', fontSize: '0.88rem', color: '#0F172A', maxWidth: '220px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={draft.client_detected_name || 'Desconocido'}>
+                      {draft.client_detected_name || 'Desconocido'}
+                    </div>
+                    <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                      <span style={{ 
+                        fontSize: '0.64rem', 
                         fontWeight: '800', 
-                        padding: '1px 5px', 
-                        borderRadius: '4px',
+                        padding: '2px 6px', 
+                        borderRadius: '5px',
                         display: 'inline-block',
                         backgroundColor: meta.clientType === 'b2b_client' ? '#EEF2FF' : '#FDF2F8',
                         color: meta.clientType === 'b2b_client' ? '#4338CA' : '#BE185D',
@@ -5971,86 +6332,56 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       }}>
                         {meta.clientType === 'b2b_client' ? 'B2B HORECA' : 'B2C HOGAR'}
                       </span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    <div style={{ fontWeight: '800', fontSize: '0.80rem', color: '#0F172A', maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={draft.client_detected_name || 'Desconocido'}>
-                      {draft.client_detected_name || 'Desconocido'}
-                    </div>
-                    <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px', maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <Mail size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} /> 
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{draft.source_email}</span>
                       {meta.phone && meta.phone !== 'No detectado' && (
-                        <>
-                          <span style={{ margin: '0 2px', color: '#CBD5E1' }}>|</span>
-                          <Phone size={9} strokeWidth={1.5} style={{ flexShrink: 0 }} /> 
-                          <span>{meta.phone}</span>
-                        </>
+                        <span style={{ fontSize: '0.70rem', color: '#64748B', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                          <Phone size={10} strokeWidth={1.8} style={{ color: '#94A3B8' }} />
+                          {meta.phone}
+                        </span>
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
+
+                  {/* 3. DIRECCIÓN / GPS */}
+                  <td style={{ padding: '0.85rem 0.85rem' }}>
                     <div 
                       title={meta.address !== 'No detectado' ? meta.address : ''} 
-                      style={{ fontSize: '0.74rem', color: '#334155', fontWeight: '600', maxWidth: '220px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      style={{ fontSize: '0.78rem', color: '#334155', fontWeight: '600', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                     >
                       {meta.address !== 'No detectado' ? meta.address : '-'}
                     </div>
-                    <div style={{ marginTop: '1px' }}>
+                    <div style={{ marginTop: '3px' }}>
                       {meta.address !== 'No detectado' ? (
-                        <span style={{ fontSize: '0.60rem', color: '#059669', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                          <MapPin size={9} color="#059669" /> GPS OK
+                        <span style={{ fontSize: '0.66rem', color: '#059669', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <MapPin size={11} color="#059669" /> GPS OK
                         </span>
                       ) : (
-                        <span style={{ fontSize: '0.60rem', color: '#94A3B8', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                          <AlertTriangle size={9} color="#94A3B8" /> SIN GPS
+                        <span style={{ fontSize: '0.66rem', color: '#94A3B8', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <AlertTriangle size={11} color="#94A3B8" /> SIN GPS
                         </span>
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>
-                    <div 
-                      title={draft.email_subject || ''} 
-                      style={{ fontSize: '0.74rem', color: '#1E293B', fontWeight: '600', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                    >
-                      {cleanSubject(draft.email_subject)}
+
+                  {/* 4. ITEMS & PESO */}
+                  <td style={{ padding: '0.85rem 0.85rem', textAlign: 'center' }}>
+                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.84rem' }}>
+                      {itemsCount} <span style={{ fontSize: '0.70rem', color: '#64748B', fontWeight: '600' }}>prods</span>
                     </div>
-                    <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                      {getChannelBadge('email')}
-                      {(draft.status === 'approved' || meta.orderId) && meta.orderNumber && (
-                        <span style={{ 
-                          fontSize: '0.62rem', 
-                          fontWeight: '800', 
-                          color: '#065F46', 
-                          backgroundColor: '#DEF7EC',
-                          border: '1px solid #86EFAC',
-                          padding: '0 4px', 
-                          borderRadius: '4px',
-                          display: 'inline-flex', 
-                          alignItems: 'center', 
-                          gap: '2px' 
-                        }}>
-                          <CheckCircle2 size={9} color="#059669" />
-                          #{meta.orderNumber.replace(/^#/, '')}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
-                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
-                      {itemsCount} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>prods</span>
-                    </div>
-                    <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '1px' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
                       {formatNumber(estimatedWeight, 1)} kg
                     </div>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: '800', color: '#059669', fontSize: '0.84rem', fontVariantNumeric: 'tabular-nums' }}>
+
+                  {/* 5. VALOR */}
+                  <td style={{ padding: '0.85rem 0.85rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '0.92rem', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-outfit), sans-serif' }}>
                     {formatMoney(estimatedTotal)}
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+
+                  {/* 6. ESTADO */}
+                  <td style={{ padding: '0.85rem 0.85rem', textAlign: 'center' }}>
                     {(draft.status === 'approved' || Boolean(meta.orderId)) ? (
                       <div style={{
-                        padding: '2px 6px', borderRadius: '5px', fontSize: '0.62rem', fontWeight: '800',
+                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '800',
                         backgroundColor: '#DEF7EC',
                         color: '#03543F',
                         border: '1px solid #86EFAC',
@@ -6058,12 +6389,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         alignItems: 'center',
                         gap: '3px'
                       }}>
-                        <CheckCircle2 size={10} color="#059669" />
+                        <CheckCircle2 size={11} color="#059669" />
                         <span>LISTO</span>
                       </div>
                     ) : draft.status === 'rejected' ? (
                       <div style={{
-                        padding: '2px 6px', borderRadius: '5px', fontSize: '0.62rem', fontWeight: '800',
+                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '800',
                         backgroundColor: '#FDE8E8',
                         color: '#9B1C1C',
                         border: '1px solid #FCA5A5'
@@ -6072,7 +6403,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     ) : (
                       <div style={{
-                        padding: '2px 6px', borderRadius: '5px', fontSize: '0.62rem', fontWeight: '800',
+                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '800',
                         backgroundColor: '#FEF3C7',
                         color: '#92400E',
                         border: '1px solid #FCD34D'
@@ -6081,7 +6412,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: '0.5rem 0.65rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+
+                  {/* 7. ACCIONES */}
+                  <td style={{ padding: '0.85rem 0.5rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={(e) => handleDelete(draft.id, e)}
                       style={{ 
@@ -6089,11 +6422,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         border: 'none', 
                         color: '#94A3B8', 
                         cursor: 'pointer', 
-                        padding: '4px', 
+                        padding: '6px', 
                         display: 'inline-flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
-                        borderRadius: '4px',
+                        borderRadius: '6px',
                         transition: 'all 0.15s ease'
                       }}
                       onMouseEnter={(e) => {
@@ -6392,7 +6725,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     type="button"
                     onClick={() => {
                       setIsClientSearchOpen(prev => !prev);
-                      setFocusedClientSearchIndex(-1);
                     }}
                     style={{
                       background: isClientInactive ? '#FEF3C7' : (matchedProfile ? '#FFFFFF' : '#FEF3C7'),
@@ -6456,152 +6788,67 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   )}
 
                   {isClientSearchOpen && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      marginTop: '8px',
-                      width: '450px',
-                      maxHeight: '380px',
-                      backgroundColor: 'white',
-                      borderRadius: '14px',
-                      boxShadow: '0 15px 35px -5px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.08)',
-                      border: '1px solid #CBD5E1',
-                      zIndex: 10000,
-                      padding: '10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1.5px solid #3B82F6' }}>
-                        <Search size={16} color="#3B82F6" />
-                        <input
-                          autoFocus
-                          type="text"
-                          autoComplete="off"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          placeholder="Buscar Empresa, Sucursal, NIT, Dirección..."
-                          value={clientSearchQuery}
-                          onChange={e => {
-                            setClientSearchQuery(e.target.value);
-                            setFocusedClientSearchIndex(0);
-                          }}
-                          onKeyDown={e => {
-                            if (filteredClientProfiles.length === 0) return;
-                            if (e.key === 'ArrowDown') {
-                              e.preventDefault();
-                              setFocusedClientSearchIndex(prev => Math.min(prev + 1, filteredClientProfiles.length - 1));
-                            } else if (e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              setFocusedClientSearchIndex(prev => Math.max(prev - 1, 0));
-                            } else if (e.key === 'Enter' || e.key === 'Tab') {
-                              const targetIdx = focusedClientSearchIndex >= 0 ? focusedClientSearchIndex : 0;
-                              if (filteredClientProfiles[targetIdx]) {
-                                e.preventDefault();
-                                handleSelectClientProfile(filteredClientProfiles[targetIdx]);
-                              }
-                            } else if (e.key === 'Escape') {
-                              setIsClientSearchOpen(false);
-                            }
-                          }}
-                          style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.88rem', fontWeight: 600, color: '#0F172A' }}
-                        />
-                        {clientSearchQuery && (
-                          <button onClick={() => setClientSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={14} /></button>
-                        )}
-                      </div>
-
-                      <div style={{ overflowY: 'auto', maxHeight: '300px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {filteredClientProfiles.length === 0 ? (
-                          <div style={{ padding: '16px', textAlign: 'center', color: '#94A3B8', fontSize: '0.82rem' }}>
-                            No se encontraron clientes para &quot;{clientSearchQuery}&quot;
-                          </div>
-                        ) : (
-                          filteredClientProfiles.map((p: any, pIdx: number) => {
-                            const isFocused = pIdx === focusedClientSearchIndex;
-                            const parentMatrix = p.parent_id ? matrixClientsMap.get(p.parent_id) : null;
-                            const isDirectBranch = Boolean(p.isDirectSearchedBranch && parentMatrix);
-
-                            return (
-                              <div
-                                key={p.id}
-                                id={`client-search-item-${pIdx}`}
-                                onClick={() => handleSelectClientProfile(p)}
-                                onMouseEnter={() => setFocusedClientSearchIndex(pIdx)}
-                                style={{
-                                  padding: '10px 12px',
-                                  borderRadius: '8px',
-                                  cursor: 'pointer',
-                                  backgroundColor: isFocused ? '#DBEAFE' : (isDirectBranch ? '#F0FDF4' : 'transparent'),
-                                  borderLeft: isFocused ? '4px solid #2563EB' : '4px solid transparent',
-                                  borderBottom: '1px solid #F1F5F9',
-                                  transition: 'all 0.12s ease'
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                                  <div style={{ fontWeight: isFocused ? 800 : 700, color: isFocused ? '#1E3A8A' : '#0F172A', fontSize: '0.86rem' }}>
-                                    {p.company_name || p.contact_name}
-                                  </div>
-                                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                    {p.is_active === false && (
-                                      <span style={{ fontSize: '0.66rem', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                                        Inactiva
-                                      </span>
-                                    )}
-                                    {parentMatrix && (
-                                      <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                                        Sucursal
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {parentMatrix && (
-                                  <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600, marginTop: '2px' }}>
-                                    Matriz: {parentMatrix.company_name}
-                                  </div>
-                                )}
-
-                                <div style={{ fontSize: '0.74rem', color: isFocused ? '#1E40AF' : '#64748B', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                  {p.nit && <span><strong>NIT:</strong> {p.nit}</span>}
-                                  {p.address && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><MapPin size={11} color="#64748B" /> {p.address} {p.city ? `(${p.city})` : ''}</span>}
-                                  {p.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Phone size={11} color="#64748B" /> {p.phone}</span>}
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
+                    <ClientSearchCombobox
+                      initialQuery={matchedProfile ? (matchedProfile.company_name || matchedProfile.contact_name || '') : (selectedDraft.client_detected_name || '')}
+                      profiles={profiles}
+                      parentMatrixIds={parentMatrixIds}
+                      matrixClientsMap={matrixClientsMap}
+                      onSelectClient={handleSelectClientProfile}
+                      onClose={() => setIsClientSearchOpen(false)}
+                    />
                   )}
                 </div>
 
-                {/* Delivery Date Picker */}
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: '#FFFFFF',
-                  border: '1.5px solid #CBD5E1',
-                  padding: '4px 10px',
-                  borderRadius: '10px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                }}>
+                {/* Delivery Date Capsule */}
+                <div 
+                  onClick={() => {
+                    try {
+                      deliveryDateInputRef.current?.showPicker();
+                    } catch {
+                      deliveryDateInputRef.current?.focus();
+                    }
+                  }}
+                  style={{
+                    position: 'relative',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    backgroundColor: '#F0FDF4',
+                    border: '1.5px solid #86EFAC',
+                    padding: '5px 12px',
+                    borderRadius: '10px',
+                    boxShadow: '0 1px 2px rgba(16, 185, 129, 0.1)',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    transition: 'all 0.15s'
+                  }}
+                  title="Clic para cambiar la fecha de entrega"
+                >
                   <Calendar size={14} color="#0D7A57" />
-                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Entrega:</span>
+                  <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Entrega:</span>
+                  <span style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                    {formatDeliveryDateLabel(deliveryDate)}
+                  </span>
+                  <ChevronDown size={13} color="#0D7A57" style={{ marginLeft: '2px' }} />
+
                   <input
+                    ref={deliveryDateInputRef}
                     type="date"
+                    className="hide-native-date-picker-indicator"
                     value={deliveryDate}
-                    onChange={e => setDeliveryDate(e.target.value)}
+                    min={minDeliveryDate}
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      if (newDate) {
+                        setDeliveryDate(newDate);
+                      }
+                    }}
                     style={{
-                      border: 'none',
-                      fontSize: '0.85rem',
-                      fontWeight: '800',
-                      color: '#0F172A',
-                      outline: 'none',
-                      cursor: 'pointer',
-                      background: 'transparent'
+                      position: 'absolute',
+                      opacity: 0,
+                      width: 0,
+                      height: 0,
+                      pointerEvents: 'none'
                     }}
                   />
                 </div>
@@ -8095,7 +8342,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '62px', maxWidth: '85px', overflow: 'hidden' }}>
                                     <span style={{ fontSize: '0.80rem', fontWeight: '800', color: '#334155', lineHeight: '1.1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                      {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                      {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                     </span>
                                     {matchedProd ? (
                                       resolvedUnitPrice > 0 ? (
@@ -9599,22 +9846,38 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <div style={{ marginBottom: '1.5rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>FECHA DE ENTREGA:</label>
-                <input 
-                  type="date" 
-                  value={deliveryDate} 
-                  min={minDeliveryDate}
-                  onChange={(e) => {
-                    const newDate = e.target.value;
-                    const minDate = getMinDeliveryDate();
-                    if (newDate < minDate) {
-                      showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
-                      setDeliveryDate(minDate);
-                      return;
-                    }
-                    setDeliveryDate(newDate);
-                  }} 
-                  style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.9rem', fontWeight: 700 }}
-                />
+                <div style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  backgroundColor: '#FFFFFF',
+                  border: `1.5px solid ${THEME.colors.border}`,
+                  borderRadius: '10px',
+                  padding: '0.65rem 0.9rem',
+                  gap: '10px'
+                }}>
+                  <Calendar size={18} color="#0D7A57" />
+                  <input 
+                    type="date" 
+                    className="hide-native-date-picker-indicator"
+                    value={deliveryDate} 
+                    min={minDeliveryDate}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      const minDate = getMinDeliveryDate();
+                      if (newDate < minDate) {
+                        showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
+                        setDeliveryDate(minDate);
+                        return;
+                      }
+                      setDeliveryDate(newDate);
+                    }} 
+                    style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: '0.92rem', fontWeight: 700, color: '#0F172A', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#059669', backgroundColor: '#ECFDF5', padding: '2px 8px', borderRadius: '6px' }}>
+                    {formatDeliveryDateLabel(deliveryDate)}
+                  </span>
+                </div>
               </div>
             </div>
 

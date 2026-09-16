@@ -1601,6 +1601,21 @@ export async function POST(req: Request) {
     console.log('[Email Inbound] Draft(s) created successfully:', insertedDrafts?.map(d => d.id));
     supabaseAdmin.from('raw_emails').update({ status: 'success' }).eq('payload->>envelope->>from', fromField).then(()=>{}, ()=>{});
 
+    // Auto-purga en segundo plano: Limpiar borradores antiguos (> 30 días) para mantener la BD ligera
+    (async () => {
+      try {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        await supabaseAdmin
+          .from('order_drafts')
+          .delete()
+          .lt('created_at', thirtyDaysAgo.toISOString())
+          .in('status', ['approved', 'rejected']); // Purgar gestionados/rechazados viejos
+      } catch (purgeErr) {
+        console.warn('[Email Inbound] Auto-purge warning:', purgeErr);
+      }
+    })().catch(() => {});
+
     // 4. Send confirmation email to the client using Nodemailer
     // DESACTIVADO: Ahora los correos se envían manualmente después de la revisión del operario
     if (false && process.env.SMTP_USER && process.env.SMTP_PASS) {

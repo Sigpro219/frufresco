@@ -28,6 +28,7 @@ import {
     Sparkles,
     Settings,
     ChevronLeft,
+    ChevronDown,
     ArrowLeft,
     Trash2,
     Plus,
@@ -390,6 +391,8 @@ function CreateOrderContent() {
     const [selectedClient, setSelectedClient] = useState('');
     const [clientSearch, setClientSearch] = useState('');
     const [focusedClientIndex, setFocusedClientIndex] = useState(-1);
+    const [branchFilterQuery, setBranchFilterQuery] = useState('');
+    const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
 
     // B2C State
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
@@ -526,6 +529,21 @@ function CreateOrderContent() {
     };
 
     const [focusedProductIndex, setFocusedProductIndex] = useState(-1);
+    const productSuggestionsListRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll the suggestions list so the keyboard-focused item is always in view
+    useEffect(() => {
+        if (focusedProductIndex >= 0 && productSuggestionsListRef.current) {
+            const container = productSuggestionsListRef.current;
+            const targetItem = container.children[focusedProductIndex] as HTMLElement;
+            if (targetItem) {
+                targetItem.scrollIntoView({
+                    block: 'nearest',
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }, [focusedProductIndex]);
 
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
@@ -761,6 +779,19 @@ function CreateOrderContent() {
             }
         }
     }, [focusedClientIndexB2C]);
+
+    // Auto-scroll para el dropdown flotante de SKUs en la Mesa de Trabajo
+    useEffect(() => {
+        if (activeDropdownRowIndex !== null && focusedDropdownItemIndex >= 0) {
+            const el = document.getElementById(`dropdown-item-${activeDropdownRowIndex}-${focusedDropdownItemIndex}`);
+            if (el) {
+                el.scrollIntoView({
+                    block: 'nearest',
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }, [activeDropdownRowIndex, focusedDropdownItemIndex]);
 
     useEffect(() => {
         if (manageConversionsProduct) {
@@ -1957,7 +1988,7 @@ function CreateOrderContent() {
         }
     };
 
-    // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 1 (Tope Absoluto, 0px)
+    // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 2 (dejando 1 fila de contexto arriba)
     const scrollToStagedRow = (targetIdx: number) => {
         setTimeout(() => {
             const container = document.getElementById('staged-table-scroll-container');
@@ -1971,7 +2002,9 @@ function CreateOrderContent() {
 
             const thead = container.querySelector('thead');
             const theadHeight = thead ? thead.clientHeight : 35;
-            const targetScroll = Math.max(0, row.offsetTop - theadHeight);
+            const prevRow = document.getElementById(`staged-row-${targetIdx - 1}`);
+            const slotOffset = prevRow ? prevRow.offsetHeight : 68;
+            const targetScroll = Math.max(0, row.offsetTop - theadHeight - slotOffset);
 
             container.scrollTo({
                 top: targetScroll,
@@ -2000,17 +2033,12 @@ function CreateOrderContent() {
             : (exc?.preferred_options && typeof exc.preferred_options === 'object' ? { ...exc.preferred_options } : {});
         setSelectedOptions(mergedOptions);
         
-        if (originalQty !== undefined) {
-            setModalQuantity(originalQty);
-            setModalUnit(originalUnit || product.unit_of_measure || 'Kg');
-            setModalFactor(factor || 1);
-        } else {
-            const stagedItem = stagedItems.find(item => item.id === stagedId);
-            const defaultQty = stagedItem ? (stagedItem.originalQtyInFile || stagedItem.quantity) : qty;
-            setModalQuantity(defaultQty);
-            setModalUnit(product.unit_of_measure || 'Kg');
-            setModalFactor(1);
-        }
+        const stagedItem = stagedItems.find(item => item.id === stagedId);
+        const effectiveQty = stagedItem ? stagedItem.quantity : qty;
+
+        setModalQuantity(effectiveQty);
+        setModalUnit(product.unit_of_measure || 'Kg');
+        setModalFactor(1);
     };
 
     const closeProductModal = () => {
@@ -2222,6 +2250,7 @@ function CreateOrderContent() {
             }
             
             // Helper para detectar unidad desde el texto y metadatos del item
+            // Helper para detectar unidad desde el texto y metadatos del item
             const detectUnitFromItem = (item: any, product: any, productConversions: any[]) => {
                 const cleanName = (item.originalName || '').toLowerCase();
                 const rawUnit = (item.unit || '').trim();
@@ -2229,6 +2258,8 @@ function CreateOrderContent() {
                 const rawObs = (item.observations || '').trim();
                 const docUnitNorm = normalizeDocUnit(rawUnit || rawPres);
                 const fullSearchText = `${cleanName} ${rawUnit} ${rawPres} ${rawObs}`.toLowerCase();
+                const baseUnitLower = (product.unit_of_measure || 'Kg').toLowerCase();
+                const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
                 
                 // 1. Obtener todas las unidades posibles para este producto
                 const possibleUnits: { unit: string; factor: number }[] = [];
@@ -2298,7 +2329,14 @@ function CreateOrderContent() {
                     }
                 }
 
-                // 3. Buscar en texto completo (nombre + observaciones) qué unidad coincide mejor
+                // 3. Buscar en texto completo (nombre + observaciones) si se detectan Libras/500g para productos en Kg
+                if (docUnitNorm === 'Libra' || fullSearchText.includes('libra') || fullSearchText.includes(' lb') || fullSearchText.includes(' lbs') || fullSearchText.includes('500g') || fullSearchText.includes('500 gr')) {
+                    if (isKgProduct) {
+                        return { unit: 'Libra', factor: 0.5 };
+                    }
+                }
+
+                // 4. Buscar en texto completo (nombre + observaciones) qué unidad coincide mejor
                 for (const u of possibleUnits) {
                     const unitLower = u.unit.toLowerCase();
                     if (unitLower.length > 2) {
@@ -2308,11 +2346,11 @@ function CreateOrderContent() {
                     }
                 }
                 
-                // 4. Si el documento trajo una unidad normalizada, respetarla
+                // 5. Si el documento trajo una unidad normalizada, respetarla y aplicar factor
                 if (docUnitNorm) {
                     let factor = 1;
-                    if (docUnitNorm === 'Libra' && product.unit_of_measure === 'Kg') factor = 0.5;
-                    if (docUnitNorm === 'g' && product.unit_of_measure === 'Kg') factor = 0.001;
+                    if (docUnitNorm === 'Libra' && isKgProduct) factor = 0.5;
+                    if (docUnitNorm === 'g' && isKgProduct) factor = 0.001;
                     return { unit: docUnitNorm, factor };
                 }
 
@@ -2338,7 +2376,8 @@ function CreateOrderContent() {
             if (clientType === 'B2B' && clients && clients.length > 0) {
                 autoMatchedProfile = resolveClientProfile({
                     nit: data.nitInDocument,
-                    name: data.clientInDocument
+                    name: data.clientInDocument,
+                    address: data.addressInDocument
                 }, clients);
 
                 if (autoMatchedProfile) {
@@ -2383,14 +2422,21 @@ function CreateOrderContent() {
                     ? detectUnitFromItem(item, match, productConversions) 
                     : (item.unit ? { unit: item.unit, factor: 1 } : null);
                 
+                const factor = detectedUnit?.factor || 1;
+                const convertedQty = detectedUnit ? parseFloat((quantity * factor).toFixed(3)) : quantity;
+                const rawDocUnit = item.unit || item.presentation || '';
+                const docUnitNorm = normalizeDocUnit(rawDocUnit);
+                const originalUnitInFile = detectedUnit?.unit || docUnitNorm || rawDocUnit || (match?.unit_of_measure || 'Kg');
+
                 return {
                     id: crypto.randomUUID(),
                     originalName: originalName,
-                    quantity: detectedUnit ? parseFloat((quantity * detectedUnit.factor).toFixed(3)) : quantity,
+                    quantity: convertedQty,
                     originalQtyInFile: quantity,
-                    originalQty: quantity,
-                    originalUnit: detectedUnit ? detectedUnit.unit : (item.unit || item.presentation || match?.unit_of_measure || 'Kg'),
-                    conversion_factor: detectedUnit ? detectedUnit.factor : 1,
+                    originalUnitInFile: originalUnitInFile,
+                    originalQty: convertedQty,
+                    originalUnit: match?.unit_of_measure || 'Kg',
+                    conversion_factor: 1,
                     suggestedProduct: match || null,
                     confidence: matchResult.confidence,
                     confidenceScore: matchResult.confidenceScore,
@@ -2461,7 +2507,30 @@ function CreateOrderContent() {
                 showToast('Tu sesión ha expirado o no es válida. Por favor recarga la página o inicia sesión de nuevo.', 'error');
             } else {
                 console.error('AI Parsing Error:', error);
-                showToast(`Error al procesar documento: ${error.message}`, 'error');
+                const rawMsg = error.message || '';
+                const isModelIssue = rawMsg.toLowerCase().includes('vigente') ||
+                                     rawMsg.toLowerCase().includes('no longer available') ||
+                                     rawMsg.toLowerCase().includes('deprecated') ||
+                                     rawMsg.toLowerCase().includes('is not supported');
+
+                const isFileIssue = rawMsg.toLowerCase().includes('dañado') ||
+                                    rawMsg.toLowerCase().includes('no compatible') ||
+                                    rawMsg.toLowerCase().includes('páginas') ||
+                                    rawMsg.toLowerCase().includes('no pages') ||
+                                    rawMsg.toLowerCase().includes('vacío') ||
+                                    rawMsg.toLowerCase().includes('corrupto') ||
+                                    rawMsg.toLowerCase().includes('bytes');
+
+                if (isModelIssue) {
+                    showToast('⚠️ El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo. Por favor ingrese el pedido manualmente.', 'error');
+                } else if (isFileIssue) {
+                    const formatted = rawMsg.toLowerCase().includes('archivo dañado') 
+                        ? rawMsg 
+                        : `Archivo dañado o no compatible. ${rawMsg}`;
+                    showToast(`⚠️ ${formatted}`, 'error');
+                } else {
+                    showToast(`⚠️ ${error.message}`, 'error');
+                }
             }
         } finally {
             setParsingFile(false);
@@ -2469,6 +2538,22 @@ function CreateOrderContent() {
     };
 
     const handleConfirmImport = async () => {
+        // Validación de Seguridad: Debe haber un cliente seleccionado
+        if (!selectedClient) {
+            showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar la importación.', 'error');
+            return;
+        }
+
+        // Validación de Seguridad: Si el documento detectado no coincide con el cliente asignado
+        if (!isAuditClientMatch && importValidation?.clientInDocument) {
+            const confirmed = window.confirm(
+                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionada la empresa:\n"${selectedClientDetails?.company_name}"\n\n¿Deseas continuar e importar este pedido a ${selectedClientDetails?.company_name}?`
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+
         setIsConfirmingImport(true);
         try {
             // 1. Subida silenciosa del archivo original al bucket order-attachments para persistencia permanente
@@ -2506,6 +2591,10 @@ function CreateOrderContent() {
                 .map(item => {
                     const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
                     const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+                    const prodId = item.suggestedProduct?.id;
+                    const resolvedPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                        ? contractPrices[prodId]
+                        : (item.price || item.suggestedProduct?.base_price || 1000);
                     return {
                         product: item.suggestedProduct,
                         qty: item.quantity,
@@ -2514,7 +2603,7 @@ function CreateOrderContent() {
                         originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
                         originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
                         conversion_factor: item.conversion_factor || 1,
-                        price: item.price || item.suggestedProduct?.base_price || 1000
+                        price: resolvedPrice
                     };
                 });
 
@@ -2584,7 +2673,13 @@ function CreateOrderContent() {
         setStagedItems(prev => prev.map(item => {
             if (item.id === id) {
                 if (field === 'product') {
-                    return { ...item, suggestedProduct: value, status: 'MATCH', isConfirmed: true };
+                    return { 
+                        ...item, 
+                        suggestedProduct: value, 
+                        originalUnit: value?.unit_of_measure || 'Kg',
+                        status: 'MATCH', 
+                        isConfirmed: true 
+                    };
                 }
                 return { ...item, [field]: value, isConfirmed: true };
             }
@@ -2971,7 +3066,7 @@ function CreateOrderContent() {
                 URL.revokeObjectURL(uploadedFileUrl);
                 setUploadedFileUrl(null);
             }
-            router.push('/admin/orders/loading');
+            router.push(`/admin/orders/loading?date=${deliveryDate}`);
 
         } catch (e: any) {
             console.error('Submit Full Error:', e);
@@ -3135,7 +3230,81 @@ function CreateOrderContent() {
         return [...directSearchedBranches, ...otherMatches].slice(0, 10);
     }, [clients, clientSearch, parentMatrixIds]);
 
-    const getSelectedClientDetails = () => clients.find(c => c.id === selectedClient);
+    const selectedClientDetails = useMemo(() => {
+        return clients.find(c => c.id === selectedClient);
+    }, [clients, selectedClient]);
+
+    const getSelectedClientDetails = () => selectedClientDetails;
+
+    // Sucursales / Sedes hermanas pertenecientes al mismo grupo empresarial (mismo NIT o mismo parent_id)
+    const siblingBranches = useMemo(() => {
+        if (!selectedClientDetails) return [];
+        const currentNit = selectedClientDetails.nit ? selectedClientDetails.nit.trim() : null;
+        const currentParentId = selectedClientDetails.parent_id;
+        const currentId = selectedClientDetails.id;
+
+        return clients.filter(c => {
+            if (c.id === currentId) return false;
+            // Misma matriz (sucursales hermanas)
+            if (currentParentId && c.parent_id === currentParentId) return true;
+            // Esta sucursal es matriz y la otra es hija
+            if (c.parent_id === currentId) return true;
+            // La otra es matriz de esta sucursal
+            if (currentParentId && c.id === currentParentId) return true;
+            // Mismo NIT no vacío
+            if (currentNit && c.nit && c.nit.trim() === currentNit) return true;
+            return false;
+        }).sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
+    }, [selectedClientDetails, clients]);
+
+    // Filtro interactivo de sedes hermanas por texto escrito por el usuario
+    const filteredSiblingBranches = useMemo(() => {
+        if (!branchFilterQuery.trim()) return siblingBranches;
+        const q = branchFilterQuery.toLowerCase().trim();
+        return siblingBranches.filter(b => {
+            const name = (b.company_name || '').toLowerCase();
+            const addr = (b.address || '').toLowerCase();
+            const contact = (b.contact_name || '').toLowerCase();
+            return name.includes(q) || addr.includes(q) || contact.includes(q);
+        });
+    }, [siblingBranches, branchFilterQuery]);
+
+    // Detección contextual: ¿alguna sede hermana coincide con lo detectado en el documento (ej. "Cafetería", "Girardot")?
+    const docSuggestedBranchId = useMemo(() => {
+        if (!importValidation?.clientInDocument || siblingBranches.length === 0) return null;
+        const docText = (importValidation.clientInDocument + ' ' + (selectedClientDetails?.address || '')).toLowerCase();
+        const match = siblingBranches.find(b => {
+            const bName = (b.company_name || '')
+                .toLowerCase()
+                .replace(/caja de compensacion familiar colsubsidio|colsubsidio|sede|sucursal|sas|s\.a\.s/gi, '')
+                .trim();
+            if (bName.length > 3 && docText.includes(bName)) return true;
+            const bAddr = (b.address || '').toLowerCase();
+            if (bAddr.length > 5 && docText.includes(bAddr)) return true;
+            return false;
+        });
+        return match ? match.id : null;
+    }, [importValidation?.clientInDocument, selectedClientDetails, siblingBranches]);
+
+    // Validación Dinámica de Auditoría: compara en vivo la empresa/sede seleccionada con el cliente detectado en el documento
+    const isAuditClientMatch = useMemo(() => {
+        if (!importValidation?.clientInDocument) return true;
+        if (!selectedClientDetails) return false;
+        const selectedName = (selectedClientDetails.company_name || selectedClientDetails.contact_name || '').toUpperCase();
+        const detectedName = (importValidation.clientInDocument || '').toUpperCase();
+        if (!selectedName || !detectedName) return false;
+
+        // Regla 1: Ambas comparten Colsubsidio
+        if (detectedName.includes('COLSUBSIDIO') && selectedName.includes('COLSUBSIDIO')) return true;
+
+        // Regla 2: Coincidencia por tokens relevantes
+        const stopWords = ['CAJA', 'COMPENSACION', 'FAMILIAR', 'COLSUBSIDIO', 'SAS', 'S.A.S', 'S.A.', 'LTDA', 'SEDE', 'SUCURSAL', 'RESTAURANTE', 'CLIENTE', 'DE', 'DEL', 'Y', 'LA', 'EL'];
+        const detectedTokens = detectedName.split(/[\s,.-]+/).filter(w => w.length > 2 && !stopWords.includes(w));
+        const selectedTokens = selectedName.split(/[\s,.-]+/).filter(w => w.length > 2 && !stopWords.includes(w));
+
+        const hasTokenMatch = detectedTokens.some(t => selectedName.includes(t)) || selectedTokens.some(t => detectedName.includes(t));
+        return hasTokenMatch || selectedName.includes(detectedName.slice(0, 6)) || detectedName.includes(selectedName.slice(0, 6));
+    }, [importValidation?.clientInDocument, selectedClientDetails]);
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
@@ -3232,87 +3401,260 @@ function CreateOrderContent() {
 
                                     {selectedClient ? (
                                         <div style={{
-                                            padding: '0.75rem 1rem', 
+                                            padding: '0.85rem 1.15rem', 
                                             backgroundColor: '#F0FDF4', 
-                                            border: '1px solid #BBF7D0', 
+                                            border: '1.5px solid #86EFAC', 
                                             borderRadius: '12px',
                                             display: 'flex', 
                                             flexDirection: 'column',
-                                            gap: '0.45rem',
-                                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)'
+                                            gap: '0.6rem',
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)'
                                         }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
-                                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#166534', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', backgroundColor: '#DCFCE7', border: '1px solid #BBF7D0', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                                         SUCURSAL SELECCIONADA
                                                     </span>
-                                                    <span style={{ fontWeight: '800', color: '#14532D', fontSize: '0.95rem' }}>
-                                                        {getSelectedClientDetails()?.company_name}
+                                                    <span style={{ fontWeight: '900', color: '#14532D', fontSize: '1.05rem' }}>
+                                                        {selectedClientDetails?.company_name}
                                                     </span>
                                                     {activePricingModel && (
                                                         <span style={{
-                                                            padding: '2px 6px',
+                                                            padding: '2px 8px',
                                                             borderRadius: '5px',
                                                             backgroundColor: '#E0F2FE',
                                                             border: '1px solid #BAE6FD',
                                                             color: '#0369A1',
-                                                            fontSize: '0.72rem',
+                                                            fontSize: '0.75rem',
                                                             fontWeight: '700',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '3px'
+                                                            gap: '4px'
                                                         }}>
-                                                            <Tag size={11} strokeWidth={2} />
-                                                            {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Modelo: ${activePricingModel?.name || 'General Institucional'}`}
+                                                            <Tag size={12} strokeWidth={2} />
+                                                            {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Tarifa: ${activePricingModel?.name || 'General Institucional'}`}
                                                             {isContractExpired && <span style={{ color: '#DC2626' }}>(Expirado)</span>}
                                                         </span>
                                                     )}
-                                                    {getSelectedClientDetails()?.parent_id && (
+                                                    {selectedClientDetails?.parent_id && (
                                                         <span style={{ fontSize: '0.75rem', color: '#15803D', fontWeight: '600' }}>
-                                                            (Matriz: {clients.find(c => c.id === getSelectedClientDetails()?.parent_id)?.company_name || 'Corporativo'})
+                                                            (Matriz: {clients.find(c => c.id === selectedClientDetails?.parent_id)?.company_name || 'Corporativo'})
                                                         </span>
                                                     )}
                                                 </div>
                                                 <button
+                                                    type="button"
                                                     onClick={() => setSelectedClient('')}
                                                     style={{ 
                                                         background: '#DCFCE7', 
-                                                        border: '1px solid #BBF7D0', 
+                                                        border: '1px solid #86EFAC', 
                                                         color: '#166534', 
-                                                        padding: '3px 8px', 
+                                                        padding: '4px 10px', 
                                                         borderRadius: '6px', 
                                                         display: 'inline-flex', 
                                                         alignItems: 'center', 
-                                                        gap: '4px',
+                                                        gap: '5px',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.72rem',
-                                                        fontWeight: '700'
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '700',
+                                                        transition: 'all 0.15s'
                                                     }}
-                                                    title="Cambiar cliente"
+                                                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#BBF7D0'; }}
+                                                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#DCFCE7'; }}
+                                                    title="Buscar otra empresa"
                                                 >
-                                                    <X size={12} />
-                                                    <span>Cambiar</span>
+                                                    <Search size={13} />
+                                                    <span>Buscar Otra Empresa</span>
                                                 </button>
                                             </div>
 
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.78rem', color: '#166534', flexWrap: 'wrap', borderTop: '1px solid #DCFCE7', paddingTop: '0.4rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <MapPin size={12} strokeWidth={1.5} style={{ color: '#15803D' }} />
-                                                    <span style={{ fontWeight: '600' }}>{getSelectedClientDetails()?.address || 'Sin dirección'}</span>
-                                                    <span style={{ opacity: 0.8 }}>({getSelectedClientDetails()?.city || 'Bogotá'})</span>
+                                            {/* BUSCADOR INTERACTIVO DE OTRAS SEDES DE LA MISMA EMPRESA */}
+                                            {siblingBranches.length > 0 && (
+                                                <div style={{ position: 'relative', width: '100%' }}>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        padding: '6px 10px',
+                                                        backgroundColor: '#FFFFFF',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #86EFAC',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                    }}>
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <Building2 size={14} color="#16A34A" />
+                                                            Sedes de esta empresa ({siblingBranches.length}):
+                                                        </span>
+                                                        <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                                                            <Search size={13} style={{ position: 'absolute', left: '8px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                            <input
+                                                                type="text"
+                                                                placeholder={`Escribe para filtrar sede (ej. "${siblingBranches[0]?.company_name?.split('-')?.[1]?.trim() || 'Cafetería'}", "${siblingBranches[0]?.address?.split(' ')?.[0] || 'Calle'}")...`}
+                                                                value={branchFilterQuery}
+                                                                onChange={(e) => {
+                                                                    setBranchFilterQuery(e.target.value);
+                                                                    setIsBranchDropdownOpen(true);
+                                                                }}
+                                                                onFocus={() => setIsBranchDropdownOpen(true)}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    fontSize: '0.8rem',
+                                                                    fontWeight: '600',
+                                                                    padding: '4px 26px 4px 26px',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    color: '#0F172A',
+                                                                    outline: 'none'
+                                                                }}
+                                                            />
+                                                            {branchFilterQuery && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setBranchFilterQuery('')}
+                                                                    style={{ position: 'absolute', right: '6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '2px' }}
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsBranchDropdownOpen(prev => !prev)}
+                                                            style={{
+                                                                backgroundColor: isBranchDropdownOpen ? '#DCFCE7' : '#F1F5F9',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '6px',
+                                                                padding: '4px 8px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '700',
+                                                                color: '#334155',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}
+                                                        >
+                                                            <span>{isBranchDropdownOpen ? 'Cerrar' : `Ver ${filteredSiblingBranches.length}`}</span>
+                                                            <ChevronDown size={12} style={{ transform: isBranchDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* LISTADO FLOTANTE DE SEDES FILTRADAS */}
+                                                    {isBranchDropdownOpen && (
+                                                        <>
+                                                            <div 
+                                                                style={{ position: 'fixed', inset: 0, zIndex: 40 }} 
+                                                                onClick={() => setIsBranchDropdownOpen(false)} 
+                                                            />
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                top: 'calc(100% + 4px)',
+                                                                left: 0,
+                                                                right: 0,
+                                                                maxHeight: '260px',
+                                                                overflowY: 'auto',
+                                                                backgroundColor: '#FFFFFF',
+                                                                border: '1px solid #86EFAC',
+                                                                borderRadius: '8px',
+                                                                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                                                                zIndex: 50
+                                                            }}>
+                                                                {filteredSiblingBranches.length === 0 ? (
+                                                                    <div style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', color: '#64748B', textAlign: 'center' }}>
+                                                                        No se encontraron sedes con "{branchFilterQuery}"
+                                                                    </div>
+                                                                ) : (
+                                                                    filteredSiblingBranches.map(b => {
+                                                                        const isSelected = b.id === selectedClient;
+                                                                        const isDocSuggested = docSuggestedBranchId === b.id;
+                                                                        return (
+                                                                            <div
+                                                                                key={b.id}
+                                                                                onClick={() => {
+                                                                                    selectClient(b);
+                                                                                    setIsBranchDropdownOpen(false);
+                                                                                    setBranchFilterQuery('');
+                                                                                    showToast(`🏢 Sede cambiada a: ${b.company_name}`, 'success');
+                                                                                }}
+                                                                                style={{
+                                                                                    padding: '0.65rem 0.85rem',
+                                                                                    cursor: 'pointer',
+                                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                                    backgroundColor: isSelected ? '#DCFCE7' : isDocSuggested ? '#FEF3C7' : '#FFFFFF',
+                                                                                    display: 'flex',
+                                                                                    justifyContent: 'space-between',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '8px',
+                                                                                    transition: 'background-color 0.1s'
+                                                                                }}
+                                                                                onMouseEnter={(e) => {
+                                                                                    if (!isSelected) e.currentTarget.style.backgroundColor = isDocSuggested ? '#FDE68A' : '#F8FAFC';
+                                                                                }}
+                                                                                onMouseLeave={(e) => {
+                                                                                    if (!isSelected) e.currentTarget.style.backgroundColor = isDocSuggested ? '#FEF3C7' : '#FFFFFF';
+                                                                                }}
+                                                                            >
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                                    <div style={{ fontSize: '0.82rem', fontWeight: '700', color: isSelected ? '#166534' : '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                        <span>{b.company_name}</span>
+                                                                                        {isDocSuggested && (
+                                                                                            <span style={{ fontSize: '0.68rem', backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                                                ⭐ Sugerida por documento
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    {b.address && (
+                                                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                            <MapPin size={11} color="#94A3B8" />
+                                                                                            <span>{b.address} {b.city ? `(${b.city})` : ''}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    style={{
+                                                                                        fontSize: '0.7rem',
+                                                                                        fontWeight: '700',
+                                                                                        padding: '3px 8px',
+                                                                                        borderRadius: '4px',
+                                                                                        border: 'none',
+                                                                                        backgroundColor: isSelected ? '#16A34A' : '#E2E8F0',
+                                                                                        color: isSelected ? '#FFFFFF' : '#334155',
+                                                                                        cursor: 'pointer',
+                                                                                        whiteSpace: 'nowrap'
+                                                                                    }}
+                                                                                >
+                                                                                    {isSelected ? 'Actual' : 'Elegir'}
+                                                                                </button>
+                                                                            </div>
+                                                                        );
+                                                                    })
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
-                                                {getSelectedClientDetails()?.contact_name && (
+                                            )}
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.78rem', color: '#166534', flexWrap: 'wrap', borderTop: '1px solid #DCFCE7', paddingTop: '0.45rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <MapPin size={13} strokeWidth={1.5} style={{ color: '#15803D' }} />
+                                                    <span style={{ fontWeight: '700' }}>{selectedClientDetails?.address || 'Sin dirección'}</span>
+                                                    <span style={{ opacity: 0.85 }}>({selectedClientDetails?.city || 'Bogotá'})</span>
+                                                </div>
+                                                {selectedClientDetails?.contact_name && (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <User size={12} strokeWidth={1.5} style={{ color: '#15803D' }} />
-                                                        <span>{getSelectedClientDetails()?.contact_name}</span>
-                                                        {getSelectedClientDetails()?.contact_phone && (
-                                                            <span style={{ opacity: 0.8 }}>• {getSelectedClientDetails()?.contact_phone}</span>
+                                                        <User size={13} strokeWidth={1.5} style={{ color: '#15803D' }} />
+                                                        <span>{selectedClientDetails?.contact_name}</span>
+                                                        {selectedClientDetails?.contact_phone && (
+                                                            <span style={{ opacity: 0.85 }}>• {selectedClientDetails?.contact_phone}</span>
                                                         )}
                                                     </div>
                                                 )}
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Globe size={12} strokeWidth={1.5} style={{ color: '#15803D' }} />
-                                                    <span style={{ fontWeight: '600' }}>{getSelectedClientDetails()?.latitude ? 'GPS Confirmado' : 'GPS Pendiente'}</span>
+                                                    <Globe size={13} strokeWidth={1.5} style={{ color: '#15803D' }} />
+                                                    <span style={{ fontWeight: '600' }}>{selectedClientDetails?.latitude ? 'GPS Confirmado' : 'GPS Pendiente'}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -3950,8 +4292,8 @@ function CreateOrderContent() {
                                     {/* Mesa de Trabajo Header: Client Validation */}
                                     <div style={{ 
                                         padding: '1.25rem 2rem', 
-                                        backgroundColor: importValidation.isMatch ? '#F0FDF4' : '#FFF7ED', 
-                                        borderBottom: `1px solid ${importValidation.isMatch ? '#BBF7D0' : '#FFEDD5'}`,
+                                        backgroundColor: isAuditClientMatch ? '#F0FDF4' : '#FFF7ED', 
+                                        borderBottom: `1px solid ${isAuditClientMatch ? '#BBF7D0' : '#FFEDD5'}`,
                                         display: 'flex',
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
@@ -3959,17 +4301,75 @@ function CreateOrderContent() {
                                         gap: '1rem'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                            <div style={{ color: importValidation.isMatch ? '#16A34A' : '#D97706' }}>{importValidation.isMatch ? <CheckCircle2 size={24} strokeWidth={1.5} /> : <AlertTriangle size={24} strokeWidth={1.5} />}</div>
+                                            <div style={{ color: isAuditClientMatch ? '#16A34A' : '#D97706' }}>
+                                                {isAuditClientMatch ? <CheckCircle2 size={26} strokeWidth={1.7} /> : <AlertTriangle size={26} strokeWidth={1.7} />}
+                                            </div>
                                             <div>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: importValidation.isMatch ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                    Validación de Cliente (Auditoría)
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isAuditClientMatch ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Validación de Cliente (Auditoría en Vivo)
                                                 </div>
-                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>
-                                                    Documento detectado para: <span style={{ textDecoration: 'underline' }}>{importValidation.clientInDocument}</span>
+                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <span>Documento detectado para:</span>
+                                                    <span style={{ textDecoration: 'underline', color: isAuditClientMatch ? '#15803D' : '#C2410C' }}>
+                                                        {importValidation.clientInDocument}
+                                                    </span>
                                                 </div>
-                                                {!importValidation.isMatch && (
-                                                    <div style={{ fontSize: '0.85rem', color: '#C2410C', fontWeight: '600', marginTop: '2px' }}>
-                                                        ¡ALERTA! El nombre del documento no coincide con el cliente seleccionado.
+                                                {!selectedClient ? (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
+                                                            ⚠️ No has seleccionado la empresa en el sistema.
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setClientSearch(importValidation.clientInDocument)}
+                                                            style={{
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: '#DC2626',
+                                                                color: '#FFFFFF',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '4px',
+                                                                border: 'none',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            ⚡ Buscar "{importValidation.clientInDocument}"
+                                                        </button>
+                                                    </div>
+                                                ) : !isAuditClientMatch ? (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
+                                                            ⚠️ El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionada la empresa <b>{selectedClientDetails?.company_name}</b>.
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedClient('');
+                                                                setClientSearch(importValidation.clientInDocument);
+                                                                showToast(`🔍 Buscando cliente: ${importValidation.clientInDocument}`, 'info');
+                                                            }}
+                                                            style={{
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: '#EA580C',
+                                                                color: '#FFFFFF',
+                                                                padding: '3px 10px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                            }}
+                                                        >
+                                                            <Search size={12} />
+                                                            <span>Cambiar a "{importValidation.clientInDocument}"</span>
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
+                                                        ✅ Empresa validada correctamente ({selectedClientDetails?.company_name}).
                                                     </div>
                                                 )}
                                             </div>
@@ -4247,7 +4647,7 @@ function CreateOrderContent() {
                                                                     </div>
                                                                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                                         <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 7px', borderRadius: '6px', fontWeight: '900' }}>
-                                                                            {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
+                                                                            {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnitInFile || item.originalUnit)}
                                                                         </span>
                                                                         {/* SEMÁFORO DE CONFIANZA */}
                                                                         {item.suggestedProduct ? (
@@ -4585,7 +4985,7 @@ function CreateOrderContent() {
                                                                         <input 
                                                                             type="text"
                                                                             id={`staged-qty-input-${idx}`}
-                                                                            value={item.originalQty !== undefined ? item.originalQty : item.quantity}
+                                                                            value={item.quantity}
                                                                             onFocus={(e) => {
                                                                                 e.target.select();
                                                                                 scrollToStagedRow(idx);
@@ -4594,12 +4994,8 @@ function CreateOrderContent() {
                                                                                 if (e.key === 'Enter') {
                                                                                     e.preventDefault();
                                                                                     const val = evaluateMathExpression(e.currentTarget.value);
-                                                                                    if (item.originalQty !== undefined) {
-                                                                                        updateStagedItem(item.id, 'originalQty', val);
-                                                                                        updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
-                                                                                    } else {
-                                                                                        updateStagedItem(item.id, 'quantity', val);
-                                                                                    }
+                                                                                    updateStagedItem(item.id, 'quantity', val);
+                                                                                    updateStagedItem(item.id, 'originalQty', val);
                                                                                     const nextIdx = idx + 1;
                                                                                     const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                                                                     if (nextInput) {
@@ -4613,22 +5009,14 @@ function CreateOrderContent() {
                                                                             }}
                                                                             onBlur={(e) => {
                                                                                 const val = evaluateMathExpression(e.currentTarget.value);
-                                                                                if (item.originalQty !== undefined) {
-                                                                                    updateStagedItem(item.id, 'originalQty', val);
-                                                                                    updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
-                                                                                } else {
-                                                                                    updateStagedItem(item.id, 'quantity', val);
-                                                                                }
+                                                                                updateStagedItem(item.id, 'quantity', val);
+                                                                                updateStagedItem(item.id, 'originalQty', val);
                                                                             }}
                                                                             onChange={(e) => {
                                                                                 const rawVal = e.target.value;
                                                                                 const val = evaluateMathExpression(rawVal);
-                                                                                if (item.originalQty !== undefined) {
-                                                                                    updateStagedItem(item.id, 'originalQty', rawVal);
-                                                                                    updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
-                                                                                } else {
-                                                                                    updateStagedItem(item.id, 'quantity', rawVal);
-                                                                                }
+                                                                                updateStagedItem(item.id, 'quantity', rawVal);
+                                                                                updateStagedItem(item.id, 'originalQty', val);
                                                                             }}
                                                                             style={{ 
                                                                                 width: '75px', 
@@ -4642,7 +5030,7 @@ function CreateOrderContent() {
                                                                             }}
                                                                         />
                                                                         <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '40px', textAlign: 'left' }}>
-                                                                            {item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg'}
+                                                                            {item.suggestedProduct?.unit_of_measure || item.originalUnit || 'Kg'}
                                                                         </span>
                                                                     </div>
                                                                 </td>
@@ -4792,12 +5180,15 @@ function CreateOrderContent() {
                                 </div>
 
                             {filteredProducts.length > 0 && (
-                                <div style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                    backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
-                                    maxHeight: '280px', overflowY: 'auto'
-                                }}>
+                                <div 
+                                    ref={productSuggestionsListRef}
+                                    style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                                        backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
+                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
+                                        maxHeight: '280px', overflowY: 'auto'
+                                    }}
+                                >
                                     {filteredProducts.map((p, idx) => {
                                         const isScarcityLocked = Boolean(scarcityLockedMap[p.id]);
                                         const exc = clientExceptions.find(e => e.product_id === p.id);
@@ -5828,7 +6219,7 @@ function CreateOrderContent() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                                             <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
                                             <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
-                                                {formatDetectedUnit(stagedItem.originalQtyInFile || stagedItem.quantity, stagedItem.originalUnit)}
+                                                {formatDetectedUnit(stagedItem.originalQtyInFile || stagedItem.quantity, stagedItem.originalUnitInFile || stagedItem.originalUnit)}
                                             </span>
                                         </div>
                                         <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={stagedItem.originalName}>

@@ -325,6 +325,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         weight_kg: initialWeight(),
         web_conversion_factor: initialWebFactor(),
         iva_rate: product.iva_rate ?? 19,
+        min_inventory_level: product.min_inventory_level ?? 0,
         utility_deviation_pct: product.utility_deviation_pct ?? 0,
         inherit_price: (product as any).inherit_price ?? false
     });
@@ -1543,21 +1544,19 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                             >
                                                 <option value="">SELECCIONAR EQUIPO...</option>
-                                                <option value="AGUACATES">AGUACATES</option>
-                                                <option value="ALISTAMIENTO ABARROTES">ALISTAMIENTO ABARROTES</option>
+                                                <option value="ALISTAMIENTO ABARROTES Y FRUTOS SECOS">ALISTAMIENTO ABARROTES Y FRUTOS SECOS</option>
+                                                <option value="ALISTAMIENTO AGUACATES">ALISTAMIENTO AGUACATES</option>
                                                 <option value="ALISTAMIENTO BATAVIA">ALISTAMIENTO BATAVIA</option>
-                                                <option value="ALISTAMIENTO EN SECO PAPAS">ALISTAMIENTO EN SECO PAPAS</option>
-                                                <option value="ALISTAMIENTO EN SECO PLATANOS">ALISTAMIENTO EN SECO PLATANOS</option>
-                                                <option value="ALISTAMIENTO EN SECO TOMATE">ALISTAMIENTO EN SECO TOMATE</option>
-                                                <option value="ALISTAMIENTO FRUTOS SECOS">ALISTAMIENTO FRUTOS SECOS</option>
+                                                <option value="ALISTAMIENTO FRESAS Y MORAS">ALISTAMIENTO FRESAS Y MORAS</option>
+                                                <option value="ALISTAMIENTO FRUTAS DE ALTA DEMANDA">ALISTAMIENTO FRUTAS DE ALTA DEMANDA</option>
+                                                <option value="ALISTAMIENTO FRUTAS DE BAJA DEMANDA">ALISTAMIENTO FRUTAS DE BAJA DEMANDA</option>
+                                                <option value="ALISTAMIENTO HORTALIZAS">ALISTAMIENTO HORTALIZAS</option>
+                                                <option value="ALISTAMIENTO LACTEOS Y REFRIGERADOS">ALISTAMIENTO LACTEOS Y REFRIGERADOS</option>
+                                                <option value="ALISTAMIENTO PAPAS Y TUBERCULOS">ALISTAMIENTO PAPAS Y TUBERCULOS</option>
+                                                <option value="ALISTAMIENTO PLATANOS">ALISTAMIENTO PLATANOS</option>
                                                 <option value="ALISTAMIENTO PROCESADOS">ALISTAMIENTO PROCESADOS</option>
-                                                <option value="EQUIPO A VEGETALES">EQUIPO A VEGETALES</option>
-                                                <option value="EQUIPO B FRUTAS Y OTROS">EQUIPO B FRUTAS Y OTROS</option>
-                                                <option value="FRESAS Y MORA">FRESAS Y MORA</option>
-                                                <option value="FRUTA BAJA DEMANDA">FRUTA BAJA DEMANDA</option>
-                                                <option value="HIERBAS Y HORTALIZAS">HIERBAS Y HORTALIZAS</option>
-                                                <option value="LACTEOS Y REFRIGERADOS">LACTEOS Y REFRIGERADOS</option>
-                                                <option value="LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO">LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO</option>
+                                                <option value="ALISTAMIENTO TOMATES">ALISTAMIENTO TOMATES</option>
+                                                <option value="ALISTAMIENTO VERDURAS">ALISTAMIENTO VERDURAS</option>
                                             </select>
                                         </div>
                                         <div>
@@ -1605,6 +1604,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             >
                                                 <option value="">SELECCIONAR GRUPO...</option>
                                                 <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
+                                                <option value="INVENTARIO DE FRESAS Y MORAS">INVENTARIO DE FRESAS Y MORAS</option>
                                                 <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
                                                 <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
                                                 <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
@@ -1616,7 +1616,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                                 {/* Columna Derecha: Parámetros Operativos */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '0.8rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 0.9fr', gap: '0.8rem' }}>
                                         <div>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                                                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: '700', color: '#374151', margin: 0 }}>
@@ -1652,19 +1652,47 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>
-                                                {formData.unit_of_measure?.toLowerCase() === 'unidad' ? 'Peso Log. (kg)' : 'Mínimo (kg)'}
+                                                Peso Log. (kg)
                                             </label>
                                             <input
                                                 type="number"
                                                 step="0.001"
                                                 min="0.001"
-                                                value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : 0.1}
+                                                value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : (formData.unit_of_measure?.toLowerCase() === 'unidad' ? 1.0 : 0.1)}
                                                 onChange={(e) => {
                                                     const val = e.target.value === '' ? 0.1 : parseFloat(e.target.value);
                                                     setFormData({ ...formData, weight_kg: val });
                                                 }}
                                                 onFocus={(e) => e.target.select()}
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '1rem', fontWeight: '800' }}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#B91C1C', marginBottom: '4px' }}>
+                                                Mín. Inventario ({formData.unit_of_measure || 'Kg'})
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={formData.min_inventory_level !== undefined && formData.min_inventory_level !== null ? formData.min_inventory_level : 0}
+                                                onChange={(e) => {
+                                                    const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                                                    setFormData({ ...formData, min_inventory_level: isNaN(val) ? 0 : val });
+                                                }}
+                                                onFocus={(e) => e.target.select()}
+                                                placeholder="0"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '0.8rem', 
+                                                    borderRadius: '8px', 
+                                                    border: formData.min_inventory_level && formData.min_inventory_level > 0 ? '1.5px solid #FCA5A5' : '1px solid #D1D5DB', 
+                                                    backgroundColor: formData.min_inventory_level && formData.min_inventory_level > 0 ? '#FEF2F2' : '#FFFFFF', 
+                                                    fontSize: '1rem', 
+                                                    fontWeight: '800', 
+                                                    color: formData.min_inventory_level && formData.min_inventory_level > 0 ? '#991B1B' : '#374151' 
+                                                }}
                                             />
                                         </div>
 

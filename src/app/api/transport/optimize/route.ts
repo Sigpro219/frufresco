@@ -614,7 +614,7 @@ async function generateAiExplanation(orders: any[], vehicles: any[], assignments
         const genAI = new GoogleGenerativeAI(apiKey);
         
         // Try models in order of preference
-        const modelsToTry = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
+        const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
         let explanation = "";
         let errorDetails = "";
 
@@ -689,7 +689,7 @@ Menciona explícitamente y al inicio del informe que NO se pudieron programar to
 * ⚖️ Las asignaciones se realizaron asegurando el cumplimiento estricto de los límites de peso (**kg**) y capacidad de canastillas de cada vehículo.
 * 📍 El agrupamiento de entregas se calculó minimizando las distancias geográficas y optimizando los tiempos estimados de llegada.
 
-*(Nota: No se pudo generar la explicación detallada por IA debido a una indisponibilidad temporal del servicio de Google Gemini. Sin embargo, la optimización física de rutas se completó con éxito).*`;
+*(Nota: El modelo de Inteligencia Artificial ya no está vigente o requiere actualización. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo. Sin embargo, la optimización física de rutas se completó con éxito).*`;
 
         if (unassignedOrders && unassignedOrders.length > 0) {
             programmaticExplanation = `### ⚠️ ATENCIÓN: Planificación Incompleta (Pedidos Sin Asignar)

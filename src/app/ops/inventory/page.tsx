@@ -143,6 +143,21 @@ const DEFAULT_WORK_CELLS: WorkCell[] = [
         description: 'Abarrotes, frutos secos, lácteos y carnes frías'
     },
     {
+        id: 'cell_fresas',
+        name: 'Célula de Fresas & Moras',
+        short_name: 'Fresas & Moras',
+        icon: 'apple',
+        inventory_group: 'INVENTARIO DE FRESAS Y MORAS',
+        categories: ['FRUTAS'],
+        buying_teams: [],
+        leader_id: null,
+        leader_name: 'FRESAS',
+        color: '#BE123C',
+        badge_bg: '#FFE4E6',
+        badge_text: '#881337',
+        description: 'Fresas, moras y frutos rojos'
+    },
+    {
         id: 'cell_frutas',
         name: 'Célula de Frutas & Otros',
         short_name: 'Frutas & Otros',

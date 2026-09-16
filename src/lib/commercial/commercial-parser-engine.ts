@@ -1,4 +1,4 @@
-﻿import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { sanitizeDocText, findBestProductMatchDetails, resolveClientProfile } from '@/lib/orders/order-parser-engine';
 import * as XLSX from 'xlsx';
 
@@ -41,11 +41,11 @@ export async function extractCommercialProposalAI(
 ): Promise<CommercialProposalExtraction> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const modelsToTry = [
-    'gemini-2.5-flash-lite',
-    'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-2.0-flash'
+    'gemini-2.5-pro',
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite'
   ];
 
   const prompt = `
@@ -60,22 +60,23 @@ export async function extractCommercialProposalAI(
     """
     
     TAREA:
-    1. Analiza el documento adjunto o texto para extraer la propuesta de PRECIOS / TARIFAS comerciales enviada por el cliente.
-    2. Identifica el nombre de la empresa / cliente, NIT, dirección, teléfono y el período de vigencia solicitado (ej. "Septiembre 2026", "Semana 35", etc.).
-    3. Para cada ítem/producto solicitado, extrae:
-       - "accounting_id": Código contable, PLU o SKU del cliente si está presente (ej. "1042", "PLU-201"), o null.
-       - "client_product_name": Nombre exacto del producto tal como lo solicita el cliente.
-       - "client_proposed_price": Precio unitario numérico ofertado/propuesto por el cliente (ej. 3500. Sin símbolos de moneda ni comas de miles).
-       - "unit": Unidad de medida (Kg, Lb, Unidad, Caja, Litro, etc.). Si no se especifica, usa "Kg".
-       - "observations": Especificaciones de calidad o notas asociadas al producto.
-    
-    REGLAS CRÍTICAS:
-    - Extrae el PRECIO o TARIFA del producto, NO cantidades pedidas.
-    - Las cifras en "client_proposed_price" deben ser estrictamente numéricas (ej. 4200).
-    - Omite filas de subtotales, totales, impuestos o encabezados repetidos.
-    - Devuelve ÚNICAMENTE un objeto JSON puro con la estructura especificada.
+    1. Identifica el nombre de la empresa / cliente que solicita o negocia la cotización.
+    2. Identifica el NIT de la empresa si aparece.
+    3. Identifica la dirección de entrega o ciudad si aparece.
+    4. Identifica el teléfono o contacto si aparece.
+    5. Identifica las fechas de vigencia propuestas (inicio y fin) si se mencionan en el correo o adjunto.
+    6. Extrae cada uno de los productos solicitados con:
+       - accounting_id: Código o referencia contable si está presente en el texto/documento (ej. "1042", "REF-001"), o null si no existe.
+       - client_product_name: Nombre exacto con el que el cliente llama al producto en su documento o correo.
+       - client_proposed_price: Precio que el cliente ofrece o solicita pagar por unidad (número), o null si es una solicitud de cotización abierta donde nosotros debemos poner el precio.
+       - unit: Unidad de medida mencionada (Kg, Und, Gramos, Bolsa, etc.).
+       - observations: Cualquier especificación técnica requerida por el cliente (ej. "Maduro", "Verde", "Empacado al vacío", etc.) o null.
 
-    FORMATO DE RESPUESTA ESPERADO:
+    REGLAS CRÍTICAS:
+    - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
+    - Si las cantidades o precios tienen separadores de miles o decimales, conviértelos a números estándar.
+    
+    FORMATO JSON ESPERADO:
     {
       "client_name": "Nombre de la Empresa / Cliente",
       "client_nit": "NIT o cédula si está presente o null",
@@ -96,33 +97,80 @@ export async function extractCommercialProposalAI(
     }
   `;
 
+  const isPdf = mimeType === 'application/pdf';
+  const modelsToTry = isPdf
+    ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+    : ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash-lite'];
+
   let resultText: string | null = null;
   let successfulModel: string = '';
   let lastError: any = null;
+  let allModelsNotFound = true;
 
   for (const modelName of modelsToTry) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const contents: any[] = [];
-      if (base64Data) {
-        contents.push({ inlineData: { data: base64Data, mimeType } });
+      const parts: any[] = [];
+      if (base64Data && base64Data.trim().length > 0) {
+        parts.push({
+          inline_data: {
+            mime_type: mimeType,
+            data: base64Data.trim()
+          }
+        });
       }
-      contents.push({ text: prompt });
+      parts.push({ text: prompt });
 
-      const res = await model.generateContent(contents);
-      const text = (await res.response).text().trim();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts }] }),
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = data?.error?.message || response.statusText || 'Error desconocido';
+        console.warn(`[CommercialParserEngine] Error ${response.status} con ${modelName}:`, errorMsg);
+
+        if (response.status !== 404 && response.status !== 410) {
+          allModelsNotFound = false;
+        }
+
+        if (errorMsg.includes('has no pages') || errorMsg.includes('no pages')) {
+          throw new Error('El documento adjunto no contiene páginas legibles o está vacío.');
+        }
+
+        lastError = new Error(`[Gemini ${response.status}] ${errorMsg}`);
+        continue;
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (text) {
         resultText = text;
         successfulModel = modelName;
         break;
       }
     } catch (err: any) {
+      if (err.message && err.message.includes('páginas')) {
+        throw err;
+      }
       lastError = err;
     }
   }
 
   if (!resultText) {
-    throw lastError || new Error('No se pudo procesar la propuesta con Gemini.');
+    if (allModelsNotFound) {
+      throw new Error('El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo.');
+    }
+    throw lastError || new Error('No fue posible procesar la propuesta comercial con el motor de Inteligencia Artificial.');
   }
 
   // Parse JSON

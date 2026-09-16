@@ -48,6 +48,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         animation: 'spin 1s linear infinite' 
                     }} />
                     <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Verificando credenciales...</span>
+                    
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            if (typeof window !== 'undefined') {
+                                localStorage.clear();
+                                window.location.href = '/login';
+                            }
+                        }}
+                        style={{
+                            marginTop: '0.5rem',
+                            backgroundColor: 'transparent',
+                            border: '1px solid #CBD5E1',
+                            color: '#64748B',
+                            borderRadius: '8px',
+                            padding: '5px 12px',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        ¿Tarda mucho? Iniciar sesión de nuevo
+                    </button>
                 </div>
                 <style dangerouslySetInnerHTML={{ __html: `
                     @keyframes spin { to { transform: rotate(360deg); } }

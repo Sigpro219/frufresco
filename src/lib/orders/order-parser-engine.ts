@@ -32,47 +32,105 @@ export async function fetchGeminiExtraction(
   base64Data?: string,
   mimeType: string = 'application/pdf'
 ): Promise<any> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const modelsToTry = [
-    'gemini-2.5-flash-lite',
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite'
-  ];
+  const isPdf = mimeType === 'application/pdf';
+  // Modelos válidos en la API v1beta:
+  // - Para PDF: gemini-2.5-flash y gemini-2.5-flash-lite son nativamente multimodales con soporte de documentos.
+  //   Los modelos gemini-3.x en v1beta no aceptan documentos PDF en inline_data y devuelven 400 INVALID_ARGUMENT.
+  const modelsToTry = isPdf
+    ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+    : ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash-lite'];
+
   let resultText: string | null = null;
   let successfulModel: string = '';
   let lastError: any = null;
+  let allModelsNotFound = true;
 
   for (const modelName of modelsToTry) {
     try {
       console.log(`[OrderParserEngine] Extrayendo con modelo ultrarrápido: ${modelName}...`);
-      const model = genAI.getGenerativeModel({ model: modelName });
-      
-      const contents: any[] = [];
-      if (base64Data) {
-        contents.push({ inlineData: { data: base64Data, mimeType } });
-      }
-      contents.push({ text: prompt });
 
-      const res = await model.generateContent(contents);
-      const text = (await res.response).text().trim();
+      const parts: any[] = [];
+      if (base64Data && base64Data.trim().length > 0) {
+        parts.push({
+          inline_data: {
+            mime_type: mimeType,
+            data: base64Data.trim()
+          }
+        });
+      }
+      parts.push({ text: prompt });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts }] }),
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = data?.error?.message || response.statusText || 'Error desconocido';
+        console.warn(`[OrderParserEngine] Respuesta ${response.status} con modelo ${modelName}:`, errorMsg);
+
+        // Si el modelo NO es un 404/410, no consideramos que todos los modelos están deprecados
+        if (response.status !== 404 && response.status !== 410) {
+          allModelsNotFound = false;
+        }
+
+        // Si el error es de cliente (el archivo no tiene páginas, documento inválido, etc.)
+        // NO tiene sentido reintentar con otros modelos: el archivo es el que tiene el problema.
+        if (errorMsg.includes('has no pages') || errorMsg.includes('no pages') || errorMsg.includes('empty page')) {
+          throw new Error('Archivo dañado o no compatible. El documento PDF no contiene páginas legibles o está vacío. Por favor verifique que sea un documento PDF original completo.');
+        }
+
+        if (response.status === 400 && (errorMsg.includes('corrupted') || errorMsg.includes('failed to parse') || errorMsg.includes('invalid argument'))) {
+          throw new Error(`Archivo dañado o no compatible. No fue posible interpretar la estructura del documento.`);
+        }
+
+        lastError = new Error(`[Gemini ${response.status}] ${errorMsg}`);
+        continue;
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (text) {
         resultText = text;
         successfulModel = modelName;
         console.log(`[OrderParserEngine] ✅ Extracción exitosa con modelo ${modelName}`);
         break;
+      } else {
+        lastError = new Error(`El modelo ${modelName} no devolvió texto en la respuesta.`);
       }
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn(`[OrderParserEngine] Timeout de 45s con modelo ${modelName}`);
+        lastError = new Error(`Timeout esperando respuesta del modelo ${modelName}`);
+        allModelsNotFound = false;
+        continue;
+      }
+
+      // Si es un error explícito de archivo sin páginas o corrupto, lo propagamos de inmediato
+      if (err.message && (err.message.includes('páginas') || err.message.includes('corrupto') || err.message.includes('vacío'))) {
+        throw err;
+      }
+
       console.warn(`[OrderParserEngine] Advertencia con modelo ${modelName}:`, err.message);
       lastError = err;
-      // Continuar inmediatamente al siguiente modelo de respaldo
     }
   }
 
   if (!resultText) {
-    throw lastError || new Error('No se pudo establecer comunicación con la API de Gemini.');
+    if (allModelsNotFound) {
+      throw new Error('El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo.');
+    }
+    throw lastError || new Error('No fue posible procesar el documento con el motor de Inteligencia Artificial. Verifique el archivo o ingrese los datos manualmente.');
   }
 
   // Sanitizar el bloque JSON de la respuesta de forma ultra-robusta
@@ -117,64 +175,124 @@ export function resolveClientProfile(
 ): any | null {
   if (!profiles || profiles.length === 0) return null;
 
-  // Capa 1: Coincidencia por NIT
   const cleanNit = (clientInfo.nit || '').replace(/[^0-9]/g, '');
+  const cleanName = sanitizeDocText(clientInfo.name || '');
+  const cleanAddress = sanitizeDocText(clientInfo.address || '');
+  const sigText = sanitizeDocText(clientInfo.signatureText || '');
+  const fullSearchContext = `${cleanName} ${cleanAddress} ${sigText}`.toLowerCase();
+
+  const stopWords = ['caja', 'compensacion', 'familiar', 'colsubsidio', 'sas', 's.a.s', 's.a.', 'ltda', 'sociedad', 'sede', 'sucursal', 'restaurante', 'empresa', 'cliente'];
+  const nameKeywords = cleanName
+    .split(/\s+/)
+    .map(w => w.replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length > 2 && !stopWords.includes(w));
+  
+  const addressNumbers = cleanAddress.match(/\b\d+[\w-]*\b/g) || [];
+
+  const scoreCandidateBranch = (p: any): number => {
+    let score = 0;
+    const compName = sanitizeDocText(p.company_name || '');
+    const contactName = sanitizeDocText(p.contact_name || '');
+    const pAddress = sanitizeDocText(p.address || '');
+
+    // 1. Coincidencia de Dirección exacta o parcial
+    if (cleanAddress && pAddress) {
+      if (cleanAddress.includes(pAddress) || pAddress.includes(cleanAddress)) score += 50;
+      // Coincidencia de números de nomenclatura (calle, carrera, número)
+      if (addressNumbers.length > 0) {
+        let numMatches = 0;
+        addressNumbers.forEach(n => {
+          if (pAddress.includes(n)) numMatches++;
+        });
+        score += numMatches * 15;
+      }
+    }
+
+    // 2. Coincidencia de palabras clave del nombre de la sede (ej. "CESD", "53", "Galerias", "Bellavista", "Piscilago")
+    nameKeywords.forEach(kw => {
+      if (compName.includes(kw)) score += 20;
+      if (contactName.includes(kw)) score += 15;
+      if (pAddress.includes(kw)) score += 10;
+    });
+
+    // 3. Coincidencia en contexto completo (ej. documento menciona palabras de compName)
+    const branchSpecificWords = compName.split(/\s+/).filter(w => w.length > 3 && !stopWords.includes(w));
+    branchSpecificWords.forEach(w => {
+      if (fullSearchContext.includes(w)) score += 10;
+    });
+
+    return score;
+  };
+
+  // Capa 1: Coincidencia por NIT (con Desambiguación Multisede)
   if (cleanNit && cleanNit.length >= 6) {
-    const matched = profiles.find(p => {
+    const nitCandidates = profiles.filter(p => {
       const pNit = (p.nit || '').replace(/[^0-9]/g, '');
       return pNit && (pNit.includes(cleanNit) || cleanNit.includes(pNit));
     });
-    if (matched) return matched;
+
+    if (nitCandidates.length === 1) {
+      return nitCandidates[0];
+    } else if (nitCandidates.length > 1) {
+      // Ordenar candidatos por puntuación de sede (dirección + nombre)
+      const scored = nitCandidates.map(p => ({ profile: p, score: scoreCandidateBranch(p) }));
+      scored.sort((a, b) => b.score - a.score);
+      if (scored[0].score > 0) {
+        return scored[0].profile;
+      }
+      // Si ninguna sede específica coincidió con la dirección/nombre, preferir matriz o primera
+      const parentMatrix = nitCandidates.find(p => !p.parent_id);
+      return parentMatrix || nitCandidates[0];
+    }
   }
 
   // Capa 2: Coincidencia por Correo Electrónico
   const srcEmail = (clientInfo.email || '').toLowerCase().trim();
   if (srcEmail && srcEmail.includes('@')) {
-    const matched = profiles.find(p => {
+    const emailCandidates = profiles.filter(p => {
       const primaryEmail = (p.email || '').toLowerCase().trim();
       const altEmails = Array.isArray(p.alternate_emails) 
         ? p.alternate_emails.map((e: string) => e.toLowerCase().trim())
         : [];
       return primaryEmail === srcEmail || altEmails.includes(srcEmail);
     });
-    if (matched) return matched;
+    if (emailCandidates.length === 1) return emailCandidates[0];
+    if (emailCandidates.length > 1) {
+      const scored = emailCandidates.map(p => ({ profile: p, score: scoreCandidateBranch(p) }));
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0].profile;
+    }
   }
 
   // Capa 3: Coincidencia por Razón Social / Nombre Comercial / Sede Específica
-  const cleanName = sanitizeDocText(clientInfo.name || '');
-  const cleanAddress = sanitizeDocText(clientInfo.address || '');
   if (cleanName && cleanName.length >= 3) {
-    // Si contiene sede específica (ej: "Colegio Norte", "Ceic Norte", "El Cubo", "Peñalisa")
-    const matchedSede = profiles.find(p => {
-      const compName = sanitizeDocText(p.company_name || '');
-      const pAddress = sanitizeDocText(p.address || '');
-      // Match si la dirección del perfil coincide con la dirección del documento
-      if (cleanAddress && pAddress && (pAddress.includes(cleanAddress) || cleanAddress.includes(pAddress.replace(/[^a-z0-9]/g, '')))) {
-        return true;
-      }
-      // Match si el nombre contiene la sede (ej. "Norte", "Ceic", "Cubo")
-      const nameWords = cleanName.split(/\s+/).filter(w => w.length > 3 && !['caja', 'compensacion', 'familiar', 'colsubsidio', 'sas', 'ltda'].includes(w));
-      return nameWords.length > 0 && nameWords.some(w => compName.includes(w));
-    });
-    if (matchedSede) return matchedSede;
-
-    const matched = profiles.find(p => {
+    const nameCandidates = profiles.filter(p => {
       const compName = sanitizeDocText(p.company_name || '');
       const contactName = sanitizeDocText(p.contact_name || '');
       return (compName && (compName.includes(cleanName) || cleanName.includes(compName.split(' ')[0]))) ||
              (contactName && contactName.includes(cleanName));
     });
-    if (matched) return matched;
+
+    if (nameCandidates.length === 1) {
+      return nameCandidates[0];
+    } else if (nameCandidates.length > 1) {
+      const scored = nameCandidates.map(p => ({ profile: p, score: scoreCandidateBranch(p) }));
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0].profile;
+    }
   }
 
-  // Capa 4: Coincidencia por Texto de Firma, Dirección o Cuerpo del Correo
-  const sigText = sanitizeDocText(clientInfo.signatureText || '');
+  // Capa 4: Coincidencia por Texto de Firma o Contexto General
   if (sigText && sigText.length >= 5) {
-    const matched = profiles.find(p => {
+    const sigCandidates = profiles.filter(p => {
       const compName = sanitizeDocText(p.company_name || '');
       return compName && compName.length >= 4 && sigText.includes(compName);
     });
-    if (matched) return matched;
+    if (sigCandidates.length > 0) {
+      const scored = sigCandidates.map(p => ({ profile: p, score: scoreCandidateBranch(p) }));
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0].profile;
+    }
   }
 
   // Capa 5: Coincidencia por Dirección de Entrega en el Documento

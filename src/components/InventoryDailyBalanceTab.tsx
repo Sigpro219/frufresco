@@ -24,6 +24,8 @@ import {
     ChevronLeft,
     ChevronsLeft,
     ChevronsRight,
+    ChevronsUpDown,
+    Check,
     FolderPlus,
     FolderMinus,
     ArrowUpDown, 
@@ -42,7 +44,11 @@ import {
     Wheat,
     FileText,
     ArrowDownToLine,
-    Columns
+    Columns,
+    Database,
+    Sparkles,
+    Info,
+    Dna
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { WorkCell } from '@/types/workCells';
@@ -176,7 +182,45 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     const todayStr = new Date().toISOString().split('T')[0];
     const [balanceDate, setBalanceDate] = useState<string>(todayStr);
     const [selectedCell, setSelectedCell] = useState<string>('ALL');
+    const [isCellComboboxOpen, setIsCellComboboxOpen] = useState(false);
+    const [cellComboboxSearch, setCellComboboxSearch] = useState('');
+    const cellComboboxRef = useRef<HTMLDivElement>(null);
+
+    const cellOptions = useMemo(() => [
+        { value: 'ALL', label: `Todas (${workCells.length})`, icon: <Boxes size={14} color="#0D7A57" strokeWidth={2} /> },
+        ...workCells.map(c => ({
+            value: c.inventory_group || c.name,
+            label: c.short_name || c.name,
+            icon: renderCellLucideIcon(c, 14)
+        }))
+    ], [workCells]);
+
+    const selectedCellOption = useMemo(() => {
+        return cellOptions.find(opt => opt.value === selectedCell) || cellOptions[0];
+    }, [cellOptions, selectedCell]);
+
+    const filteredCellOptions = useMemo(() => {
+        if (!cellComboboxSearch.trim()) return cellOptions;
+        const term = cellComboboxSearch.toLowerCase().trim();
+        return cellOptions.filter(opt => opt.label.toLowerCase().includes(term));
+    }, [cellOptions, cellComboboxSearch]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (cellComboboxRef.current && !cellComboboxRef.current.contains(event.target as Node)) {
+                setIsCellComboboxOpen(false);
+            }
+        };
+        if (isCellComboboxOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isCellComboboxOpen]);
+
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [showHelpTooltip, setShowHelpTooltip] = useState<boolean>(false);
     const [loading, setLoading] = useState<boolean>(true);
     const [refreshing, setRefreshing] = useState<boolean>(false);
 
@@ -591,8 +635,60 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         return families;
     }, [dailyRows]);
 
+    // Lógica de búsqueda inteligente y etiquetas (#ID, @tags, multi-búsqueda por comas)
+    const matchSearchSegment = (row: InventoryDailyRow, segment: string): boolean => {
+        const trimmed = segment.trim();
+        if (!trimmed) return true;
+
+        // Soporte #ID (ej: #15, #1528)
+        if (trimmed.startsWith('#')) {
+            const id = trimmed.slice(1).trim();
+            return row.colB_idProducto?.toString() === id;
+        }
+
+        const parts = trimmed.split(/\s+/);
+        const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1).toLowerCase());
+        const searchTerms = parts.filter(pt => !pt.startsWith('@')).map(t => t.toLowerCase());
+
+        const matchesText = searchTerms.every(term => 
+            row.colD_productName?.toLowerCase().includes(term) ||
+            (row.sku || '')?.toLowerCase().includes(term) ||
+            row.colB_idProducto?.toString()?.toLowerCase().includes(term) ||
+            row.colC_inventoryGroup?.toLowerCase().includes(term)
+        );
+
+        if (!matchesText && searchTerms.length > 0) return false;
+
+        const matchesTags = tags.every(tag => {
+            if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
+                return row.colV_missing < 0;
+            }
+            if (tag === 'disponible' || tag === 'ok' || tag === 'positivo' || tag === 'constock' || tag === 'con_stock') {
+                return (row.colS_calculated || 0) > 0;
+            }
+            if (tag === 'agotado' || tag === 'cero' || tag === 'sin_stock' || tag === 'sinstock') {
+                return (row.colS_calculated || 0) <= 0;
+            }
+            if (tag === 'sobrante' || tag === 'sobrantes') return row.colW_surplus > 0;
+            if (tag === 'faltante' || tag === 'faltantes') return row.colV_missing < 0;
+            if (tag === 'merma' || tag === 'desperdicio') return (row.colQ_damageWaste > 0 || row.colR_cleaningWaste > 0 || row.colP_weighingWaste > 0);
+            if (tag === 'padre') return !row.parent_id || row.parent_id === row.productId;
+            if (tag === 'hijo') return Boolean(row.parent_id && row.parent_id !== row.productId);
+
+            // Filtro por grupo / célula de inventario (@fresas, @hortalizas, @verduras, @frutas, @papas, @abarrotes...)
+            if (row.colC_inventoryGroup?.toLowerCase().includes(tag)) return true;
+
+            return false;
+        });
+
+        return matchesTags;
+    };
+
     // Filtrado interactivo sobre las familias
     const filteredFamilies = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
+
         return dailyFamilies.filter(family => {
             // Filtro por Célula / Grupo
             if (selectedCell !== 'ALL') {
@@ -606,23 +702,15 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 if (!parentMatches && !childMatches) return false;
             }
 
-            // Filtro por búsqueda
-            if (searchQuery.trim()) {
-                const q = searchQuery.toLowerCase();
-                const matchParentName = family.parent.colD_productName.toLowerCase().includes(q);
-                const matchParentId = family.parent.colB_idProducto.toString().toLowerCase().includes(q);
-                const matchParentGroup = family.parent.colC_inventoryGroup.toLowerCase().includes(q);
-                const matchParentSku = (family.parent.sku || '').toLowerCase().includes(q);
-
-                const matchChildren = family.children.some(c =>
-                    c.colD_productName.toLowerCase().includes(q) ||
-                    c.colB_idProducto.toString().toLowerCase().includes(q) ||
-                    (c.sku || '').toLowerCase().includes(q)
-                );
-
-                if (!matchParentName && !matchParentId && !matchParentGroup && !matchParentSku && !matchChildren) {
+            // Filtro por búsqueda inteligente avanzada
+            if (segments.length > 0) {
+                const matchFamily = segments.every(seg => {
+                    if (matchSearchSegment(family.parent, seg)) return true;
+                    if (matchSearchSegment(family.consolidated, seg)) return true;
+                    if (family.children.some(child => matchSearchSegment(child, seg))) return true;
                     return false;
-                }
+                });
+                if (!matchFamily) return false;
             }
 
             return true;
@@ -1450,7 +1538,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 style={{
                     position: 'sticky',
                     top: '85px',
-                    zIndex: 50,
+                    zIndex: 70,
                     backgroundColor: 'rgba(255, 255, 255, 0.98)',
                     backdropFilter: 'blur(12px)',
                     WebkitBackdropFilter: 'blur(12px)',
@@ -1461,13 +1549,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '0.65rem',
-                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    flexWrap: 'nowrap',
+                    overflow: 'visible',
                     transition: 'all 0.2s ease-in-out'
                 }}
             >
                 {/* IZQUIERDA: Filtros Compactos */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1, minWidth: '320px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: '0' }}>
                     {/* Fecha */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha:</span>
@@ -1506,60 +1595,366 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
                     <div style={{ height: '18px', width: '1px', backgroundColor: '#E2E8F0' }} />
 
-                    {/* Célula */}
+                    {/* Combobox de Célula */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Célula:</span>
-                        <select
-                            value={selectedCell}
-                            onChange={e => { setSelectedCell(e.target.value); setCurrentPage(1); }}
-                            style={{
-                                padding: '0.3rem 0.6rem',
-                                borderRadius: '7px',
-                                border: '1px solid #CBD5E1',
-                                fontSize: '0.78rem',
-                                fontWeight: '700',
-                                backgroundColor: '#FFFFFF',
-                                color: '#1E293B',
-                                outline: 'none',
-                                maxWidth: '190px'
-                            }}
-                        >
-                            <option value="ALL">Todas ({workCells.length})</option>
-                            {workCells.map(c => (
-                                <option key={c.id} value={c.inventory_group || c.name}>
-                                    {c.short_name || c.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Buscador */}
-                    <div style={{ position: 'relative', flex: 1, minWidth: '150px', maxWidth: '240px' }}>
-                        <Search size={13} style={{ position: 'absolute', left: '8px', top: '7px', color: '#94A3B8' }} />
-                        <input
-                            type="text"
-                            placeholder="Buscar SKU, ID..."
-                            value={searchQuery}
-                            onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                            style={{
-                                width: '100%',
-                                padding: '0.28rem 0.5rem 0.28rem 1.7rem',
-                                borderRadius: '7px',
-                                border: '1px solid #CBD5E1',
-                                fontSize: '0.78rem',
-                                boxSizing: 'border-box',
-                                outline: 'none'
-                            }}
-                        />
-                        {searchQuery && (
+                        <div ref={cellComboboxRef} style={{ position: 'relative' }}>
                             <button
                                 type="button"
-                                onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                                style={{ position: 'absolute', right: '6px', top: '6px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#94A3B8', padding: 0 }}
+                                onClick={() => {
+                                    setIsCellComboboxOpen(prev => !prev);
+                                    setCellComboboxSearch('');
+                                }}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '0.28rem 0.65rem',
+                                    borderRadius: '7px',
+                                    border: `1px solid ${selectedCell !== 'ALL' ? '#0D7A57' : '#CBD5E1'}`,
+                                    backgroundColor: selectedCell !== 'ALL' ? '#EAEFEA' : '#FFFFFF',
+                                    color: selectedCell !== 'ALL' ? '#0D7A57' : '#1E293B',
+                                    fontWeight: '700',
+                                    fontSize: '0.78rem',
+                                    cursor: 'pointer',
+                                    outline: 'none',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    transition: 'all 0.2s',
+                                    height: '28px',
+                                    maxWidth: '200px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.borderColor = '#0D7A57'}
+                                onMouseLeave={(e) => e.currentTarget.style.borderColor = selectedCell !== 'ALL' ? '#0D7A57' : '#CBD5E1'}
+                                title="Filtrar por Célula / Grupo de Inventario"
                             >
-                                <X size={12} />
+                                <span style={{ display: 'flex', alignItems: 'center' }}>
+                                    {selectedCellOption.icon}
+                                </span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {selectedCellOption.label}
+                                </span>
+                                <ChevronsUpDown size={12} strokeWidth={2} style={{ opacity: 0.6, flexShrink: 0, marginLeft: '2px' }} />
                             </button>
-                        )}
+
+                            {isCellComboboxOpen && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 4px)',
+                                    left: 0,
+                                    width: '260px',
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                    border: '1px solid #E2E8F0',
+                                    zIndex: 100,
+                                    padding: '6px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '4px'
+                                }}>
+                                    {/* Buscador interno del Combobox */}
+                                    <div style={{ position: 'relative', padding: '2px 4px 6px 4px', borderBottom: '1px solid #E2E8F0' }}>
+                                        <Search size={13} strokeWidth={2} style={{ position: 'absolute', left: '12px', top: '40%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar célula..."
+                                            value={cellComboboxSearch}
+                                            onChange={(e) => setCellComboboxSearch(e.target.value)}
+                                            autoFocus
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.35rem 0.5rem 0.35rem 1.8rem',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '500',
+                                                borderRadius: '6px',
+                                                border: '1px solid #CBD5E1',
+                                                outline: 'none',
+                                                backgroundColor: '#F8FAF9',
+                                                color: '#0F172A',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            onFocus={(e) => e.currentTarget.style.borderColor = '#0D7A57'}
+                                            onBlur={(e) => e.currentTarget.style.borderColor = '#CBD5E1'}
+                                        />
+                                    </div>
+
+                                    {/* Lista de opciones */}
+                                    <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        {filteredCellOptions.length === 0 ? (
+                                            <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', color: '#94A3B8' }}>
+                                                No se encontraron células
+                                            </div>
+                                        ) : (
+                                            filteredCellOptions.map((opt) => {
+                                                const isSelected = selectedCell === opt.value;
+                                                return (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedCell(opt.value);
+                                                            setCurrentPage(1);
+                                                            setIsCellComboboxOpen(false);
+                                                        }}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            padding: '0.45rem 0.65rem',
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            backgroundColor: isSelected ? '#EAEFEA' : 'transparent',
+                                                            color: isSelected ? '#0D7A57' : '#1E293B',
+                                                            fontWeight: isSelected ? '700' : '500',
+                                                            fontSize: '0.76rem',
+                                                            cursor: 'pointer',
+                                                            textAlign: 'left',
+                                                            transition: 'all 0.12s ease',
+                                                            width: '100%'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            if (!isSelected) e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                                            <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                                                {opt.icon}
+                                                            </span>
+                                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {opt.label}
+                                                            </span>
+                                                        </div>
+                                                        {isSelected && (
+                                                            <Check size={14} strokeWidth={2.5} style={{ color: '#0D7A57', flexShrink: 0, marginLeft: '6px' }} />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Buscador Inteligente Potenciado + Contador + Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: '200px', maxWidth: '360px' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <div style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
+                                <Search size={14} strokeWidth={1.5} />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Buscar por nombre, ID (#), grupo (@)..."
+                                value={searchQuery}
+                                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.35rem 2rem 0.35rem 2rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '500',
+                                    backgroundColor: '#F8FAF9',
+                                    color: '#0F172A',
+                                    outline: 'none',
+                                    height: '32px',
+                                    boxSizing: 'border-box',
+                                    transition: 'all 0.2s'
+                                }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = '#0D7A57';
+                                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                    e.currentTarget.style.boxShadow = '0 0 0 2px rgba(13, 122, 87, 0.15)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = '#CBD5E1';
+                                    e.currentTarget.style.backgroundColor = '#F8FAF9';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '0.5rem',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#64748B',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '2px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#EAEFEA'
+                                    }}
+                                    title="Limpiar búsqueda"
+                                >
+                                    <X size={12} strokeWidth={2} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Contador de Familias Filtradas + Botón Info FUSIONADOS */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            height: '32px',
+                            backgroundColor: (searchQuery || selectedCell !== 'ALL') ? '#EAEFEA' : '#F8FAFC',
+                            color: (searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#64748B',
+                            border: `1px solid ${(searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#CBD5E1'}`,
+                            borderRadius: '8px',
+                            padding: '0 0 0 0.65rem',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            flexShrink: 0,
+                            position: 'relative',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                            transition: 'all 0.2s ease'
+                        }}>
+                            {/* Conteo de Familias */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', paddingRight: '0.45rem' }}>
+                                {(searchQuery || selectedCell !== 'ALL') ? <Search size={12} strokeWidth={2} /> : <Database size={12} strokeWidth={2} />}
+                                <span>
+                                    {(searchQuery || selectedCell !== 'ALL') ? (
+                                        <>
+                                            <strong style={{ color: '#0D7A57' }}>{formatNumber(filteredFamilies.length)}</strong>
+                                            <span style={{ fontWeight: '450', color: '#64748B', marginLeft: '3px' }}>de {formatNumber(dailyFamilies.length)}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <strong style={{ color: '#0F172A' }}>{formatNumber(dailyFamilies.length)}</strong>
+                                            <span style={{ fontWeight: '450', color: '#64748B', marginLeft: '3px' }}>familias</span>
+                                        </>
+                                    )}
+                                </span>
+                            </div>
+
+                            {/* Divisor vertical */}
+                            <div style={{ width: '1px', height: '18px', backgroundColor: (searchQuery || selectedCell !== 'ALL') ? '#A7D7C5' : '#E2E8F0' }} />
+
+                            {/* Botón Info Integrado */}
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowHelpTooltip(prev => !prev);
+                                }}
+                                style={{
+                                    height: '100%',
+                                    padding: '0 0.55rem',
+                                    border: 'none',
+                                    backgroundColor: showHelpTooltip ? '#0D7A57' : 'transparent',
+                                    color: showHelpTooltip ? '#FFFFFF' : '#0D7A57',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderTopRightRadius: '7px',
+                                    borderBottomRightRadius: '7px',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                title="Ver guía de comandos (@ / #)"
+                            >
+                                <Info size={13} strokeWidth={2.2} />
+                            </button>
+
+                            {/* Dropdown del Tooltip con Backdrop */}
+                            {showHelpTooltip && (
+                                <>
+                                    <div
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowHelpTooltip(false);
+                                        }}
+                                        style={{
+                                            position: 'fixed',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            zIndex: 99998,
+                                            cursor: 'default'
+                                        }}
+                                    />
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + 6px)',
+                                        right: '0',
+                                        width: '340px',
+                                        backgroundColor: '#111827',
+                                        color: 'white',
+                                        padding: '1.1rem',
+                                        borderRadius: '14px',
+                                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+                                        zIndex: 99999,
+                                        fontSize: '0.78rem',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        lineHeight: '1.5',
+                                        animation: 'fadeInDown 0.2s ease-out'
+                                    }}>
+                                        <div style={{ fontWeight: '800', color: '#10B981', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Dna size={14} strokeWidth={2} /> COMANDOS DE BÚSQUEDA (@ / #)
+                                            </div>
+                                            <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'normal' }}>Clic para aplicar</span>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px 9px' }}>
+                                            {[
+                                                { tag: '@bajo', desc: 'Bajo stock / Faltante' },
+                                                { tag: '@disponible', desc: 'Stock positivo' },
+                                                { tag: '@agotado', desc: 'Sin stock' },
+                                                { tag: '@sobrantes', desc: 'Con sobrantes (+)' },
+                                                { tag: '@padre', desc: 'Familias / Base' },
+                                                { tag: '@hijo', desc: 'Fraccionados' },
+                                                { tag: '@fresas', desc: 'Fresas y Moras' },
+                                                { tag: '@hortalizas', desc: 'Hortalizas' },
+                                                { tag: '@verduras', desc: 'Verduras' },
+                                                { tag: '@frutas', desc: 'Frutas y Otros' },
+                                                { tag: '@papas', desc: 'Papas & Plátano' },
+                                                { tag: '#ID', desc: 'ID Contable (#12)' }
+                                            ].map((item, i) => (
+                                                <div
+                                                    key={i}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const cleanTag = item.tag === '#ID' ? '#' : item.tag;
+                                                        setSearchQuery(prev => {
+                                                            if (!prev) return cleanTag;
+                                                            if (prev.toLowerCase().includes(cleanTag.toLowerCase())) return prev;
+                                                            return `${prev}, ${cleanTag}`;
+                                                        });
+                                                        setCurrentPage(1);
+                                                    }}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        padding: '4px 6px',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: 'rgba(255,255,255,0.05)',
+                                                        transition: 'background 0.15s'
+                                                    }}
+                                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)')}
+                                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)')}
+                                                >
+                                                    <b style={{ color: '#FCD34D' }}>{item.tag}</b>: {item.desc}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+                                            Tip: Separa múltiples criterios con comas (,). Ej: <code>acelga, @bajo</code>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Toggle expandir / colapsar familias */}
@@ -1577,7 +1972,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            gap: '4px',
+                            flexShrink: 0
                         }}
                         title={allCollapsed ? "Expandir todas las presentaciones" : "Colapsar todas las familias"}
                     >
@@ -1586,144 +1982,188 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     </button>
                 </div>
 
-                {/* DERECHA: Botones de Acción */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                    <button
-                        type="button"
-                        onClick={() => setIsWasteModalOpen(true)}
-                        style={{
-                            padding: '0.36rem 0.75rem',
-                            borderRadius: '8px',
-                            border: 'none',
-                            backgroundColor: '#0D7A57',
-                            color: '#FFFFFF',
-                            fontSize: '0.76rem',
-                            fontWeight: '800',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0A5F43')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0D7A57')}
-                    >
-                        <Plus size={14} />
-                        <span>+ Merma / Novedad</span>
-                    </button>
+                {/* DERECHA: Grupos de Acciones y Herramientas Compactas */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                    {/* Grupo 1: Registro de Novedades (Segmented Pill Group) */}
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: '#F1F5F9',
+                        borderRadius: '8px',
+                        padding: '2px',
+                        border: '1px solid #CBD5E1',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                    }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsWasteModalOpen(true)}
+                            style={{
+                                padding: '0.3rem 0.65rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: '#0D7A57',
+                                color: '#FFFFFF',
+                                fontSize: '0.74rem',
+                                fontWeight: '800',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                height: '28px',
+                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.25)'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0A5F43')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0D7A57')}
+                            title="Registrar Merma / Novedad"
+                        >
+                            <Plus size={13} strokeWidth={2.5} />
+                            <span>+ Merma</span>
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => setIsPayrollModalOpen(true)}
-                        style={{
-                            padding: '0.36rem 0.65rem',
-                            borderRadius: '8px',
-                            border: '1px solid #E2E8F0',
-                            backgroundColor: '#FFFFFF',
-                            color: '#334155',
-                            fontSize: '0.76rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            cursor: 'pointer'
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
-                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
-                    >
-                        <User size={13} color="#2563EB" />
-                        <span>Nómina (Col N)</span>
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsPayrollModalOpen(true)}
+                            style={{
+                                padding: '0.3rem 0.55rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: 'transparent',
+                                color: '#334155',
+                                fontSize: '0.74rem',
+                                fontWeight: '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                height: '28px'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
+                            title="Descuento de Nómina a Empleados (Columna N)"
+                        >
+                            <User size={13} color="#2563EB" strokeWidth={2} />
+                            <span>Nómina</span>
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => setIsAdditionalSalesModalOpen(true)}
-                        style={{
-                            padding: '0.36rem 0.65rem',
-                            borderRadius: '8px',
-                            border: '1px solid #E2E8F0',
-                            backgroundColor: '#FFFFFF',
-                            color: '#334155',
-                            fontSize: '0.76rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            cursor: 'pointer'
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
-                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
-                    >
-                        <ShoppingCart size={13} color="#7E22CE" />
-                        <span>Extra (Col M)</span>
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsAdditionalSalesModalOpen(true)}
+                            style={{
+                                padding: '0.3rem 0.55rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: 'transparent',
+                                color: '#334155',
+                                fontSize: '0.74rem',
+                                fontWeight: '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                height: '28px'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
+                            title="Venta Extra / Mostrador (Columna M)"
+                        >
+                            <ShoppingCart size={13} color="#7E22CE" strokeWidth={2} />
+                            <span>Extra</span>
+                        </button>
+                    </div>
 
-                    <button
-                        type="button"
-                        onClick={handleExportOfficialExcel}
-                        style={{
-                            padding: '0.36rem 0.7rem',
-                            borderRadius: '8px',
-                            border: '1px solid #0D7A57',
-                            backgroundColor: '#ECFDF5',
-                            color: '#0D7A57',
-                            fontSize: '0.76rem',
-                            fontWeight: '800',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            cursor: 'pointer'
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#D1FAE5')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ECFDF5')}
-                    >
-                        <FileSpreadsheet size={13} color="#0D7A57" />
-                        <span>Excel 24 Col</span>
-                    </button>
+                    {/* Grupo 2: Herramientas de Exportación y Vista (Tool Group) */}
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        padding: '2px',
+                        gap: '2px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                    }}>
+                        <button
+                            type="button"
+                            onClick={handleExportOfficialExcel}
+                            style={{
+                                padding: '0.3rem 0.6rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: '#ECFDF5',
+                                color: '#0D7A57',
+                                fontSize: '0.74rem',
+                                fontWeight: '800',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                                height: '28px',
+                                transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#D1FAE5')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ECFDF5')}
+                            title="Descargar Balance Oficial en Excel (24 Columnas)"
+                        >
+                            <FileSpreadsheet size={13} color="#0D7A57" strokeWidth={2} />
+                            <span>Excel</span>
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => setIsCompactIdentification(!isCompactIdentification)}
-                        title={isCompactIdentification ? "Cambiar a vista de 24 columnas separadas" : "Compactar identificación A-D (ahorra 235px)"}
-                        style={{
-                            padding: '0.36rem 0.65rem',
-                            borderRadius: '8px',
-                            border: isCompactIdentification ? '1px solid #CBD5E1' : '1px solid #E2E8F0',
-                            backgroundColor: isCompactIdentification ? '#F1F5F9' : '#FFFFFF',
-                            color: isCompactIdentification ? '#1E293B' : '#475569',
-                            fontSize: '0.76rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease'
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#E2E8F0'; }}
-                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = isCompactIdentification ? '#F1F5F9' : '#FFFFFF'; }}
-                    >
-                        <Columns size={13} color={isCompactIdentification ? '#0D7A57' : '#64748B'} />
-                        <span>{isCompactIdentification ? 'Identificación Compacta' : 'Cols A-D Separadas'}</span>
-                    </button>
+                        <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
 
-                    <button
-                        type="button"
-                        onClick={() => loadDailyData(true)}
-                        title="Refrescar balance"
-                        style={{
-                            padding: '0.36rem 0.5rem',
-                            borderRadius: '8px',
-                            border: '1px solid #E2E8F0',
-                            backgroundColor: '#FFFFFF',
-                            color: '#64748B',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center'
-                        }}
-                    >
-                        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsCompactIdentification(!isCompactIdentification)}
+                            title={isCompactIdentification ? "Cambiar a vista de 24 columnas separadas (A, B, C, D)" : "Modo Compacto: Fusionar identificación (ahorra 235px)"}
+                            style={{
+                                padding: '0.3rem 0.5rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: isCompactIdentification ? '#EAEFEA' : 'transparent',
+                                color: isCompactIdentification ? '#0D7A57' : '#64748B',
+                                fontSize: '0.74rem',
+                                fontWeight: '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                                height: '28px',
+                                transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                            onMouseLeave={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                            <Columns size={13} color={isCompactIdentification ? '#0D7A57' : '#64748B'} strokeWidth={2} />
+                            <span style={{ fontSize: '0.72rem' }}>{isCompactIdentification ? 'Compacta' : 'Cols A-D'}</span>
+                        </button>
+
+                        <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
+
+                        <button
+                            type="button"
+                            onClick={() => loadDailyData(true)}
+                            title="Refrescar balance diario"
+                            style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: 'transparent',
+                                color: '#64748B',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.color = '#0F172A'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
+                        >
+                            <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

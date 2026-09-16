@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 import { verifySessionAndPermission } from '@/lib/auth';
@@ -23,16 +22,53 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'API Key de Gemini no configurada' }, { status: 500 });
     }
 
-    // Inicializar Gemini
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // Obtener ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer();
-    
+
+
+    // Obtener los bytes del archivo — usamos file.bytes() preferentemente porque es más
+    // confiable en el contexto de Next.js + Turbopack que file.arrayBuffer(), que a veces
+    // devuelve 0 bytes cuando el stream ya fue consumido internamente por el runtime.
+    let fileBytes: Uint8Array;
+    try {
+      // file.bytes() es la API moderna (Node 20+, Edge Runtime). Intentar primero.
+      fileBytes = await (file as any).bytes();
+    } catch (_) {
+      // Fallback: leer como arrayBuffer y convertir
+      const ab = await file.arrayBuffer();
+      fileBytes = new Uint8Array(ab);
+    }
+
+    console.log(`[AI Extract] Archivo recibido: "${file.name}" | tipo: ${file.type} | tamaño declarado: ${file.size} bytes | bytes leídos: ${fileBytes.byteLength}`);
+
+    if (fileBytes.byteLength === 0) {
+      console.error('[AI Extract] ERROR: El archivo llegó vacío al servidor (0 bytes).');
+      return NextResponse.json({ error: 'El archivo recibido está vacío (0 bytes). Por favor, intente subirlo nuevamente.' }, { status: 400 });
+    }
+
     const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
                     file.type === 'application/vnd.ms-excel' || 
                     file.name.toLowerCase().endsWith('.xlsx') || 
                     file.name.toLowerCase().endsWith('.xls');
+
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+    // Validación preventiva para archivos PDF
+    if (isPdf) {
+      if (fileBytes.byteLength < 300) {
+        console.error(`[AI Extract] Archivo PDF sospechosamente diminuto (${fileBytes.byteLength} bytes). Posible archivo de texto vacío o renombrado.`);
+        return NextResponse.json({ 
+          error: `Archivo dañado o no compatible. El documento "${file.name}" mide solo ${fileBytes.byteLength} bytes y no contiene páginas legibles. Por favor suba el archivo PDF o Excel original.` 
+        }, { status: 400 });
+      }
+
+      // Validar firma mágica %PDF- (bytes: 0x25, 0x50, 0x44, 0x46)
+      const headerStr = String.fromCharCode(...fileBytes.slice(0, 5));
+      if (!headerStr.startsWith('%PDF-')) {
+        console.error(`[AI Extract] Encabezado inválido para PDF: "${headerStr}"`);
+        return NextResponse.json({ 
+          error: `Archivo dañado o no compatible. El archivo "${file.name}" no tiene una estructura PDF válida. Por favor verifique el archivo o súbalo en formato original.` 
+        }, { status: 400 });
+      }
+    }
 
     let prompt = `
       Eres un asistente experto en logística para FruFresco. 
@@ -70,7 +106,7 @@ export async function POST(req: Request) {
     let resolvedMimeType = 'application/pdf';
 
     if (isExcel) {
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const workbook = XLSX.read(fileBytes, { type: 'array' });
       let csvContent = "";
       workbook.SheetNames.forEach(sheetName => {
         csvContent += `\n--- Hoja: ${sheetName} ---\n`;
@@ -78,25 +114,21 @@ export async function POST(req: Request) {
       });
       prompt += `\n\nCONTENIDO DEL DOCUMENTO EXCEL EN FORMATO CSV:\n${csvContent}`;
     } else {
-      base64Str = Buffer.from(arrayBuffer).toString('base64');
-      resolvedMimeType = file.type || '';
-      if (!resolvedMimeType || resolvedMimeType === 'application/octet-stream') {
-        const fileNameLower = file.name.toLowerCase();
-        if (fileNameLower.endsWith('.pdf')) {
-          resolvedMimeType = 'application/pdf';
-        } else if (fileNameLower.endsWith('.png')) {
-          resolvedMimeType = 'image/png';
-        } else if (fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg')) {
-          resolvedMimeType = 'image/jpeg';
-        } else if (fileNameLower.endsWith('.webp')) {
-          resolvedMimeType = 'image/webp';
-        } else if (fileNameLower.endsWith('.xlsx')) {
-          resolvedMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        } else if (fileNameLower.endsWith('.xls')) {
-          resolvedMimeType = 'application/vnd.ms-excel';
-        } else {
-          resolvedMimeType = 'application/pdf';
-        }
+      const fileBuffer = Buffer.from(fileBytes);
+      base64Str = fileBuffer.toString('base64');
+      console.log(`[AI Extract] base64 generado: ${base64Str.length} caracteres (${Math.round(base64Str.length * 0.75 / 1024)} KB aprox)`);
+      
+      const fileNameLower = file.name.toLowerCase();
+      if (fileNameLower.endsWith('.pdf') || file.type === 'application/pdf') {
+        resolvedMimeType = 'application/pdf';
+      } else if (fileNameLower.endsWith('.png') || file.type === 'image/png') {
+        resolvedMimeType = 'image/png';
+      } else if (fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || file.type === 'image/jpeg') {
+        resolvedMimeType = 'image/jpeg';
+      } else if (fileNameLower.endsWith('.webp') || file.type === 'image/webp') {
+        resolvedMimeType = 'image/webp';
+      } else {
+        resolvedMimeType = file.type || 'application/pdf';
       }
     }
 

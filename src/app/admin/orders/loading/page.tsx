@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
@@ -97,6 +98,59 @@ const formatCreatedAt = (dateStr?: string) => {
     return `${day} ${monthStr} · ${hours}:${minutes}`;
 };
 
+interface OrderAuditInfo {
+    label: string;
+    full: string;
+    type: 'edit' | 'reassign';
+}
+
+const getOrderLastAudit = (order: any): OrderAuditInfo | null => {
+    if (!order || !order.admin_notes) return null;
+    const notes = String(order.admin_notes);
+
+    // Regex to match REASIGNACIÓN e.g. [REASIGNACIÓN 15/09/2026 18:20 por FruFresco Admin]: Motivo...
+    const reassignRegex = /\[REASIGNACI[OÓ]N\s+(?:(\d{1,2}\/\d{1,2}\/\d{2,4})\s+)?(\d{1,2}:\d{2})\s+por\s+([^\]]+?)\](?::\s*([^\[\n]+))?/gi;
+    // Regex to match Audit e.g. [Audit 16:56: Edición por FruFresco Admin]
+    const auditRegex = /\[Audit\s+(?:(\d{1,2}\/\d{1,2}\/\d{2,4})\s+)?(\d{1,2}:\d{2})(?::\s*([^\]]+?))?\]/gi;
+
+    let lastAudit: OrderAuditInfo | null = null;
+    let match: RegExpExecArray | null;
+
+    while ((match = reassignRegex.exec(notes)) !== null) {
+        const time = match[2];
+        const operator = match[3]?.trim() || 'Mesa de Control';
+        const reason = match[4]?.trim() || '';
+        lastAudit = {
+            label: `Reasig. ${time}`,
+            full: `Reasignado a las ${time} por ${operator}${reason ? `. ${reason}` : ''}`,
+            type: 'reassign'
+        };
+    }
+
+    while ((match = auditRegex.exec(notes)) !== null) {
+        const time = match[2];
+        const details = match[3]?.trim() || '';
+        lastAudit = {
+            label: `Ed. ${time}`,
+            full: `Editado a las ${time}${details ? `: ${details}` : ''}`,
+            type: 'edit'
+        };
+    }
+
+    if (!lastAudit) {
+        const fallbackMatch = notes.match(/\b(\d{1,2}:\d{2})\b/);
+        if (fallbackMatch && (notes.includes('Audit') || notes.includes('Edición') || notes.includes('REASIGNACIÓN'))) {
+            lastAudit = {
+                label: `Ed. ${fallbackMatch[1]}`,
+                full: `Modificado a las ${fallbackMatch[1]}`,
+                type: 'edit'
+            };
+        }
+    }
+
+    return lastAudit;
+};
+
 const getChannelBadge = (source: string, isB2B?: boolean) => {
     let activeSource = source;
     if (isB2B && (source === 'web_b2c' || source === 'web' || !source)) {
@@ -120,7 +174,7 @@ const getChannelBadge = (source: string, isB2B?: boolean) => {
     }
 };
 
-export default function OrderLoadingPage() {
+function OrderLoadingContent() {
     const { profile, loading: authLoading } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
     const [rolesLoaded, setRolesLoaded] = useState(false);
@@ -169,10 +223,15 @@ export default function OrderLoadingPage() {
 
     useEffect(() => {
         const fetchEmailCounts = async () => {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const minDateIso = thirtyDaysAgo.toISOString();
+
             const { count: pendingCount } = await supabase
                 .from('order_drafts')
                 .select('*', { count: 'exact', head: true })
-                .eq('status', 'pending');
+                .eq('status', 'pending')
+                .gte('created_at', minDateIso);
             setPendingEmailCount(pendingCount || 0);
 
             const { count: sentCount } = await supabase
@@ -216,7 +275,11 @@ export default function OrderLoadingPage() {
     };
 
 
+    const searchParams = useSearchParams();
+    const dateQueryParam = searchParams.get('date');
+
     const [selectedDate, setSelectedDate] = useState(() => {
+        if (dateQueryParam) return dateQueryParam;
         try {
             return getTomorrowDateStr();
         } catch (e) {
@@ -225,6 +288,12 @@ export default function OrderLoadingPage() {
             return d.toISOString().split('T')[0];
         }
     }); 
+
+    useEffect(() => {
+        if (dateQueryParam && dateQueryParam !== selectedDate) {
+            setSelectedDate(dateQueryParam);
+        }
+    }, [dateQueryParam]); 
 
     const [searchTerm, setSearchTerm] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
@@ -625,6 +694,7 @@ export default function OrderLoadingPage() {
     const [reassignReason, setReassignReason] = useState('');
     const [reassignConfirmedCheck, setReassignConfirmedCheck] = useState(false);
     const [isReassigning, setIsReassigning] = useState(false);
+    const [reassignClientTypeTab, setReassignClientTypeTab] = useState<'all' | 'b2b' | 'b2c'>('all');
 
     const handleOpenReassignModal = async () => {
         setIsReassignModalOpen(true);
@@ -634,16 +704,22 @@ export default function OrderLoadingPage() {
         setReassignReason('');
         setReassignConfirmedCheck(false);
 
+        // Preselección inteligente: Si el pedido es B2C / Hogar, enfocar pestaña Hogar; si es B2B, enfocar Institucional
+        const isCurrentOrderB2B = selectedOrder?.type?.startsWith('b2b') || selectedOrder?.profiles?.role === 'b2b_client';
+        setReassignClientTypeTab(isCurrentOrderB2B ? 'b2b' : 'b2c');
+
         if (reassignClientsList.length === 0) {
             setReassignLoadingClients(true);
             try {
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('id, company_name, contact_name, nit, phone, contact_phone, email, address, latitude, longitude, role, parent_id, is_corporate_parent, classification')
+                    .select('id, company_name, contact_name, nit, phone, contact_phone, email, address, latitude, longitude, role, parent_id, is_corporate_parent, is_active')
                     .in('role', ['b2b_client', 'b2c_client', 'client'])
-                    .order('company_name', { ascending: true });
+                    .limit(2000);
                 if (!error && data) {
                     setReassignClientsList(data);
+                } else if (error) {
+                    console.error('Error fetching clients for reassignment:', error);
                 }
             } catch (err) {
                 console.error('Error fetching clients for reassignment:', err);
@@ -672,25 +748,57 @@ export default function OrderLoadingPage() {
     }, [reassignClientsList]);
 
     const filteredReassignClients = useMemo(() => {
-        if (!reassignSearch || reassignSearch.trim().length < 2) {
-            return reassignClientsList.filter(c => !c.is_corporate_parent && !reassignParentMatrixIds.has(c.id) && c.id !== selectedOrder?.user_id).slice(0, 15);
+        const currentProfileId = selectedOrder?.profile_id || selectedOrder?.profiles?.id || selectedOrder?.user_id;
+
+        const isClientB2B = (c: any) => c.role === 'b2b_client' || Boolean(c.is_corporate_parent) || Boolean(c.parent_id);
+        const isClientB2C = (c: any) => c.role === 'b2c_client' || (c.role === 'client' && !c.is_corporate_parent && !c.parent_id);
+
+        const matchesTab = (c: any) => {
+            if (reassignClientTypeTab === 'b2c') return isClientB2C(c);
+            if (reassignClientTypeTab === 'b2b') return isClientB2B(c);
+            return true;
+        };
+
+        const query = (reassignSearch || '').toLowerCase().trim();
+
+        if (!query || query.length < 2) {
+            const candidates = reassignClientsList.filter(c => 
+                !c.is_corporate_parent && 
+                !reassignParentMatrixIds.has(c.id) && 
+                c.id !== currentProfileId &&
+                matchesTab(c)
+            );
+
+            candidates.sort((a, b) => {
+                const nameA = (a.company_name || a.contact_name || '').trim();
+                const nameB = (b.company_name || b.contact_name || '').trim();
+                return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+            });
+
+            return candidates.slice(0, 25);
         }
-        const query = reassignSearch.toLowerCase().trim();
 
-        // 1. Matched parent matrices
+        // 1. Matched parent matrices (relevant for B2B search)
         const matchedParentMatrixIds = new Set<string>();
-        reassignClientsList.forEach(c => {
-            if (reassignParentMatrixIds.has(c.id) || c.is_corporate_parent) {
-                const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
-                const nitMatch = (c.nit?.toString() || '').includes(query);
-                if (nameMatch || nitMatch) {
-                    matchedParentMatrixIds.add(c.id);
+        if (reassignClientTypeTab !== 'b2c') {
+            reassignClientsList.forEach(c => {
+                if (reassignParentMatrixIds.has(c.id) || c.is_corporate_parent) {
+                    const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
+                    const nitMatch = (c.nit?.toString() || '').includes(query);
+                    if (nameMatch || nitMatch) {
+                        matchedParentMatrixIds.add(c.id);
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        // 2. Deliverable clients (not a parent matrix, not current client)
-        const deliverableClients = reassignClientsList.filter(c => !reassignParentMatrixIds.has(c.id) && c.id !== selectedOrder?.user_id);
+        // 2. Deliverable clients (not a parent matrix, not current client, matches selected tab)
+        const deliverableClients = reassignClientsList.filter(c => 
+            !reassignParentMatrixIds.has(c.id) && 
+            !c.is_corporate_parent &&
+            c.id !== currentProfileId &&
+            matchesTab(c)
+        );
 
         const directSearchedBranches: any[] = [];
         const otherMatches: any[] = [];
@@ -712,10 +820,14 @@ export default function OrderLoadingPage() {
         });
 
         directSearchedBranches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
-        otherMatches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
+        otherMatches.sort((a, b) => {
+            const nameA = (a.company_name || a.contact_name || '').trim();
+            const nameB = (b.company_name || b.contact_name || '').trim();
+            return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+        });
 
-        return [...directSearchedBranches, ...otherMatches].slice(0, 15);
-    }, [reassignClientsList, reassignSearch, reassignParentMatrixIds, selectedOrder]);
+        return [...directSearchedBranches, ...otherMatches].slice(0, 30);
+    }, [reassignClientsList, reassignSearch, reassignClientTypeTab, reassignParentMatrixIds, selectedOrder]);
 
     const handleExecuteReassignment = async () => {
         if (!selectedOrder || !reassignSelectedClient) return;
@@ -734,7 +846,13 @@ export default function OrderLoadingPage() {
             const nowDateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const operatorName = profile?.contact_name || (profile as any)?.email || currentUser?.email || 'Mesa de Control';
 
-            const auditNote = `[REASIGNACIÓN ${nowDateStr} ${nowTimeStr} por ${operatorName}]: Transferido de "${selectedOrder.customer_name}" (NIT: ${selectedOrder.customer_nit || 'N/A'}) a "${reassignSelectedClient.company_name || reassignSelectedClient.contact_name}" (NIT: ${reassignSelectedClient.nit || 'N/A'}). Motivo: ${reassignReason.trim()}`;
+            const isNewClientB2C = reassignSelectedClient.role === 'b2c_client' || (reassignSelectedClient.role === 'client' && !reassignSelectedClient.is_corporate_parent && !reassignSelectedClient.parent_id);
+            const newOrderType = isNewClientB2C ? 'b2c' : 'b2b';
+            const destDisplayName = isNewClientB2C 
+                ? (reassignSelectedClient.contact_name || reassignSelectedClient.company_name || 'Cliente Hogar')
+                : (reassignSelectedClient.company_name || reassignSelectedClient.contact_name);
+
+            const auditNote = `[REASIGNACIÓN ${nowDateStr} ${nowTimeStr} por ${operatorName}]: Transferido de "${selectedOrder.customer_name}" (${selectedOrder.customer_nit ? 'NIT: ' + selectedOrder.customer_nit : 'Hogar'}) a "${destDisplayName}" (${reassignSelectedClient.nit ? 'NIT: ' + reassignSelectedClient.nit : 'Hogar'}). Motivo: ${reassignReason.trim()}`;
 
             const updatedAdminNotes = `${selectedOrder.admin_notes || ''}\n${auditNote}`.trim();
 
@@ -742,11 +860,12 @@ export default function OrderLoadingPage() {
             const newLat = reassignSelectedClient.latitude || null;
             const newLng = reassignSelectedClient.longitude || null;
 
-            // 1. Update orders table in Supabase
+            // 1. Update orders table in Supabase (including updating segment type if changed)
             const { error: orderError } = await supabase
                 .from('orders')
                 .update({
                     profile_id: reassignSelectedClient.id,
+                    type: newOrderType,
                     shipping_address: newAddress,
                     latitude: newLat,
                     longitude: newLng,
@@ -768,6 +887,7 @@ export default function OrderLoadingPage() {
                 reason: reassignReason.trim(),
                 old_data: {
                     user_id: selectedOrder.user_id || selectedOrder.profiles?.id,
+                    type: selectedOrder.type,
                     customer_name: selectedOrder.customer_name,
                     customer_nit: selectedOrder.customer_nit,
                     customer_phone: selectedOrder.customer_phone,
@@ -777,7 +897,8 @@ export default function OrderLoadingPage() {
                 },
                 new_data: {
                     user_id: reassignSelectedClient.id,
-                    customer_name: reassignSelectedClient.company_name || reassignSelectedClient.contact_name,
+                    type: newOrderType,
+                    customer_name: destDisplayName,
                     customer_nit: reassignSelectedClient.nit,
                     customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone,
                     shipping_address: newAddress,
@@ -793,8 +914,10 @@ export default function OrderLoadingPage() {
             // 3. Update local state
             const updatedOrder = {
                 ...selectedOrder,
+                type: newOrderType,
+                profile_id: reassignSelectedClient.id,
                 user_id: reassignSelectedClient.id,
-                customer_name: reassignSelectedClient.company_name || reassignSelectedClient.contact_name,
+                customer_name: destDisplayName,
                 customer_nit: reassignSelectedClient.nit || null,
                 customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone || null,
                 customer_email: reassignSelectedClient.email || null,
@@ -2976,7 +3099,7 @@ export default function OrderLoadingPage() {
 
 
 
-                                            <th style={{ padding: '1rem', width: '12%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '15%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>ID / TIPO</span>
                                                     <button 
@@ -3001,8 +3124,8 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '23%', textAlign: 'left', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                                            <th style={{ padding: '1rem', width: '25%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '23%', textAlign: 'left', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '22%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>DIRECCIÓN / GPS</span>
                                                     <button 
@@ -3064,9 +3187,9 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '9%', textAlign: 'center', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'right', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>VALOR</th>
-                                            <th style={{ padding: '1rem', width: '11%', textAlign: 'center', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '0.85rem 0.65rem', width: '9%', textAlign: 'center', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                                            <th style={{ padding: '0.85rem 0.65rem', width: '9%', textAlign: 'right', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>VALOR</th>
+                                            <th style={{ padding: '0.85rem 0.65rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                     <span>ESTADO</span>
                                                     <button 
@@ -3110,7 +3233,7 @@ export default function OrderLoadingPage() {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '1rem', width: '5%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
+                                            <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
                                                 {(() => {
                                                     const launchableOrders = filteredOrders.filter(o => o.isComplete && o.status === 'pending_approval');
                                                     const isAllSelected = launchableOrders.length > 0 && selectedOrders.size === launchableOrders.length;
@@ -3155,25 +3278,52 @@ export default function OrderLoadingPage() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FEE2E2' : !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = duplicateInfo ? '#FEF2F2' : !order.isComplete ? '#FFF1F2' : 'transparent'}
                                                 >
-                                                    <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
-                                                        <div style={{ fontWeight: '900', fontSize: '0.9rem', color: '#0F172A', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                    <td style={{ padding: '0.75rem 0.85rem', verticalAlign: 'middle' }}>
+                                                        <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
                                                             {friendlyId}
                                                         </div>
                                                         {order.created_at && (
-                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }} title="Fecha y hora en que se recibió el pedido">
-                                                                <Clock size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
-                                                                <span>Recibido: {formatCreatedAt(order.created_at)}</span>
+                                                            <div style={{ fontSize: '0.66rem', color: '#475569', fontWeight: '600', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }} title={`Creado: ${new Date(order.created_at).toLocaleString('es-CO')}`}>
+                                                                    <Clock size={10} strokeWidth={2.2} style={{ color: '#0D7A57' }} />
+                                                                    <span>{formatCreatedAt(order.created_at)}</span>
+                                                                </span>
+                                                                {(() => {
+                                                                    const audit = getOrderLastAudit(order);
+                                                                    if (!audit) return null;
+                                                                    return (
+                                                                        <span 
+                                                                            title={audit.full}
+                                                                            style={{ 
+                                                                                display: 'inline-flex', 
+                                                                                alignItems: 'center', 
+                                                                                gap: '2px', 
+                                                                                backgroundColor: audit.type === 'reassign' ? '#FEF3C7' : '#EFF6FF', 
+                                                                                color: audit.type === 'reassign' ? '#92400E' : '#1D4ED8', 
+                                                                                padding: '1px 5px', 
+                                                                                borderRadius: '4px', 
+                                                                                fontSize: '0.62rem', 
+                                                                                fontWeight: '800', 
+                                                                                border: `1px solid ${audit.type === 'reassign' ? '#FCD34D' : '#BFDBFE'}`,
+                                                                                whiteSpace: 'nowrap',
+                                                                                lineHeight: '1.2'
+                                                                            }}
+                                                                        >
+                                                                            <Edit2 size={8} strokeWidth={2.5} /> {audit.label}
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         )}
 
 
                                                         <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                                                             {isB2B ? (
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.64rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '4px' }}>
                                                                     <Building2 size={10} strokeWidth={2} /> Institucional
                                                                 </span>
                                                             ) : (
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.64rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', padding: '1px 6px', borderRadius: '4px' }}>
                                                                     <Home size={10} strokeWidth={2} /> Hogar
                                                                 </span>
                                                             )}
@@ -3999,7 +4149,7 @@ export default function OrderLoadingPage() {
                                 background: 'linear-gradient(to right, #F8FAFC, #FFFFFF)'
                             }}>
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                                         <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#0F172A', fontWeight: '900' }}>
                                             Pedido {getFriendlyOrderId(selectedOrder)}
                                         </h2>
@@ -4021,6 +4171,36 @@ export default function OrderLoadingPage() {
                                         }}>
                                             {getStatusLabel(selectedOrder.status)}
                                         </span>
+
+                                        {selectedOrder.created_at && (
+                                            <div style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                backgroundColor: '#F8FAFC',
+                                                border: '1px solid #CBD5E1',
+                                                padding: '3px 10px',
+                                                borderRadius: '8px',
+                                                fontSize: '0.78rem',
+                                                color: '#334155',
+                                                fontWeight: '700'
+                                            }}>
+                                                <Clock size={13} strokeWidth={2.2} style={{ color: '#0D7A57' }} />
+                                                <span>Creado: {formatCreatedAt(selectedOrder.created_at)}</span>
+                                                {(() => {
+                                                    const audit = getOrderLastAudit(selectedOrder);
+                                                    if (!audit) return null;
+                                                    return (
+                                                        <span 
+                                                            title={audit.full}
+                                                            style={{ color: '#1D4ED8', marginLeft: '6px', borderLeft: '1.5px solid #CBD5E1', paddingLeft: '8px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                        >
+                                                            <Edit2 size={11} strokeWidth={2.2} /> {audit.full}
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -5326,7 +5506,7 @@ export default function OrderLoadingPage() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            zIndex: 1200,
+                            zIndex: 4000,
                             padding: '1rem'
                         }}
                         onClick={() => !isReassigning && setIsReassignModalOpen(false)}
@@ -5404,18 +5584,132 @@ export default function OrderLoadingPage() {
                                 {reassignStep === 'search' ? (
                                     <>
                                         {/* Current Client Banner */}
-                                        <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cliente / Sucursal Actual</div>
-                                            <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem', marginTop: '2px' }}>{selectedOrder.customer_name}</div>
-                                            <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>
-                                                NIT: {selectedOrder.customer_nit || 'N/A'} • {selectedOrder.shipping_address || 'Sin dirección registrada'}
+                                        {(() => {
+                                            const isCurrentB2B = selectedOrder.type?.startsWith('b2b') || selectedOrder.profiles?.role === 'b2b_client';
+                                            return (
+                                                <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                            Cliente / Sucursal Actual
+                                                        </div>
+                                                        <span style={{
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: '800',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: isCurrentB2B ? '#EEF2FF' : '#FCE7F3',
+                                                            color: isCurrentB2B ? '#4F46E5' : '#BE185D',
+                                                            border: `1px solid ${isCurrentB2B ? '#E0E7FF' : '#FBCFE8'}`,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}>
+                                                            {isCurrentB2B ? <Building2 size={11} strokeWidth={2.5} /> : <Home size={11} strokeWidth={2.5} />}
+                                                            {isCurrentB2B ? 'Institucional' : 'Hogar'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem', marginTop: '3px' }}>
+                                                        {selectedOrder.customer_name}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>
+                                                        {selectedOrder.customer_nit && <span>NIT: {selectedOrder.customer_nit} • </span>}
+                                                        {selectedOrder.customer_phone && <span>Tel: {selectedOrder.customer_phone} • </span>}
+                                                        <span>{selectedOrder.shipping_address || 'Sin dirección registrada'}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Segment Filter Tabs */}
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                    Filtrar por Segmento:
+                                                </span>
+                                                <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '600' }}>
+                                                    {reassignClientTypeTab === 'b2c' ? 'Clientes Hogar (B2C)' : reassignClientTypeTab === 'b2b' ? 'Clientes Institucionales (B2B)' : 'Todos los Clientes'}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr auto', gap: '8px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReassignClientTypeTab('b2c')}
+                                                    style={{
+                                                        padding: '8px 12px',
+                                                        borderRadius: '9px',
+                                                        border: reassignClientTypeTab === 'b2c' ? '1.5px solid #EC4899' : '1px solid #E2E8F0',
+                                                        backgroundColor: reassignClientTypeTab === 'b2c' ? '#FDF2F8' : '#F8FAFC',
+                                                        color: reassignClientTypeTab === 'b2c' ? '#BE185D' : '#64748B',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px',
+                                                        transition: 'all 0.15s ease',
+                                                        boxShadow: reassignClientTypeTab === 'b2c' ? '0 2px 4px rgba(236, 72, 153, 0.15)' : 'none'
+                                                    }}
+                                                >
+                                                    <Home size={14} strokeWidth={2.5} />
+                                                    <span>Hogar (B2C)</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReassignClientTypeTab('b2b')}
+                                                    style={{
+                                                        padding: '8px 12px',
+                                                        borderRadius: '9px',
+                                                        border: reassignClientTypeTab === 'b2b' ? '1.5px solid #6366F1' : '1px solid #E2E8F0',
+                                                        backgroundColor: reassignClientTypeTab === 'b2b' ? '#EEF2FF' : '#F8FAFC',
+                                                        color: reassignClientTypeTab === 'b2b' ? '#4F46E5' : '#64748B',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px',
+                                                        transition: 'all 0.15s ease',
+                                                        boxShadow: reassignClientTypeTab === 'b2b' ? '0 2px 4px rgba(99, 102, 241, 0.15)' : 'none'
+                                                    }}
+                                                >
+                                                    <Building2 size={14} strokeWidth={2.5} />
+                                                    <span>Institucional (B2B)</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReassignClientTypeTab('all')}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        borderRadius: '9px',
+                                                        border: reassignClientTypeTab === 'all' ? '1.5px solid #64748B' : '1px solid #E2E8F0',
+                                                        backgroundColor: reassignClientTypeTab === 'all' ? '#F1F5F9' : '#F8FAFC',
+                                                        color: reassignClientTypeTab === 'all' ? '#1E293B' : '#64748B',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.15s ease',
+                                                        boxShadow: reassignClientTypeTab === 'all' ? '0 2px 4px rgba(100, 116, 139, 0.15)' : 'none'
+                                                    }}
+                                                >
+                                                    <span>Todos</span>
+                                                </button>
                                             </div>
                                         </div>
 
                                         {/* Search Box */}
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#1E293B', marginBottom: '6px' }}>
-                                                Buscar Nueva Empresa, Sucursal o NIT:
+                                                {reassignClientTypeTab === 'b2c' 
+                                                    ? 'Buscar Cliente Hogar por Nombre, Teléfono o Dirección:' 
+                                                    : reassignClientTypeTab === 'b2b'
+                                                        ? 'Buscar Empresa, Sucursal o NIT:'
+                                                        : 'Buscar Cliente Hogar o Institucional:'}
                                             </label>
                                             <div style={{ position: 'relative' }}>
                                                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
@@ -5423,7 +5717,13 @@ export default function OrderLoadingPage() {
                                                     type="text"
                                                     value={reassignSearch}
                                                     onChange={(e) => setReassignSearch(e.target.value)}
-                                                    placeholder="Ej: Club del Comercio, Colsubsidio, Cafetería..."
+                                                    placeholder={
+                                                        reassignClientTypeTab === 'b2c'
+                                                            ? 'Ej: Pruebas, Luis Fernando, 3005555555...'
+                                                            : reassignClientTypeTab === 'b2b'
+                                                                ? 'Ej: Club del Comercio, Colsubsidio, 901509376...'
+                                                                : 'Ej: Pruebas, Colsubsidio, Cafetería...'
+                                                    }
                                                     autoFocus
                                                     style={{
                                                         width: '100%',
@@ -5456,12 +5756,21 @@ export default function OrderLoadingPage() {
                                                 </div>
                                             ) : filteredReassignClients.length === 0 ? (
                                                 <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.85rem' }}>
-                                                    No se encontraron clientes o sucursales con esa búsqueda.
+                                                    {reassignClientTypeTab === 'b2c'
+                                                        ? 'No se encontraron clientes Hogar (B2C) con esa búsqueda.'
+                                                        : reassignClientTypeTab === 'b2b'
+                                                            ? 'No se encontraron clientes o sucursales institucionales (B2B).'
+                                                            : 'No se encontraron clientes con esa búsqueda.'}
                                                 </div>
                                             ) : (
                                                 filteredReassignClients.map((client) => {
                                                     const parentMatrix = client.parent_id ? reassignMatrixClientsMap.get(client.parent_id) : null;
                                                     const isDirectBranch = Boolean(client.isDirectSearchedBranch && parentMatrix);
+                                                    const isClientB2C = client.role === 'b2c_client' || (client.role === 'client' && !client.is_corporate_parent && !client.parent_id);
+                                                    const displayName = isClientB2C 
+                                                        ? (client.contact_name || client.company_name || 'Cliente Hogar') 
+                                                        : (client.company_name || client.contact_name || 'Empresa B2B');
+                                                    const displayPhone = client.contact_phone || client.phone;
 
                                                     return (
                                                         <div
@@ -5479,29 +5788,51 @@ export default function OrderLoadingPage() {
                                                                 transition: 'all 0.15s',
                                                                 display: 'flex',
                                                                 justifyContent: 'space-between',
-                                                                alignItems: 'center'
+                                                                alignItems: 'center',
+                                                                gap: '12px'
                                                             }}
                                                             onMouseEnter={(e) => {
-                                                                e.currentTarget.style.backgroundColor = '#F0FDF4';
-                                                                e.currentTarget.style.borderColor = '#86EFAC';
+                                                                e.currentTarget.style.backgroundColor = isClientB2C ? '#FDF2F8' : '#F0FDF4';
+                                                                e.currentTarget.style.borderColor = isClientB2C ? '#F472B6' : '#86EFAC';
                                                             }}
                                                             onMouseLeave={(e) => {
                                                                 e.currentTarget.style.backgroundColor = 'white';
                                                                 e.currentTarget.style.borderColor = '#E2E8F0';
                                                             }}
                                                         >
-                                                            <div>
+                                                            <div style={{ minWidth: 0, flex: 1 }}>
                                                                 <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                                    <span>{client.company_name || client.contact_name}</span>
+                                                                    <span style={{ wordBreak: 'break-word' }}>{displayName}</span>
+                                                                    {isClientB2C ? (
+                                                                        <span style={{ fontSize: '0.64rem', backgroundColor: '#FCE7F3', color: '#BE185D', padding: '1px 6px', borderRadius: '5px', fontWeight: '800', border: '1px solid #FBCFE8', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <Home size={10} strokeWidth={2.5} /> Hogar
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '0.64rem', backgroundColor: '#EEF2FF', color: '#4F46E5', padding: '1px 6px', borderRadius: '5px', fontWeight: '800', border: '1px solid #E0E7FF', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <Building2 size={10} strokeWidth={2.5} /> Institucional
+                                                                        </span>
+                                                                    )}
                                                                     {isDirectBranch && (
-                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 7px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FFEDD5', textTransform: 'uppercase' }}>
+                                                                        <span style={{ fontSize: '0.64rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '5px', fontWeight: '800', border: '1px solid #FFEDD5', textTransform: 'uppercase' }}>
                                                                             Sucursal
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>
+                                                                <div style={{ fontSize: '0.76rem', color: '#64748B', marginTop: '3px', lineHeight: '1.3' }}>
                                                                     {isDirectBranch && parentMatrix && <span style={{ fontWeight: '700', color: '#475569' }}>Matriz: {parentMatrix.company_name} • </span>}
-                                                                    NIT: {client.nit || 'N/A'} • {client.address || 'Sin dirección'}
+                                                                    {isClientB2C ? (
+                                                                        <>
+                                                                            {displayPhone && <span>Tel: {displayPhone} • </span>}
+                                                                            <span>{client.address || 'Sin dirección registrada'}</span>
+                                                                            {client.nit && <span style={{ color: '#94A3B8' }}> • Doc: {client.nit}</span>}
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span>NIT: {client.nit || 'N/A'} • </span>
+                                                                            <span>{client.address || 'Sin dirección'}</span>
+                                                                            {displayPhone && <span style={{ color: '#94A3B8' }}> • Tel: {displayPhone}</span>}
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -5539,36 +5870,66 @@ export default function OrderLoadingPage() {
                                         {/* Comparison Origin -> Destination */}
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.75rem', alignItems: 'center' }}>
                                             {/* Origen */}
-                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Origen (Actual)</div>
-                                                <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.88rem', marginTop: '4px' }}>
-                                                    {selectedOrder.customer_name}
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
-                                                    NIT: {selectedOrder.customer_nit || 'N/A'}
-                                                </div>
-                                                <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '3px' }}>
-                                                    {selectedOrder.shipping_address || 'Sin dirección'}
-                                                </div>
-                                            </div>
+                                            {(() => {
+                                                const isOrigB2B = selectedOrder.type?.startsWith('b2b') || selectedOrder.profiles?.role === 'b2b_client';
+                                                return (
+                                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Origen (Actual)</div>
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isOrigB2B ? '#EEF2FF' : '#FCE7F3', color: isOrigB2B ? '#4F46E5' : '#BE185D', border: `1px solid ${isOrigB2B ? '#E0E7FF' : '#FBCFE8'}` }}>
+                                                                {isOrigB2B ? '🏢 Institucional' : '🏠 Hogar'}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.88rem', marginTop: '4px' }}>
+                                                            {selectedOrder.customer_name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
+                                                            {selectedOrder.customer_nit ? `NIT: ${selectedOrder.customer_nit}` : selectedOrder.customer_phone ? `Tel: ${selectedOrder.customer_phone}` : 'Doc: N/A'}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '3px' }}>
+                                                            {selectedOrder.shipping_address || 'Sin dirección'}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
 
                                             <div style={{ display: 'flex', justifyContent: 'center', color: '#0D7A57' }}>
                                                 <ArrowRight size={24} strokeWidth={2.5} />
                                             </div>
 
                                             {/* Destino */}
-                                            <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #86EFAC' }}>
-                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Destino (Nuevo)</div>
-                                                <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.88rem', marginTop: '4px' }}>
-                                                    {reassignSelectedClient.company_name || reassignSelectedClient.contact_name}
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '3px' }}>
-                                                    NIT: {reassignSelectedClient.nit || 'N/A'}
-                                                </div>
-                                                <div style={{ fontSize: '0.72rem', color: '#047857', marginTop: '3px' }}>
-                                                    {reassignSelectedClient.address || 'Sin dirección registrada'}
-                                                </div>
-                                            </div>
+                                            {(() => {
+                                                const isNewB2C = reassignSelectedClient.role === 'b2c_client' || (reassignSelectedClient.role === 'client' && !reassignSelectedClient.is_corporate_parent && !reassignSelectedClient.parent_id);
+                                                const destName = isNewB2C ? (reassignSelectedClient.contact_name || reassignSelectedClient.company_name || 'Cliente Hogar') : (reassignSelectedClient.company_name || reassignSelectedClient.contact_name);
+                                                const destPhone = reassignSelectedClient.contact_phone || reassignSelectedClient.phone;
+
+                                                return (
+                                                    <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #86EFAC' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Destino (Nuevo)</div>
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isNewB2C ? '#FCE7F3' : '#EEF2FF', color: isNewB2C ? '#BE185D' : '#4F46E5', border: `1px solid ${isNewB2C ? '#FBCFE8' : '#E0E7FF'}` }}>
+                                                                {isNewB2C ? '🏠 Hogar' : '🏢 Institucional'}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.88rem', marginTop: '4px' }}>
+                                                            {destName}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '3px' }}>
+                                                            {isNewB2C ? (
+                                                                <>
+                                                                    {destPhone && <span>Tel: {destPhone} • </span>}
+                                                                    {reassignSelectedClient.nit ? `Doc: ${reassignSelectedClient.nit}` : 'Sin NIT/Doc'}
+                                                                </>
+                                                            ) : (
+                                                                <>NIT: {reassignSelectedClient.nit || 'N/A'}</>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#047857', marginTop: '3px' }}>
+                                                            {reassignSelectedClient.address || 'Sin dirección registrada'}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* Reason Input */}
@@ -5769,9 +6130,24 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div style={{ fontWeight: '900', fontSize: '1.1rem', color: duplicateInfo ? '#991B1B' : '#111827' }}>{friendlyId}</div>
                                 {order.created_at && (
-                                    <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '5px', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
-                                        {formatCreatedAt(order.created_at)}
-                                    </span>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '5px', letterSpacing: '0.01em', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                            <Clock size={10} style={{ color: '#0D7A57' }} />
+                                            {formatCreatedAt(order.created_at)}
+                                        </span>
+                                        {(() => {
+                                            const audit = getOrderLastAudit(order);
+                                            if (!audit) return null;
+                                            return (
+                                                <span 
+                                                    title={audit.full}
+                                                    style={{ fontSize: '0.62rem', color: audit.type === 'reassign' ? '#92400E' : '#1D4ED8', fontWeight: '800', backgroundColor: audit.type === 'reassign' ? '#FEF3C7' : '#EFF6FF', border: `1px solid ${audit.type === 'reassign' ? '#FCD34D' : '#BFDBFE'}`, padding: '1px 5px', borderRadius: '5px', whiteSpace: 'nowrap' }}
+                                                >
+                                                    ✏️ {audit.label}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                 )}
                             </div>
                             <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -5869,5 +6245,20 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                 </div>
             )}
         </div>
+    );
+}
+
+export default function OrderLoadingPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#F8FAFC' }}>
+                <div style={{ color: '#0D7A57', fontWeight: '700', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '18px', height: '18px', border: '3px solid #0D7A57', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    Cargando módulo de pedidos...
+                </div>
+            </div>
+        }>
+            <OrderLoadingContent />
+        </Suspense>
     );
 }

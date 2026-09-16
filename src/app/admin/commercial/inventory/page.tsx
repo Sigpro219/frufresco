@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
@@ -256,9 +256,50 @@ export default function InventoryAdminPage() {
     const [movements, setMovements] = useState<Movement[]>([]);
     const [randomTasks, setRandomTasks] = useState<RandomTask[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<{ id: string, name: string } | null>(null);
     const [stockStatusFilter, setStockStatusFilter] = useState<'available' | 'returned' | 'in_process' | 'all'>('all');
+    const [filterInventoryGroup, setFilterInventoryGroup] = useState<string>('all');
+    const [isGroupComboboxOpen, setIsGroupComboboxOpen] = useState(false);
+    const [groupComboboxSearch, setGroupComboboxSearch] = useState('');
+    const groupComboboxRef = useRef<HTMLDivElement>(null);
+
+    const INVENTORY_GROUP_OPTIONS = useMemo(() => [
+        { value: 'all', label: 'Todos los Grupos de Inv.', icon: <Boxes size={14} color="#0D7A57" strokeWidth={2} /> },
+        { value: 'INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS', label: 'Abarrotes, Frutos Secos & Lácteos', icon: <Boxes size={14} color="#D97706" strokeWidth={2} /> },
+        { value: 'INVENTARIO DE FRESAS Y MORAS', label: 'Fresas y Moras', icon: <Apple size={14} color="#E11D48" strokeWidth={2} /> },
+        { value: 'INVENTARIO DE FRUTAS Y OTROS', label: 'Frutas y Otros', icon: <Apple size={14} color="#EA580C" strokeWidth={2} /> },
+        { value: 'INVENTARIO DE HORTALIZAS', label: 'Hortalizas', icon: <Sprout size={14} color="#10B981" strokeWidth={2} /> },
+        { value: 'INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES', label: 'Papas, Plátano, Tomate & Aguacates', icon: <Layers size={14} color="#B45309" strokeWidth={2} /> },
+        { value: 'INVENTARIO DE VERDURAS', label: 'Verduras', icon: <Carrot size={14} color="#16A34A" strokeWidth={2} /> },
+        { value: 'none', label: 'Sin Grupo Asignado', icon: <AlertTriangle size={14} color="#EF4444" strokeWidth={2} /> },
+    ], []);
+
+    const selectedGroupOption = useMemo(() => {
+        return INVENTORY_GROUP_OPTIONS.find(opt => opt.value === filterInventoryGroup) || INVENTORY_GROUP_OPTIONS[0];
+    }, [INVENTORY_GROUP_OPTIONS, filterInventoryGroup]);
+
+    const filteredGroupOptions = useMemo(() => {
+        if (!groupComboboxSearch.trim()) return INVENTORY_GROUP_OPTIONS;
+        const term = groupComboboxSearch.toLowerCase().trim();
+        return INVENTORY_GROUP_OPTIONS.filter(opt => opt.label.toLowerCase().includes(term));
+    }, [INVENTORY_GROUP_OPTIONS, groupComboboxSearch]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (groupComboboxRef.current && !groupComboboxRef.current.contains(event.target as Node)) {
+                setIsGroupComboboxOpen(false);
+            }
+        };
+        if (isGroupComboboxOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isGroupComboboxOpen]);
+
     const [currentPage, setCurrentPage] = useState(1);
     const [avgCosts, setAvgCosts] = useState<Record<string, number>>({});
     const [collapsedParents, setCollapsedParents] = useState<Record<string, boolean>>({});
@@ -1294,24 +1335,49 @@ export default function InventoryAdminPage() {
         const p = item.products;
         if (!p) return false;
 
-        const parts = segment.split(/\s+/);
-        const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1));
-        const searchTerms = parts.filter(pt => !pt.startsWith('@'));
+        const trimmed = segment.trim();
+        if (!trimmed) return true;
+
+        // Soporte #ID (ej: #15, #1528)
+        if (trimmed.startsWith('#')) {
+            const id = trimmed.slice(1).trim();
+            return p.accounting_id?.toString() === id;
+        }
+
+        const parts = trimmed.split(/\s+/);
+        const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1).toLowerCase());
+        const searchTerms = parts.filter(pt => !pt.startsWith('@')).map(t => t.toLowerCase());
 
         const matchesText = searchTerms.every(term => 
             p.name?.toLowerCase().includes(term) ||
-            p.accounting_id?.toString()?.includes(term)
+            p.sku?.toLowerCase().includes(term) ||
+            p.accounting_id?.toString()?.includes(term) ||
+            p.inventory_group?.toLowerCase().includes(term) ||
+            p.buying_team?.toLowerCase().includes(term) ||
+            (p as any).purchase_sublist?.toLowerCase().includes(term)
         );
 
         if (!matchesText && searchTerms.length > 0) return false;
 
         const matchesTags = tags.every(tag => {
             if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
-                return item.quantity <= (p.min_inventory_level || 0);
+                return (item.quantity || 0) <= (p.min_inventory_level || 0);
             }
-            if (tag === 'disponible' || tag === 'ok') return item.status === 'available';
-            if (tag === 'regreso') return item.status === 'returned';
+            if (tag === 'disponible' || tag === 'ok' || tag === 'positivo' || tag === 'constock' || tag === 'con_stock') {
+                return (item.quantity || 0) > 0;
+            }
+            if (tag === 'agotado' || tag === 'cero' || tag === 'sin_stock' || tag === 'sinstock') {
+                return (item.quantity || 0) <= 0;
+            }
+            if (tag === 'regreso' || tag === 'devolucion') return item.status === 'returned';
             if (tag === 'reproceso') return item.status === 'in_process';
+            if (tag === 'padre') return p.parent_id === item.product_id || (!p.parent_id);
+            if (tag === 'hijo') return Boolean(p.parent_id && p.parent_id !== item.product_id);
+
+            // Filtro por grupo de inventario (@inventario..., @fresas, @hortalizas, @verduras...)
+            if (p.inventory_group?.toLowerCase().includes(tag)) return true;
+            if (p.buying_team?.toLowerCase().includes(tag)) return true;
+            if ((p as any).purchase_sublist?.toLowerCase().includes(tag)) return true;
 
             const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
                 String(label).toLowerCase().startsWith(tag)
@@ -1328,10 +1394,18 @@ export default function InventoryAdminPage() {
         const query = searchQuery.trim().toLowerCase();
         const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-        // 1. First apply Status Filter (Tab buttons)
-        const currentStocks = stockStatusFilter === 'all' 
+        // 1. Aplicar Filtro de Estado y Filtro de Grupo de Inventario
+        let currentStocks = stockStatusFilter === 'all' 
             ? stocks 
             : stocks.filter(s => s.status === stockStatusFilter);
+
+        if (filterInventoryGroup !== 'all') {
+            if (filterInventoryGroup === 'none') {
+                currentStocks = currentStocks.filter(s => !s.products?.inventory_group || s.products.inventory_group.trim() === '');
+            } else {
+                currentStocks = currentStocks.filter(s => (s.products?.inventory_group || '').trim().toUpperCase() === filterInventoryGroup.trim().toUpperCase());
+            }
+        }
 
         // 2. Identify children and group by parent_id
         const childrenByParent = new Map<string, InventoryItem[]>();
@@ -1423,7 +1497,7 @@ export default function InventoryAdminPage() {
         });
 
         return result;
-    }, [stocks, searchQuery, stockStatusFilter, avgCosts]);
+    }, [stocks, searchQuery, stockStatusFilter, filterInventoryGroup, avgCosts]);
 
     const sortedFamilies = useMemo(() => {
         const list = [...filteredFamilies];
@@ -1710,7 +1784,8 @@ export default function InventoryAdminPage() {
             }
         });
 
-        const segments = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const query = searchQuery.trim().toLowerCase();
+        const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
 
         const list: {
             parent: InventoryItem;
@@ -1769,17 +1844,13 @@ export default function InventoryAdminPage() {
             }
 
             if (segments.length > 0) {
-                const parentName = (parentItem.products?.name || '').toLowerCase();
-                const parentIdContable = String(parentItem.products?.accounting_id || '');
-                const parentMatches = segments.some(seg => parentName.includes(seg) || parentIdContable.includes(seg));
-
-                const matchingChildren = childrenWithSummary.filter(c => {
-                    const cName = (c.child.products?.name || '').toLowerCase();
-                    const cId = String(c.child.products?.accounting_id || '');
-                    return segments.some(seg => cName.includes(seg) || cId.includes(seg));
+                const matchesAllSegments = segments.every(seg => {
+                    const parentMatches = matchSearchSegment(parentItem, seg);
+                    const childMatches = childrenWithSummary.some(c => matchSearchSegment(c.child, seg));
+                    return parentMatches || childMatches;
                 });
 
-                if (!parentMatches && matchingChildren.length === 0) {
+                if (!matchesAllSegments) {
                     return;
                 }
             }
@@ -2279,141 +2350,390 @@ export default function InventoryAdminPage() {
                         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
                         position: 'sticky',
                         top: '85px',
-                        zIndex: 50,
+                        zIndex: 70,
+                        overflow: 'visible',
                         transition: 'all 0.2s ease-in-out',
                         flexWrap: 'wrap'
                     }}
                 >
-                    {/* 1. LADO IZQUIERDO: Buscador Inteligente Amplio */}
-                    <div style={{ position: 'relative', flex: 1, minWidth: '260px', maxWidth: activeTab === 'movements' ? '380px' : '480px' }}>
-                        <div style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
-                            <Search size={16} />
-                        </div>
-                        <input 
-                            type="text" 
-                            placeholder={activeTab === 'movements' ? "Buscar por producto, ID o SKU..." : "Buscar por nombre o ID Contable..."} 
-                            value={searchQuery}
-                            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                            style={{ 
-                                width: '100%', 
-                                padding: '0.6rem 2.8rem 0.6rem 2.5rem', 
-                                borderRadius: '12px', 
-                                border: `1px solid ${THEME.colors.border}`, 
-                                fontSize: '0.84rem', 
-                                fontWeight: '500',
-                                backgroundColor: '#F8FAF9',
-                                color: THEME.colors.textMain,
-                                outline: 'none',
-                                transition: 'all 0.2s ease-in-out'
-                            }}
-                            onFocus={(e) => {
-                                e.currentTarget.style.borderColor = THEME.colors.primary;
-                                e.currentTarget.style.backgroundColor = '#FFFFFF';
-                                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.15)';
-                            }}
-                            onBlur={(e) => {
-                                e.currentTarget.style.borderColor = THEME.colors.border;
-                                e.currentTarget.style.backgroundColor = '#F8FAF9';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                        />
-                        
-                        {searchQuery && (
-                            <button 
-                                onClick={() => setSearchQuery('')}
+                    {/* 1. LADO IZQUIERDO: Buscador Inteligente Potenciado + Contador + Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '320px', maxWidth: '640px' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <div style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                                <Search size={16} strokeWidth={1.5} />
+                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar por nombre, ID (#), categoría (@), grupo (@)..." 
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 style={{ 
-                                    position: 'absolute', 
-                                    right: '2.6rem', 
-                                    top: '50%', 
-                                    transform: 'translateY(-50%)', 
-                                    background: 'none', 
-                                    border: 'none', 
-                                    cursor: 'pointer', 
-                                    fontSize: '0.85rem', 
-                                    color: THEME.colors.textSecondary,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    padding: '2px',
-                                    borderRadius: '50%',
-                                    backgroundColor: '#EAEFEA'
+                                    width: '100%', 
+                                    padding: '0.55rem 2.4rem 0.55rem 2.4rem', 
+                                    borderRadius: '10px', 
+                                    border: `1px solid ${THEME.colors.border}`, 
+                                    fontSize: '0.84rem', 
+                                    fontWeight: '500',
+                                    backgroundColor: '#F8FAF9',
+                                    color: THEME.colors.textMain,
+                                    outline: 'none',
+                                    transition: 'all 0.2s ease-in-out',
+                                    height: '38px',
+                                    boxSizing: 'border-box'
                                 }}
-                            ><X size={14} /></button>
-                        )}
-                        
-                        <button 
-                            onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
-                            style={{ 
-                                position: 'absolute', 
-                                right: '0.8rem', 
-                                top: '50%', 
-                                transform: 'translateY(-50%)', 
-                                background: 'none', 
-                                border: 'none', 
-                                cursor: 'pointer', 
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: THEME.colors.primary,
-                                padding: '4px',
-                                borderRadius: '6px',
-                                transition: 'background-color 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EAEFEA'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        >
-                            <Sparkles size={16} />
-                        </button>
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = THEME.colors.primary;
+                                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                    e.currentTarget.style.boxShadow = '0 0 0 2px rgba(13, 122, 87, 0.15)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = THEME.colors.border;
+                                    e.currentTarget.style.backgroundColor = '#F8FAF9';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                            />
+                            
+                            {searchQuery && (
+                                <button 
+                                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                    style={{ 
+                                        position: 'absolute', 
+                                        right: '0.75rem', 
+                                        top: '50%', 
+                                        transform: 'translateY(-50%)', 
+                                        background: 'none', 
+                                        border: 'none', 
+                                        cursor: 'pointer', 
+                                        fontSize: '0.85rem', 
+                                        color: THEME.colors.textSecondary,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '3px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#EAEFEA'
+                                    }}
+                                    title="Limpiar búsqueda"
+                                ><X size={13} strokeWidth={2} /></button>
+                            )}
+                        </div>
 
-                        {isInfoGuideOpen && (
-                            <div style={{ 
-                                position: 'absolute', 
-                                top: '100%', 
-                                right: 0, 
-                                marginTop: '0.8rem', 
-                                width: '300px', 
-                                backgroundColor: 'white', 
-                                padding: '1.25rem', 
-                                borderRadius: '12px', 
-                                boxShadow: THEME.shadow.lg, 
-                                zIndex: 100, 
-                                border: `1px solid ${THEME.colors.border}` 
+                        {/* Contador de Familias Filtradas + Botón Info FUSIONADOS */}
+                        {(activeTab === 'stock' || activeTab === 'movements') && (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                height: '38px',
+                                backgroundColor: ((activeTab === 'stock' && (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all')) || (activeTab === 'movements' && (searchQuery || movementsFilterActiveOnly))) ? THEME.colors.primaryLight : '#FFFFFF',
+                                color: ((activeTab === 'stock' && (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all')) || (activeTab === 'movements' && (searchQuery || movementsFilterActiveOnly))) ? THEME.colors.primary : THEME.colors.textSecondary,
+                                border: `1px solid ${((activeTab === 'stock' && (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all')) || (activeTab === 'movements' && (searchQuery || movementsFilterActiveOnly))) ? THEME.colors.primary : THEME.colors.border}`,
+                                borderRadius: THEME.radius.md,
+                                padding: '0 0 0 0.75rem',
+                                fontSize: '0.8rem',
+                                fontWeight: '700',
+                                flexShrink: 0,
+                                position: 'relative',
+                                boxShadow: THEME.shadow.sm,
+                                transition: 'all 0.2s ease'
                             }}>
-                                <h4 style={{ margin: '0 0 0.75rem 0', fontWeight: '800', fontSize: '0.9rem', color: THEME.colors.textMain }}>Guía de Búsqueda Inteligente</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                    <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center' }}>
-                                        <code style={{ color: '#2563EB', fontWeight: '700', backgroundColor: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>@bajo</code>
-                                        <span style={{ marginLeft: '8px', color: THEME.colors.textSecondary }}>Bajo stock mín.</span>
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center' }}>
-                                        <code style={{ color: '#059669', fontWeight: '700', backgroundColor: '#ECFDF5', padding: '2px 6px', borderRadius: '4px' }}>@disponible</code>
-                                        <span style={{ marginLeft: '8px', color: THEME.colors.textSecondary }}>Solo stock venta</span>
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center' }}>
-                                        <code style={{ color: '#D97706', fontWeight: '700', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>@regreso</code>
-                                        <span style={{ marginLeft: '8px', color: THEME.colors.textSecondary }}>Devoluciones</span>
-                                    </div>
-                                    <div style={{ padding: '0.5rem', backgroundColor: '#F4F7F6', borderRadius: '8px', fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <Sparkles size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                        <span>Ej: <strong>Tomate @bajo</strong></span>
-                                    </div>
-                                    <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.55rem', marginTop: '0.25rem' }}>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '2px' }}>Búsqueda Múltiple:</div>
-                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
-                                            Separa con comas (<code>,</code>) para buscar varios productos o SKUs simultáneamente.
-                                            <br />
-                                            <span>Ej: <strong>aji casero, cebollin</strong></span>
-                                        </div>
-                                    </div>
+                                {/* Conteo de Familias */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>
+                                    {((activeTab === 'stock' && (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all')) || (activeTab === 'movements' && (searchQuery || movementsFilterActiveOnly))) ? <Search size={13} strokeWidth={2} /> : <Database size={13} strokeWidth={2} />}
+                                    <span>
+                                        {activeTab === 'stock' ? (
+                                            (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all') ? (
+                                                <>
+                                                    <strong style={{ color: THEME.colors.primary, fontWeight: '700' }}>{formatNumber(filteredFamilies.length)}</strong>
+                                                    <span style={{ fontWeight: '450', color: THEME.colors.textSecondary, marginLeft: '4px' }}>de {formatNumber(hierarchyStats.parentsCount + hierarchyStats.standaloneCount)}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <strong style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(hierarchyStats.parentsCount + hierarchyStats.standaloneCount)}</strong>
+                                                    <span style={{ fontWeight: '450', color: THEME.colors.textSecondary, marginLeft: '4px' }}>familias</span>
+                                                </>
+                                            )
+                                        ) : (
+                                            (searchQuery || movementsFilterActiveOnly) ? (
+                                                <>
+                                                    <strong style={{ color: THEME.colors.primary, fontWeight: '700' }}>{formatNumber(kardexFamilies.length)}</strong>
+                                                    <span style={{ fontWeight: '450', color: THEME.colors.textSecondary, marginLeft: '4px' }}>de {formatNumber(hierarchyStats.parentsCount + hierarchyStats.standaloneCount)}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <strong style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(kardexFamilies.length)}</strong>
+                                                    <span style={{ fontWeight: '450', color: THEME.colors.textSecondary, marginLeft: '4px' }}>familias</span>
+                                                </>
+                                            )
+                                        )}
+                                    </span>
                                 </div>
+
+                                {/* Divisor vertical */}
+                                <div style={{ width: '1px', height: '20px', backgroundColor: ((activeTab === 'stock' && (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all')) || (activeTab === 'movements' && (searchQuery || movementsFilterActiveOnly))) ? '#A7D7C5' : '#E2E8F0' }} />
+
+                                {/* Botón Info Integrado */}
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowHelpTooltip(prev => !prev);
+                                    }}
+                                    style={{
+                                        height: '100%',
+                                        padding: '0 0.65rem',
+                                        border: 'none',
+                                        backgroundColor: showHelpTooltip ? THEME.colors.primary : 'transparent',
+                                        color: showHelpTooltip ? '#FFFFFF' : THEME.colors.primary,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderTopRightRadius: '8px',
+                                        borderBottomRightRadius: '8px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    title="Ver guía de comandos (@ / #)"
+                                >
+                                    <Info size={14} strokeWidth={2.2} />
+                                </button>
+
+                                {/* Dropdown del Tooltip con Backdrop */}
+                                {showHelpTooltip && (
+                                    <>
+                                        <div
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowHelpTooltip(false);
+                                            }}
+                                            style={{
+                                                position: 'fixed',
+                                                top: 0,
+                                                left: 0,
+                                                right: 0,
+                                                bottom: 0,
+                                                zIndex: 99998,
+                                                cursor: 'default'
+                                            }}
+                                        />
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            right: '0',
+                                            width: '360px',
+                                            backgroundColor: '#111827',
+                                            color: 'white',
+                                            padding: '1.2rem',
+                                            borderRadius: '16px',
+                                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+                                            zIndex: 99999,
+                                            fontSize: '0.78rem',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            lineHeight: '1.5',
+                                            animation: 'fadeInDown 0.2s ease-out'
+                                        }}>
+                                            <div style={{ fontWeight: '800', color: '#10B981', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Dna size={14} strokeWidth={2} /> COMANDOS DE BÚSQUEDA (@ / #)
+                                                </div>
+                                                <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'normal' }}>Clic para aplicar</span>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
+                                                {[
+                                                    { tag: '@bajo', desc: 'Bajo stock mín.' },
+                                                    { tag: '@disponible', desc: 'Stock positivo' },
+                                                    { tag: '@agotado', desc: 'Sin stock' },
+                                                    { tag: '@padre', desc: 'Familias / Base' },
+                                                    { tag: '@hijo', desc: 'Fraccionados' },
+                                                    { tag: '@fresas', desc: 'Fresas y Moras' },
+                                                    { tag: '@hortalizas', desc: 'Hortalizas' },
+                                                    { tag: '@verduras', desc: 'Verduras' },
+                                                    { tag: '@frutas', desc: 'Frutas y Otros' },
+                                                    { tag: '@papas', desc: 'Papas & Plátano' },
+                                                    { tag: '@abarrotes', desc: 'Abarrotes & Lácteos' },
+                                                    { tag: '#ID', desc: 'ID Contable (#12)' }
+                                                ].map((item, i) => (
+                                                    <div 
+                                                        key={i}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const cleanTag = item.tag === '#ID' ? '#' : item.tag;
+                                                            setSearchQuery(prev => {
+                                                                if (!prev) return cleanTag;
+                                                                if (prev.toLowerCase().includes(cleanTag.toLowerCase())) return prev;
+                                                                return `${prev}, ${cleanTag}`;
+                                                            });
+                                                            setCurrentPage(1);
+                                                        }}
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            padding: '4px 6px',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: 'rgba(255,255,255,0.05)',
+                                                            transition: 'background 0.15s'
+                                                        }}
+                                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)')}
+                                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)')}
+                                                    >
+                                                        <b style={{ color: '#FCD34D' }}>{item.tag}</b>: {item.desc}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+                                                Tip: Separa múltiples criterios con comas (,). Ej: <code>aji, @bajo</code>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
 
-                    {/* 2. ZONA DERECHA / CENTRAL: Controles Contextuales según la pestaña activa */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {/* 2. ZONA DERECHA: Controles Contextuales (Filtro Grupo Inv, Jerarquía, Stock, Orden) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
                         {activeTab === 'stock' && (
                             <>
+                                {/* Combobox de Grupo de Inventario */}
+                                <div ref={groupComboboxRef} style={{ position: 'relative' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsGroupComboboxOpen(prev => !prev);
+                                            setGroupComboboxSearch('');
+                                        }}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '7px',
+                                            padding: '0.45rem 0.85rem',
+                                            borderRadius: '8px',
+                                            border: `1px solid ${filterInventoryGroup !== 'all' ? THEME.colors.primary : THEME.colors.border}`,
+                                            backgroundColor: filterInventoryGroup !== 'all' ? THEME.colors.primaryLight : '#FFFFFF',
+                                            color: filterInventoryGroup !== 'all' ? THEME.colors.primary : THEME.colors.textMain,
+                                            fontWeight: '600',
+                                            fontSize: '0.78rem',
+                                            cursor: 'pointer',
+                                            outline: 'none',
+                                            boxShadow: THEME.shadow.sm,
+                                            transition: 'all 0.2s',
+                                            height: '35px',
+                                            maxWidth: '260px'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                        onMouseLeave={(e) => e.currentTarget.style.borderColor = filterInventoryGroup !== 'all' ? THEME.colors.primary : THEME.colors.border}
+                                        title="Filtrar por Grupo de Inventario"
+                                    >
+                                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                                            {selectedGroupOption.icon}
+                                        </span>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {selectedGroupOption.label}
+                                        </span>
+                                        <ChevronsUpDown size={13} strokeWidth={2} style={{ opacity: 0.6, flexShrink: 0, marginLeft: '2px' }} />
+                                    </button>
+
+                                    {isGroupComboboxOpen && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 'calc(100% + 6px)',
+                                            left: 0,
+                                            width: '280px',
+                                            backgroundColor: '#FFFFFF',
+                                            borderRadius: '12px',
+                                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            zIndex: 100,
+                                            padding: '6px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '4px'
+                                        }}>
+                                            {/* Buscador interno del Combobox */}
+                                            <div style={{ position: 'relative', padding: '2px 4px 6px 4px', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                <Search size={13} strokeWidth={2} style={{ position: 'absolute', left: '12px', top: '40%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar grupo..."
+                                                    value={groupComboboxSearch}
+                                                    onChange={(e) => setGroupComboboxSearch(e.target.value)}
+                                                    autoFocus
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.35rem 0.5rem 0.35rem 1.8rem',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: '500',
+                                                        borderRadius: '6px',
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        outline: 'none',
+                                                        backgroundColor: '#F8FAF9',
+                                                        color: THEME.colors.textMain,
+                                                        boxSizing: 'border-box'
+                                                    }}
+                                                    onFocus={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                                    onBlur={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
+                                                />
+                                            </div>
+
+                                            {/* Lista de opciones */}
+                                            <div style={{ maxHeight: '230px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                {filteredGroupOptions.length === 0 ? (
+                                                    <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                                        No se encontraron grupos
+                                                    </div>
+                                                ) : (
+                                                    filteredGroupOptions.map((opt) => {
+                                                        const isSelected = filterInventoryGroup === opt.value;
+                                                        return (
+                                                            <button
+                                                                key={opt.value}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFilterInventoryGroup(opt.value);
+                                                                    setCurrentPage(1);
+                                                                    setIsGroupComboboxOpen(false);
+                                                                }}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between',
+                                                                    padding: '0.45rem 0.65rem',
+                                                                    borderRadius: '6px',
+                                                                    border: 'none',
+                                                                    backgroundColor: isSelected ? THEME.colors.primaryLight : 'transparent',
+                                                                    color: isSelected ? THEME.colors.primary : THEME.colors.textMain,
+                                                                    fontWeight: isSelected ? '700' : '500',
+                                                                    fontSize: '0.76rem',
+                                                                    cursor: 'pointer',
+                                                                    textAlign: 'left',
+                                                                    transition: 'all 0.12s ease',
+                                                                    width: '100%'
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    if (!isSelected) e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                                                                }}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                                                    <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                                                        {opt.icon}
+                                                                    </span>
+                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {opt.label}
+                                                                    </span>
+                                                                </div>
+                                                                {isSelected && (
+                                                                    <Check size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary, flexShrink: 0, marginLeft: '6px' }} />
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {filteredFamilies.some(f => f.isParent) && (
                                     <button
                                         type="button"
@@ -2464,9 +2784,9 @@ export default function InventoryAdminPage() {
                                     style={{ 
                                         padding: '0.45rem 1rem', 
                                         borderRadius: '8px', 
-                                        border: `1px solid ${THEME.colors.border}`, 
-                                        backgroundColor: '#FFFFFF',
-                                        color: THEME.colors.textMain,
+                                        border: `1px solid ${stockStatusFilter !== 'all' ? THEME.colors.primary : THEME.colors.border}`, 
+                                        backgroundColor: stockStatusFilter !== 'all' ? THEME.colors.primaryLight : '#FFFFFF',
+                                        color: stockStatusFilter !== 'all' ? THEME.colors.primary : THEME.colors.textMain,
                                         fontWeight: '600',
                                         fontSize: '0.78rem',
                                         cursor: 'pointer',
@@ -2475,7 +2795,7 @@ export default function InventoryAdminPage() {
                                         transition: 'all 0.2s'
                                     }}
                                     onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
-                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
+                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = stockStatusFilter !== 'all' ? THEME.colors.primary : THEME.colors.border}
                                 >
                                     <option value="all">Ver Todos</option>
                                     <option value="available">Disponible</option>
