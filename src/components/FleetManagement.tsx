@@ -13,7 +13,8 @@ import {
     User, 
     XCircle, 
     Save, 
-    Truck
+    Truck,
+    Trash2
 } from 'lucide-react';
 
 interface Route {
@@ -318,6 +319,28 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         } catch (err: any) {
             console.error('Error al actualizar vehículo:', err);
             alert(err?.message || 'Error al guardar los cambios.');
+        } finally {
+            setIsSavingVehicle(false);
+        }
+    };
+
+    const handleDeleteVehicle = async (vehicle: Vehicle) => {
+        if (readOnly) return;
+        const confirmMsg = `¿Estás seguro de que deseas eliminar permanentemente el vehículo ${vehicle.plate} (${vehicle.brand} ${vehicle.model})?\n\nEsta acción borrará el vehículo de la flota y de la base de datos de forma irreversible.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setIsSavingVehicle(true);
+        try {
+            await callVehiclesApi({
+                action: 'delete',
+                vehicleId: vehicle.id
+            });
+            setEditingVehicle(null);
+            setEditForm(null);
+            fetchVehicles();
+        } catch (err: any) {
+            console.error('Error al eliminar vehículo:', err);
+            alert(err?.message || 'Error al eliminar el vehículo.');
         } finally {
             setIsSavingVehicle(false);
         }
@@ -684,30 +707,51 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                     <input type="number" value={editForm.current_odometer} onChange={e => setEditForm({...editForm, current_odometer: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
                                 </div>
                             </div>
-                            <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                                <button type="button" onClick={() => { setEditingVehicle(null); setEditForm(null); }} style={{ padding: '0.9rem 2rem', borderRadius: '14px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '700', cursor: 'pointer', color: '#374151' }}>
-                                    Cancelar
-                                </button>
+                            <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
                                 <button 
-                                    type="submit" 
+                                    type="button" 
+                                    onClick={() => editingVehicle && handleDeleteVehicle(editingVehicle)} 
                                     disabled={isSavingVehicle}
                                     style={{ 
-                                        padding: '0.9rem 2.5rem', 
+                                        padding: '0.9rem 1.4rem', 
                                         borderRadius: '14px', 
-                                        border: 'none', 
-                                        background: isSavingVehicle ? '#94A3B8' : '#0891B2', 
-                                        color: 'white', 
-                                        fontWeight: '900', 
-                                        cursor: isSavingVehicle ? 'not-allowed' : 'pointer', 
-                                        fontSize: '1rem', 
-                                        boxShadow: isSavingVehicle ? 'none' : '0 10px 15px -3px rgba(8, 145, 178, 0.2)', 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center', 
-                                        gap: '8px' 
+                                        border: '1px solid #FECACA', 
+                                        background: '#FEF2F2', 
+                                        color: '#DC2626', 
+                                        fontWeight: '700', 
+                                        cursor: isSavingVehicle ? 'not-allowed' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
                                     }}
                                 >
-                                    <Save size={16} /> {isSavingVehicle ? 'Guardando...' : 'Guardar Cambios'}
+                                    <Trash2 size={16} /> Eliminar Vehículo
                                 </button>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <button type="button" onClick={() => { setEditingVehicle(null); setEditForm(null); }} style={{ padding: '0.9rem 2rem', borderRadius: '14px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '700', cursor: 'pointer', color: '#374151' }}>
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={isSavingVehicle}
+                                        style={{ 
+                                            padding: '0.9rem 2.5rem', 
+                                            borderRadius: '14px', 
+                                            border: 'none', 
+                                            background: isSavingVehicle ? '#94A3B8' : '#0891B2', 
+                                            color: 'white', 
+                                            fontWeight: '900', 
+                                            cursor: isSavingVehicle ? 'not-allowed' : 'pointer', 
+                                            fontSize: '1rem', 
+                                            boxShadow: isSavingVehicle ? 'none' : '0 10px 15px -3px rgba(8, 145, 178, 0.2)', 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center', 
+                                            gap: '8px' 
+                                        }}
+                                    >
+                                        <Save size={16} /> {isSavingVehicle ? 'Guardando...' : 'Guardar Cambios'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>

@@ -206,6 +206,33 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true });
         }
 
+        // 7. Acción: ELIMINAR VEHÍCULO
+        if (action === 'delete') {
+            if (!vehicleId) {
+                return NextResponse.json({ error: 'Falta el ID del vehículo a eliminar.' }, { status: 400 });
+            }
+
+            // Limpiar mantenimientos programados asociados antes de borrar
+            await adminSupabase
+                .from('maintenance_schedules')
+                .delete()
+                .eq('vehicle_id', vehicleId);
+
+            const { data, error } = await adminSupabase
+                .from('fleet_vehicles')
+                .delete()
+                .eq('id', vehicleId)
+                .select()
+                .maybeSingle();
+
+            if (error) {
+                console.error('[API /api/transport/vehicles] Error eliminando vehículo:', error);
+                return NextResponse.json({ error: error.message || 'Error al eliminar vehículo en base de datos.' }, { status: 500 });
+            }
+
+            return NextResponse.json({ success: true, deleted: data });
+        }
+
         return NextResponse.json({ error: `Acción '${action}' no reconocida.` }, { status: 400 });
     } catch (err: any) {
         console.error('[API /api/transport/vehicles] Excepción no controlada:', err);
