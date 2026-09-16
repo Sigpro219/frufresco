@@ -171,7 +171,20 @@ export default function PQRFloatingWidget() {
                 }
             }
 
-            // 2. Insert PQR record (always with order_id: null; order association happens during resolution in CS)
+            // 2. Format creator info for traceability
+            const creatorDisplayName = profile?.contact_name || profile?.company_name || user?.email?.split('@')[0] || 'Colaborador FruFresco';
+            const roleLabels: Record<string, string> = {
+                admin: 'Administración',
+                picker: 'Picking / Bodega',
+                driver: 'Transporte',
+                commercial: 'Comercial',
+                sales: 'Ventas',
+                customer_service: 'Servicio al Cliente'
+            };
+            const creatorRoleLabel = profile?.role ? (roleLabels[profile.role] || profile.role) : 'Operaciones';
+            const formattedDescription = `[Radicado por Colaborador FruFresco: ${creatorDisplayName} (${creatorRoleLabel})]\n\n${description.trim()}`;
+
+            // 3. Insert PQR record (always with order_id: null; order association happens during resolution in CS)
             const { error } = await supabase.from('customer_service_pqrs').insert({
                 client_id: selectedClientId,
                 order_id: null,
@@ -179,7 +192,7 @@ export default function PQRFloatingWidget() {
                 category: category,
                 priority: priority,
                 subject: subject.trim(),
-                description: description.trim(),
+                description: formattedDescription,
                 primary_photo_url: primaryUrl,
                 additional_photos: additionalUrls,
                 status: 'pending'

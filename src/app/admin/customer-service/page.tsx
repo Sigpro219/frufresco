@@ -156,6 +156,33 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
     const rawPhone = p.profiles?.contact_phone || p.profiles?.phone || '';
     const phoneParsed = cleanColombianPhone(rawPhone);
 
+    // 0. Explicit Collaborator Attribution (Internal Staff via Floating Widget / Ops)
+    const collabMatch = desc.match(/\[Radicado por Colaborador FruFresco:\s*([^\]]+)\]/i) || desc.match(/\[Radicado por:\s*([^\]]+)\]/i);
+    if (collabMatch) {
+        const collabRaw = collabMatch[1].trim();
+        return {
+            channel: 'mesa_ayuda',
+            channelLabel: 'Módulo Operaciones / SAC',
+            channelBadgeColor: '#7C3AED',
+            channelBadgeBg: '#F3E8FF',
+            channelBadgeBorder: '#DDD6FE',
+            authorTitle: 'Radicado Internamente por FruFresco',
+            authorName: collabRaw,
+            authorRole: 'Equipo de Operaciones & Mesa de Experiencia FruFresco',
+            authorInitials: getClientInitials(collabRaw.split('(')[0]),
+            receptionChannel: 'Mesa de Ayuda / Chat Interno FruFresco',
+            companyName: company,
+            clientContact: contact,
+            nit,
+            email,
+            phone: phoneParsed.display || rawPhone,
+            cleanPhone: phoneParsed.waNumber,
+            isPhoneValid: phoneParsed.isValid,
+            isDriver: false,
+            isClient: false
+        };
+    }
+
     // 1. If submitted via Driver App in delivery route
     if (subject.startsWith('[Conductor]') || desc.includes('El conductor reportó') || desc.includes('Cancelación total reportada por conductor')) {
         return {
@@ -182,7 +209,7 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
     }
 
     // 2. If submitted by B2B Institutional Client (Self-Service or Order Novelty)
-    if (p.profiles?.role === 'b2b_client' || subject.startsWith('[Portal B2B]') || desc.includes('Reporte de autoservicio B2B')) {
+    if (subject.startsWith('[Portal B2B]') || desc.includes('Reporte de autoservicio B2B')) {
         const clientDisplayName = contact && contact !== 'Ecónomo / Contacto en Sitio' && contact !== company ? contact : company;
         return {
             channel: 'portal_b2b',
@@ -208,7 +235,7 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
     }
 
     // 3. If submitted by B2C Final Consumer Client
-    if (p.profiles?.role === 'b2c_client' || p.profiles?.role === 'client') {
+    if (subject.startsWith('[Portal B2C]') || subject.startsWith('[Tienda B2C]') || desc.includes('Reporte de autoservicio B2C') || desc.includes('Reporte Tienda Online B2C')) {
         const b2cName = contact || company || 'Cliente Consumidor Final';
         return {
             channel: 'portal_b2c',
@@ -233,7 +260,7 @@ export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
         };
     }
 
-    // 4. Internal FruFresco Staff / Customer Service Desk
+    // 4. Internal FruFresco Staff / Customer Service Desk (Default for internal tickets)
     return {
         channel: 'mesa_ayuda',
         channelLabel: 'Mesa de Ayuda SAC',
@@ -2845,7 +2872,11 @@ export default function CustomerServicePage() {
                                                             </span>
                                                         </div>
                                                         <p style={{ margin: 0, fontSize: '0.86rem', color: '#1E293B', lineHeight: '1.55', whiteSpace: 'pre-wrap', fontWeight: '500' }}>
-                                                            {selectedPqr.description}
+                                                            {selectedPqr.description
+                                                                .replace(/^\[Radicado por Colaborador FruFresco:\s*[^\]]+\]\s*/i, '')
+                                                                .replace(/^\[Radicado por:\s*[^\]]+\]\s*/i, '')
+                                                                .replace(/^\[RCA_METADATA:[^\]]+\]\s*/i, '')
+                                                                .trim()}
                                                         </p>
                                                     </div>
                                                     
