@@ -896,6 +896,8 @@ function CreateOrderContent() {
         picking_note?: string;
         delivery_note?: string;
         is_from_last_order?: boolean;
+        observations?: string;
+        deliverySchedule?: string;
     }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
@@ -2175,7 +2177,49 @@ function CreateOrderContent() {
     };
     // --- ORDER IMPORT LOGIC (Mesa de Trabajo) ---
 
-    // --- ORDER IMPORT LOGIC (Mesa de Trabajo) ---
+    // Helper para calcular fecha de entrega destino a partir de un día de la semana (ej. 'MARTES')
+    const calculateTargetDeliveryDate = (baseDateStr: string, targetDayName: string): string => {
+        if (!baseDateStr) return '';
+        try {
+            const daysMap: Record<string, number> = {
+                'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'miércoles': 3,
+                'jueves': 4, 'viernes': 5, 'sabado': 6, 'sábado': 6
+            };
+            const cleanDay = (targetDayName || '').toLowerCase().trim();
+            const targetDayIdx = daysMap[cleanDay];
+            if (targetDayIdx === undefined) {
+                return baseDateStr;
+            }
+            const [y, m, d] = baseDateStr.split('-').map(Number);
+            const curr = new Date(y, m - 1, d, 12, 0, 0);
+            const currDayIdx = curr.getDay();
+            let daysToAdd = (targetDayIdx - currDayIdx + 7) % 7;
+            if (daysToAdd === 0) daysToAdd = 7; // estrictamente el próximo día indicado
+            curr.setDate(curr.getDate() + daysToAdd);
+            const resY = curr.getFullYear();
+            const resM = String(curr.getMonth() + 1).padStart(2, '0');
+            const resD = String(curr.getDate()).padStart(2, '0');
+            return `${resY}-${resM}-${resD}`;
+        } catch {
+            return baseDateStr;
+        }
+    };
+
+    // Helper para extraer horario/día diferido desde el ítem o sus especificaciones
+    const detectDeliveryScheduleFromItem = (item: any): string | null => {
+        if (item.deliverySchedule && typeof item.deliverySchedule === 'string') {
+            const upper = item.deliverySchedule.toUpperCase().trim();
+            if (upper && upper !== 'NULL' && upper !== 'NORMAL' && upper !== 'PRINCIPAL') {
+                return upper;
+            }
+        }
+        const searchIn = `${item.observations || ''} ${item.presentation || ''} ${item.originalName || ''}`.toLowerCase();
+        const match = searchIn.match(/para\s+(?:el\s+)?(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i);
+        if (match && match[1]) {
+            return match[1].toUpperCase();
+        }
+        return null;
+    };
 
     const parseOrderWithAI = async (file: File) => {
         setParsingFile(true);
@@ -2256,50 +2300,6 @@ function CreateOrderContent() {
                 throw new Error(data.error || 'Error en la API de extracción');
             }
             
-            // Helper para calcular fecha de entrega destino a partir de un día de la semana (ej. 'MARTES')
-            const calculateTargetDeliveryDate = (baseDateStr: string, targetDayName: string): string => {
-                if (!baseDateStr) return '';
-                try {
-                    const daysMap: Record<string, number> = {
-                        'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'miércoles': 3,
-                        'jueves': 4, 'viernes': 5, 'sabado': 6, 'sábado': 6
-                    };
-                    const cleanDay = (targetDayName || '').toLowerCase().trim();
-                    const targetDayIdx = daysMap[cleanDay];
-                    if (targetDayIdx === undefined) {
-                        return baseDateStr;
-                    }
-                    const [y, m, d] = baseDateStr.split('-').map(Number);
-                    const curr = new Date(y, m - 1, d, 12, 0, 0);
-                    const currDayIdx = curr.getDay();
-                    let daysToAdd = (targetDayIdx - currDayIdx + 7) % 7;
-                    if (daysToAdd === 0) daysToAdd = 7; // estrictamente el próximo día indicado
-                    curr.setDate(curr.getDate() + daysToAdd);
-                    const resY = curr.getFullYear();
-                    const resM = String(curr.getMonth() + 1).padStart(2, '0');
-                    const resD = String(curr.getDate()).padStart(2, '0');
-                    return `${resY}-${resM}-${resD}`;
-                } catch {
-                    return baseDateStr;
-                }
-            };
-
-            // Helper para extraer horario/día diferido desde el ítem o sus especificaciones
-            const detectDeliveryScheduleFromItem = (item: any): string | null => {
-                if (item.deliverySchedule && typeof item.deliverySchedule === 'string') {
-                    const upper = item.deliverySchedule.toUpperCase().trim();
-                    if (upper && upper !== 'NULL' && upper !== 'NORMAL' && upper !== 'PRINCIPAL') {
-                        return upper;
-                    }
-                }
-                const searchIn = `${item.observations || ''} ${item.presentation || ''} ${item.originalName || ''}`.toLowerCase();
-                const match = searchIn.match(/para\s+(?:el\s+)?(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i);
-                if (match && match[1]) {
-                    return match[1].toUpperCase();
-                }
-                return null;
-            };
-
             // Helper para detectar unidad desde el texto y metadatos del item
             const detectUnitFromItem = (item: any, product: any, productConversions: any[]) => {
                 const cleanName = (item.originalName || '').toLowerCase();
@@ -2846,7 +2846,7 @@ function CreateOrderContent() {
                         delivery_date: targetDate,
                         delivery_slot: deliverySlot,
                         admin_notes: `${poNum} [${deliveryLabel}] - ${clientName}${adminNotes ? ` | ${adminNotes}` : ''}`,
-                        shipping_address: shippingAddress || targetClient?.address || '',
+                        shipping_address: targetClient?.address || 'Dirección Principal',
                         document_url: docUrl
                     },
                     itemsData: mappedItems
@@ -8255,6 +8255,386 @@ function CreateOrderContent() {
                             style={{ width: '100%', height: '100%', border: 'none' }}
                             title="Visor de Documento Original"
                         />
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Confirmación de Pedidos Relacionados Multi-Entrega */}
+            {showMultiOrderModal && (() => {
+                const group1 = stagedItems.filter(i => !i.deliverySchedule && i.suggestedProduct);
+                const group2 = stagedItems.filter(i => i.deliverySchedule && i.suggestedProduct);
+                const secondaryScheduleName = group2[0]?.deliverySchedule || 'Segunda Entrega';
+
+                const clientDetails = getSelectedClientDetails();
+                const clientName = clientDetails?.company_name || clientDetails?.contact_name || 'Cliente Institucional';
+
+                const calcTotalGroup = (items: any[]) => {
+                    return items.reduce((acc, it) => {
+                        const price = (it.suggestedProduct?.id && contractPrices[it.suggestedProduct.id]) 
+                            ? contractPrices[it.suggestedProduct.id] 
+                            : (it.price || it.suggestedProduct?.base_price || 1000);
+                        return acc + (price * it.quantity);
+                    }, 0);
+                };
+
+                return (
+                    <div style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                        backdropFilter: 'blur(6px)',
+                        zIndex: 99999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1.5rem'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '24px',
+                            maxWidth: '960px',
+                            width: '100%',
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            overflow: 'hidden'
+                        }}>
+                            {/* Modal Header */}
+                            <div style={{
+                                padding: '1.5rem 2rem',
+                                borderBottom: '1px solid #E2E8F0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                backgroundColor: '#F8FAFC'
+                            }}>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '3px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>
+                                            Multi-Entrega Inteligente
+                                        </span>
+                                        {importValidation?.poNumber && (
+                                            <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '3px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900' }}>
+                                                OC: {importValidation.poNumber}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0F172A', marginTop: '4px' }}>
+                                        Crear 2 Pedidos Relacionados para {clientName}
+                                    </h2>
+                                    <p style={{ fontSize: '0.88rem', color: '#64748B', marginTop: '2px' }}>
+                                        El documento solicita entregas en días diferentes. FruFresco creará dos pedidos independientes para garantizar el alistamiento y despacho correcto sin confusiones en bodega.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMultiOrderModal(false)}
+                                    style={{
+                                        border: 'none',
+                                        background: '#F1F5F9',
+                                        color: '#64748B',
+                                        borderRadius: '12px',
+                                        width: '36px',
+                                        height: '36px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Modal Body: Two Columns */}
+                            <div style={{ padding: '1.5rem 2rem', overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                {/* Order 1 Box */}
+                                <div style={{
+                                    border: '2px solid #E2E8F0',
+                                    borderRadius: '18px',
+                                    padding: '1.25rem',
+                                    backgroundColor: '#FAFAFA',
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+                                            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#1E293B' }}>
+                                                Pedido 1: Entrega Principal
+                                            </h3>
+                                        </div>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#059669', backgroundColor: '#ECFDF5', padding: '2px 8px', borderRadius: '6px' }}>
+                                            {group1.length} productos
+                                        </span>
+                                    </div>
+
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                            FECHA DE ENTREGA PEDIDO 1
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={multiOrderDate1}
+                                            onChange={e => setMultiOrderDate1(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 12px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #CBD5E1',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '700',
+                                                color: '#1E293B',
+                                                backgroundColor: '#FFFFFF'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                        Productos a Alistar:
+                                    </div>
+                                    <div style={{ flex: 1, maxHeight: '240px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '10px', backgroundColor: '#FFFFFF', padding: '8px' }}>
+                                        {group1.map((it, idx) => (
+                                            <div key={it.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 4px', borderBottom: idx < group1.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                                                <div style={{ maxWidth: '70%' }}>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#1E293B' }}>{it.suggestedProduct?.name || it.originalName}</div>
+                                                    {it.observations && (
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748B', fontStyle: 'italic' }}>📝 {it.observations}</div>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                                                    {it.quantity} {it.originalUnit || it.suggestedProduct?.unit_of_measure}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>Subtotal estimado:</span>
+                                        <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#1E293B' }}>{formatMoney(calcTotalGroup(group1))}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '4px' }}>
+                                        Nota: OC: {importValidation?.poNumber || 'S/N'} [Entrega 1/2 - Principal]
+                                    </div>
+                                </div>
+
+                                {/* Order 2 Box */}
+                                <div style={{
+                                    border: '2px solid #FDE68A',
+                                    borderRadius: '18px',
+                                    padding: '1.25rem',
+                                    backgroundColor: '#FFFDF5',
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#F59E0B' }} />
+                                            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#92400E' }}>
+                                                Pedido 2: Entrega ({secondaryScheduleName})
+                                            </h3>
+                                        </div>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#B45309', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: '6px' }}>
+                                            {group2.length} productos
+                                        </span>
+                                    </div>
+
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#92400E', display: 'block', marginBottom: '4px' }}>
+                                            FECHA DE ENTREGA PEDIDO 2 (CALCULADA)
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={multiOrderDate2}
+                                            onChange={e => setMultiOrderDate2(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 12px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #FCD34D',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '700',
+                                                color: '#78350F',
+                                                backgroundColor: '#FFFFFF'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#92400E', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                        Productos a Alistar:
+                                    </div>
+                                    <div style={{ flex: 1, maxHeight: '240px', overflowY: 'auto', border: '1px solid #FDE68A', borderRadius: '10px', backgroundColor: '#FFFFFF', padding: '8px' }}>
+                                        {group2.map((it, idx) => (
+                                            <div key={it.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 4px', borderBottom: idx < group2.length - 1 ? '1px solid #FEF3C7' : 'none' }}>
+                                                <div style={{ maxWidth: '70%' }}>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#1E293B' }}>{it.suggestedProduct?.name || it.originalName}</div>
+                                                    {it.observations && (
+                                                        <div style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: '600' }}>🗓️ {it.observations}</div>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400E', whiteSpace: 'nowrap' }}>
+                                                    {it.quantity} {it.originalUnit || it.suggestedProduct?.unit_of_measure}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #FDE68A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: '600' }}>Subtotal estimado:</span>
+                                        <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#92400E' }}>{formatMoney(calcTotalGroup(group2))}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: '#B45309', marginTop: '4px' }}>
+                                        Nota: OC: {importValidation?.poNumber || 'S/N'} [Entrega 2/2 - {secondaryScheduleName}]
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{
+                                padding: '1.25rem 2rem',
+                                borderTop: '1px solid #E2E8F0',
+                                backgroundColor: '#F8FAFC',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMultiOrderModal(false)}
+                                    disabled={isCreatingMultiOrders}
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: '12px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: 'white',
+                                        color: '#64748B',
+                                        fontWeight: '700',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Volver y Revisar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCreateMultiOrders}
+                                    disabled={isCreatingMultiOrders}
+                                    style={{
+                                        padding: '12px 28px',
+                                        borderRadius: '14px',
+                                        border: 'none',
+                                        backgroundColor: isCreatingMultiOrders ? '#B45309' : '#D97706',
+                                        color: 'white',
+                                        fontWeight: '900',
+                                        fontSize: '1rem',
+                                        cursor: isCreatingMultiOrders ? 'not-allowed' : 'pointer',
+                                        boxShadow: '0 10px 20px -3px rgba(217, 119, 6, 0.4)',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    {isCreatingMultiOrders ? (
+                                        <>
+                                            <Loader2 size={18} className="animate-spin" />
+                                            <span>Generando Pedidos Relacionados...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 size={18} />
+                                            <span>🚀 Confirmar y Crear los 2 Pedidos</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* Modal de Éxito Multi-Entrega */}
+            {multiOrderSuccess && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 100000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.5rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '24px',
+                        maxWidth: '600px',
+                        width: '100%',
+                        padding: '2.5rem',
+                        textAlign: 'center',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)'
+                    }}>
+                        <div style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            backgroundColor: '#DCFCE7',
+                            color: '#16A34A',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.25rem'
+                        }}>
+                            <CheckCircle2 size={36} strokeWidth={2.5} />
+                        </div>
+                        <h2 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#0F172A', marginBottom: '0.5rem' }}>
+                            ¡2 Pedidos Creados Exitosamente!
+                        </h2>
+                        <p style={{ fontSize: '0.92rem', color: '#64748B', marginBottom: '1.5rem' }}>
+                            La Orden de Compra fue separada correctamente. Ambos pedidos quedaron registrados en el sistema, vinculados al documento original y programados para sus respectivas fechas de despacho.
+                        </p>
+
+                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'left', border: '1px solid #E2E8F0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid #E2E8F0' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase' }}>Pedido 1 (Principal)</div>
+                                    <div style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B' }}>ID: #{multiOrderSuccess.order1Id.slice(0, 8)}</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Fecha de Despacho: <b>{multiOrderDate1}</b></div>
+                                </div>
+                                <Link href={`/admin/orders/loading?date=${multiOrderDate1}`}>
+                                    <button style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#1E293B', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                        Ver Alistamiento
+                                    </button>
+                                </Link>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase' }}>Pedido 2 (Diferido)</div>
+                                    <div style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B' }}>ID: #{multiOrderSuccess.order2Id.slice(0, 8)}</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Fecha de Despacho: <b>{multiOrderDate2}</b></div>
+                                </div>
+                                <Link href={`/admin/orders/loading?date=${multiOrderDate2}`}>
+                                    <button style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#1E293B', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                        Ver Alistamiento
+                                    </button>
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                            <Link href="/admin/orders">
+                                <button style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer' }}>
+                                    Ver Listado de Pedidos
+                                </button>
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setMultiOrderSuccess(null)}
+                                style={{ padding: '12px 24px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#64748B', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer' }}
+                            >
+                                Cerrar y Continuar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
