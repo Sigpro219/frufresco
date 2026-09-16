@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import RoleProcessGuide from '@/components/common/RoleProcessGuide';
 import ProcessTooltip from '@/components/common/ProcessTooltip';
+import FinancialAdjustmentModal from '@/components/FinancialAdjustmentModal';
 import { 
     RCA_CATEGORIES_L1, 
     RESPONSIBLE_PARTIES, 
@@ -418,6 +419,14 @@ export default function CustomerServicePage() {
     // Custom Taxonomy & Parameters State
     const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
     const [showTaxonomyModal, setShowTaxonomyModal] = useState(false);
+    const [showFinancialModal, setShowFinancialModal] = useState(false);
+    const [financialModalMode, setFinancialModalMode] = useState<'credit_note' | 'invoice_adjustment'>('credit_note');
+
+    const openFinancialModal = (mode: 'credit_note' | 'invoice_adjustment') => {
+        setFinancialModalMode(mode);
+        setResolutionOption(mode === 'credit_note' ? 'opt3' : 'opt4');
+        setShowFinancialModal(true);
+    };
     const [editingTaxonomy, setEditingTaxonomy] = useState<DefectCategoryL1[]>([]);
     const [selectedTaxonomyCatIdx, setSelectedTaxonomyCatIdx] = useState(0);
     const [totalOrdersCount, setTotalOrdersCount] = useState<number | null>(null);
@@ -949,86 +958,14 @@ export default function CustomerServicePage() {
                     redirectUrl = `/admin/orders/${newOrder.id}`;
 
                 } else if (resolutionOption === 'opt3') {
-                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 3 - Generar Nota Crédito (Remitir novedad a facturación)]`;
+                    setActionLoading(false);
+                    openFinancialModal('credit_note');
+                    return;
 
                 } else if (resolutionOption === 'opt4') {
-                    if (!selectedPqr.order_id) {
-                        showToast('Esta PQR no tiene un pedido asociado para cerrar con cantidad recibida.', 'warning');
-                        setActionLoading(false);
-                        return;
-                    }
-
-                    const { data: pendingReturns, error: returnsError } = await supabase
-                        .from('billing_returns')
-                        .select('*')
-                        .eq('order_id', selectedPqr.order_id)
-                        .eq('status', 'pending_review');
-
-                    if (returnsError) {
-                        throw new Error(`Error consultando devoluciones pendientes: ${returnsError.message}`);
-                    }
-
-                    if (!pendingReturns || pendingReturns.length === 0) {
-                        showToast('No se encontraron novedades de producto pendientes registradas para este pedido. Registra primero la cantidad devuelta/faltante a la derecha.', 'warning');
-                        setActionLoading(false);
-                        return;
-                    }
-
-                    for (const novelty of pendingReturns) {
-                        const { data: itemData, error: itemError } = await supabase
-                            .from('order_items')
-                            .select('unit_price, quantity')
-                            .eq('order_id', novelty.order_id)
-                            .eq('product_id', novelty.product_id)
-                            .single();
-                        
-                        if (itemError) continue;
-
-                        const newQty = Math.max(0, Number(itemData.quantity) - Number(novelty.quantity_returned));
-                        const priceCredit = Number(novelty.quantity_returned) * Number(itemData.unit_price);
-
-                        await supabase
-                            .from('order_items')
-                            .update({ quantity: newQty })
-                            .eq('order_id', novelty.order_id)
-                            .eq('product_id', novelty.product_id);
-
-                        const { data: orderData } = await supabase.from('orders').select('total').eq('id', novelty.order_id).single();
-                        const newTotal = Math.max(0, (Number(orderData?.total) || 0) - priceCredit);
-                        
-                        await supabase
-                            .from('orders')
-                            .update({ total: newTotal })
-                            .eq('id', novelty.order_id);
-
-                        const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', novelty.order_id).single();
-                        if (invoiceData) {
-                            const { data: orderProf } = await supabase
-                                .from('orders')
-                                .select('profiles(iva_responsible)')
-                                .eq('id', novelty.order_id)
-                                .single();
-                            const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
-                            const totalBase = isIva ? newTotal / 1.19 : newTotal;
-                            const totalTax = isIva ? newTotal - totalBase : 0;
-
-                            await supabase
-                                .from('billing_invoices')
-                                .update({
-                                    total_base: totalBase,
-                                    total_tax: totalTax,
-                                    total_final: newTotal
-                                })
-                                .eq('id', invoiceData.id);
-                        }
-
-                        await supabase
-                            .from('billing_returns')
-                            .update({ status: 'approved' })
-                            .eq('id', novelty.id);
-                    }
-
-                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 4 - Cerrar pedido con cantidad real recibida]\n-> Novedades aprobadas y total recalculado automáticamente en facturación.`;
+                    setActionLoading(false);
+                    openFinancialModal('invoice_adjustment');
+                    return;
                 }
             } else {
                 finalNotes = `${resolutionNotes}\n\n[CASO RECHAZADO / ARCHIVADO]`;
@@ -3408,7 +3345,10 @@ export default function CustomerServicePage() {
 
                                                 {/* Card 3: Nota Crédito */}
                                                 <div 
-                                                    onClick={() => setResolutionOption('opt3')}
+                                                    onClick={() => {
+                                                        setResolutionOption('opt3');
+                                                        openFinancialModal('credit_note');
+                                                    }}
                                                     style={{
                                                         backgroundColor: resolutionOption === 'opt3' ? '#F5F3FF' : '#FFFFFF',
                                                         border: `2px solid ${resolutionOption === 'opt3' ? '#7C3AED' : '#E2E8F0'}`,
@@ -3430,11 +3370,38 @@ export default function CustomerServicePage() {
                                                     <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
                                                         Emitir descuento contable a favor del cliente en facturación.
                                                     </p>
+                                                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #DDD6FE' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openFinancialModal('credit_note');
+                                                            }}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                color: '#6D28D9',
+                                                                backgroundColor: '#EDE9FE',
+                                                                border: 'none',
+                                                                padding: '4px 8px',
+                                                                borderRadius: '6px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <Receipt size={12} /> Liquidar Nota Crédito ↗
+                                                        </button>
+                                                    </div>
                                                 </div>
 
                                                 {/* Card 4: Ajustar Factura */}
                                                 <div 
-                                                    onClick={() => setResolutionOption('opt4')}
+                                                    onClick={() => {
+                                                        setResolutionOption('opt4');
+                                                        openFinancialModal('invoice_adjustment');
+                                                    }}
                                                     style={{
                                                         backgroundColor: resolutionOption === 'opt4' ? '#FFFBEB' : '#FFFFFF',
                                                         border: `2px solid ${resolutionOption === 'opt4' ? '#D97706' : '#E2E8F0'}`,
@@ -3456,6 +3423,30 @@ export default function CustomerServicePage() {
                                                     <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
                                                         Recalcular valor a pagar liquidando solo la cantidad conforme recibida.
                                                     </p>
+                                                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #FDE68A' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openFinancialModal('invoice_adjustment');
+                                                            }}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                color: '#B45309',
+                                                                backgroundColor: '#FEF3C7',
+                                                                border: 'none',
+                                                                padding: '4px 8px',
+                                                                borderRadius: '6px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <Scale size={12} /> Configurar Ajuste Factura ↗
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -3684,6 +3675,82 @@ export default function CustomerServicePage() {
                                                         >
                                                             <ExternalLink size={13} /> Montar Nuevo Pedido D+1 ↗
                                                         </Link>
+                                                    </div>
+                                                )}
+
+                                                {/* Nota Crédito Direct Action Card */}
+                                                {resolutionOption === 'opt3' && (
+                                                    <div style={{ backgroundColor: '#FAF5FF', border: '1.5px solid #DDD6FE', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <Receipt size={18} color="#7C3AED" />
+                                                            <div>
+                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#6D28D9' }}>
+                                                                    Emisión de Nota Crédito Comercial
+                                                                </div>
+                                                                <div style={{ fontSize: '0.7rem', color: '#7C3AED' }}>
+                                                                    Abre el asistente interactivo para liquidar productos, calcular saldos a favor y emitir la nota crédito.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openFinancialModal('credit_note')}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px',
+                                                                backgroundColor: '#7C3AED',
+                                                                color: '#FFFFFF',
+                                                                padding: '8px 14px',
+                                                                borderRadius: '8px',
+                                                                fontSize: '0.76rem',
+                                                                fontWeight: '800',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >
+                                                            <Receipt size={13} /> Abrir Liquidador de Nota Crédito ↗
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* Ajustar Factura Direct Action Card */}
+                                                {resolutionOption === 'opt4' && (
+                                                    <div style={{ backgroundColor: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <Scale size={18} color="#D97706" />
+                                                            <div>
+                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#92400E' }}>
+                                                                    Ajuste Directo de Factura & Pedido
+                                                                </div>
+                                                                <div style={{ fontSize: '0.7rem', color: '#B45309' }}>
+                                                                    Modifica cantidades recibidas para refacturar y cobrar únicamente lo recibido conforme.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openFinancialModal('invoice_adjustment')}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px',
+                                                                backgroundColor: '#D97706',
+                                                                color: '#FFFFFF',
+                                                                padding: '8px 14px',
+                                                                borderRadius: '8px',
+                                                                fontSize: '0.76rem',
+                                                                fontWeight: '800',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >
+                                                            <Scale size={13} /> Configurar Ajuste de Factura ↗
+                                                        </button>
                                                     </div>
                                                 )}
 
@@ -4674,6 +4741,25 @@ export default function CustomerServicePage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Financial Adjustment & Credit Note Modal (Options 3 & 4) */}
+            {selectedPqr && (
+                <FinancialAdjustmentModal
+                    isOpen={showFinancialModal}
+                    onClose={() => setShowFinancialModal(false)}
+                    mode={financialModalMode}
+                    pqr={selectedPqr}
+                    orderItems={orderItems}
+                    defaultRcaCategory={rcaCategoryL1}
+                    defaultRcaSubtype={rcaSubtypeL2}
+                    defaultRcaResponsible={rcaResponsible}
+                    activeTaxonomy={activeTaxonomy}
+                    onSuccess={(msg) => {
+                        showToast(msg, 'success');
+                        fetchData();
+                    }}
+                />
             )}
         </main>
     );
