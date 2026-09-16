@@ -4192,11 +4192,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const getDraftItems = (draft: any) => {
     const raw = draft.extracted_items || [];
     if (!Array.isArray(raw)) return [];
+    const directItems = raw.filter((i: any) => !i.isMetadata);
+    if (directItems.length > 0) {
+      return directItems;
+    }
     const meta = raw.find((i: any) => i.isMetadata);
     if (meta?.attachments && meta.attachments[0]?.items && meta.attachments[0].items.length > 0) {
       return meta.attachments[0].items;
     }
-    return raw.filter((i: any) => !i.isMetadata);
+    return [];
   };
   
   const getDraftMetadata = (draft: any) => {

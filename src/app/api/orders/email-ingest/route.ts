@@ -73,6 +73,96 @@ export async function POST(req: Request) {
       rawPayloadStr = await req.text();
       const payload = JSON.parse(rawPayloadStr);
 
+      const headers = payload.headers || {};
+      const envelope = payload.envelope || {};
+      const rawSubject = headers.subject || headers.Subject || '';
+      const rawFrom = headers.from || headers.From || envelope.from || '';
+      const messageId = headers['message-id'] || headers['Message-ID'] || envelope.id || null;
+      const plainText = payload.plain || '';
+
+      // 1. Extract clean subject and identifiers
+      const cleanSubject = rawSubject
+        .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
+        .replace(/^\[EML-[A-Z0-9]+\]\s*/i, '')
+        .replace(/^\[Adjunto\s+\d+\/\d+\]\s*/i, '')
+        .replace(/^\[Pedido\s+\d+\/\d+\]\s*/i, '')
+        .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
+        .trim();
+
+      // Clean sender email
+      let senderEmail = rawFrom;
+      const matchEmail = rawFrom.match(/<([^>]+)>/);
+      if (matchEmail) {
+        senderEmail = matchEmail[1];
+      }
+      senderEmail = senderEmail.trim().toLowerCase();
+
+      // Check forwarded sender
+      const deMatch = plainText.match(/(?:De|From):\s*([^<\r\n]+)?\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i);
+      let forwardedOriginalEmail: string | null = null;
+      if (deMatch && deMatch[2]) {
+        forwardedOriginalEmail = deMatch[2].trim().toLowerCase();
+      }
+
+      const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'admin@frufresco.com', 'investcortes@gmail.com', 'contacto@investmentscortes.com'];
+      if ((corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com')) && forwardedOriginalEmail && !corporateEmails.includes(forwardedOriginalEmail)) {
+        senderEmail = forwardedOriginalEmail;
+      }
+
+      // Check for OC / Purchase order number in subject
+      const ocMatch = cleanSubject.match(/\b(?:OC|OCC|SC|PEDIDO|ORDEN|SOLPED)?[#\s_-]*([0-9]{5,12})\b/i);
+      const ocNumber = ocMatch ? ocMatch[1] : null;
+
+      // 2. IMMEDIATE DEDUPLICATION CHECK (Anti-rebote de 15 minutos previo a inserción / Gemini)
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { data: recentDrafts } = await supabaseAdmin
+        .from('order_drafts')
+        .select('id, email_subject, source_email, created_at, extracted_items')
+        .gte('created_at', fifteenMinutesAgo);
+
+      if (recentDrafts && recentDrafts.length > 0) {
+        const isDuplicate = recentDrafts.some((d: any) => {
+          // Check OC match
+          if (ocNumber) {
+            const dSub = (d.email_subject || '');
+            if (dSub.includes(ocNumber)) {
+              return true;
+            }
+          }
+
+          // Check normalized subject + sender match
+          const prevSub = (d.email_subject || '')
+            .replace(/^\[EML-[A-Z0-9]+\]\s*/i, '')
+            .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
+            .replace(/^\[Adjunto\s+\d+\/\d+\]\s*/i, '')
+            .replace(/^\[Pedido\s+\d+\/\d+\]\s*/i, '')
+            .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
+            .trim()
+            .toLowerCase();
+
+          const currSub = cleanSubject.toLowerCase();
+          const sameSubject = prevSub === currSub;
+          const sameSender = (d.source_email || '').toLowerCase() === senderEmail ||
+                             (d.source_email || '').toLowerCase() === rawFrom.toLowerCase() ||
+                             (forwardedOriginalEmail && (d.source_email || '').toLowerCase() === forwardedOriginalEmail);
+
+          if (sameSubject && sameSender) {
+            return true;
+          }
+
+          if (sameSubject && cleanSubject.length > 10) {
+            return true;
+          }
+
+          return false;
+        });
+
+        if (isDuplicate) {
+          console.log(`[Email Inbound] Deduplicación inmediata: Se detectó correo duplicado reciente (OC: ${ocNumber || 'N/A'}, Asunto: "${cleanSubject}", Remitente: ${senderEmail}). Abortando sin crear borrador.`);
+          return NextResponse.json({ success: true, message: 'Duplicate email ignored' }, { status: 200 });
+        }
+      }
+
       // Save email immediately to the 'order_drafts' table to ensure we have a record
       // Using extracted_items JSONB column to store the raw payload for debugging
       const { data: mailRecord, error: mailErr } = await supabaseAdmin
@@ -110,20 +200,33 @@ export async function POST(req: Request) {
           const htmlText = payload.html || '';
           let attachments = payload.attachments || [];
           
-          // Filter out tiny signature images (typically inline images with cid or very small size)
+          // Check if there are documents (.pdf, .xlsx, .xls, .csv)
+          const hasDocuments = attachments.some((att: any) => {
+            const name = (att.file_name || att.filename || '').toLowerCase();
+            const mime = (att.content_type || '').toLowerCase();
+            return name.endsWith('.pdf') || name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') ||
+                   mime.includes('pdf') || mime.includes('spreadsheet') || mime.includes('excel');
+          });
+
+          // Filter attachments:
           attachments = attachments.filter((att: any) => {
             if (!att.content) return false;
             const lowerName = (att.file_name || att.filename || '').toLowerCase();
             const mimeType = (att.content_type || '').toLowerCase();
-            const isImage = mimeType.startsWith('image/') || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp');
+            const isImage = mimeType.startsWith('image/') || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp') || lowerName.endsWith('.gif');
             
-            // Base64 size estimation
+            // If the email ALREADY has PDF or Excel documents, ANY image is a signature logo / icon / banner!
+            if (isImage && hasDocuments) {
+              console.log(`[Email Inbound] Ignorando imagen de firma porque el correo contiene documento(s): ${lowerName}`);
+              return false;
+            }
+            
             const sizeInKB = att.content.length / 1.33 / 1024;
             const isInline = !!(att.content_id || att.cid || (att.disposition && att.disposition.toLowerCase() === 'inline'));
             
             if (isImage) {
-              if ((sizeInKB < 60 && isInline) || sizeInKB < 15) {
-                console.log(`[Email Inbound] Ignorando adjunto de imagen pequeño/firma: ${lowerName} (${Math.round(sizeInKB)}KB, inline: ${isInline})`);
+              if (sizeInKB < 40 || isInline || lowerName.includes('logo') || lowerName.includes('firma') || lowerName.includes('banner')) {
+                console.log(`[Email Inbound] Ignorando adjunto de imagen pequeño/firma: ${lowerName} (${Math.round(sizeInKB)}KB)`);
                 return false;
               }
             }
@@ -1168,64 +1271,15 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Build cohesive draft for public.order_drafts
-    const uniqueDraftUuid = draftUuid;
-    const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
-    const finalSubject = `[${shortCode}] ${subject}`.trim().replace(/\s+/g, ' ');
+    // 5. Build drafts for public.order_drafts (Opción B: Cada adjunto con productos es un borrador independiente)
+    const draftsToInsert: any[] = [];
+    
+    // Filter attachments that extracted valid items unless none did
+    const attachmentsWithItems = parsedAttachments.filter((att: any) => Array.isArray(att.items) && att.items.length > 0);
+    const validAttachments = attachmentsWithItems.length > 0 ? attachmentsWithItems : parsedAttachments;
 
-    // Collect all items across all attachments (or from body if no attachments)
-    const allExtractedItems: any[] = [];
-    const sourceAttachments = parsedAttachments.length > 0 ? parsedAttachments : [];
-
-    if (sourceAttachments.length > 0) {
-      sourceAttachments.forEach((att: any, attIdx: number) => {
-        const attItems = Array.isArray(att.items) ? att.items : [];
-        attItems.forEach((itm: any) => {
-          let originalName = String(itm.originalName || itm.name || '').trim();
-          originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
-          const nameLower = originalName.toLowerCase();
-          let observations = itm.observations || '';
-          let assignedUnit = itm.unit;
-
-          if (nameLower.includes('libra') || nameLower.includes('lb')) {
-            assignedUnit = 'Lb';
-            if (!observations.toLowerCase().includes('libra')) {
-              observations = `Solicitado en Libras. ${observations}`.trim();
-            }
-          } else if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
-            assignedUnit = 'Litro';
-            if (!observations.toLowerCase().includes('litro')) {
-              observations = `Solicitado en Litros. ${observations}`.trim();
-            }
-          }
-
-          let matchedProductId = itm.matched_product_id || null;
-          let resolvedUnitPrice = itm.unit_price || 0;
-
-          if (!matchedProductId && originalName) {
-            const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
-            if (bestMatch) {
-              matchedProductId = bestMatch.id;
-              resolvedUnitPrice = bestMatch.base_price || 0;
-              if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';
-            }
-          }
-
-          allExtractedItems.push({
-            ...itm,
-            originalName,
-            unit: assignedUnit || 'Unidad',
-            matched_product_id: matchedProductId,
-            unit_price: resolvedUnitPrice,
-            observations,
-            attachment_index: attIdx,
-            source_attachment_name: att.name || `Adjunto_${attIdx + 1}`
-          });
-        });
-      });
-    } else {
-      const bodyItems = Array.isArray(extractedData.items) ? extractedData.items : [];
-      bodyItems.forEach((itm: any) => {
+    const processItemsArray = (rawItems: any[], attIndex = 0, attName: string | null = null) => {
+      return (Array.isArray(rawItems) ? rawItems : []).map((itm: any) => {
         let originalName = String(itm.originalName || itm.name || '').trim();
         originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
         const nameLower = originalName.toLowerCase();
@@ -1256,50 +1310,98 @@ export async function POST(req: Request) {
           }
         }
 
-        allExtractedItems.push({
+        return {
           ...itm,
           originalName,
           unit: assignedUnit || 'Unidad',
           matched_product_id: matchedProductId,
           unit_price: resolvedUnitPrice,
           observations,
-          attachment_index: 0,
-          source_attachment_name: null
+          attachment_index: attIndex,
+          source_attachment_name: attName
+        };
+      });
+    };
+
+    if (validAttachments.length > 1) {
+      for (let index = 0; index < validAttachments.length; index++) {
+        const att = validAttachments[index];
+        const draftId = index === 0 ? uniqueDraftUuid : crypto.randomUUID();
+        const shortCode = `EML-${draftId.substring(0, 6).toUpperCase()}`;
+        const attSubject = `[${shortCode}] [Adjunto ${index + 1}/${validAttachments.length}] ${subject}`.trim().replace(/\s+/g, ' ');
+        const processedItems = processItemsArray(att.items || [], index, att.name || `Adjunto_${index + 1}`);
+        const clientDetected = (att.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
+        const hasValid = processedItems.length > 0;
+
+        draftsToInsert.push({
+          id: draftId,
+          profile_id: profile ? profile.id : null,
+          client_detected_name: clientDetected,
+          source_email: senderEmail,
+          email_subject: attSubject,
+          email_body: currentPlainText,
+          extracted_items: [
+            {
+              isMetadata: true,
+              address: att.address || extractedData.address || null,
+              addressDetected: addressDetected,
+              deliverySlot: att.deliverySlot || finalDeliverySlot,
+              deliveryDate: att.deliveryDate || targetDeliveryDate || null,
+              phone: att.phone || extractedData.phone || null,
+              nit: att.nit || extractedData.nit || null,
+              clientType: att.clientType || clientType,
+              attachmentUrl: att.url || null,
+              attachmentName: att.name || null,
+              attachments: [att],
+              autoRejectedReason: hasValid ? null : 'Sin productos ni requerimientos detectados',
+              emailHtml: htmlText || null
+            },
+            ...processedItems
+          ],
+          status: hasValid ? 'pending' : 'rejected'
         });
+      }
+    } else {
+      const primarySource = validAttachments.length > 0 ? validAttachments[0] : extractedData;
+      const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
+      const finalSubject = `[${shortCode}] ${subject}`.trim().replace(/\s+/g, ' ');
+      
+      const sourceItems = Array.isArray(primarySource.items) && primarySource.items.length > 0
+        ? primarySource.items
+        : (Array.isArray(extractedData.items) ? extractedData.items : []);
+
+      const processedItems = processItemsArray(sourceItems, 0, primarySource.name || null);
+      const clientDetected = (primarySource.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
+      const hasValid = processedItems.length > 0;
+
+      draftsToInsert.push({
+        id: uniqueDraftUuid,
+        profile_id: profile ? profile.id : null,
+        client_detected_name: clientDetected,
+        source_email: senderEmail,
+        email_subject: finalSubject,
+        email_body: currentPlainText,
+        extracted_items: [
+          {
+            isMetadata: true,
+            address: primarySource.address || extractedData.address || null,
+            addressDetected: addressDetected,
+            deliverySlot: primarySource.deliverySlot || finalDeliverySlot,
+            deliveryDate: primarySource.deliveryDate || targetDeliveryDate || null,
+            phone: primarySource.phone || extractedData.phone || null,
+            nit: primarySource.nit || extractedData.nit || null,
+            clientType: primarySource.clientType || clientType,
+            attachmentUrl: primarySource.url || attachmentUrl || null,
+            attachmentName: primarySource.name || attachmentName || null,
+            attachments: validAttachments.length > 0 ? validAttachments : (attachmentUrl ? [{ url: attachmentUrl, name: attachmentName || 'documento.pdf', items: [] }] : []),
+            autoRejectedReason: hasValid ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
+            emailHtml: htmlText || null
+          },
+          ...processedItems
+        ],
+        status: hasValid ? 'pending' : 'rejected'
       });
     }
-
-    const primarySource = parsedAttachments.length > 0 ? parsedAttachments[0] : extractedData;
-    const clientDetected = (primarySource.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
-    const hasValidItems = allExtractedItems.length > 0;
-
-    const draftsToInsert = [{
-      id: uniqueDraftUuid,
-      profile_id: profile ? profile.id : null,
-      client_detected_name: clientDetected,
-      source_email: senderEmail,
-      email_subject: finalSubject,
-      email_body: currentPlainText,
-      extracted_items: [
-        {
-          isMetadata: true,
-          address: primarySource.address || extractedData.address || null,
-          addressDetected: addressDetected,
-          deliverySlot: primarySource.deliverySlot || finalDeliverySlot,
-          deliveryDate: primarySource.deliveryDate || targetDeliveryDate || null,
-          phone: primarySource.phone || extractedData.phone || null,
-          nit: primarySource.nit || extractedData.nit || null,
-          clientType: primarySource.clientType || clientType,
-          attachmentUrl: primarySource.url || attachmentUrl || null,
-          attachmentName: primarySource.name || attachmentName || null,
-          attachments: parsedAttachments.length > 0 ? parsedAttachments : (attachmentUrl ? [{ url: attachmentUrl, name: attachmentName || 'documento.pdf', items: [] }] : []),
-          autoRejectedReason: hasValidItems ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
-          emailHtml: htmlText || null
-        },
-        ...allExtractedItems
-      ],
-      status: hasValidItems ? 'pending' : 'rejected'
-    }];
 
     const { data: insertedDrafts, error: draftError } = await supabaseAdmin
       .from('order_drafts')

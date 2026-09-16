@@ -2,15 +2,20 @@
 
 import { useAuth } from '@/lib/authContext';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { THEME } from '@/lib/adminTheme';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const { user, profile, loading } = useAuth();
     const router = useRouter();
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
-        if (!loading) {
+        setIsMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!loading && isMounted) {
             // Wait for profile if user is authenticated but profile is not loaded yet
             if (user && !profile) {
                 return;
@@ -33,9 +38,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }
             }
         }
-    }, [loading, user, profile, router]);
+    }, [loading, user, profile, router, isMounted]);
 
-    if (loading || !profile) {
+    if (!isMounted || loading || !profile) {
         return (
             <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
