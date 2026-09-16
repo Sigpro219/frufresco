@@ -67,8 +67,10 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             if (!profile) {
                 router.push('/');
             } else {
-                const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
-                if (!staffRoles.includes(profile.role)) {
+                const isStaff = profile.profile_type === 'employee' || 
+                                (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
+                                (profile.custom_permissions && profile.custom_permissions.length > 0);
+                if (!isStaff) {
                     if (profile.role === 'b2b_client') {
                         router.push('/b2b/dashboard');
                     } else {
@@ -130,8 +132,10 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     }
 
     // Check if user is staff before rendering operations content
-    const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
-    if (!staffRoles.includes(profile.role)) {
+    const isStaff = profile.profile_type === 'employee' || 
+                    (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
+                    (profile.custom_permissions && profile.custom_permissions.length > 0);
+    if (!isStaff) {
         return null;
     }
 
