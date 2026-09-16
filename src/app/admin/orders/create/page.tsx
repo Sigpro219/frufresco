@@ -937,8 +937,15 @@ function CreateOrderContent() {
     const [importValidation, setImportValidation] = useState<{
         clientInDocument: string,
         isMatch: boolean,
-        documentType: 'PDF' | 'EXCEL' | 'CSV' | null
+        documentType: 'PDF' | 'EXCEL' | 'CSV' | null,
+        poNumber?: string | null,
+        deliveryDateInDocument?: string | null
     }>({ clientInDocument: '', isMatch: true, documentType: null });
+    const [showMultiOrderModal, setShowMultiOrderModal] = useState(false);
+    const [multiOrderDate1, setMultiOrderDate1] = useState('');
+    const [multiOrderDate2, setMultiOrderDate2] = useState('');
+    const [isCreatingMultiOrders, setIsCreatingMultiOrders] = useState(false);
+    const [multiOrderSuccess, setMultiOrderSuccess] = useState<{ order1Id: string; order2Id: string } | null>(null);
     const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
     const [permanentDocumentUrl, setPermanentDocumentUrl] = useState<string | null>(null);
@@ -2249,7 +2256,50 @@ function CreateOrderContent() {
                 throw new Error(data.error || 'Error en la API de extracción');
             }
             
-            // Helper para detectar unidad desde el texto y metadatos del item
+            // Helper para calcular fecha de entrega destino a partir de un día de la semana (ej. 'MARTES')
+            const calculateTargetDeliveryDate = (baseDateStr: string, targetDayName: string): string => {
+                if (!baseDateStr) return '';
+                try {
+                    const daysMap: Record<string, number> = {
+                        'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'miércoles': 3,
+                        'jueves': 4, 'viernes': 5, 'sabado': 6, 'sábado': 6
+                    };
+                    const cleanDay = (targetDayName || '').toLowerCase().trim();
+                    const targetDayIdx = daysMap[cleanDay];
+                    if (targetDayIdx === undefined) {
+                        return baseDateStr;
+                    }
+                    const [y, m, d] = baseDateStr.split('-').map(Number);
+                    const curr = new Date(y, m - 1, d, 12, 0, 0);
+                    const currDayIdx = curr.getDay();
+                    let daysToAdd = (targetDayIdx - currDayIdx + 7) % 7;
+                    if (daysToAdd === 0) daysToAdd = 7; // estrictamente el próximo día indicado
+                    curr.setDate(curr.getDate() + daysToAdd);
+                    const resY = curr.getFullYear();
+                    const resM = String(curr.getMonth() + 1).padStart(2, '0');
+                    const resD = String(curr.getDate()).padStart(2, '0');
+                    return `${resY}-${resM}-${resD}`;
+                } catch {
+                    return baseDateStr;
+                }
+            };
+
+            // Helper para extraer horario/día diferido desde el ítem o sus especificaciones
+            const detectDeliveryScheduleFromItem = (item: any): string | null => {
+                if (item.deliverySchedule && typeof item.deliverySchedule === 'string') {
+                    const upper = item.deliverySchedule.toUpperCase().trim();
+                    if (upper && upper !== 'NULL' && upper !== 'NORMAL' && upper !== 'PRINCIPAL') {
+                        return upper;
+                    }
+                }
+                const searchIn = `${item.observations || ''} ${item.presentation || ''} ${item.originalName || ''}`.toLowerCase();
+                const match = searchIn.match(/para\s+(?:el\s+)?(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i);
+                if (match && match[1]) {
+                    return match[1].toUpperCase();
+                }
+                return null;
+            };
+
             // Helper para detectar unidad desde el texto y metadatos del item
             const detectUnitFromItem = (item: any, product: any, productConversions: any[]) => {
                 const cleanName = (item.originalName || '').toLowerCase();
@@ -2428,6 +2478,9 @@ function CreateOrderContent() {
                 const docUnitNorm = normalizeDocUnit(rawDocUnit);
                 const originalUnitInFile = detectedUnit?.unit || docUnitNorm || rawDocUnit || (match?.unit_of_measure || 'Kg');
 
+                const rawObs = (item.observations || '').trim();
+                const schedule = detectDeliveryScheduleFromItem(item);
+
                 return {
                     id: crypto.randomUUID(),
                     originalName: originalName,
@@ -2443,6 +2496,8 @@ function CreateOrderContent() {
                     matchSource: matchResult.matchSource,
                     matchReason: matchResult.matchReason,
                     status: match ? 'MATCH' : 'PENDING',
+                    observations: rawObs,
+                    deliverySchedule: schedule,
                     selected_options: (() => {
                         const opts: any = {};
                         // 1. Cargar preferencias fijas del cliente si existen
@@ -2486,10 +2541,24 @@ function CreateOrderContent() {
             setDigestionDuration(elapsedSec);
             setDigestionModel(data._modelUsed || 'gemini-2.5-flash');
 
+            const detectedPo = data.poNumber || null;
+            const detectedDate = data.deliveryDateInDocument || null;
+
+            // Inicializar fechas para pedidos relacionados si se detecta entrega diferida
+            const secondaryItem = suggested.find((i: any) => i && i.deliverySchedule);
+            const baseDate = deliveryDate || new Date().toISOString().split('T')[0];
+            if (secondaryItem) {
+                setMultiOrderDate1(baseDate);
+                const calcDate2 = calculateTargetDeliveryDate(baseDate, secondaryItem.deliverySchedule);
+                setMultiOrderDate2(calcDate2);
+            }
+
             setImportValidation({
                 clientInDocument: clientInFile,
                 isMatch: !!isMatch,
-                documentType: data.documentType || (file.name.endsWith('.pdf') ? 'PDF' : 'Documento')
+                documentType: data.documentType || (file.name.endsWith('.pdf') ? 'PDF' : 'Documento'),
+                poNumber: detectedPo,
+                deliveryDateInDocument: detectedDate
             });
 
             setStagedItems(suggested);
@@ -2603,7 +2672,9 @@ function CreateOrderContent() {
                         originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
                         originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
                         conversion_factor: item.conversion_factor || 1,
-                        price: resolvedPrice
+                        price: resolvedPrice,
+                        observations: item.observations || null,
+                        deliverySchedule: item.deliverySchedule || null
                     };
                 });
 
@@ -2628,10 +2699,12 @@ function CreateOrderContent() {
                 for (const newItem of itemsToInject) {
                     const cleanLabel = (newItem.variant_label || '').trim().toLowerCase();
                     const cleanUnit = (newItem.originalUnit || newItem.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                    const cleanObs = (newItem.observations || '').trim().toLowerCase();
                     const existingIdx = result.findIndex(item =>
                         item.product.id === newItem.product.id &&
                         (item.variant_label || '').trim().toLowerCase() === cleanLabel &&
-                        (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit
+                        (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit &&
+                        ((item.observations || '').trim().toLowerCase() === cleanObs)
                     );
 
                     if (existingIdx >= 0) {
@@ -2666,6 +2739,186 @@ function CreateOrderContent() {
             showToast('Hubo un error al inyectar los productos al pedido.', 'error');
         } finally {
             setIsConfirmingImport(false);
+        }
+    };
+
+    // --- GESTIÓN INTELIGENTE DE PEDIDOS RELACIONADOS MULTI-ENTREGA ---
+    const handleCreateMultiOrders = async () => {
+        if (!selectedClient) {
+            showToast('⚠️ Debes seleccionar una empresa cliente antes de crear los pedidos.', 'error');
+            return;
+        }
+
+        const group1Items = stagedItems.filter(i => !i.deliverySchedule && i.suggestedProduct);
+        const group2Items = stagedItems.filter(i => i.deliverySchedule && i.suggestedProduct);
+
+        if (group1Items.length === 0 && group2Items.length === 0) {
+            showToast('⚠️ No hay productos válidos con match para crear pedidos.', 'error');
+            return;
+        }
+
+        if (!multiOrderDate1 || !multiOrderDate2) {
+            showToast('⚠️ Debes definir las fechas de entrega para ambos pedidos.', 'error');
+            return;
+        }
+
+        setIsCreatingMultiOrders(true);
+        try {
+            // 1. Subida silenciosa del archivo al bucket si aún no está persistido
+            let docUrl = permanentDocumentUrl;
+            if (!docUrl && uploadedFile) {
+                try {
+                    const cleanFileName = `${Date.now()}_${uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                    const filePath = `${cleanFileName}`;
+                    const { error: upErr } = await supabase.storage
+                        .from('order-attachments')
+                        .upload(filePath, uploadedFile, { upsert: true });
+
+                    if (!upErr) {
+                        const { data: publicUrlData } = supabase.storage
+                            .from('order-attachments')
+                            .getPublicUrl(filePath);
+                        if (publicUrlData?.publicUrl) {
+                            docUrl = publicUrlData.publicUrl;
+                            setPermanentDocumentUrl(docUrl);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error subiendo adjunto a storage:', e);
+                }
+            }
+
+            const targetClient = getSelectedClientDetails();
+            const clientName = targetClient?.company_name || targetClient?.contact_name || 'Cliente';
+            const poNum = importValidation?.poNumber ? `OC: ${importValidation.poNumber}` : 'OC S/N';
+            const secondarySchedule = group2Items[0]?.deliverySchedule || 'Entrega Diferida';
+
+            const buildOrderPayload = (itemsGroup: any[], targetDate: string, deliveryLabel: string) => {
+                let subtotal = 0;
+                let tax = 0;
+                let totalWeight = 0;
+
+                const mappedItems = itemsGroup.map(item => {
+                    const prodId = item.suggestedProduct.id;
+                    const unitPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                        ? contractPrices[prodId]
+                        : (item.price || item.suggestedProduct.base_price || 1000);
+
+                    const qty = item.quantity;
+                    const itemSubtotal = unitPrice * qty;
+                    const ivaRate = item.suggestedProduct.iva_rate || 0;
+                    const itemTax = itemSubtotal * (ivaRate / 100);
+                    const weightFactor = parseFloat(item.suggestedProduct.weight_kg) || 1;
+                    const itemWeight = (item.originalUnit === 'Kg' || item.originalUnit === 'kg') ? qty : (qty * weightFactor);
+
+                    subtotal += itemSubtotal;
+                    tax += itemTax;
+                    totalWeight += itemWeight;
+
+                    const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
+                    const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+
+                    return {
+                        product_id: item.suggestedProduct.id,
+                        quantity: qty,
+                        unit_price: unitPrice,
+                        nickname: item.originalName || null,
+                        variant_label: variantLabel || null,
+                        unit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
+                        selected_options: item.selected_options || {}
+                    };
+                });
+
+                const total = subtotal + tax;
+
+                return {
+                    orderData: {
+                        profile_id: selectedClient,
+                        total: parseFloat(total.toFixed(2)),
+                        subtotal: parseFloat(subtotal.toFixed(2)),
+                        tax: parseFloat(tax.toFixed(2)),
+                        total_weight_kg: parseFloat(totalWeight.toFixed(2)),
+                        status: 'pending_approval',
+                        payment_status: 'Pendiente',
+                        payment_method: paymentMethod,
+                        origin: 'Admin Panel',
+                        origin_source: 'file_upload',
+                        delivery_date: targetDate,
+                        delivery_slot: deliverySlot,
+                        admin_notes: `${poNum} [${deliveryLabel}] - ${clientName}${adminNotes ? ` | ${adminNotes}` : ''}`,
+                        shipping_address: shippingAddress || targetClient?.address || '',
+                        document_url: docUrl
+                    },
+                    itemsData: mappedItems
+                };
+            };
+
+            const payload1 = buildOrderPayload(group1Items, multiOrderDate1, 'Entrega 1/2 - Principal');
+            const payload2 = buildOrderPayload(group2Items, multiOrderDate2, `Entrega 2/2 - ${secondarySchedule}`);
+
+            // Insertar Pedido 1
+            const { data: order1, error: err1 } = await supabase
+                .from('orders')
+                .insert(payload1.orderData)
+                .select()
+                .single();
+
+            if (err1) throw new Error(`Error creando Pedido 1: ${err1.message}`);
+
+            const items1WithOrderId = payload1.itemsData.map(it => ({ ...it, order_id: order1.id }));
+            const { error: errItems1 } = await supabase
+                .from('order_items')
+                .insert(items1WithOrderId);
+
+            if (errItems1) throw new Error(`Error guardando productos de Pedido 1: ${errItems1.message}`);
+
+            // Insertar Pedido 2
+            const { data: order2, error: err2 } = await supabase
+                .from('orders')
+                .insert(payload2.orderData)
+                .select()
+                .single();
+
+            if (err2) throw new Error(`Error creando Pedido 2: ${err2.message}`);
+
+            const items2WithOrderId = payload2.itemsData.map(it => ({ ...it, order_id: order2.id }));
+            const { error: errItems2 } = await supabase
+                .from('order_items')
+                .insert(items2WithOrderId);
+
+            if (errItems2) throw new Error(`Error guardando productos de Pedido 2: ${errItems2.message}`);
+
+            // Memorizar aprendizaje de productos
+            const learningPromises = stagedItems
+                .filter(item => item.suggestedProduct && item.originalName)
+                .map(item => recordLearningMemory(
+                    supabase,
+                    selectedClient,
+                    item.originalName,
+                    item.suggestedProduct.id,
+                    item.originalUnit || item.suggestedProduct.unit_of_measure
+                ));
+            await Promise.allSettled(learningPromises);
+
+            setMultiOrderSuccess({
+                order1Id: order1.id,
+                order2Id: order2.id
+            });
+            setShowMultiOrderModal(false);
+
+            showToast(`🎉 ¡Éxito! Creados 2 Pedidos Relacionados para ${poNum}`, 'success');
+
+            setIsStaging(false);
+            setStagedItems([]);
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+                setUploadedFileUrl(null);
+            }
+        } catch (err: any) {
+            console.error('Error en handleCreateMultiOrders:', err);
+            showToast(err.message || 'Error creando pedidos relacionados', 'error');
+        } finally {
+            setIsCreatingMultiOrders(false);
         }
     };
 
@@ -4450,6 +4703,84 @@ function CreateOrderContent() {
                                         </div>
                                     </div>
 
+                                    {/* Banner Inteligente de Detección Multi-Entrega */}
+                                    {(() => {
+                                        const hasMultiSchedule = stagedItems.some(i => i.deliverySchedule);
+                                        if (!hasMultiSchedule) return null;
+
+                                        const group1 = stagedItems.filter(i => !i.deliverySchedule);
+                                        const group2 = stagedItems.filter(i => i.deliverySchedule);
+                                        const scheduleName = group2[0]?.deliverySchedule || 'Diferida';
+
+                                        return (
+                                            <div style={{
+                                                margin: '0.75rem 1.5rem',
+                                                padding: '1rem 1.5rem',
+                                                backgroundColor: '#FFFBEB',
+                                                border: '1.5px solid #F59E0B',
+                                                borderRadius: '16px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: '1rem',
+                                                flexWrap: 'wrap',
+                                                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.08)'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                                    <div style={{ backgroundColor: '#FEF3C7', padding: '10px', borderRadius: '12px', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Truck size={24} strokeWidth={2} />
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontWeight: '900', color: '#92400E', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span>🚚 Orden Multi-Entrega Detectada</span>
+                                                            {importValidation?.poNumber && (
+                                                                <span style={{ backgroundColor: '#FDE68A', padding: '2px 8px', borderRadius: '6px', fontSize: '0.78rem', color: '#78350F' }}>
+                                                                    OC: {importValidation.poNumber}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.84rem', color: '#78350F', marginTop: '3px' }}>
+                                                            Se identificaron <b>{group1.length} productos</b> para <b>Entrega Principal</b> y <b>{group2.length} productos</b> para <b>Entrega diferida ({scheduleName})</b>.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const secItem = stagedItems.find(i => i.deliverySchedule);
+                                                        const baseDate = deliveryDate || new Date().toISOString().split('T')[0];
+                                                        setMultiOrderDate1(baseDate);
+                                                        if (secItem) {
+                                                            const calcDate = calculateTargetDeliveryDate(baseDate, secItem.deliverySchedule);
+                                                            setMultiOrderDate2(calcDate);
+                                                        }
+                                                        setShowMultiOrderModal(true);
+                                                    }}
+                                                    style={{
+                                                        backgroundColor: '#D97706',
+                                                        color: '#FFFFFF',
+                                                        border: 'none',
+                                                        borderRadius: '10px',
+                                                        padding: '10px 20px',
+                                                        fontWeight: '900',
+                                                        fontSize: '0.88rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        boxShadow: '0 4px 6px -1px rgba(217, 119, 6, 0.3)',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#B45309'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#D97706'}
+                                                >
+                                                    <Sparkles size={16} />
+                                                    <span>⚡ Generar 2 Pedidos Relacionados</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+
                                     {/* Mesa de Trabajo Body: Split Screen (Side-by-Side) */}
                                     <div style={{ display: 'flex', gap: '0', padding: '0', alignItems: 'stretch', maxHeight: '650px', overflow: 'hidden' }}>
                                         {/* Left Side: Document Preview */}
@@ -4688,6 +5019,43 @@ function CreateOrderContent() {
                                                                         {item.variant_label && (
                                                                             <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>
                                                                                 {item.variant_label}
+                                                                            </span>
+                                                                        )}
+                                                                        {item.deliverySchedule && (
+                                                                            <span style={{ 
+                                                                                backgroundColor: '#FEF3C7', 
+                                                                                color: '#92400E', 
+                                                                                border: '1.5px solid #F59E0B', 
+                                                                                padding: '1px 8px', 
+                                                                                borderRadius: '6px', 
+                                                                                fontSize: '0.7rem', 
+                                                                                fontWeight: '900',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px'
+                                                                            }}>
+                                                                                🗓️ Para: {item.deliverySchedule}
+                                                                            </span>
+                                                                        )}
+                                                                        {item.observations && (
+                                                                            <span 
+                                                                                title={`Especificación en orden: ${item.observations}`}
+                                                                                style={{ 
+                                                                                    backgroundColor: '#F8FAFC', 
+                                                                                    color: '#334155', 
+                                                                                    border: '1px dashed #94A3B8', 
+                                                                                    padding: '1px 7px', 
+                                                                                    borderRadius: '6px', 
+                                                                                    fontSize: '0.68rem', 
+                                                                                    fontWeight: '600',
+                                                                                    maxWidth: '190px',
+                                                                                    overflow: 'hidden',
+                                                                                    textOverflow: 'ellipsis',
+                                                                                    whiteSpace: 'nowrap',
+                                                                                    display: 'inline-block'
+                                                                                }}
+                                                                            >
+                                                                                📝 {item.observations}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -5072,6 +5440,41 @@ function CreateOrderContent() {
                                                 <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Items Auditados</div>
                                                 <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B' }}>{stagedItems.length} productos</div>
                                             </div>
+                                            {stagedItems.some(i => i.deliverySchedule) && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const secItem = stagedItems.find(i => i.deliverySchedule);
+                                                        const baseDate = deliveryDate || new Date().toISOString().split('T')[0];
+                                                        setMultiOrderDate1(baseDate);
+                                                        if (secItem) {
+                                                            const calcDate = calculateTargetDeliveryDate(baseDate, secItem.deliverySchedule);
+                                                            setMultiOrderDate2(calcDate);
+                                                        }
+                                                        setShowMultiOrderModal(true);
+                                                    }}
+                                                    style={{ 
+                                                        padding: '12px 24px', 
+                                                        borderRadius: '14px', 
+                                                        border: 'none', 
+                                                        backgroundColor: '#D97706', 
+                                                        color: 'white', 
+                                                        fontWeight: '900', 
+                                                        fontSize: '0.95rem', 
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 8px 15px -3px rgba(217, 119, 6, 0.35)',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                                                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                                                >
+                                                    <Sparkles size={16} strokeWidth={2} />
+                                                    <span>⚡ Generar 2 Pedidos Relacionados</span>
+                                                </button>
+                                            )}
                                             <button 
                                                 id="confirm-inject-button"
                                                 onClick={handleConfirmImport}

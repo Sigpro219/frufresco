@@ -93,6 +93,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         max_crates_capacity: number;
         current_odometer: number;
     } | null>(null);
+    const [isSavingVehicle, setIsSavingVehicle] = useState(false);
 
     const fetchDrivers = useCallback(async () => {
         try {
@@ -203,51 +204,69 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         return () => { isMounted.current = false; };
     }, [loadData]);
 
+    const callVehiclesApi = async (body: any) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        };
+        if (session?.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        const res = await fetch('/api/transport/vehicles', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Error al procesar la operación de vehículos.');
+        }
+        return data;
+    };
+
     const updateOdometer = async (id: string, newValue: number) => {
         if (readOnly) return;
         try {
-            const { error } = await supabase
-                .from('fleet_vehicles')
-                .update({ current_odometer: newValue, last_odometer_update: new Date().toISOString() })
-                .eq('id', id);
-            
-            if (error) throw error;
+            await callVehiclesApi({
+                action: 'update_odometer',
+                vehicleId: id,
+                odometer: newValue
+            });
             setEditingKm(null);
             fetchVehicles();
-        } catch {
-            alert('Error al actualizar kilometraje.');
+        } catch (err: any) {
+            console.error('Error updating odometer:', err);
+            alert(err?.message || 'Error al actualizar kilometraje.');
         }
     };
 
     const assignDriver = async (vehicleId: string, driverId: string) => {
         if (readOnly) return;
         try {
-            const { error } = await supabase
-                .from('fleet_vehicles')
-                .update({ driver_id: driverId || null })
-                .eq('id', vehicleId);
-            
-            if (error) throw error;
+            await callVehiclesApi({
+                action: 'assign_driver',
+                vehicleId,
+                driverId: driverId || null
+            });
             fetchVehicles();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error assigning driver:', err);
-            alert('Error al asignar conductor.');
+            alert(err?.message || 'Error al asignar conductor.');
         }
     };
 
     const updateStatus = async (vehicleId: string, newStatus: string) => {
         if (readOnly) return;
         try {
-            const { error } = await supabase
-                .from('fleet_vehicles')
-                .update({ status: newStatus })
-                .eq('id', vehicleId);
-            
-            if (error) throw error;
+            await callVehiclesApi({
+                action: 'update_status',
+                vehicleId,
+                status: newStatus
+            });
             fetchVehicles();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error updating status:', err);
-            alert('Error al actualizar el estado del vehículo.');
+            alert(err?.message || 'Error al actualizar el estado del vehículo.');
         }
     };
 
@@ -255,17 +274,16 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         e.preventDefault();
         if (readOnly) return;
         try {
-            const { error } = await supabase
-                .from('fleet_vehicles')
-                .insert([newVehicle]);
-
-            if (error) throw error;
+            await callVehiclesApi({
+                action: 'create',
+                vehicleData: newVehicle
+            });
             setShowAdd(false);
             fetchVehicles();
             setNewVehicle({ plate: '', brand: '', model: '', vehicle_type: 'Furgón', capacity_kg: 1000, max_crates_capacity: 0, current_odometer: 0 });
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error adding vehicle:', err);
-            alert('Error al agregar vehículo.');
+            alert(err?.message || 'Error al agregar vehículo.');
         }
     };
 
@@ -287,18 +305,21 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         e.preventDefault();
         if (readOnly) return;
         if (!editingVehicle || !editForm) return;
+        setIsSavingVehicle(true);
         try {
-            const { error } = await supabase
-                .from('fleet_vehicles')
-                .update(editForm)
-                .eq('id', editingVehicle.id);
-            if (error) throw error;
+            await callVehiclesApi({
+                action: 'update',
+                vehicleId: editingVehicle.id,
+                vehicleData: editForm
+            });
             setEditingVehicle(null);
             setEditForm(null);
             fetchVehicles();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error al actualizar vehículo:', err);
-            alert('Error al guardar los cambios.');
+            alert(err?.message || 'Error al guardar los cambios.');
+        } finally {
+            setIsSavingVehicle(false);
         }
     };
 
@@ -667,8 +688,25 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                 <button type="button" onClick={() => { setEditingVehicle(null); setEditForm(null); }} style={{ padding: '0.9rem 2rem', borderRadius: '14px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '700', cursor: 'pointer', color: '#374151' }}>
                                     Cancelar
                                 </button>
-                                <button type="submit" style={{ padding: '0.9rem 2.5rem', borderRadius: '14px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '900', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.2)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                                    <Save size={16} /> Guardar Cambios
+                                <button 
+                                    type="submit" 
+                                    disabled={isSavingVehicle}
+                                    style={{ 
+                                        padding: '0.9rem 2.5rem', 
+                                        borderRadius: '14px', 
+                                        border: 'none', 
+                                        background: isSavingVehicle ? '#94A3B8' : '#0891B2', 
+                                        color: 'white', 
+                                        fontWeight: '900', 
+                                        cursor: isSavingVehicle ? 'not-allowed' : 'pointer', 
+                                        fontSize: '1rem', 
+                                        boxShadow: isSavingVehicle ? 'none' : '0 10px 15px -3px rgba(8, 145, 178, 0.2)', 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px' 
+                                    }}
+                                >
+                                    <Save size={16} /> {isSavingVehicle ? 'Guardando...' : 'Guardar Cambios'}
                                 </button>
                             </div>
                         </form>
