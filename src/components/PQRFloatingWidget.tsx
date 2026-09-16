@@ -171,8 +171,8 @@ export default function PQRFloatingWidget() {
                 }
             }
 
-            // 2. Format creator info for traceability
-            const creatorDisplayName = profile?.contact_name || profile?.company_name || user?.email?.split('@')[0] || 'Colaborador FruFresco';
+            // 2. Format creator info for traceability with full name
+            const creatorDisplayName = profile?.contact_name || (user?.user_metadata?.full_name as string) || (user?.user_metadata?.name as string) || profile?.company_name || user?.email || 'Colaborador FruFresco';
             const roleLabels: Record<string, string> = {
                 admin: 'Administración',
                 picker: 'Picking / Bodega',
