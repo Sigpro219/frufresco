@@ -39,15 +39,6 @@ export async function extractCommercialProposalAI(
   base64Data?: string,
   mimeType: string = 'application/pdf'
 ): Promise<CommercialProposalExtraction> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-    'gemini-3.5-flash',
-    'gemini-3.6-flash',
-    'gemini-3.5-flash-lite'
-  ];
-
   const prompt = `
     Eres un analista comercial senior experto en negociación B2B de alimentos para FruFresco (Investments Cortés SAS).
     FECHA ACTUAL: ${new Date().toISOString().split('T')[0]}
