@@ -482,6 +482,13 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
                             );
                         })}
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colSpan={10} style={{ padding: '12px 16px', textAlign: 'center', backgroundColor: '#F1F5F9', color: '#64748B', fontSize: '0.72rem', fontWeight: 600, borderTop: '2px solid #CBD5E1' }}>
+                                Fin de la hoja · {currentSheet.countWithQty} ítems con cantidad encontrados ({filteredRows.length} filas en total)
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
