@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
-import { MessageSquare, UploadCloud, X, Check, Loader2, Building2, User, HelpCircle, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { MessageSquare, UploadCloud, X, Check, Loader2, Building2, User, HelpCircle, AlertTriangle, Image as ImageIcon, Search } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 
 export default function PQRFloatingWidget() {
@@ -24,10 +24,7 @@ export default function PQRFloatingWidget() {
     const [selectedClientId, setSelectedClientId] = useState('');
     const [clientSearch, setClientSearch] = useState('');
     const [showClientDropdown, setShowClientDropdown] = useState(false);
-
-    // Order selection
-    const [orders, setOrders] = useState<any[]>([]);
-    const [selectedOrderId, setSelectedOrderId] = useState('');
+    const [focusedClientIndex, setFocusedClientIndex] = useState(-1);
 
     // Photo uploads
     const [primaryPhoto, setPrimaryPhoto] = useState<File | null>(null);
@@ -45,11 +42,11 @@ export default function PQRFloatingWidget() {
     useEffect(() => {
         if (!isAuthorized || !isOpen) return;
 
-        // Fetch clients
+        // Fetch clients with rich metadata
         const fetchClients = async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, role, nit')
+                .select('id, company_name, contact_name, role, nit, address, phone, contact_phone')
                 .in('role', ['b2b_client', 'b2c_client'])
                 .order('company_name', { ascending: true });
             setClients(data || []);
@@ -57,27 +54,6 @@ export default function PQRFloatingWidget() {
 
         fetchClients();
     }, [isOpen, isAuthorized]);
-
-    // Fetch orders when client changes
-    useEffect(() => {
-        if (!selectedClientId) {
-            setOrders([]);
-            setSelectedOrderId('');
-            return;
-        }
-
-        const fetchRecentOrders = async () => {
-            const { data } = await supabase
-                .from('orders')
-                .select('id, sequence_id, total, created_at')
-                .eq('profile_id', selectedClientId)
-                .order('created_at', { ascending: false })
-                .limit(10);
-            setOrders(data || []);
-        };
-
-        fetchRecentOrders();
-    }, [selectedClientId]);
 
     // Close on outside click
     useEffect(() => {
@@ -107,7 +83,8 @@ export default function PQRFloatingWidget() {
                 setDescription('');
                 setSelectedClientId('');
                 setClientSearch('');
-                setSelectedOrderId('');
+                setShowClientDropdown(false);
+                setFocusedClientIndex(-1);
                 setPrimaryPhoto(null);
                 setPrimaryPhotoPreview(null);
                 setShowAdvancedPhotos(false);
@@ -129,7 +106,6 @@ export default function PQRFloatingWidget() {
                 .upload(filePath, file);
 
             if (uploadError) {
-                // If bucket does not exist, upload to public folder or fallback
                 console.warn('Evidence bucket upload failed, trying fallback:', uploadError);
                 return null;
             }
@@ -195,10 +171,10 @@ export default function PQRFloatingWidget() {
                 }
             }
 
-            // 2. Insert PQR record
+            // 2. Insert PQR record (always with order_id: null; order association happens during resolution in CS)
             const { error } = await supabase.from('customer_service_pqrs').insert({
                 client_id: selectedClientId,
-                order_id: selectedOrderId || null,
+                order_id: null,
                 type: pqrType,
                 category: category,
                 priority: priority,
@@ -222,13 +198,27 @@ export default function PQRFloatingWidget() {
         }
     };
 
-    if (!isAuthorized) return null;
+    // Multi-term fuzzy client filtering
+    const filteredClients = useMemo(() => {
+        if (!clientSearch.trim()) return [];
+        const tokens = clientSearch.toLowerCase().trim().split(/\s+/).filter(Boolean);
+        return clients.filter(c => {
+            const text = `${c.company_name || ''} ${c.contact_name || ''} ${c.nit || ''} ${c.address || ''} ${c.phone || ''} ${c.contact_phone || ''}`.toLowerCase();
+            return tokens.every(token => text.includes(token));
+        }).slice(0, 20);
+    }, [clients, clientSearch]);
 
-    const filteredClients = clients.filter(c => 
-        (c.company_name || '').toLowerCase().includes(clientSearch.toLowerCase()) ||
-        (c.contact_name || '').toLowerCase().includes(clientSearch.toLowerCase()) ||
-        (c.nit || '').toLowerCase().includes(clientSearch.toLowerCase())
-    );
+    // Auto-scroll to focused client in dropdown
+    useEffect(() => {
+        if (focusedClientIndex >= 0) {
+            const el = document.getElementById(`pqr-floating-client-${focusedClientIndex}`);
+            if (el) {
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [focusedClientIndex]);
+
+    if (!isAuthorized) return null;
 
     const selectedClientObj = clients.find(c => c.id === selectedClientId);
 
@@ -242,7 +232,7 @@ export default function PQRFloatingWidget() {
                 style={{
                     position: 'fixed',
                     bottom: '20px',
-                    right: '20px', // Positioned in the corner since HelpDeskWidget is hidden
+                    right: '20px',
                     width: '42px',
                     height: '42px',
                     borderRadius: '50%',
@@ -270,7 +260,7 @@ export default function PQRFloatingWidget() {
                     position: 'fixed',
                     bottom: '75px',
                     right: '20px',
-                    width: '380px',
+                    width: '390px',
                     maxHeight: 'calc(100vh - 120px)',
                     backgroundColor: 'white',
                     borderRadius: '16px',
@@ -312,7 +302,7 @@ export default function PQRFloatingWidget() {
                                 PQR Registrada
                             </h4>
                             <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 1.5rem 0', lineHeight: '1.4' }}>
-                                El caso ha sido guardado exitosamente. Podrás gestionarlo y aplicar deducciones en el panel de Atención al Cliente.
+                                El caso ha sido guardado exitosamente. Podrás gestionarlo y asociarlo al pedido específico en el panel de Atención al Cliente.
                             </p>
                             <button
                                 onClick={() => setIsOpen(false)}
@@ -327,87 +317,145 @@ export default function PQRFloatingWidget() {
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {/* Client Lookup */}
+                            {/* Client Lookup with Keyboard Arrow Navigation */}
                             <div style={{ position: 'relative' }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
                                     Cliente afectado *
                                 </label>
                                 {selectedClientId ? (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: '8px', backgroundColor: '#F8FAFC' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '600', color: '#1E293B' }}>
-                                            {selectedClientObj?.role === 'b2b_client' ? <Building2 size={14} style={{ color: '#0D7A57' }} /> : <User size={14} style={{ color: '#0D7A57' }} />}
-                                            {selectedClientObj?.company_name || selectedClientObj?.contact_name}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '8px', backgroundColor: '#F8FAFC' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: '700', color: '#1E293B', overflow: 'hidden' }}>
+                                            {selectedClientObj?.role === 'b2b_client' ? <Building2 size={15} style={{ color: '#0D7A57', flexShrink: 0 }} /> : <User size={15} style={{ color: '#2563EB', flexShrink: 0 }} />}
+                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <span>{selectedClientObj?.company_name || selectedClientObj?.contact_name}</span>
+                                                {selectedClientObj?.nit && <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500', marginLeft: '6px' }}>NIT: {selectedClientObj.nit}</span>}
+                                            </div>
                                         </div>
-                                        <button onClick={() => setSelectedClientId('')} style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '0.9rem' }}>✕</button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedClientId('');
+                                                setClientSearch('');
+                                                setShowClientDropdown(false);
+                                            }} 
+                                            style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '1rem', padding: '2px 6px', fontWeight: '700' }}
+                                            title="Cambiar cliente"
+                                        >
+                                            ✕
+                                        </button>
                                     </div>
                                 ) : (
                                     <>
-                                        <input
-                                            value={clientSearch}
-                                            onChange={e => { setClientSearch(e.target.value); setShowClientDropdown(true); }}
-                                            onFocus={() => setShowClientDropdown(true)}
-                                            placeholder="Buscar cliente por nombre o NIT..."
-                                            style={{
-                                                width: '100%', padding: '8px 12px', borderRadius: '8px',
-                                                border: '1px solid #E2E8F0', fontSize: '0.85rem',
-                                                outline: 'none', boxSizing: 'border-box'
-                                            }}
-                                        />
+                                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                            <Search size={14} style={{ position: 'absolute', left: '10px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                            <input
+                                                value={clientSearch}
+                                                onChange={e => { 
+                                                    setClientSearch(e.target.value); 
+                                                    setShowClientDropdown(true); 
+                                                    setFocusedClientIndex(0);
+                                                }}
+                                                onFocus={() => {
+                                                    setShowClientDropdown(true);
+                                                    if (filteredClients.length > 0 && focusedClientIndex === -1) {
+                                                        setFocusedClientIndex(0);
+                                                    }
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (filteredClients.length === 0) return;
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setFocusedClientIndex(prev => Math.max(prev - 1, 0));
+                                                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                                        const targetIdx = focusedClientIndex >= 0 ? focusedClientIndex : 0;
+                                                        if (filteredClients[targetIdx]) {
+                                                            e.preventDefault();
+                                                            setSelectedClientId(filteredClients[targetIdx].id);
+                                                            setClientSearch('');
+                                                            setShowClientDropdown(false);
+                                                            setFocusedClientIndex(-1);
+                                                        }
+                                                    } else if (e.key === 'Escape') {
+                                                        setShowClientDropdown(false);
+                                                        setFocusedClientIndex(-1);
+                                                    }
+                                                }}
+                                                placeholder="Buscar por Nombre, NIT o Teléfono..."
+                                                style={{
+                                                    width: '100%', 
+                                                    padding: '8px 12px 8px 30px', 
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #CBD5E1', 
+                                                    fontSize: '0.82rem',
+                                                    outline: 'none', 
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            />
+                                        </div>
                                         {showClientDropdown && clientSearch.length > 0 && (
                                             <div style={{
                                                 position: 'absolute', top: '100%', left: 0, right: 0,
-                                                backgroundColor: 'white', border: '1px solid #E2E8F0',
-                                                borderRadius: '8px', zIndex: 9999, maxHeight: '150px',
-                                                overflowY: 'auto', marginTop: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                                                backgroundColor: 'white', border: '1px solid #CBD5E1',
+                                                borderRadius: '10px', zIndex: 9999, maxHeight: '210px',
+                                                overflowY: 'auto', marginTop: '4px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
                                             }}>
-                                                {filteredClients.map(c => (
-                                                    <div 
-                                                        key={c.id}
-                                                        onClick={() => {
-                                                            setSelectedClientId(c.id);
-                                                            setClientSearch('');
-                                                            setShowClientDropdown(false);
-                                                        }}
-                                                        style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.8rem', borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }}
-                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                    >
-                                                        <strong>{c.company_name || c.contact_name}</strong> {c.nit ? `• NIT ${c.nit}` : ''}
-                                                    </div>
-                                                ))}
+                                                {filteredClients.map((c, idx) => {
+                                                    const isFocused = idx === focusedClientIndex;
+                                                    return (
+                                                        <div 
+                                                            key={c.id}
+                                                            id={`pqr-floating-client-${idx}`}
+                                                            onClick={() => {
+                                                                setSelectedClientId(c.id);
+                                                                setClientSearch('');
+                                                                setShowClientDropdown(false);
+                                                                setFocusedClientIndex(-1);
+                                                            }}
+                                                            onMouseEnter={() => setFocusedClientIndex(idx)}
+                                                            style={{ 
+                                                                padding: '8px 12px', 
+                                                                cursor: 'pointer', 
+                                                                fontSize: '0.78rem', 
+                                                                borderBottom: '1px solid #F1F5F9', 
+                                                                backgroundColor: isFocused ? '#EAEFEA' : 'transparent',
+                                                                borderLeft: isFocused ? '4px solid #0D7A57' : '4px solid transparent',
+                                                                transition: 'background 0.1s' 
+                                                            }}
+                                                        >
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <strong style={{ color: isFocused ? '#0A5F43' : '#1E293B', fontWeight: isFocused ? '800' : '700' }}>
+                                                                    {c.company_name || c.contact_name}
+                                                                </strong>
+                                                                <span style={{ 
+                                                                    fontSize: '0.62rem', 
+                                                                    fontWeight: '800', 
+                                                                    padding: '1px 5px', 
+                                                                    borderRadius: '4px',
+                                                                    backgroundColor: c.role === 'b2b_client' ? '#EAEFEA' : '#EFF6FF',
+                                                                    color: c.role === 'b2b_client' ? '#0D7A57' : '#1D4ED8'
+                                                                }}>
+                                                                    {c.role === 'b2b_client' ? 'B2B' : 'B2C'}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
+                                                                {c.nit ? `NIT: ${c.nit} ` : ''}{c.address ? `• ${c.address}` : ''}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                                 {filteredClients.length === 0 && (
-                                                    <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: '#64748B', textAlign: 'center' }}>No se encontraron clientes</div>
+                                                    <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748B', textAlign: 'center' }}>
+                                                        No se encontraron clientes coincidentes
+                                                    </div>
                                                 )}
                                             </div>
                                         )}
                                     </>
                                 )}
                             </div>
-
-                            {/* Order Selection */}
-                            {selectedClientId && orders.length > 0 && (
-                                <div>
-                                    <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                        Pedido asociado (Opcional)
-                                    </label>
-                                    <select
-                                        value={selectedOrderId}
-                                        onChange={e => setSelectedOrderId(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '8px', borderRadius: '8px',
-                                            border: '1px solid #E2E8F0', fontSize: '0.8rem',
-                                            outline: 'none', backgroundColor: 'white', fontWeight: '600'
-                                        }}
-                                    >
-                                        <option value="">No asociar a un pedido específico</option>
-                                        {orders.map(o => (
-                                            <option key={o.id} value={o.id}>
-                                                Pedido #{o.sequence_id || o.id.substring(0,6).toUpperCase()} (${(o.total || 0).toLocaleString()} • {new Date(o.created_at).toLocaleDateString()})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
 
                             {/* Type and Category */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

@@ -11,7 +11,7 @@ import {
     HeartHandshake, TrendingUp, Layers, Store, Warehouse, PackageCheck,
     Zap, ChevronRight, ChevronDown, ChevronUp, RotateCcw, ExternalLink, CameraOff, Upload,
     Maximize2, Phone, Mail, MessageCircle, UserCheck, X, Scale, Receipt,
-    PackageMinus, Inbox, Edit2, Sliders, Settings
+    PackageMinus, Inbox, Edit2, Sliders, Settings, Link2, Unlink, ShoppingBag
 } from 'lucide-react';
 import Link from 'next/link';
 import RoleProcessGuide from '@/components/common/RoleProcessGuide';
@@ -341,6 +341,12 @@ export default function CustomerServicePage() {
     const [newPhoneInput, setNewPhoneInput] = useState('');
     const [savingPhone, setSavingPhone] = useState(false);
 
+    // Order linking state for cases without an associated order
+    const [clientRecentOrders, setClientRecentOrders] = useState<any[]>([]);
+    const [linkingOrderId, setLinkingOrderId] = useState<string>('');
+    const [isLinkingOrder, setIsLinkingOrder] = useState<boolean>(false);
+    const [loadingRecentOrders, setLoadingRecentOrders] = useState<boolean>(false);
+
     // Sticky header & KPI collapse state
     const [showKpis, setShowKpis] = useState(true);
     const kpiHeaderRef = useRef<HTMLDivElement>(null);
@@ -617,6 +623,104 @@ export default function CustomerServicePage() {
             }
         } else {
             setOrderItems([]);
+        }
+
+        // Fetch recent orders for this client to enable 1-click linking
+        setLinkingOrderId('');
+        if (pqr.client_id) {
+            setLoadingRecentOrders(true);
+            try {
+                const { data: recentOrders } = await supabase
+                    .from('orders')
+                    .select('id, sequence_id, total, status, created_at, shipping_address, origin_source, admin_notes')
+                    .eq('profile_id', pqr.client_id)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                setClientRecentOrders(recentOrders || []);
+            } catch (err) {
+                console.error('Error fetching client recent orders:', err);
+                setClientRecentOrders([]);
+            } finally {
+                setLoadingRecentOrders(false);
+            }
+        } else {
+            setClientRecentOrders([]);
+        }
+    };
+
+    // Link an order to a PQR case that was created without order association
+    const handleLinkOrder = async (orderIdToLink: string) => {
+        if (!selectedPqr || !orderIdToLink) return;
+        setIsLinkingOrder(true);
+        try {
+            const { data: orderData, error: ordErr } = await supabase
+                .from('orders')
+                .select('id, sequence_id, total, created_at, origin_source, admin_notes, shipping_address')
+                .eq('id', orderIdToLink)
+                .single();
+            if (ordErr) throw ordErr;
+
+            const { error: updateErr } = await supabase
+                .from('customer_service_pqrs')
+                .update({ order_id: orderIdToLink })
+                .eq('id', selectedPqr.id);
+            if (updateErr) throw updateErr;
+
+            const updatedPqr: PQR = {
+                ...selectedPqr,
+                order_id: orderIdToLink,
+                orders: orderData
+            };
+            setSelectedPqr(updatedPqr);
+            setPqrs(prev => prev.map(p => p.id === selectedPqr.id ? updatedPqr : p));
+
+            setLoadingItems(true);
+            const { data: items, error: itemsErr } = await supabase
+                .from('order_items')
+                .select(`
+                    *,
+                    products(name, sku, unit_of_measure)
+                `)
+                .eq('order_id', orderIdToLink);
+            if (itemsErr) throw itemsErr;
+            setOrderItems(items || []);
+
+            showToast(`Pedido #${orderData.sequence_id} vinculado exitosamente al caso.`, 'success');
+        } catch (e: any) {
+            console.error('Error linking order:', e);
+            showToast('Error al vincular pedido: ' + (e.message || 'Error desconocido'), 'error');
+        } finally {
+            setIsLinkingOrder(false);
+            setLoadingItems(false);
+        }
+    };
+
+    // Unlink order from PQR case
+    const handleUnlinkOrder = async () => {
+        if (!selectedPqr) return;
+        setIsLinkingOrder(true);
+        try {
+            const { error: updateErr } = await supabase
+                .from('customer_service_pqrs')
+                .update({ order_id: null })
+                .eq('id', selectedPqr.id);
+            if (updateErr) throw updateErr;
+
+            const updatedPqr: PQR = {
+                ...selectedPqr,
+                order_id: null,
+                orders: null
+            };
+            setSelectedPqr(updatedPqr);
+            setPqrs(prev => prev.map(p => p.id === selectedPqr.id ? updatedPqr : p));
+            setOrderItems([]);
+            setSelectedItemId('');
+            showToast('Pedido desvinculado del caso.', 'success');
+        } catch (e: any) {
+            console.error('Error unlinking order:', e);
+            showToast('Error al desvincular pedido: ' + (e.message || 'Error desconocido'), 'error');
+        } finally {
+            setIsLinkingOrder(false);
         }
     };
 
@@ -2590,24 +2694,61 @@ export default function CustomerServicePage() {
                                                 }}>
                                                     Prioridad: {selectedPqr.priority}
                                                 </span>
-                                                {selectedPqr.orders && (
-                                                    <Link 
-                                                        href={`/admin/orders/${selectedPqr.order_id}`}
-                                                        style={{
-                                                            fontSize: '0.68rem',
-                                                            fontWeight: '800',
-                                                            padding: '3px 8px',
-                                                            borderRadius: '6px',
-                                                            backgroundColor: '#E0F2FE',
-                                                            color: '#0369A1',
-                                                            textDecoration: 'none',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px'
-                                                        }}
-                                                    >
-                                                        PEDIDO #{selectedPqr.orders.sequence_id} <ExternalLink size={10} />
-                                                    </Link>
+                                                {selectedPqr.orders ? (
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <Link 
+                                                            href={`/admin/orders/${selectedPqr.order_id}`}
+                                                            style={{
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '800',
+                                                                padding: '3px 8px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: '#E0F2FE',
+                                                                color: '#0369A1',
+                                                                textDecoration: 'none',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}
+                                                        >
+                                                            PEDIDO #{selectedPqr.orders.sequence_id} <ExternalLink size={10} />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleUnlinkOrder}
+                                                            disabled={isLinkingOrder}
+                                                            title="Desvincular pedido de este caso"
+                                                            style={{
+                                                                background: '#F1F5F9',
+                                                                border: '1px solid #E2E8F0',
+                                                                color: '#64748B',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                padding: '2px 4px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                fontSize: '0.62rem',
+                                                                fontWeight: '700'
+                                                            }}
+                                                        >
+                                                            <Unlink size={10} style={{ marginRight: '2px' }} /> Cambiar
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span style={{
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '6px',
+                                                        backgroundColor: '#FEF3C7',
+                                                        color: '#92400E',
+                                                        border: '1px solid #FDE68A',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <ShoppingBag size={11} /> Sin Pedido Asociado
+                                                    </span>
                                                 )}
                                                 <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>
                                                     Radicado el {new Date(selectedPqr.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -2876,6 +3017,94 @@ export default function CustomerServicePage() {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* Order Linking Selector Banner for Unlinked Cases */}
+                                            {!selectedPqr.order_id && (
+                                                <div style={{
+                                                    backgroundColor: '#F0FDF4',
+                                                    border: '1.5px dashed #16A34A',
+                                                    borderRadius: '14px',
+                                                    padding: '1rem 1.25rem',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '10px'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#DCFCE7', color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                <ShoppingBag size={16} />
+                                                            </div>
+                                                            <div>
+                                                                <h4 style={{ margin: 0, fontSize: '0.84rem', fontWeight: '900', color: '#14532D' }}>
+                                                                    Vincular Pedido del Cliente
+                                                                </h4>
+                                                                <p style={{ margin: '2px 0 0 0', fontSize: '0.72rem', color: '#166534' }}>
+                                                                    Este caso fue reportado sin asociar un pedido específico. Asocia un pedido reciente para habilitar el reporte de ítems averiados/faltantes y notas crédito.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {loadingRecentOrders ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', color: '#166534' }}>
+                                                            <Loader2 size={14} className="animate-spin" /> Buscando pedidos recientes del cliente...
+                                                        </div>
+                                                    ) : clientRecentOrders.length > 0 ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <select
+                                                                value={linkingOrderId}
+                                                                onChange={e => setLinkingOrderId(e.target.value)}
+                                                                style={{
+                                                                    flex: 1,
+                                                                    minWidth: '240px',
+                                                                    padding: '8px 12px',
+                                                                    borderRadius: '8px',
+                                                                    border: '1px solid #86EFAC',
+                                                                    backgroundColor: 'white',
+                                                                    fontSize: '0.78rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#1E293B',
+                                                                    outline: 'none'
+                                                                }}
+                                                            >
+                                                                <option value="">Selecciona un pedido reciente ({clientRecentOrders.length} encontrados)...</option>
+                                                                {clientRecentOrders.map(ord => (
+                                                                    <option key={ord.id} value={ord.id}>
+                                                                        Pedido #{ord.sequence_id} — {formatMoney(ord.total || 0)} [{ord.status}] — {new Date(ord.created_at).toLocaleDateString('es-CO')} {ord.shipping_address ? `(${ord.shipping_address})` : ''}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                            <button
+                                                                type="button"
+                                                                disabled={!linkingOrderId || isLinkingOrder}
+                                                                onClick={() => handleLinkOrder(linkingOrderId)}
+                                                                style={{
+                                                                    padding: '8px 16px',
+                                                                    borderRadius: '8px',
+                                                                    backgroundColor: linkingOrderId ? '#0D7A57' : '#94A3B8',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    fontWeight: '800',
+                                                                    fontSize: '0.78rem',
+                                                                    cursor: linkingOrderId ? 'pointer' : 'not-allowed',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px',
+                                                                    transition: 'all 0.15s ease',
+                                                                    boxShadow: linkingOrderId ? '0 2px 6px rgba(13, 122, 87, 0.2)' : 'none'
+                                                                }}
+                                                            >
+                                                                {isLinkingOrder ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
+                                                                <span>Vincular Pedido al Caso</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontStyle: 'italic' }}>
+                                                            No se encontraron pedidos registrados para el cliente seleccionado.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* Photo Evidence Section (Compact & Zero Wasted Space) */}
                                             <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '1rem' }}>
