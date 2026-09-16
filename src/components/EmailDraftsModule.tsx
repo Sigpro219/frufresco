@@ -2841,7 +2841,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } else if (!isNaN(origQtyNum) && origQtyNum > 0) {
       initialQtyStr = String(origQtyNum);
     }
-    const unit = item.originalUnit || item.unit || product.unit_of_measure || 'Kg';
+    const defaultUnit = product.unit_of_measure || 'Kg';
+    let unit = item.originalUnit || item.unit || defaultUnit;
+    let factor = item.conversion_factor || 1;
     const opts = { ...(item.selected_options || {}) };
 
     // Pre-populate structured preferred options if exist
@@ -2852,6 +2854,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       });
     }
 
+    // Determine initial unit and factor from presentation options if selected or default
+    (product.options_config || []).forEach((opt: any) => {
+      if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+        const optVal = opts[opt.name];
+        if (optVal) {
+          const clean = (optVal.includes('|') ? optVal.split('|')[0] : optVal).trim();
+          const cleanLower = clean.toLowerCase();
+          if (cleanLower === 'kg' || cleanLower === 'kilo' || cleanLower === defaultUnit.toLowerCase()) {
+            unit = defaultUnit;
+            factor = 1;
+          } else {
+            unit = clean;
+            const pw = getParsedWeight(optVal);
+            if (pw !== null) factor = pw;
+          }
+        }
+      }
+    });
+
     setCustomizingModalItem({
       rowIndex,
       product,
@@ -2861,7 +2882,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       options: opts,
       quantity: initialQtyStr,
       unit,
-      factor: item.conversion_factor || 1
+      factor
     });
   };
 
@@ -10923,6 +10944,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           label: `${baseUnit} (Base)`
         });
         
+        // Include presentation options from product options_config (e.g. Unidad 200 gr, etc.)
+        normalizedOptionsConfig.forEach((opt: any) => {
+          if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+            opt.values?.forEach((val: string) => {
+              const cleanVal = (val.includes('|') ? val.split('|')[0] : val).trim();
+              if (!cleanVal) return;
+              const cleanLower = cleanVal.toLowerCase();
+              if (cleanLower === 'kg' || cleanLower === 'kilo' || cleanLower === 'kilogramo' || cleanLower === baseUnit.toLowerCase()) {
+                return;
+              }
+              const isDuplicate = modalOptionsList.some(o => o.unit.toLowerCase() === cleanVal.toLowerCase());
+              if (!isDuplicate) {
+                const pw = getParsedWeight(val);
+                const convFactor = pw !== null ? pw : 1;
+                modalOptionsList.push({
+                  unit: cleanVal,
+                  factor: convFactor,
+                  label: pw !== null ? `${cleanVal} (${pw} ${baseUnit})` : cleanVal
+                });
+              }
+            });
+          }
+        });
+        
+        // Include conversions from product_conversions table
         itemConversions.forEach(c => {
           const fromLower = c.from_unit.toLowerCase();
           if (fromLower.includes('libra') || fromLower.includes('pound') || fromLower.includes('unidad web')) return;
@@ -11309,7 +11355,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           const defaultUnit = product.unit_of_measure || 'Kg';
                           const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
                           if (isKgSel) {
-                            newUnit = 'Kg';
+                            newUnit = defaultUnit;
                             newFactor = 1;
                           } else {
                             const matchedUnit = modalOptionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
@@ -11321,6 +11367,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               if (parsedWeight !== null) {
                                 newUnit = cleanUnit;
                                 newFactor = parsedWeight;
+                              } else {
+                                newUnit = cleanUnit;
+                                newFactor = 1;
                               }
                             }
                           }
@@ -11492,11 +11541,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       value={unit}
                       onChange={(e) => {
                         const selected = e.target.value;
-                        const matched = modalOptionsList.find(o => o.unit === selected);
+                        const matched = modalOptionsList.find(o => o.unit.toLowerCase() === selected.toLowerCase());
+                        const newFactor = matched ? matched.factor : 1;
+
+                        // Sincronización inversa de UNIDAD DE MEDIDA -> PRESENTACIÓN
+                        const updatedOptions = { ...options };
+                        normalizedOptionsConfig.forEach((opt: any) => {
+                          if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+                            const matchedValue = opt.values?.find((val: string) => {
+                              const cleanVal = val.includes('|') ? val.split('|')[0] : val;
+                              return cleanVal.toLowerCase() === selected.toLowerCase();
+                            });
+                            if (matchedValue) {
+                              updatedOptions[opt.name] = matchedValue;
+                            } else {
+                              const defaultUnit = product.unit_of_measure || 'Kg';
+                              if (selected.toLowerCase() === defaultUnit.toLowerCase()) {
+                                const matchedDefault = opt.values?.find((val: string) => {
+                                  const cleanVal = val.includes('|') ? val.split('|')[0] : val;
+                                  return cleanVal.toLowerCase() === defaultUnit.toLowerCase() || cleanVal.toLowerCase() === 'kg';
+                                });
+                                if (matchedDefault) {
+                                  updatedOptions[opt.name] = matchedDefault;
+                                }
+                              }
+                            }
+                          }
+                        });
+
                         setCustomizingModalItem(prev => prev ? {
                           ...prev,
                           unit: selected,
-                          factor: matched ? matched.factor : 1
+                          factor: newFactor,
+                          options: updatedOptions
                         } : null);
                       }}
                       onKeyDown={(e) => {
@@ -11539,7 +11616,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       readOnly
                       tabIndex={-1}
                       type="text"
-                      value={modalOptionsList[0]?.label || `${unit} (Base)`}
+                      value={factor !== 1 ? `${unit} (${factor} ${baseUnit})` : (unit ? `${unit} (Base)` : `${baseUnit} (Base)`)}
                       style={{
                         width: '100%',
                         padding: '0.7rem 0.8rem',
@@ -11575,54 +11652,47 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }, 50);
                   }}
                   style={{
-                    width: '120px',
-                    padding: '0.65rem',
-                    borderRadius: '8px',
-                    border: '1px solid #D1D5DB',
+                    padding: '0.8rem 1.6rem',
+                    borderRadius: '12px',
+                    border: '1.5px solid #CBD5E1',
                     backgroundColor: 'white',
-                    fontWeight: '600',
-                    fontSize: '0.9rem',
-                    color: '#6B7280',
+                    fontWeight: '800',
+                    color: '#64748B',
                     cursor: 'pointer',
-                    outline: 'none',
-                    transition: 'all 0.2s ease-in-out'
+                    fontSize: '0.9rem',
+                    transition: 'all 0.15s'
                   }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3B82F6';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#D1D5DB';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  onMouseOver={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                  onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
                 >
                   Cancelar
                 </button>
+
                 <button
                   id="btn-modal-add"
                   type="button"
-                  tabIndex={0}
+                  tabIndex={-1}
                   onClick={saveCustomizingModal}
                   style={{
                     flex: 1,
-                    padding: '0.9rem',
-                    borderRadius: '10px',
+                    padding: '0.85rem 1.8rem',
+                    borderRadius: '12px',
                     border: 'none',
                     backgroundColor: '#059669',
                     color: 'white',
-                    fontWeight: '700',
+                    fontWeight: '900',
                     fontSize: '1rem',
                     cursor: 'pointer',
-                    outline: 'none',
-                    transition: 'all 0.2s ease-in-out'
+                    boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                   }}
-                  onFocus={(e) => {
+                  onMouseOver={e => {
                     e.currentTarget.style.backgroundColor = '#047857';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
                   }}
-                  onBlur={(e) => {
+                  onMouseOut={e => {
                     e.currentTarget.style.backgroundColor = '#059669';
-                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 >
                   Agregar
