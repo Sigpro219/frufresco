@@ -1278,14 +1278,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             
             if (validRows.length === 0) return;
 
-            // Find header row (row containing PLU, PRODUCTO, PRODCUTO, DESCRIPCION, CANT, CAN, etc.)
+            // 1. Score each row to find the true header row
             let headerRowIdx = 0;
+            let bestHeaderScore = -1;
             for (let r = 0; r < Math.min(15, validRows.length); r++) {
-              const rowStr = validRows[r].map(c => String(c || '').toLowerCase()).join(' ');
-              if ((rowStr.includes('prod') || rowStr.includes('descrip') || rowStr.includes('item') || rowStr.includes('articulo')) && 
-                  (rowStr.includes('can') || rowStr.includes('cant') || rowStr.includes('ubm') || rowStr.includes('plu') || rowStr.includes('unid'))) {
+              let score = 0;
+              const row = validRows[r];
+              row.forEach((cell: any) => {
+                const s = String(cell || '').toLowerCase().trim();
+                if (s.includes('plu') || s.includes('codigo') || s.includes('cod')) score += 3;
+                if (s.includes('descrip') || s.includes('prod') || s.includes('articulo') || s.includes('item') || s.includes('nombre')) score += 3;
+                if (s.includes('present') || s.includes('ubm') || s.includes('unidad') || s.includes('medida')) score += 3;
+                if (s.includes('cant') || s.includes('qty') || s.includes('pedido') || s.includes('total')) score += 3;
+              });
+              if (score > bestHeaderScore) {
+                bestHeaderScore = score;
                 headerRowIdx = r;
-                break;
               }
             }
 
@@ -1301,65 +1309,74 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               }
             }
 
-            const qtyCandidates: number[] = [];
+            const headerRow = validRows[headerRowIdx] || [];
             let nameCol = -1;
             let unitCol = -1;
             let pluCol = -1;
-            const headerRow = validRows[headerRowIdx] || [];
+            const qtyCandidates: number[] = [];
+
             headerRow.forEach((cellVal: any, colIdx: number) => {
               const s = String(cellVal || '').toLowerCase().trim();
-              if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s.includes('cantidad') || s === 'qty' || s === 'pedido' || s === 'total' || s.includes('total') || s.includes('solic') || s.includes('requer')) {
-                qtyCandidates.push(colIdx);
-              } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo') || s.includes('item')) {
-                nameCol = colIdx;
-              } else if (s === 'ubm' || s.includes('unidad') || s === 'und' || s === 'u.m' || s.includes('medida')) {
-                unitCol = colIdx;
-              } else if (s.includes('plu') || s.includes('codigo') || s.includes('cod') || s === 'id' || s.includes('ref')) {
+              if (s.includes('plu') || s === 'id' || s.includes('codigo') || s.includes('cod') || s.includes('ref')) {
                 pluCol = colIdx;
+              } else if (s.includes('present') || s.includes('ubm') || s.includes('unidad') || s.includes('und') || s.includes('medida') || s.includes('uom') || s.includes('empaque')) {
+                unitCol = colIdx;
+              } else if (s.includes('descrip') || s.includes('prod') || s.includes('articulo') || s.includes('item') || s.includes('nombre')) {
+                nameCol = colIdx;
+              } else if (s.includes('cant') || s === 'qty' || s === 'pedido' || s.includes('total') || s.includes('solic') || s.includes('requer')) {
+                qtyCandidates.push(colIdx);
               }
             });
 
-            // If multiple qty candidates (e.g. empty CANT vs filled TOTAL), determine the best column by finding positive numeric values
-            let qtyCol = -1;
-            if (qtyCandidates.length > 0) {
-              let bestCount = -1;
-              qtyCandidates.forEach(candCol => {
-                let positiveCount = 0;
+            // If nameCol not found from header keywords, scan columns for highest text frequency (not pure numbers)
+            if (nameCol === -1) {
+              let bestTextRatio = -1;
+              activeCols.forEach(colIdx => {
+                if (colIdx === pluCol || colIdx === unitCol) return;
+                let textCount = 0;
+                let totalData = 0;
                 for (let r = headerRowIdx + 1; r < validRows.length; r++) {
-                  const val = validRows[r]?.[candCol];
+                  const val = validRows[r]?.[colIdx];
                   if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    const cleanNum = parseFloat(String(val).replace(',', '.').replace(/[^0-9.]/g, ''));
-                    if (!isNaN(cleanNum) && cleanNum > 0) {
-                      positiveCount++;
+                    totalData++;
+                    const s = String(val).trim();
+                    if (isNaN(Number(s.replace(',', '.'))) && s.length > 2) {
+                      textCount++;
                     }
                   }
                 }
-                if (positiveCount > bestCount) {
-                  bestCount = positiveCount;
-                  qtyCol = candCol;
+                const ratio = totalData > 0 ? textCount / totalData : 0;
+                if (ratio > 0.6 && textCount > bestTextRatio) {
+                  bestTextRatio = textCount;
+                  nameCol = colIdx;
                 }
               });
             }
 
-            // Fallback: If no qty candidate header matched, auto-detect any active column with positive numbers
-            if (qtyCol === -1 || qtyCandidates.length === 0) {
-              for (const candCol of activeCols) {
-                if (candCol === nameCol || candCol === pluCol) continue;
-                let positiveCount = 0;
-                for (let r = headerRowIdx + 1; r < validRows.length; r++) {
-                  const val = validRows[r]?.[candCol];
-                  if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    const cleanNum = parseFloat(String(val).replace(',', '.').replace(/[^0-9.]/g, ''));
-                    if (!isNaN(cleanNum) && cleanNum > 0) {
-                      positiveCount++;
-                    }
+            // Find qtyCol: column with the highest count of pure numeric quantities (>0 and <50000)
+            let qtyCol = -1;
+            let bestQtyCount = -1;
+            activeCols.forEach(colIdx => {
+              if (colIdx === pluCol || colIdx === nameCol || colIdx === unitCol) return;
+              let numericCount = 0;
+              for (let r = headerRowIdx + 1; r < validRows.length; r++) {
+                const val = validRows[r]?.[colIdx];
+                if (val !== undefined && val !== null && String(val).trim() !== '') {
+                  const s = String(val).trim().replace(',', '.');
+                  const num = Number(s);
+                  if (!isNaN(num) && num > 0 && num < 50000) {
+                    numericCount++;
                   }
                 }
-                if (positiveCount > 0) {
-                  qtyCol = candCol;
-                  break;
-                }
               }
+              if (numericCount > bestQtyCount && numericCount > 0) {
+                bestQtyCount = numericCount;
+                qtyCol = colIdx;
+              }
+            });
+
+            if (qtyCol !== -1 && !qtyCandidates.includes(qtyCol)) {
+              qtyCandidates.push(qtyCol);
             }
 
             const parsedRows = validRows.map((row, rIdx) => {
@@ -1367,27 +1384,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               const isMeta = rIdx < headerRowIdx;
               
               let qtyNum: number | null = null;
-              let rawQty = '';
               if (!isHeader && !isMeta) {
                 // 1. Try primary qtyCol
                 if (qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
-                  rawQty = String(row[qtyCol]).trim();
-                  const cleaned = rawQty.replace(',', '.').replace(/[^0-9.]/g, '');
-                  const parsed = parseFloat(cleaned);
-                  if (!isNaN(parsed) && parsed > 0 && rawQty !== '') {
+                  const s = String(row[qtyCol]).trim().replace(',', '.');
+                  const parsed = Number(s);
+                  if (!isNaN(parsed) && parsed > 0 && parsed <= 50000) {
                     qtyNum = parsed;
                   }
                 }
 
-                // 2. Fallback to any qty candidate column if primary was 0 or empty for this row
+                // 2. Fallback to any qty candidate column if primary was empty
                 if (qtyNum === null) {
                   for (const candCol of qtyCandidates) {
                     if (candCol === qtyCol) continue;
                     const cVal = row[candCol];
                     if (cVal !== undefined && cVal !== null && String(cVal).trim() !== '') {
-                      const cleaned = String(cVal).replace(',', '.').replace(/[^0-9.]/g, '');
-                      const parsed = parseFloat(cleaned);
-                      if (!isNaN(parsed) && parsed > 0) {
+                      const s = String(cVal).trim().replace(',', '.');
+                      const parsed = Number(s);
+                      if (!isNaN(parsed) && parsed > 0 && parsed <= 50000) {
                         qtyNum = parsed;
                         break;
                       }
@@ -1400,6 +1415,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               const rowUnit = unitCol !== -1 ? String(row[unitCol] || '').trim() : 'Kg';
               const rowPlu = pluCol !== -1 ? String(row[pluCol] || '').trim() : '';
 
+              // Filter out metadata rows (like "DESCRIPCION", "FECHA DE CONSUMO", etc.)
+              const isMetaRowText = ['descripcion', 'descripción', 'fecha', 'plu', 'presentacion', 'presentación'].includes(rowName.toLowerCase());
+
               const isDateRow = row.some(cell => {
                 const s = String(cell || '').toLowerCase();
                 return s.includes('fecha') || s.includes('solicitud') || s.includes('entrega');
@@ -1408,10 +1426,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               return {
                 rowIndex: rIdx + 1,
                 isHeader,
-                isMeta,
-                hasQty: qtyNum !== null && qtyNum > 0,
-                qtyVal: qtyNum,
-                nameVal: rowName,
+                isMeta: isMeta || isMetaRowText,
+                hasQty: !isMetaRowText && qtyNum !== null && qtyNum > 0,
+                qtyVal: isMetaRowText ? null : qtyNum,
+                nameVal: isMetaRowText ? '' : rowName,
                 unitVal: rowUnit,
                 pluVal: rowPlu,
                 cells: activeCols.map(c => {
@@ -7612,7 +7630,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                       borderRadius: '4px',
                                                       fontWeight: 900
                                                     }}>
-                                                      {r.qtyVal} {r.unitVal}
+                                                      {cellText}
                                                     </span>
                                                   ) : (
                                                     cellText
