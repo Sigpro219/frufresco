@@ -1191,6 +1191,7 @@ export async function POST(req: Request) {
               attachmentUrl: sourceData.url || attachmentUrl || null,
               attachmentName: sourceData.name || attachmentName || null,
               attachments: isFromAttachment ? [{ ...sourceData, items: groupedItems }] : parsedAttachments.map((pa: any) => ({ ...pa, items: [] })),
+              autoRejectedReason: (groupedItems && groupedItems.length > 0) ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
               emailHtml: htmlText || null
             },
             ...groupedItems.map((itm: any) => {
@@ -1235,7 +1236,7 @@ export async function POST(req: Request) {
               };
             })
           ],
-          status: 'pending'
+          status: (groupedItems && groupedItems.length > 0) ? 'pending' : 'rejected'
         });
       }
     };
