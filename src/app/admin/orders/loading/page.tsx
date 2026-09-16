@@ -1147,7 +1147,7 @@ function OrderLoadingContent() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data), order_items(id, quantity, unit, nickname, products(name, sku, weight_kg, unit_of_measure))');
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data), order_items(id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group))');
 
 
 

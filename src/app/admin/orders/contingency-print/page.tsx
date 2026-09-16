@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import { Printer, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Printer, ShieldAlert, ArrowLeft, Download } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow } from '@/components/print';
@@ -82,7 +82,7 @@ export default function ContingencyPrintPage() {
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
                         shipping_address, admin_notes, special_notes, warehouse_spaces,
                         profiles:profiles(id, company_name, contact_name, contact_phone, address, nit, role),
-                        order_items(id, quantity, unit, unit_price, nickname, variant_label, products(id, name, sku, unit_of_measure, weight_kg))
+                        order_items(id, quantity, unit, unit_price, nickname, variant_label, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, inventory_group))
                     `)
                     .in('id', ids)
                     .order('created_at', { ascending: true });
@@ -210,13 +210,54 @@ export default function ContingencyPrintPage() {
                     </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                     <button
                         onClick={() => router.back()}
                         style={{ padding: '10px 18px', backgroundColor: '#F1F5F9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem' }}
                     >
                         Volver
                     </button>
+
+                    {/* Botón Descargar PDF */}
+                    <button
+                        onClick={() => {
+                            const docName = mode === 'purchases' 
+                                ? `Planilla_Compras_${orders[0]?.delivery_date || 'fecha'}`
+                                : mode === 'picking'
+                                ? `Recibo_A_Ciegas_${orders[0]?.delivery_date || 'fecha'}`
+                                : mode === 'remissions'
+                                ? `Remisiones_Duplicadas_${orders[0]?.delivery_date || 'fecha'}`
+                                : mode === 'dispatch'
+                                ? `Manifiesto_Flota_${orders[0]?.delivery_date || 'fecha'}`
+                                : `Kit_Contingencia_${orders[0]?.delivery_date || 'fecha'}`;
+
+                            printViaNewWindow({
+                                element: printDocRef.current,
+                                title: docName,
+                                paperSize: 'letter',
+                                orientation: 'portrait'
+                            });
+                        }}
+                        style={{
+                            padding: '10px 18px',
+                            backgroundColor: '#FFFFFF',
+                            color: '#0369A1',
+                            border: '1.5px solid #0284C7',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            fontWeight: '900',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.15)',
+                            fontSize: '0.88rem'
+                        }}
+                        title="Abre la vista limpia oficial para guardar como archivo PDF"
+                    >
+                        <Download size={17} /> Descargar PDF
+                    </button>
+
+                    {/* Botón Imprimir Físico */}
                     <button
                         onClick={() => {
                             printViaNewWindow({
@@ -241,7 +282,7 @@ export default function ContingencyPrintPage() {
                             fontSize: '0.9rem'
                         }}
                     >
-                        <Printer size={18} /> Imprimir Kit ({orders.length} Pedidos)
+                        <Printer size={18} /> Imprimir ({orders.length} Pedidos)
                     </button>
                 </div>
             </div>

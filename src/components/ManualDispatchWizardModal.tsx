@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 interface ManualDispatchWizardModalProps {
     isOpen: boolean;
@@ -260,6 +261,172 @@ export default function ManualDispatchWizardModal({
             alert(`❌ Error al sellar tanda: ${err?.message || 'Error desconocido'}`);
         } finally {
             setFinalizingLoading(false);
+        }
+    };
+
+    // Formateador de fecha larga en español para la cabecera A1 del Excel
+    const formatSpanishLongDate = (dateStr?: string) => {
+        if (!dateStr) {
+            const now = new Date();
+            return `${now.getDate()} de ${now.toLocaleDateString('es-CO', { month: 'long' })} de ${now.getFullYear()}`;
+        }
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const [y, m, d] = parts;
+            const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+            const monthName = dateObj.toLocaleDateString('es-CO', { month: 'long' });
+            return `${Number(d)} de ${monthName} de ${y}`;
+        }
+        return dateStr;
+    };
+
+    // Generador oficial del Excel Maestro de Compras (11 Columnas) idéntico a compras_YYYY-MM-DD.xlsx
+    const handleExportMasterPurchasesExcel = async () => {
+        try {
+            // Recopilar y consolidar productos de todos los pedidos seleccionados
+            const productMap = new Map<string, {
+                inventory: number | string;
+                obsInventory: string;
+                accountingId: number | string;
+                productName: string;
+                purchaseType: string;
+                group: string;
+                kg: number;
+                un: number;
+                observations: Set<string>;
+                detail: string;
+                operationMark: string;
+            }>();
+
+            selectedOrdersList.forEach(order => {
+                (order.order_items || []).forEach((item: any) => {
+                    const prod = item.products || {};
+                    const name = prod.name || item.nickname || 'Producto Sin Nombre';
+                    const accountingId = prod.accounting_id || '';
+                    const key = accountingId ? `ID_${accountingId}` : `NAME_${name.toLowerCase().trim()}`;
+
+                    const purchaseType = prod.purchase_sublist || 'Generales';
+                    const group = (prod.category || prod.inventory_group || 'HORTALIZA SELECCIONADA').toUpperCase();
+                    const unit = (item.unit || prod.unit_of_measure || 'Kg').toLowerCase();
+                    const qty = Number(item.quantity || 0);
+
+                    if (!productMap.has(key)) {
+                        productMap.set(key, {
+                            inventory: '',
+                            obsInventory: '',
+                            accountingId: accountingId || '',
+                            productName: name,
+                            purchaseType: purchaseType,
+                            group: group,
+                            kg: 0,
+                            un: 0,
+                            observations: new Set<string>(),
+                            detail: '',
+                            operationMark: ''
+                        });
+                    }
+
+                    const rec = productMap.get(key)!;
+                    if (unit.includes('kg') || unit.includes('kilo')) {
+                        rec.kg += qty;
+                    } else if (unit.includes('un') || unit.includes('und') || unit.includes('paq') || unit.includes('frasco') || unit.includes('bolsa') || unit.includes('bandeja')) {
+                        rec.un += qty;
+                    } else {
+                        if (prod.weight_kg && prod.weight_kg > 0 && prod.weight_kg !== 1) {
+                            rec.kg += qty * prod.weight_kg;
+                        } else {
+                            rec.kg += qty;
+                        }
+                    }
+
+                    // Observaciones especiales de preparación o cliente
+                    if (item.nickname && item.nickname !== name) {
+                        rec.observations.add(item.nickname);
+                    }
+                    if (item.variant_label) {
+                        rec.observations.add(item.variant_label);
+                    }
+                    if (item.notes) {
+                        rec.observations.add(item.notes);
+                    }
+                });
+            });
+
+            // Ordenar por Tipo Compra, Grupo y Producto
+            const sortedProducts = Array.from(productMap.values()).sort((a, b) => {
+                if (a.purchaseType !== b.purchaseType) {
+                    return a.purchaseType.localeCompare(b.purchaseType);
+                }
+                if (a.group !== b.group) {
+                    return a.group.localeCompare(b.group);
+                }
+                return a.productName.localeCompare(b.productName);
+            });
+
+            // Ensamblar matriz de filas (11 columnas exactas)
+            const dateFormatted = formatSpanishLongDate(deliveryDate);
+            const rows: any[][] = [
+                [`FECHA: ${dateFormatted}`],
+                [],
+                [
+                    'Inventario',
+                    'Obs. Inventario',
+                    'ID Producto',
+                    'Producto',
+                    'Tipo Compra',
+                    'Grupo',
+                    'KG',
+                    'UN',
+                    'Observación',
+                    'Detalle',
+                    'Marca Operación'
+                ]
+            ];
+
+            sortedProducts.forEach(p => {
+                rows.push([
+                    p.inventory,                                                    // 1. Inventario
+                    p.obsInventory,                                                 // 2. Obs. Inventario
+                    p.accountingId,                                                 // 3. ID Producto
+                    p.productName,                                                  // 4. Producto
+                    p.purchaseType,                                                 // 5. Tipo Compra
+                    p.group,                                                        // 6. Grupo
+                    p.kg > 0 ? Number(p.kg.toFixed(2)) : '',                        // 7. KG
+                    p.un > 0 ? Number(p.un.toFixed(0)) : '',                        // 8. UN
+                    Array.from(p.observations).join(' | '),                         // 9. Observación
+                    p.detail,                                                       // 10. Detalle
+                    p.operationMark                                                 // 11. Marca Operación
+                ]);
+            });
+
+            // Generar libro con XLSX
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+
+            // Anchos de columnas calibrados para visualización industrial
+            ws['!cols'] = [
+                { wch: 12 }, // Inventario
+                { wch: 16 }, // Obs. Inventario
+                { wch: 14 }, // ID Producto
+                { wch: 34 }, // Producto
+                { wch: 14 }, // Tipo Compra
+                { wch: 26 }, // Grupo
+                { wch: 12 }, // KG
+                { wch: 10 }, // UN
+                { wch: 28 }, // Observación
+                { wch: 14 }, // Detalle
+                { wch: 16 }  // Marca Operación
+            ];
+
+            const wb = XLSX.utils.book_new();
+            const cleanDateStr = deliveryDate || new Date().toISOString().split('T')[0];
+            const sheetName = `Compra_${cleanDateStr}`.substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+            const fileName = `compras_${cleanDateStr}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+        } catch (err: any) {
+            console.error('Error generando Excel de compras:', err);
+            alert(`Error al generar el archivo Excel: ${err?.message || 'Error desconocido'}`);
         }
     };
 
@@ -594,7 +761,19 @@ export default function ManualDispatchWizardModal({
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <Link
+                                    href={`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`}
+                                    target="_blank"
+                                    style={{
+                                        padding: '7px 12px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
+                                        borderRadius: '8px', fontSize: '0.74rem', fontWeight: '900', textDecoration: 'none',
+                                        display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                    }}
+                                    title="Descargar Sábana de Alistamiento en formato PDF (Oficio)"
+                                >
+                                    <Download size={13} /> PDF
+                                </Link>
                                 <Link
                                     href={`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`}
                                     target="_blank"
@@ -604,7 +783,7 @@ export default function ManualDispatchWizardModal({
                                         display: 'inline-flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
                                     }}
                                 >
-                                    <Printer size={13} /> Imprimir Sábana Alistamiento (Oficio) <ExternalLink size={11} />
+                                    <Printer size={13} /> Imprimir Sábana (Oficio) <ExternalLink size={11} />
                                 </Link>
                                 <Link
                                     href={`/admin/logistics/staging-spaces?date=${deliveryDate}`}
@@ -682,20 +861,34 @@ export default function ManualDispatchWizardModal({
                                         Hojas individuales para Papa, Plátano, Frutas y Hortalizas con casillas de precio en puesto.
                                     </div>
                                 </div>
-                                <Link
-                                    href={`/admin/orders/contingency-print?mode=purchases&orderIds=${orderIdsParam}`}
-                                    target="_blank"
-                                    style={{
-                                        marginTop: '1rem', padding: '8px 12px', backgroundColor: '#0D7A57', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', textDecoration: 'none',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                                    }}
-                                >
-                                    <Printer size={13} /> Imprimir Planillas PDF <ExternalLink size={11} />
-                                </Link>
+                                <div style={{ display: 'flex', gap: '6px', marginTop: '1rem' }}>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=purchases&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1, padding: '8px 8px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
+                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                        }}
+                                        title="Descargar Planillas de Plaza en PDF"
+                                    >
+                                        <Download size={13} /> PDF
+                                    </Link>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=purchases&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1.4, padding: '8px 10px', backgroundColor: '#0D7A57', color: '#FFFFFF',
+                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                        }}
+                                    >
+                                        <Printer size={13} /> Imprimir <ExternalLink size={10} />
+                                    </Link>
+                                </div>
                             </div>
 
-                            {/* Card 2B: Excel Maestro */}
+                            {/* Card 2B: Excel Maestro (11 Cols) */}
                             <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #BAE6FD', borderRadius: '14px', padding: '1.2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.82rem' }}>
@@ -705,20 +898,21 @@ export default function ManualDispatchWizardModal({
                                         Excel Maestro (11 Cols)
                                     </div>
                                     <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', lineHeight: '1.35' }}>
-                                        Archivo oficial para compras, directores y cruce contable con Word Office.
+                                        Archivo oficial para compras, directores y cruce contable con World Office.
                                     </div>
                                 </div>
-                                <Link
-                                    href={`/admin/orders/contingency-print?mode=purchases&orderIds=${orderIdsParam}`}
-                                    target="_blank"
+                                <button
+                                    onClick={handleExportMasterPurchasesExcel}
                                     style={{
                                         marginTop: '1rem', padding: '8px 12px', backgroundColor: '#0284C7', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', textDecoration: 'none',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                        borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', border: 'none', cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)'
                                     }}
+                                    title="Descarga directa del dataset compras_YYYY-MM-DD.xlsx con las 11 columnas maestras"
                                 >
-                                    <Download size={13} /> Ver &amp; Exportar Excel <ExternalLink size={11} />
-                                </Link>
+                                    <Download size={14} /> Exportar Excel (.xlsx)
+                                </button>
                             </div>
 
                             {/* Card 2C: Ingreso a Ciegas */}
@@ -734,17 +928,31 @@ export default function ManualDispatchWizardModal({
                                         Planilla con kilos en blanco para que el chequeador de las 2:00 AM pese obligatoriamente en báscula.
                                     </div>
                                 </div>
-                                <Link
-                                    href={`/admin/orders/contingency-print?mode=picking&orderIds=${orderIdsParam}`}
-                                    target="_blank"
-                                    style={{
-                                        marginTop: '1rem', padding: '8px 12px', backgroundColor: '#D97706', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', textDecoration: 'none',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                                    }}
-                                >
-                                    <Printer size={13} /> Imprimir Recibo a Ciegas <ExternalLink size={11} />
-                                </Link>
+                                <div style={{ display: 'flex', gap: '6px', marginTop: '1rem' }}>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=picking&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1, padding: '8px 8px', backgroundColor: '#FFFFFF', color: '#D97706', border: '1.5px solid #D97706',
+                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                        }}
+                                        title="Descargar Planilla de Recibo a Ciegas en PDF"
+                                    >
+                                        <Download size={13} /> PDF
+                                    </Link>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=picking&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1.4, padding: '8px 10px', backgroundColor: '#D97706', color: '#FFFFFF',
+                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                        }}
+                                    >
+                                        <Printer size={13} /> Imprimir <ExternalLink size={10} />
+                                    </Link>
+                                </div>
                             </div>
                         </div>
 
@@ -821,18 +1029,32 @@ export default function ManualDispatchWizardModal({
                                         Incluye membrete formal de <em>Investments Cortés S.A.S.</em>, casilla manuscrita para <strong>KG-UN recibe</strong>, cuadro de firmas, cédula, sello húmedo y comodato de canastillas.
                                     </div>
                                 </div>
-                                <Link
-                                    href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`}
-                                    target="_blank"
-                                    style={{
-                                        marginTop: '1.2rem', padding: '10px 14px', backgroundColor: '#1D4ED8', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.78rem', fontWeight: '900', textDecoration: 'none',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                        boxShadow: '0 2px 6px rgba(29, 78, 216, 0.3)'
-                                    }}
-                                >
-                                    <Printer size={14} /> Imprimir Remisiones Duplicadas ({selectedOrdersList.length}) <ExternalLink size={11} />
-                                </Link>
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1, padding: '9px 10px', backgroundColor: '#FFFFFF', color: '#1D4ED8', border: '1.5px solid #1D4ED8',
+                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                        }}
+                                        title="Descargar Remisiones en formato PDF"
+                                    >
+                                        <Download size={14} /> Descargar PDF
+                                    </Link>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=remissions&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1.4, padding: '9px 12px', backgroundColor: '#1D4ED8', color: '#FFFFFF',
+                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                                            boxShadow: '0 2px 6px rgba(29, 78, 216, 0.3)'
+                                        }}
+                                    >
+                                        <Printer size={14} /> Imprimir ({selectedOrdersList.length}) <ExternalLink size={10} />
+                                    </Link>
+                                </div>
                             </div>
 
                             {/* 3B. Manifiesto de Despacho & Control de Canastillas */}
@@ -853,17 +1075,31 @@ export default function ManualDispatchWizardModal({
                                         Control físico en puerta: Placa, conductor, total de canastillas plásticas entregadas al camión, devueltas vacías y firmas de salida.
                                     </div>
                                 </div>
-                                <Link
-                                    href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`}
-                                    target="_blank"
-                                    style={{
-                                        marginTop: '1.2rem', padding: '10px 14px', backgroundColor: '#0F172A', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.78rem', fontWeight: '900', textDecoration: 'none',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                                    }}
-                                >
-                                    <Printer size={14} /> Imprimir Manifiesto de Flota <ExternalLink size={11} />
-                                </Link>
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1, padding: '9px 10px', backgroundColor: '#FFFFFF', color: '#0F172A', border: '1.5px solid #0F172A',
+                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                        }}
+                                        title="Descargar Manifiesto de Flota en formato PDF"
+                                    >
+                                        <Download size={14} /> Descargar PDF
+                                    </Link>
+                                    <Link
+                                        href={`/admin/orders/contingency-print?mode=dispatch&orderIds=${orderIdsParam}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1.4, padding: '9px 12px', backgroundColor: '#0F172A', color: '#FFFFFF',
+                                            borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                        }}
+                                    >
+                                        <Printer size={14} /> Imprimir Manifiesto <ExternalLink size={10} />
+                                    </Link>
+                                </div>
                             </div>
                         </div>
 
@@ -935,18 +1171,32 @@ export default function ManualDispatchWizardModal({
                                 </div>
                             </div>
 
-                            <Link
-                                href={`/admin/orders/print-labels?orderIds=${orderIdsParam}`}
-                                target="_blank"
-                                style={{
-                                    padding: '10px 18px', backgroundColor: '#7E22CE', color: '#FFFFFF',
-                                    borderRadius: '8px', fontSize: '0.78rem', fontWeight: '900', textDecoration: 'none',
-                                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                    boxShadow: '0 2px 6px rgba(126, 34, 206, 0.3)'
-                                }}
-                            >
-                                <Printer size={14} /> Imprimir Rótulos Térmicos ({selectedOrdersList.length}) <ExternalLink size={11} />
-                            </Link>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <Link
+                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}`}
+                                    target="_blank"
+                                    style={{
+                                        padding: '9px 12px', backgroundColor: '#FFFFFF', color: '#7E22CE', border: '1.5px solid #7E22CE',
+                                        borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                    }}
+                                    title="Descargar Rótulos Térmicos en PDF"
+                                >
+                                    <Download size={14} /> PDF
+                                </Link>
+                                <Link
+                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}`}
+                                    target="_blank"
+                                    style={{
+                                        padding: '9px 14px', backgroundColor: '#7E22CE', color: '#FFFFFF',
+                                        borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                        boxShadow: '0 2px 6px rgba(126, 34, 206, 0.3)'
+                                    }}
+                                >
+                                    <Printer size={14} /> Imprimir Rótulos ({selectedOrdersList.length}) <ExternalLink size={10} />
+                                </Link>
+                            </div>
                         </div>
 
                         {/* Checklist Final de Lanzamiento */}

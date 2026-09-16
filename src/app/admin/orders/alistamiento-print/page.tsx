@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare } from 'lucide-react';
+import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare, Download } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow } from '@/components/print';
 
@@ -785,6 +785,36 @@ export default function AlistamientoSabanaPrintPage() {
                             ))}
                         </select>
                     </div>
+
+                    {/* Botón Descargar PDF Oficio */}
+                    <button
+                        onClick={() => {
+                            printViaNewWindow({
+                                element: printDocRef.current,
+                                title: `Sabana_Alistamiento_Oficio_${selectedDate}`,
+                                paperSize: 'legal',
+                                orientation: 'landscape',
+                                margin: '0.8cm 1.0cm'
+                            });
+                        }}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 18px',
+                            backgroundColor: '#FFFFFF',
+                            color: '#0369A1',
+                            border: '1.5px solid #0284C7',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: '800',
+                            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.15)'
+                        }}
+                        title="Abre la vista limpia oficial para guardar como archivo PDF en formato Oficio"
+                    >
+                        <Download size={16} /> Descargar PDF
+                    </button>
 
                     {/* Botón de Impresión en Oficio */}
                     <button
