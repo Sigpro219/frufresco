@@ -1168,123 +1168,138 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Save draft to public.order_drafts
-    const draftsToInsert: any[] = [];
+    // 5. Build cohesive draft for public.order_drafts
+    const uniqueDraftUuid = draftUuid;
+    const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
+    const finalSubject = `[${shortCode}] ${subject}`.trim().replace(/\s+/g, ' ');
 
-    const processSourceIntoDrafts = (sourceData: any, isFromAttachment: boolean, attIndex: number = 0, totalAtts: number = 0) => {
-      const items = Array.isArray(sourceData.items) ? sourceData.items : [];
-      const groups = new Map<string, any[]>();
-      
-      if (items.length === 0) {
-        const fallbackDate = sourceData.deliveryDate || targetDeliveryDate || null;
-        groups.set(String(fallbackDate), []);
-      } else {
-        items.forEach((itm: any) => {
-          const itemDate = itm.deliveryDate || sourceData.deliveryDate || targetDeliveryDate || null;
-          const key = String(itemDate);
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(itm);
+    // Collect all items across all attachments (or from body if no attachments)
+    const allExtractedItems: any[] = [];
+    const sourceAttachments = parsedAttachments.length > 0 ? parsedAttachments : [];
+
+    if (sourceAttachments.length > 0) {
+      sourceAttachments.forEach((att: any, attIdx: number) => {
+        const attItems = Array.isArray(att.items) ? att.items : [];
+        attItems.forEach((itm: any) => {
+          let originalName = String(itm.originalName || itm.name || '').trim();
+          originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
+          const nameLower = originalName.toLowerCase();
+          let observations = itm.observations || '';
+          let assignedUnit = itm.unit;
+
+          if (nameLower.includes('libra') || nameLower.includes('lb')) {
+            assignedUnit = 'Lb';
+            if (!observations.toLowerCase().includes('libra')) {
+              observations = `Solicitado en Libras. ${observations}`.trim();
+            }
+          } else if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+            assignedUnit = 'Litro';
+            if (!observations.toLowerCase().includes('litro')) {
+              observations = `Solicitado en Litros. ${observations}`.trim();
+            }
+          }
+
+          let matchedProductId = itm.matched_product_id || null;
+          let resolvedUnitPrice = itm.unit_price || 0;
+
+          if (!matchedProductId && originalName) {
+            const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
+            if (bestMatch) {
+              matchedProductId = bestMatch.id;
+              resolvedUnitPrice = bestMatch.base_price || 0;
+              if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';
+            }
+          }
+
+          allExtractedItems.push({
+            ...itm,
+            originalName,
+            unit: assignedUnit || 'Unidad',
+            matched_product_id: matchedProductId,
+            unit_price: resolvedUnitPrice,
+            observations,
+            attachment_index: attIdx,
+            source_attachment_name: att.name || `Adjunto_${attIdx + 1}`
+          });
         });
-      }
-
-      const numGroups = groups.size;
-      console.log(`[Email Inbound] [DIAG] processSourceIntoDrafts: att=${attIndex+1}/${totalAtts} | groups=${numGroups} | dateKeys=[${[...groups.keys()].join(', ')}]`);
-      let groupIndex = 0;
-
-      for (const [dateKey, groupedItems] of groups.entries()) {
-        groupIndex++;
-        const effectiveDate = dateKey === 'null' ? null : dateKey;
-        const isFirstGlobalDraft = draftsToInsert.length === 0;
-        const uniqueDraftUuid = isFirstGlobalDraft ? draftUuid : crypto.randomUUID();
-        const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
-        
-        let subjectSuffix = '';
-        if (totalAtts > 1) {
-           subjectSuffix += `[Adjunto ${attIndex + 1}/${totalAtts}]`;
-        }
-        if (numGroups > 1) {
-           subjectSuffix += ` [Pedido ${groupIndex}/${numGroups}]`;
-        }
-        
-        const finalSubject = `[${shortCode}] ${subjectSuffix ? subjectSuffix + ' ' : ''}${subject}`.trim().replace(/\s+/g, ' ');
-
-        draftsToInsert.push({
-          id: uniqueDraftUuid,
-          profile_id: profile ? profile.id : null,
-          client_detected_name: (sourceData.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
-          source_email: senderEmail,
-          email_subject: finalSubject,
-          email_body: currentPlainText,
-          extracted_items: [
-            { 
-              isMetadata: true, 
-              address: sourceData.address || extractedData.address || null,
-              addressDetected: addressDetected,
-              deliverySlot: sourceData.deliverySlot || finalDeliverySlot,
-              deliveryDate: effectiveDate,
-              phone: sourceData.phone || extractedData.phone || null,
-              nit: sourceData.nit || extractedData.nit || null,
-              clientType: sourceData.clientType || clientType,
-              attachmentUrl: sourceData.url || attachmentUrl || null,
-              attachmentName: sourceData.name || attachmentName || null,
-              attachments: isFromAttachment ? [{ ...sourceData, items: groupedItems }] : parsedAttachments.map((pa: any) => ({ ...pa, items: [] })),
-              autoRejectedReason: (groupedItems && groupedItems.length > 0) ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
-              emailHtml: htmlText || null
-            },
-            ...groupedItems.map((itm: any) => {
-              let originalName = String(itm.originalName || itm.name || '').trim();
-              originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
-              const nameLower = originalName.toLowerCase();
-              let observations = itm.observations || '';
-              let assignedUnit = itm.unit;
-
-              if (nameLower.includes('libra') || nameLower.includes('lb')) {
-                assignedUnit = 'Lb';
-                if (!observations.toLowerCase().includes('libra')) {
-                  observations = `Solicitado en Libras. ${observations}`.trim();
-                }
-              } else if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
-                assignedUnit = 'Litro';
-                if (!observations.toLowerCase().includes('litro')) {
-                  observations = `Solicitado en Litros. ${observations}`.trim();
-                }
-              }
-
-              // In-memory SKU match usando el Motor Unificado (Memoria + Catálogo + Tokens)
-              let matchedProductId = itm.matched_product_id || null;
-              let resolvedUnitPrice = itm.unit_price || 0;
-
-              if (!matchedProductId && originalName) {
-                const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
-                if (bestMatch) {
-                  matchedProductId = bestMatch.id;
-                  resolvedUnitPrice = bestMatch.base_price || 0;
-                  if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';
-                }
-              }
-
-              return {
-                ...itm,
-                originalName,
-                unit: assignedUnit || 'Unidad',
-                matched_product_id: matchedProductId,
-                unit_price: resolvedUnitPrice,
-                observations
-              };
-            })
-          ],
-          status: (groupedItems && groupedItems.length > 0) ? 'pending' : 'rejected'
-        });
-      }
-    };
-
-    if (parsedAttachments.length > 0) {
-      for (let index = 0; index < parsedAttachments.length; index++) {
-        processSourceIntoDrafts(parsedAttachments[index], true, index, parsedAttachments.length);
-      }
+      });
     } else {
-      processSourceIntoDrafts(extractedData, false);
+      const bodyItems = Array.isArray(extractedData.items) ? extractedData.items : [];
+      bodyItems.forEach((itm: any) => {
+        let originalName = String(itm.originalName || itm.name || '').trim();
+        originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
+        const nameLower = originalName.toLowerCase();
+        let observations = itm.observations || '';
+        let assignedUnit = itm.unit;
+
+        if (nameLower.includes('libra') || nameLower.includes('lb')) {
+          assignedUnit = 'Lb';
+          if (!observations.toLowerCase().includes('libra')) {
+            observations = `Solicitado en Libras. ${observations}`.trim();
+          }
+        } else if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+          assignedUnit = 'Litro';
+          if (!observations.toLowerCase().includes('litro')) {
+            observations = `Solicitado en Litros. ${observations}`.trim();
+          }
+        }
+
+        let matchedProductId = itm.matched_product_id || null;
+        let resolvedUnitPrice = itm.unit_price || 0;
+
+        if (!matchedProductId && originalName) {
+          const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
+          if (bestMatch) {
+            matchedProductId = bestMatch.id;
+            resolvedUnitPrice = bestMatch.base_price || 0;
+            if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';
+          }
+        }
+
+        allExtractedItems.push({
+          ...itm,
+          originalName,
+          unit: assignedUnit || 'Unidad',
+          matched_product_id: matchedProductId,
+          unit_price: resolvedUnitPrice,
+          observations,
+          attachment_index: 0,
+          source_attachment_name: null
+        });
+      });
     }
+
+    const primarySource = parsedAttachments.length > 0 ? parsedAttachments[0] : extractedData;
+    const clientDetected = (primarySource.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
+    const hasValidItems = allExtractedItems.length > 0;
+
+    const draftsToInsert = [{
+      id: uniqueDraftUuid,
+      profile_id: profile ? profile.id : null,
+      client_detected_name: clientDetected,
+      source_email: senderEmail,
+      email_subject: finalSubject,
+      email_body: currentPlainText,
+      extracted_items: [
+        {
+          isMetadata: true,
+          address: primarySource.address || extractedData.address || null,
+          addressDetected: addressDetected,
+          deliverySlot: primarySource.deliverySlot || finalDeliverySlot,
+          deliveryDate: primarySource.deliveryDate || targetDeliveryDate || null,
+          phone: primarySource.phone || extractedData.phone || null,
+          nit: primarySource.nit || extractedData.nit || null,
+          clientType: primarySource.clientType || clientType,
+          attachmentUrl: primarySource.url || attachmentUrl || null,
+          attachmentName: primarySource.name || attachmentName || null,
+          attachments: parsedAttachments.length > 0 ? parsedAttachments : (attachmentUrl ? [{ url: attachmentUrl, name: attachmentName || 'documento.pdf', items: [] }] : []),
+          autoRejectedReason: hasValidItems ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
+          emailHtml: htmlText || null
+        },
+        ...allExtractedItems
+      ],
+      status: hasValidItems ? 'pending' : 'rejected'
+    }];
 
     const { data: insertedDrafts, error: draftError } = await supabaseAdmin
       .from('order_drafts')
