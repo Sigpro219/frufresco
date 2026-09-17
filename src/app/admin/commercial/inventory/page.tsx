@@ -1252,12 +1252,13 @@ export default function InventoryAdminPage() {
         };
     }, [fetchData]);
 
-    // Background polling: silently update stock details every 10 seconds
+    // Background polling: silently update stock details every 30 seconds
     useEffect(() => {
         const interval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             const controller = new AbortController();
             fetchData(controller.signal, true);
-        }, 10000);
+        }, 30000);
         return () => clearInterval(interval);
     }, [fetchData]);
 

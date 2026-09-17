@@ -125,10 +125,11 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
             )
             .subscribe();
 
-        // 2. Heartbeat de sincronización silenciosa en segundo plano (cada 8s)
+        // 2. Heartbeat de sincronización silenciosa en segundo plano (cada 30s)
         const pollingInterval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchQuotes(false);
-        }, 8000);
+        }, 30000);
 
         return () => {
             supabase.removeChannel(channel);

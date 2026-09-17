@@ -2027,6 +2027,20 @@ function CreateOrderContent() {
             return;
         }
 
+        // ── Dual-unit metadata: preserve physical count alongside billing Kg ──
+        // When a conversion factor is applied (e.g. 30 Unidades × 550 gr = 16.5 Kg),
+        // we embed the original physical instruction into selected_options so it
+        // flows through to DB and surfaces in loading, alistamiento-print and picking.
+        const enrichedOptions = resolvedFactor !== 1
+            ? {
+                ...selectedOptions,
+                _original_qty: qtyNum,
+                _conversion_factor: resolvedFactor,
+                _original_unit: resolvedUnit,
+                _physical_instruction: `${qtyNum} ${resolvedUnit}`
+            }
+            : { ...selectedOptions };
+
         if (editingStagedItemId !== null) {
             const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
 
@@ -2037,7 +2051,7 @@ function CreateOrderContent() {
                         suggestedProduct: selectedProductForModal,
                         quantity: baseQty,
                         variant_label: variantLabel,
-                        selected_options: selectedOptions,
+                        selected_options: enrichedOptions,
                         originalQty: qtyNum,
                         originalUnit: resolvedUnit,
                         conversion_factor: resolvedFactor,
@@ -2082,7 +2096,7 @@ function CreateOrderContent() {
                 originalUnit: resolvedUnit,
                 conversion_factor: resolvedFactor,
                 variant_label: finalLabel || undefined,
-                selected_options: selectedOptions
+                selected_options: enrichedOptions
             } : c));
             closeProductModal();
         } else {
@@ -2090,7 +2104,7 @@ function CreateOrderContent() {
                 selectedProductForModal, 
                 qtyNum, 
                 variantLabel, 
-                selectedOptions,
+                enrichedOptions,
                 resolvedUnit,
                 resolvedFactor
             );
@@ -6399,6 +6413,25 @@ function CreateOrderContent() {
                                                             {item.product.unit_of_measure?.toUpperCase() || 'UND'}
                                                         </div>
                                                     </div>
+
+                                                    {/* Physical Unit Badge — shown when item was entered as discrete units (e.g. 30 Und × 550 gr) */}
+                                                    {item.selected_options?._physical_instruction && item.conversion_factor && item.conversion_factor !== 1 && (
+                                                        <div style={{ textAlign: 'center', marginTop: '-2px' }}>
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: '700',
+                                                                color: '#065F46',
+                                                                backgroundColor: '#D1FAE5',
+                                                                border: '1px solid #6EE7B7',
+                                                                borderRadius: '4px',
+                                                                padding: '1px 6px',
+                                                                letterSpacing: '0.02em'
+                                                            }}>
+                                                                {item.selected_options._physical_instruction}
+                                                            </span>
+                                                        </div>
+                                                    )}
 
                                                     {/* Price Edit Input */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>

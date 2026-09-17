@@ -1334,10 +1334,11 @@ function OrderLoadingContent() {
             )
             .subscribe();
 
-        // 3. Polling Interval (8s) as robust fallback for background tabs or network drops
+        // 3. Polling Interval (25s) as robust fallback for background tabs or network drops
         const pollInterval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchOrders(false);
-        }, 8000);
+        }, 25000);
 
         return () => {
             active = false;
@@ -4758,19 +4759,37 @@ function OrderLoadingContent() {
                                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
                                                             </div>
                                                         ) : (
-                                                            <span style={{ 
-                                                                padding: '6px 12px', 
-                                                                backgroundColor: '#F1F5F9', 
-                                                                borderRadius: '8px',
-                                                                fontWeight: '800', 
-                                                                color: '#334155',
-                                                                fontSize: '1rem'
-                                                            }}>
-                                                                {formatNumber(item.quantity, 1)} 
-                                                                <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '4px', fontWeight: '600' }}>
-                                                                    {item.products?.unit_of_measure}
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                                                <span style={{ 
+                                                                    padding: '6px 12px', 
+                                                                    backgroundColor: '#F1F5F9', 
+                                                                    borderRadius: '8px',
+                                                                    fontWeight: '800', 
+                                                                    color: '#334155',
+                                                                    fontSize: '1rem'
+                                                                }}>
+                                                                    {formatNumber(item.quantity, 1)} 
+                                                                    <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '4px', fontWeight: '600' }}>
+                                                                        {item.products?.unit_of_measure}
+                                                                    </span>
                                                                 </span>
-                                                            </span>
+                                                                {/* Physical Unit Badge: shows original discrete qty when applicable */}
+                                                                {item.selected_options?._physical_instruction && (
+                                                                    <span style={{
+                                                                        fontSize: '0.68rem',
+                                                                        fontWeight: '700',
+                                                                        color: '#065F46',
+                                                                        backgroundColor: '#D1FAE5',
+                                                                        border: '1px solid #6EE7B7',
+                                                                        borderRadius: '4px',
+                                                                        padding: '1px 6px',
+                                                                        letterSpacing: '0.02em',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        {item.selected_options._physical_instruction}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#1E293B', fontWeight: '800', fontSize: '0.95rem' }}>

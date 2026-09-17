@@ -71,41 +71,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         console.log('🔄 Cargando perfil para:', userId);
+        // Timeout de seguridad de 6 segundos si no se provee signal
+        const internalController = !signal ? new AbortController() : null;
+        const effectiveSignal = signal || internalController?.signal;
+        const timeoutId = internalController ? setTimeout(() => internalController.abort(), 6000) : null;
+
         let query = supabase
             .from('profiles')
             .select('*, parent:parent_id(pricing_model_id)')
             .eq('id', userId);
             
-        if (signal) query = query.abortSignal(signal);
+        if (effectiveSignal) query = query.abortSignal(effectiveSignal);
 
         try {
             const { data, error } = await query.maybeSingle();
+            if (timeoutId) clearTimeout(timeoutId);
 
             if (error) {
                 // Network failure vs. Database error check
-                const isNetworkError = error.message?.toLowerCase().includes('fetch');
+                const isNetworkError = error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('abort');
                 
                 if (isNetworkError) {
-                    console.error('🚨 Falla de Red Crítica detectada (Failed to fetch). Iniciando diagnóstico profundo...');
-                    
-                    // Import inside function to avoid circular deps if they exist
-                    import('./supabase').then(({ verifyConnectivity }) => {
-                        verifyConnectivity().then(res => {
-                            if (!res.ok) {
-                                console.error('🚫 Diagnóstico de Conectividad:', res.error);
-                                if (res.isNetworkError) console.info('💡 Sugerencia: Revisa tu VPN, Firewall o AdBlockers. El dominio de Supabase parece inalcanzable.');
-                            } else {
-                                console.log('📡 Diagnostico OK. Latencia:', res.latency);
-                            }
-                        });
-                    });
+                    console.warn('⚠️ Falla de Red o Timeout en Supabase al cargar perfil. Continuando con sesión local...');
                 } else {
                     console.error('❌ Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
                 }
                 
                 logError('authContext fetchProfile', error);
             } else if (data) {
-                if (signal?.aborted) return;
+                if (effectiveSignal?.aborted) return;
                 if (data.is_active === false) {
                     console.warn('🔒 El perfil de usuario está INACTIVO. Cerrando sesión...');
                     setProfile(null);
@@ -129,9 +123,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } else {
                 console.warn('⚠️ Perfil no encontrado en la tabla profiles.');
             }
-        } catch (err) {
-            console.error('❌ Excepción crítica en fetchProfile:', err);
-            logError('authContext fetchProfile exception', err);
+        } catch (err: any) {
+            if (err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')) {
+                console.warn('⏱️ fetchProfile excedió el tiempo límite (6s). Manteniendo perfil en caché.');
+            } else {
+                console.error('❌ Excepción crítica en fetchProfile:', err);
+                logError('authContext fetchProfile exception', err);
+            }
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
         }
     };
 
@@ -165,14 +165,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const currentUser = session?.user ?? null;
                     setUser(currentUser);
                     if (currentUser) {
-                        // Instant hydration from local storage to prevent 0ms flicker evictions
+                        // Instant hydration from local storage (Stale-While-Revalidate 0ms)
+                        let hasCached = false;
                         try {
                             const cached = localStorage.getItem(`frufresco_cached_profile_${currentUser.id}`);
                             if (cached) {
-                                setProfile(JSON.parse(cached));
+                                const parsed = JSON.parse(cached);
+                                if (parsed && parsed.role) {
+                                    setProfile(parsed);
+                                    hasCached = true;
+                                    setLoading(false); // Desbloqueo instantáneo en 0ms
+                                }
                             }
                         } catch (e) {}
-                        await fetchProfile(currentUser.id);
+
+                        // Revalidar en segundo plano (o esperar si no había caché) con timeout de 6s
+                        const profileController = new AbortController();
+                        const profileTimeout = setTimeout(() => profileController.abort(), 6000);
+                        try {
+                            await fetchProfile(currentUser.id, profileController.signal);
+                        } finally {
+                            clearTimeout(profileTimeout);
+                            if (isMounted) {
+                                setLoading(false);
+                            }
+                        }
                     } else {
                         // Intentar recuperar de caché si el navegador está temporalmente offline
                         if (typeof window !== 'undefined' && !navigator.onLine) {
@@ -180,8 +197,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         } else {
                             setProfile(null);
                         }
+                        setLoading(false);
                     }
-                    setLoading(false);
                 }
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
