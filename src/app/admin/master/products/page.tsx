@@ -1117,6 +1117,8 @@ export default function MasterProductsPage() {
             result = result.filter(p => p.parent_id === p.id || products.some(other => other.parent_id === p.id && other.id !== p.id));
         } else if (filterHierarchy === 'hijo') {
             result = result.filter(p => (p.parent_id !== null && p.parent_id !== '') || products.some(other => other.parent_id === p.id && other.id !== p.id && p.parent_id === p.id));
+        } else if (filterHierarchy === 'padrehijo') {
+            result = result.filter(p => p.parent_id === p.id || (products.some(other => other.parent_id === p.id && other.id !== p.id) && Boolean(p.parent_id && p.parent_id !== p.id)));
         }
 
         if (filterCategoryHeader !== 'all') {
@@ -1204,9 +1206,10 @@ export default function MasterProductsPage() {
                     if (tag === 'on' || tag === 'activo') return p.is_active;
                     if (tag === 'off' || tag === 'inactivo') return !p.is_active;
 
-                    // Filtro Jerarquía (@padre, @hijo)
+                    // Filtro Jerarquía (@padre, @hijo, @padrehijo)
                     if (tag === 'padre') return p.parent_id === p.id || products.some(other => other.parent_id === p.id && other.id !== p.id);
                     if (tag === 'hijo') return (p.parent_id !== null && p.parent_id !== '') || products.some(other => other.parent_id === p.id && other.id !== p.id && p.parent_id === p.id);
+                    if (tag === 'padrehijo' || tag === 'padre-hijo' || tag === 'ambos') return p.parent_id === p.id || (products.some(other => other.parent_id === p.id && other.id !== p.id) && Boolean(p.parent_id && p.parent_id !== p.id));
 
                     // Filtro Incompletos (@sindatos)
                     if (tag === 'sindatos' || tag === 'incompleto') {
@@ -1742,6 +1745,7 @@ export default function MasterProductsPage() {
                                         { tag: '@activo', desc: 'Habilitados' },
                                         { tag: '@padre', desc: 'Producto Base' },
                                         { tag: '@hijo', desc: 'Fraccionado' },
+                                        { tag: '@padrehijo', desc: 'Padre e Hijo [P][H]' },
                                         { tag: '@19', desc: 'IVA 19%' },
                                         { tag: '@0', desc: 'Exentos IVA' },
                                         { tag: '@frutas', desc: 'Cat. Frutas' },
@@ -1777,7 +1781,7 @@ export default function MasterProductsPage() {
                                     ))}
                                 </div>
                                 <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
-                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: <code>Papa, @web, @activo</code>
+                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: <code>Papa, @web, @padrehijo</code>
                                 </div>
                             </div>
                         )}
