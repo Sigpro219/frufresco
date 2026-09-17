@@ -932,6 +932,19 @@ function CreateOrderContent() {
     // --- STAGING AREA STATE (Mesa de Trabajo) ---
     const [isStaging, setIsStaging] = useState(false);
     const [stagedItems, setStagedItems] = useState<any[]>([]);
+    const [duplicateStagedMatchConfirm, setDuplicateStagedMatchConfirm] = useState<{
+        isOpen: boolean;
+        product: any;
+        stagedItemId: string;
+        rowIndex: number;
+        duplicateIndex: number;
+        pendingOptions?: any;
+        pendingQty?: number;
+        pendingUnit?: string;
+        pendingFactor?: number;
+        pendingVariantLabel?: string;
+        openModalAfterKeep?: boolean;
+    } | null>(null);
     const [selectedStagedIds, setSelectedStagedIds] = useState<string[]>([]);
     useEffect(() => {
         setSelectedStagedIds([]);
@@ -982,6 +995,7 @@ function CreateOrderContent() {
                 if (showFloatingDoc) { setShowFloatingDoc(false); return; }
                 if (deleteConfirm) { setDeleteConfirm(null); return; }
                 if (duplicateConfirm) { setDuplicateConfirm(null); return; }
+                if (duplicateStagedMatchConfirm) { setDuplicateStagedMatchConfirm(null); return; }
                 return;
             }
 
@@ -1009,7 +1023,7 @@ function CreateOrderContent() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedProductForModal, variantConfigProduct, manageConversionsProduct, showMapPicker, showFloatingDoc, deleteConfirm, duplicateConfirm]);
+    }, [selectedProductForModal, variantConfigProduct, manageConversionsProduct, showMapPicker, showFloatingDoc, deleteConfirm, duplicateConfirm, duplicateStagedMatchConfirm]);
 
     useEffect(() => {
         loadData();
@@ -2043,6 +2057,30 @@ function CreateOrderContent() {
 
         if (editingStagedItemId !== null) {
             const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
+            const duplicateIndex = stagedItems.findIndex((item, idx) =>
+                item.id !== editingStagedItemId && item.suggestedProduct?.id === selectedProductForModal.id
+            );
+
+            if (duplicateIndex >= 0) {
+                const rowIdx = editingStagedItemIdx !== null ? editingStagedItemIdx : stagedItems.findIndex(i => i.id === editingStagedItemId);
+                setDuplicateStagedMatchConfirm({
+                    isOpen: true,
+                    product: selectedProductForModal,
+                    stagedItemId: editingStagedItemId,
+                    rowIndex: rowIdx,
+                    duplicateIndex,
+                    pendingOptions: enrichedOptions,
+                    pendingQty: baseQty,
+                    pendingVariantLabel: variantLabel,
+                    pendingUnit: resolvedUnit,
+                    pendingFactor: resolvedFactor
+                });
+                setSelectedProductForModal(null);
+                setEditingCartIndex(null);
+                setEditingStagedItemId(null);
+                setEditingStagedItemIdx(null);
+                return;
+            }
 
             setStagedItems(prev => prev.map(item => {
                 if (item.id === editingStagedItemId) {
@@ -2184,6 +2222,237 @@ function CreateOrderContent() {
             }
         }, 80);
     };
+
+    // --- MANEJO DE DUPLICADOS EN TABLA DE AUDITORÍA (STAGING) ---
+    const selectStagedProduct = (
+        stagedItemId: string,
+        product: any,
+        rowIdx: number,
+        options?: any,
+        qty?: number,
+        openModalAfter?: boolean,
+        variantLabel?: string,
+        unit?: string,
+        factor?: number
+    ) => {
+        if (!product) return;
+
+        // Check if another active row in staged items already has this product
+        const duplicateIndex = stagedItems.findIndex((item, idx) =>
+            idx !== rowIdx && item.id !== stagedItemId && item.suggestedProduct?.id === product.id
+        );
+
+        if (duplicateIndex >= 0) {
+            setDuplicateStagedMatchConfirm({
+                isOpen: true,
+                product,
+                stagedItemId,
+                rowIndex: rowIdx,
+                duplicateIndex,
+                pendingOptions: options,
+                pendingQty: qty,
+                pendingUnit: unit,
+                pendingFactor: factor,
+                pendingVariantLabel: variantLabel,
+                openModalAfterKeep: openModalAfter
+            });
+            return;
+        }
+
+        executeSelectStagedProduct(stagedItemId, product, rowIdx, options, qty, openModalAfter, variantLabel, unit, factor);
+    };
+
+    const executeSelectStagedProduct = (
+        stagedItemId: string,
+        product: any,
+        rowIdx: number,
+        options?: any,
+        qty?: number,
+        openModalAfter?: boolean,
+        variantLabel?: string,
+        unit?: string,
+        factor?: number
+    ) => {
+        setStagedItems(prev => prev.map((item, idx) => {
+            if (item.id === stagedItemId || idx === rowIdx) {
+                const resolvedUnit = unit || item.originalUnit || product.unit_of_measure || 'Kg';
+                const resolvedFactor = factor !== undefined ? factor : (item.conversion_factor || 1);
+                const resolvedQty = qty !== undefined ? qty : item.quantity;
+                return {
+                    ...item,
+                    suggestedProduct: product,
+                    originalUnit: resolvedUnit,
+                    conversion_factor: resolvedFactor,
+                    quantity: resolvedQty,
+                    variant_label: variantLabel !== undefined ? variantLabel : item.variant_label,
+                    selected_options: options !== undefined ? options : item.selected_options,
+                    searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
+                    status: 'MATCH',
+                    isConfirmed: true
+                };
+            }
+            return item;
+        }));
+
+        setActiveRowSearchQuery(null);
+        setActiveDropdownRowIndex(null);
+
+        if (openModalAfter) {
+            const item = stagedItems.find(i => i.id === stagedItemId) || stagedItems[rowIdx];
+            openModalForStagedItem(
+                stagedItemId,
+                product,
+                qty !== undefined ? qty : (item?.quantity || 1),
+                rowIdx,
+                options || item?.selected_options,
+                item?.originalQty,
+                item?.originalUnit,
+                item?.conversion_factor
+            );
+        }
+    };
+
+    const handleMergeStagedDuplicateMatch = () => {
+        if (!duplicateStagedMatchConfirm) return;
+        const { stagedItemId, rowIndex, duplicateIndex, product } = duplicateStagedMatchConfirm;
+
+        setStagedItems(prev => {
+            const currentItem = prev.find(i => i.id === stagedItemId) || prev[rowIndex];
+            const existingItem = prev[duplicateIndex];
+            if (!existingItem || !currentItem) return prev;
+
+            const currentOrigQtyInFile = parseFloat(currentItem.originalQtyInFile || currentItem.originalQty || currentItem.quantity || '0');
+            const existingOrigQtyInFile = parseFloat(existingItem.originalQtyInFile || existingItem.originalQty || existingItem.quantity || '0');
+            const sumOrigQtyInFile = parseFloat((existingOrigQtyInFile + currentOrigQtyInFile).toFixed(3));
+
+            const currentQty = parseFloat(currentItem.quantity || '0');
+            const existingQty = parseFloat(existingItem.quantity || '0');
+            const sumQty = parseFloat((existingQty + currentQty).toFixed(3));
+
+            const currentOrigQty = parseFloat(currentItem.originalQty || '0');
+            const existingOrigQty = parseFloat(existingItem.originalQty || '0');
+            const sumOrigQty = parseFloat((existingOrigQty + currentOrigQty).toFixed(3));
+
+            const mergedObservations = [existingItem.observations, currentItem.observations]
+                .filter(Boolean)
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .join(' | ');
+
+            const mergedOptions = {
+                ...(existingItem.selected_options || {}),
+                ...(currentItem.selected_options || {})
+            };
+
+            const updatedExisting = {
+                ...existingItem,
+                suggestedProduct: existingItem.suggestedProduct || product,
+                originalQtyInFile: sumOrigQtyInFile > 0 ? sumOrigQtyInFile : sumQty,
+                originalQty: sumOrigQty > 0 ? sumOrigQty : sumQty,
+                quantity: sumQty,
+                observations: mergedObservations,
+                selected_options: mergedOptions,
+                isConfirmed: true,
+                status: 'MATCH'
+            };
+
+            return prev
+                .map((item, idx) => idx === duplicateIndex ? updatedExisting : item)
+                .filter(item => item.id !== stagedItemId && item.id !== currentItem.id);
+        });
+
+        setDuplicateStagedMatchConfirm(null);
+        setActiveRowSearchQuery(null);
+        setActiveDropdownRowIndex(null);
+        showToast('Cantidad acumulada en la línea existente y fila duplicada descartada.', 'success');
+    };
+
+    const handleKeepBothStagedMatches = () => {
+        if (!duplicateStagedMatchConfirm) return;
+        const { stagedItemId, product, rowIndex, pendingOptions, pendingQty, openModalAfterKeep, pendingVariantLabel, pendingUnit, pendingFactor } = duplicateStagedMatchConfirm;
+        executeSelectStagedProduct(
+            stagedItemId,
+            product,
+            rowIndex,
+            pendingOptions,
+            pendingQty,
+            openModalAfterKeep,
+            pendingVariantLabel,
+            pendingUnit,
+            pendingFactor
+        );
+        setDuplicateStagedMatchConfirm(null);
+    };
+
+    const handleCancelStagedDuplicate = () => {
+        setDuplicateStagedMatchConfirm(null);
+        setActiveRowSearchQuery(null);
+        setActiveDropdownRowIndex(null);
+    };
+
+    const handleConsolidateAllStagedDuplicates = () => {
+        setStagedItems(prev => {
+            const map = new Map<string, any>();
+            let mergedCount = 0;
+            prev.forEach(item => {
+                if (!item.suggestedProduct) {
+                    map.set(item.id, { ...item });
+                    return;
+                }
+                const cleanLabel = (item.variant_label || '').trim().toLowerCase();
+                const cleanUnit = (item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg').trim().toLowerCase();
+                const schedule = (item.deliverySchedule || '').trim().toLowerCase();
+                const key = `${item.suggestedProduct.id}_${cleanLabel}_${cleanUnit}_${schedule}`;
+
+                if (map.has(key)) {
+                    const existing = { ...map.get(key) };
+                    const currentOrigQtyInFile = parseFloat(item.originalQtyInFile || item.originalQty || item.quantity || '0');
+                    const existingOrigQtyInFile = parseFloat(existing.originalQtyInFile || existing.originalQty || existing.quantity || '0');
+                    const sumOrigQtyInFile = parseFloat((existingOrigQtyInFile + currentOrigQtyInFile).toFixed(3));
+
+                    const currentQty = parseFloat(item.quantity || '0');
+                    const existingQty = parseFloat(existing.quantity || '0');
+                    const sumQty = parseFloat((existingQty + currentQty).toFixed(3));
+
+                    const currentOrigQty = parseFloat(item.originalQty || '0');
+                    const existingOrigQty = parseFloat(existing.originalQty || '0');
+                    const sumOrigQty = parseFloat((existingOrigQty + currentOrigQty).toFixed(3));
+
+                    existing.originalQtyInFile = sumOrigQtyInFile > 0 ? sumOrigQtyInFile : sumQty;
+                    existing.originalQty = sumOrigQty > 0 ? sumOrigQty : sumQty;
+                    existing.quantity = sumQty;
+
+                    if (item.observations && !existing.observations?.includes(item.observations)) {
+                        existing.observations = [existing.observations, item.observations].filter(Boolean).join(' | ');
+                    }
+                    existing.isConfirmed = true;
+                    map.set(key, existing);
+                    mergedCount++;
+                } else {
+                    map.set(key, { ...item });
+                }
+            });
+            if (mergedCount > 0) {
+                showToast(`✅ Se consolidaron ${mergedCount} filas duplicadas en la tabla de auditoría.`, 'success');
+            } else {
+                showToast('No se encontraron filas duplicadas para consolidar en la tabla.', 'info');
+            }
+            return Array.from(map.values());
+        });
+    };
+
+    const hasStagedDuplicates = useMemo(() => {
+        const seen = new Set<string>();
+        for (const item of stagedItems) {
+            if (!item.suggestedProduct) continue;
+            const cleanLabel = (item.variant_label || '').trim().toLowerCase();
+            const cleanUnit = (item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg').trim().toLowerCase();
+            const schedule = (item.deliverySchedule || '').trim().toLowerCase();
+            const key = `${item.suggestedProduct.id}_${cleanLabel}_${cleanUnit}_${schedule}`;
+            if (seen.has(key)) return true;
+            seen.add(key);
+        }
+        return false;
+    }, [stagedItems]);
 
     const startEditingCartItem = (idx: number) => {
         const item = cart[idx];
@@ -3010,12 +3279,12 @@ function CreateOrderContent() {
                 for (const newItem of itemsToInject) {
                     const cleanLabel = (newItem.variant_label || '').trim().toLowerCase();
                     const cleanUnit = (newItem.originalUnit || newItem.product?.unit_of_measure || 'Kg').trim().toLowerCase();
-                    const cleanObs = (newItem.observations || '').trim().toLowerCase();
+                    const cleanSchedule = (newItem.deliverySchedule || '').trim().toLowerCase();
                     const existingIdx = result.findIndex(item =>
                         item.product.id === newItem.product.id &&
                         (item.variant_label || '').trim().toLowerCase() === cleanLabel &&
                         (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit &&
-                        ((item.observations || '').trim().toLowerCase() === cleanObs)
+                        ((item.deliverySchedule || '').trim().toLowerCase() === cleanSchedule)
                     );
 
                     if (existingIdx >= 0) {
@@ -3025,6 +3294,9 @@ function CreateOrderContent() {
                         const factor = existingItem.conversion_factor || newItem.conversion_factor || 1;
                         existingItem.originalQty = newOrigQty;
                         existingItem.qty = parseFloat((newOrigQty * factor).toFixed(3));
+                        if (newItem.observations && !existingItem.observations?.includes(newItem.observations)) {
+                            existingItem.observations = [existingItem.observations, newItem.observations].filter(Boolean).join(' | ');
+                        }
                         result[existingIdx] = existingItem;
                         mergedCount++;
                     } else {
@@ -3248,18 +3520,14 @@ function CreateOrderContent() {
         }
     };
 
-    const updateStagedItem = (id: string, field: string, value: any) => {
+    const updateStagedItem = (id: string, field: string, value: any, rowIdx?: number) => {
+        if (field === 'product') {
+            const idx = rowIdx !== undefined ? rowIdx : stagedItems.findIndex(i => i.id === id);
+            selectStagedProduct(id, value, idx);
+            return;
+        }
         setStagedItems(prev => prev.map(item => {
             if (item.id === id) {
-                if (field === 'product') {
-                    return { 
-                        ...item, 
-                        suggestedProduct: value, 
-                        originalUnit: value?.unit_of_measure || 'Kg',
-                        status: 'MATCH', 
-                        isConfirmed: true 
-                    };
-                }
                 return { ...item, [field]: value, isConfirmed: true };
             }
             return item;
@@ -4966,6 +5234,29 @@ function CreateOrderContent() {
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                            {hasStagedDuplicates && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleConsolidateAllStagedDuplicates}
+                                                    style={{
+                                                        padding: '6px 14px',
+                                                        backgroundColor: '#FEF3C7',
+                                                        color: '#92400E',
+                                                        border: '1.5px solid #F59E0B',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.8rem',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        boxShadow: '0 2px 4px rgba(245, 158, 11, 0.15)'
+                                                    }}
+                                                    title="Unificar filas con el mismo producto y variante"
+                                                >
+                                                    <AlertTriangle size={14} color="#D97706" /> Consolidar Duplicados
+                                                </button>
+                                            )}
                                             {selectedStagedIds.length > 0 && (
                                                 <button
                                                     onClick={() => {
@@ -5524,9 +5815,8 @@ function CreateOrderContent() {
                                                                         onBlur={(e) => {
                                                                             const val = e.target.value;
                                                                             const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
-                                                                            if (exactProduct) {
-                                                                                updateStagedItem(item.id, 'product', exactProduct);
-                                                                                updateStagedItem(item.id, 'searchQuery', `${exactProduct.name} (${getAccountingIdDisplay(exactProduct)})`);
+                                                                            if (exactProduct && (!item.suggestedProduct || item.suggestedProduct.id !== exactProduct.id)) {
+                                                                                selectStagedProduct(item.id, exactProduct, idx);
                                                                             }
                                                                             setActiveRowSearchQuery(null);
                                                                             setTimeout(() => {
@@ -5546,29 +5836,14 @@ function CreateOrderContent() {
                                                                                 const p = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || item.suggestedProduct;
                                                                                 if (p) {
                                                                                     e.preventDefault(); 
-                                                                                    updateStagedItem(item.id, 'product', p);
-                                                                                    updateStagedItem(item.id, 'searchQuery', `${p.name} (${getAccountingIdDisplay(p)})`);
-                                                                                    setActiveRowSearchQuery(null);
-                                                                                    setActiveDropdownRowIndex(null);
-                                                                                    openModalForStagedItem(
-                                                                                        item.id, 
-                                                                                        p, 
-                                                                                        item.quantity, 
-                                                                                        idx, 
-                                                                                        item.selected_options, 
-                                                                                        item.originalQty, 
-                                                                                        item.originalUnit, 
-                                                                                        item.conversion_factor
-                                                                                    );
+                                                                                    selectStagedProduct(item.id, p, idx, undefined, undefined, true);
                                                                                 }
                                                                             } else if (e.key === 'Enter') {
                                                                                 e.preventDefault();
                                                                                 const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || item.suggestedProduct;
                                                                                 if (selectedProd) {
-                                                                                    updateStagedItem(item.id, 'product', selectedProd);
-                                                                                    updateStagedItem(item.id, 'searchQuery', `${selectedProd.name} (${getAccountingIdDisplay(selectedProd)})`);
+                                                                                    selectStagedProduct(item.id, selectedProd, idx);
                                                                                 }
-                                                                                updateStagedItem(item.id, 'isConfirmed', true);
                                                                                 setActiveRowSearchQuery(null);
                                                                                 setActiveDropdownRowIndex(null);
 
@@ -5688,11 +5963,7 @@ function CreateOrderContent() {
                                                                                                     showToast(`🚫 "${p.name}" no se puede agregar: Insumo bloqueado por escasez.`, 'error');
                                                                                                     return;
                                                                                                 }
-                                                                                                updateStagedItem(item.id, 'product', p);
-                                                                                                updateStagedItem(item.id, 'searchQuery', `${p.name} (${getAccountingIdDisplay(p)})`);
-                                                                                                updateStagedItem(item.id, 'isConfirmed', true);
-                                                                                                setActiveRowSearchQuery(null);
-                                                                                                setActiveDropdownRowIndex(null);
+                                                                                                selectStagedProduct(item.id, p, idx);
 
                                                                                                 const nextIdx = idx + 1;
                                                                                                 const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
@@ -8485,6 +8756,120 @@ function CreateOrderContent() {
                     </div>
                 );
             })()}
+
+            {duplicateStagedMatchConfirm && duplicateStagedMatchConfirm.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(17, 24, 39, 0.6)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 16000,
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        padding: '24px',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FEF3C7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px',
+                            color: '#D97706'
+                        }}>
+                            <AlertTriangle size={28} />
+                        </div>
+                        <h3 style={{
+                            fontSize: '1.25rem',
+                            fontWeight: 800,
+                            color: '#111827',
+                            margin: '0 0 8px 0'
+                        }}>
+                            Producto Duplicado Detectado
+                        </h3>
+                        <p style={{
+                            fontSize: '0.9rem',
+                            color: '#4B5563',
+                            margin: '0 0 24px 0',
+                            lineHeight: '1.6'
+                        }}>
+                            El producto <strong>{duplicateStagedMatchConfirm.product.name}</strong> 
+                            {(() => {
+                                const acctId = getAccountingIdDisplay(duplicateStagedMatchConfirm.product);
+                                return acctId && acctId !== duplicateStagedMatchConfirm.product.id ? ` (ID Contable: ${acctId})` : '';
+                            })()} 
+                            ya está asignado a otra línea activa de este pedido. ¿Cómo deseas proceder?
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={handleMergeStagedDuplicateMatch}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 16px',
+                                    backgroundColor: '#10B981',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    color: '#FFFFFF',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                                }}
+                            >
+                                Sumar y unificar cantidades
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleKeepBothStagedMatches}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 16px',
+                                    backgroundColor: '#2563EB',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    color: '#FFFFFF',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                                }}
+                            >
+                                Mantener filas separadas
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancelStagedDuplicate}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 16px',
+                                    backgroundColor: '#F3F4F6',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    color: '#4B5563',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {toast && (
                 <div style={{
