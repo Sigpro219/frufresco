@@ -2842,7 +2842,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       initialQtyStr = String(origQtyNum);
     }
     const defaultUnit = product.unit_of_measure || 'Kg';
-    let unit = item.originalUnit || item.unit || defaultUnit;
+    let unit = (item.conversion_factor && item.conversion_factor !== 1) ? (item.originalUnit || item.unit || defaultUnit) : defaultUnit;
     let factor = item.conversion_factor || 1;
     const opts = { ...(item.selected_options || {}) };
 
@@ -11615,7 +11615,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       readOnly
                       tabIndex={-1}
                       type="text"
-                      value={factor !== 1 ? `${unit} (${factor} ${baseUnit})` : (unit ? `${unit} (Base)` : `${baseUnit} (Base)`)}
+                      value={factor !== 1 ? `${unit} (${factor} ${baseUnit})` : `${baseUnit} (Base)`}
                       style={{
                         width: '100%',
                         padding: '0.7rem 0.8rem',
