@@ -3930,7 +3930,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           const u = (item.unit || '').toLowerCase().trim();
           if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
           if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
-          if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') return 'Unidad';
+          if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') return prod?.unit_of_measure || 'Unidad';
           if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) return 'Paquete 500 gramos';
           if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) return 'Paquete 250 gramos';
           if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos' || u === 'kl' || u === 'kls') return 'Kg';
@@ -8402,7 +8402,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '62px', maxWidth: '85px', overflow: 'hidden' }}>
                                     <span style={{ fontSize: '0.80rem', fontWeight: '800', color: '#334155', lineHeight: '1.1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                      {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                      {(() => {
+                                        const rawUnit = (item.unit || '').trim();
+                                        const rawLower = rawUnit.toLowerCase();
+                                        const isGenericUnit = !rawUnit || rawLower === 'unidad' || rawLower === 'und' || rawLower === 'uds' || rawLower === 'unidades' || rawLower === 'u';
+                                        if (matchedProd && (!item.conversion_factor || item.conversion_factor === 1)) {
+                                          if (isGenericUnit || matchedProd.unit_of_measure) {
+                                            return matchedProd.unit_of_measure || 'Kg';
+                                          }
+                                        }
+                                        return item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg');
+                                      })()}
                                     </span>
                                     {matchedProd ? (
                                       resolvedUnitPrice > 0 ? (

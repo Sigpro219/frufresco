@@ -287,12 +287,16 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       const itName = it.name.trim();
       const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory);
       const matchedProd = matchResult.product;
+      const normUnit = (it.unit || '').toLowerCase().trim();
+      const resolvedUnit = (normUnit === 'unidad' || normUnit === 'und' || normUnit === 'uds' || normUnit === 'unidades' || normUnit === 'u' || !it.unit)
+        ? (matchedProd?.unit_of_measure || it.unit || 'Kg')
+        : (it.unit || matchedProd?.unit_of_measure || 'Kg');
 
       return {
         originalName: itName,
         name: matchedProd ? matchedProd.name : itName,
         quantity: it.quantity,
-        unit: it.unit || matchedProd?.unit_of_measure || 'Kg',
+        unit: resolvedUnit,
         matched_product_id: matchedProd ? matchedProd.id : null,
         confidenceScore: matchResult.confidenceScore,
         confidence: matchResult.confidence,

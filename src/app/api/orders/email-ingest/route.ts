@@ -1308,14 +1308,17 @@ export async function POST(req: Request) {
           if (bestMatch) {
             matchedProductId = bestMatch.id;
             resolvedUnitPrice = bestMatch.base_price || 0;
-            if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';
+            const normAssigned = (assignedUnit || '').toLowerCase().trim();
+            if (!assignedUnit || normAssigned === 'unidad' || normAssigned === 'und' || normAssigned === 'uds' || normAssigned === 'unidades' || normAssigned === 'u') {
+              assignedUnit = bestMatch.unit_of_measure || 'Kg';
+            }
           }
         }
 
         return {
           ...itm,
           originalName,
-          unit: assignedUnit || 'Unidad',
+          unit: assignedUnit || 'Kg',
           matched_product_id: matchedProductId,
           unit_price: resolvedUnitPrice,
           observations,
