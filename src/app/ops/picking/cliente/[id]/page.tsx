@@ -23,6 +23,7 @@ interface ProductItem {
     quantity: number;
     picked_quantity: number;
     notes?: string;
+    physical_instruction?: string;
 }
 
 function PickingClientContent() {
@@ -55,7 +56,7 @@ function PickingClientContent() {
                         id, company_name, contact_name, role
                     ),
                     order_items (
-                        id, product_id, quantity, picked_quantity, nickname, variant_label,
+                        id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
                         products (name, category, unit_of_measure)
                     )
                 `)
@@ -85,7 +86,8 @@ function PickingClientContent() {
                         category: item.products?.category,
                         unit_of_measure: item.products?.unit_of_measure,
                         quantity: item.quantity,
-                        picked_quantity: item.picked_quantity || 0
+                        picked_quantity: item.picked_quantity || 0,
+                        physical_instruction: (item.selected_options as any)?._physical_instruction as string | undefined
                     };
                 });
             
@@ -186,6 +188,11 @@ function PickingClientContent() {
                                 <div style={{ fontSize: '0.9rem', color: '#9CA3AF', marginTop: '0.3rem' }}>
                                     Pedido: <span style={{ color: 'white', fontWeight: 'bold' }}>{item.quantity} {item.unit_of_measure}</span>
                                 </div>
+                                {item.physical_instruction && (
+                                    <div style={{ fontSize: '0.78rem', color: '#6EE7B7', fontWeight: '700', marginTop: '0.2rem' }}>
+                                        ↳ {item.physical_instruction}
+                                    </div>
+                                )}
                                 {item.picked_quantity > 0 && !isDone && (
                                     <div style={{ fontSize: '0.8rem', color: '#F59E0B', fontWeight: 'bold', marginTop: '0.3rem' }}>
                                         Llevas: {item.picked_quantity} {item.unit_of_measure}

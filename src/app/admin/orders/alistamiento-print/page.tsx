@@ -17,6 +17,7 @@ interface OrderItem {
     unit?: string;
     nickname?: string;
     variant_label?: string;
+    selected_options?: Record<string, any> | null;
     product?: {
         id: string;
         name: string;
@@ -400,7 +401,7 @@ export default function AlistamientoSabanaPrintPage() {
                     id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type,
                     profiles:profile_id(id, company_name, contact_name, address, role),
                     order_items(
-                        id, order_id, product_id, quantity, unit, nickname, variant_label,
+                        id, order_id, product_id, quantity, unit, nickname, variant_label, selected_options,
                         products(id, name, sku, accounting_id, unit_of_measure, buying_team, category)
                     )
                 `)
@@ -461,6 +462,7 @@ export default function AlistamientoSabanaPrintPage() {
                         unit: (it.unit || it.products?.unit_of_measure || 'KG').toUpperCase(),
                         nickname: it.nickname,
                         variant_label: it.variant_label,
+                        selected_options: it.selected_options ?? null,
                         product: it.products ? {
                             id: it.products.id,
                             name: it.products.name,
@@ -533,7 +535,9 @@ export default function AlistamientoSabanaPrintPage() {
             // Normalizar a Kilogramos
             const norm = normalizeToKg(it.quantity, it.unit, it.product?.unit_of_measure);
             const userNote = filterMeaningfulNote(it.variant_label || it.nickname, pName);
-            const combinedNote = [userNote, norm.subNote].filter(Boolean).join(' - ');
+            // Include physical instruction (e.g. "30 Unidad de 550 gr") from selected_options when present
+            const physicalInstruction = it.selected_options?._physical_instruction as string | undefined;
+            const combinedNote = [physicalInstruction || userNote, !physicalInstruction ? norm.subNote : undefined].filter(Boolean).join(' - ');
 
             if (!groups[cell].productsMap.has(pId)) {
                 groups[cell].productsMap.set(pId, {
