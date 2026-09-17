@@ -48,7 +48,9 @@ import {
     Database,
     Sparkles,
     Info,
-    Dna
+    Dna,
+    Upload,
+    Zap
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { WorkCell } from '@/types/workCells';
@@ -72,6 +74,7 @@ import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
 import InventoryWasteModal from '@/components/InventoryWasteModal';
 import InventoryPayrollModal from '@/components/InventoryPayrollModal';
 import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
+import DailyBalanceExcelImportModal from '@/components/DailyBalanceExcelImportModal';
 
 interface ProductItem {
     id: string;
@@ -109,6 +112,8 @@ export interface InventoryDailyRow {
     sku?: string;
     parent_id?: string | null;
     is_active?: boolean;
+    isP?: boolean;
+    isH?: boolean;
     // A: Fecha Inventario
     colA_date: string;
     // B: idProducto (accounting_id)
@@ -170,6 +175,8 @@ export interface DailyFamily {
     id: string;
     parent: InventoryDailyRow;
     isParent: boolean;
+    isP: boolean;
+    isH: boolean;
     children: InventoryDailyRow[];
     consolidated: InventoryDailyRow;
 }
@@ -231,7 +238,17 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     const [isWasteModalOpen, setIsWasteModalOpen] = useState(false);
     const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
     const [isAdditionalSalesModalOpen, setIsAdditionalSalesModalOpen] = useState(false);
+    const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+
+    // Estado de Edición Directa en Celda (Inline Grid Editing estilo Excel)
+    const [editingCell, setEditingCell] = useState<{
+        productId: string;
+        colKey: string;
+        initialValue: number;
+        currentValue: string;
+    } | null>(null);
+    const [isSavingCell, setIsSavingCell] = useState(false);
 
     // Medición reactiva de la Toolbar Dock para sincronización con cabecera de tabla
     const dockRef = useRef<HTMLDivElement>(null);
@@ -254,26 +271,111 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         };
     }, []);
 
-    // Control de ancho compacto en columnas de identificación A-D (ahorra 235px en X)
-    const [isCompactIdentification, setIsCompactIdentification] = useState(true);
+    // Filtro para mostrar únicamente SKUs y familias con movimientos en el día
+    const [onlyWithMovement, setOnlyWithMovement] = useState(false);
 
-    // Offsets dinámicos para salto horizontal exacto según el modo de visualización
-    const blockOffsets = useMemo(() => ({
-        identificacion: 0,
-        entradas: isCompactIdentification ? 240 : 475,
-        ventas: isCompactIdentification ? 495 : 730,
-        excepciones: isCompactIdentification ? 785 : 1020,
-        mermas: isCompactIdentification ? 1165 : 1400,
-        cierre: isCompactIdentification ? 1545 : 1780,
-        conciliacion: isCompactIdentification ? 1915 : 2150,
-    }), [isCompactIdentification]);
+    // Control de ancho en columnas de identificación A-D (por defecto false para vista clásica tabular completa)
+    const [isCompactIdentification, setIsCompactIdentification] = useState(false);
+
+    // Modo colapsado de la columna Célula (auto al navegar a la derecha, o manual por clic)
+    const [cellColumnMode, setCellColumnMode] = useState<'auto' | 'collapsed' | 'expanded'>('auto');
+    const [isScrolledRight, setIsScrolledRight] = useState(false);
+
+    const isCellCollapsed = !isCompactIdentification && (
+        cellColumnMode === 'collapsed'
+            ? true
+            : (cellColumnMode === 'expanded' ? false : isScrolledRight)
+    );
+
+    type ColumnBlockId = 'identificacion' | 'entradas' | 'ventas' | 'excepciones' | 'mermas' | 'cierre' | 'conciliacion';
+    const [activeBlock, setActiveBlock] = useState<ColumnBlockId>('identificacion');
 
     // Referencia al contenedor de la sábana de 24 columnas y helpers de navegación
     const tableScrollRef = useRef<HTMLDivElement>(null);
 
-    const scrollToColumnGroup = (targetX: number) => {
-        if (tableScrollRef.current) {
-            tableScrollRef.current.scrollTo({ left: targetX, behavior: 'smooth' });
+    const handleTableScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+        const scrollX = e.currentTarget.scrollLeft;
+        if (scrollX > 35) {
+            setIsScrolledRight(true);
+        } else if (scrollX <= 15) {
+            setIsScrolledRight(false);
+            setCellColumnMode('auto');
+            setActiveBlock('identificacion');
+        }
+    }, []);
+
+    // Centrado dinámico inteligente de bloque en el espacio disponible visible (a la derecha de Cols A-D)
+    const scrollToColumnGroup = (blockId: ColumnBlockId) => {
+        const container = tableScrollRef.current;
+        if (!container) return;
+
+        setActiveBlock(blockId);
+
+        if (blockId === 'identificacion') {
+            container.scrollTo({ left: 0, behavior: 'smooth' });
+            setIsScrolledRight(false);
+            setCellColumnMode('auto');
+            return;
+        }
+
+        // Si Célula está en modo auto y aún no está colapsada, colapsarla para maximizar el espacio útil de lectura
+        const shouldTriggerCollapse = !isCellCollapsed && !isCompactIdentification && cellColumnMode === 'auto';
+        if (shouldTriggerCollapse) {
+            setIsScrolledRight(true);
+        }
+
+        const doScroll = () => {
+            if (!container) return;
+            const containerRect = container.getBoundingClientRect();
+
+            // Detectar el borde derecho exacto en pantalla donde terminan las columnas fijas (A-D)
+            const stickyHeader = container.querySelector('[data-sticky-last="true"]');
+            const stickyRect = stickyHeader?.getBoundingClientRect();
+            const frozenWidth = stickyRect 
+                ? Math.round(stickyRect.right - containerRect.left)
+                : (isCompactIdentification ? 240 : (isCellCollapsed ? 389 : 475));
+
+            // Espacio disponible en la pantalla para ver datos (ancho del viewport menos columnas fijas)
+            const availableWidth = Math.max(100, container.clientWidth - frozenWidth);
+
+            // Elemento cabecera del bloque correspondiente
+            const blockHeader = container.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement;
+            if (!blockHeader) return;
+
+            const blockRect = blockHeader.getBoundingClientRect();
+            const blockWidth = blockRect.width;
+
+            let targetScrollLeft: number;
+
+            if (blockWidth >= availableWidth) {
+                // Si el bloque es más ancho que el espacio disponible, alinear su inicio al borde de las columnas fijas
+                const currentScreenLeft = blockRect.left - containerRect.left;
+                const deltaX = currentScreenLeft - frozenWidth;
+                targetScrollLeft = container.scrollLeft + deltaX;
+            } else {
+                // Centrar perfectamente el bloque en el espacio disponible:
+                // 1. Centro deseado en coordenadas de pantalla del contenedor (entre frozenWidth y clientWidth):
+                const desiredScreenCenter = frozenWidth + (availableWidth / 2);
+                // 2. Centro actual del bloque en coordenadas de pantalla del contenedor:
+                const currentScreenCenter = (blockRect.left - containerRect.left) + (blockWidth / 2);
+                // 3. Ajuste de scroll:
+                const deltaX = currentScreenCenter - desiredScreenCenter;
+                targetScrollLeft = container.scrollLeft + deltaX;
+            }
+
+            const maxScrollLeft = container.scrollWidth - container.clientWidth;
+            const clampedScroll = Math.max(0, Math.min(Math.round(targetScrollLeft), maxScrollLeft));
+
+            container.scrollTo({ left: clampedScroll, behavior: 'smooth' });
+        };
+
+        if (shouldTriggerCollapse) {
+            // Permitir que el navegador aplique el colapso de la Célula (ahorro de 86px) antes de medir
+            requestAnimationFrame(() => {
+                setTimeout(doScroll, 40);
+            });
+        } else {
+            doScroll();
         }
     };
 
@@ -503,20 +605,28 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             // U: Inventario Bodega post-10 AM = T + O
             const bodegaPost10 = physicalCount !== null ? physicalCount + o_returns : null;
 
-            // V & W: Faltantes y Sobrantes
+            // V & W: Faltantes y Sobrantes (Magnitudes positivas como en el Excel del cliente)
             let missing = 0;
             let surplus = 0;
             if (physicalCount !== null) {
                 const diff = physicalCount - calculatedStock;
-                if (diff < -0.001) missing = diff;
+                if (diff < -0.001) missing = Math.abs(diff);
                 else if (diff > 0.001) surplus = diff;
             }
+
+            // Jerarquía dual P/H (Sincronizada con Maestro SKU)
+            const isSelfParentChild = p.parent_id === p.id;
+            const hasOtherChildren = products.some(other => other.parent_id === p.id && other.id !== p.id);
+            const isP = isSelfParentChild || hasOtherChildren;
+            const isH = isSelfParentChild || Boolean(p.parent_id && p.parent_id !== p.id);
 
             return {
                 productId: p.id,
                 sku: p.sku || '',
                 parent_id: p.parent_id,
                 is_active: p.is_active !== false,
+                isP,
+                isH,
                 colA_date: balanceDate,
                 colB_idProducto: p.accounting_id || p.sku || 'S/N',
                 colC_inventoryGroup: p.inventory_group || 'GENERAL',
@@ -611,12 +721,12 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 colU_bodegaPost10am: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
                     ? (((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)) + (row.colO_returns + children.reduce((s, c) => s + c.colO_returns, 0)))
                     : null,
-                colV_missing: Math.min(0, ((row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
-                    ? ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)) - (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0))
-                    : 0)),
-                colW_surplus: Math.max(0, ((row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
-                    ? ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)) - (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0))
-                    : 0)),
+                colV_missing: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
+                    ? Math.max(0, (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)) - ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)))
+                    : 0,
+                colW_surplus: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
+                    ? Math.max(0, ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)) - (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)))
+                    : 0,
                 colX_foodBank: row.colX_foodBank + children.reduce((s, c) => s + c.colX_foodBank, 0),
                 evidencePhotosQ: [...row.evidencePhotosQ, ...children.flatMap(c => c.evidencePhotosQ)],
                 evidencePhotosR: [...row.evidencePhotosR, ...children.flatMap(c => c.evidencePhotosR)],
@@ -627,6 +737,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 id: row.productId,
                 parent: row,
                 isParent: hasChildren,
+                isP: Boolean(row.isP),
+                isH: Boolean(row.isH),
                 children,
                 consolidated
             });
@@ -661,7 +773,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
         const matchesTags = tags.every(tag => {
             if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
-                return row.colV_missing < 0;
+                return row.colV_missing > 0;
             }
             if (tag === 'disponible' || tag === 'ok' || tag === 'positivo' || tag === 'constock' || tag === 'con_stock') {
                 return (row.colS_calculated || 0) > 0;
@@ -670,10 +782,13 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 return (row.colS_calculated || 0) <= 0;
             }
             if (tag === 'sobrante' || tag === 'sobrantes') return row.colW_surplus > 0;
-            if (tag === 'faltante' || tag === 'faltantes') return row.colV_missing < 0;
+            if (tag === 'faltante' || tag === 'faltantes') return row.colV_missing > 0;
             if (tag === 'merma' || tag === 'desperdicio') return (row.colQ_damageWaste > 0 || row.colR_cleaningWaste > 0 || row.colP_weighingWaste > 0);
-            if (tag === 'padre') return !row.parent_id || row.parent_id === row.productId;
-            if (tag === 'hijo') return Boolean(row.parent_id && row.parent_id !== row.productId);
+            
+            // Filtros de Jerarquía 1:1 con Maestro SKU
+            if (tag === 'padre') return Boolean(row.isP);
+            if (tag === 'hijo') return Boolean(row.isH);
+            if (tag === 'padrehijo' || tag === 'padre-hijo' || tag === 'ambos') return Boolean(row.isP && row.isH);
 
             // Filtro por grupo / célula de inventario (@fresas, @hortalizas, @verduras, @frutas, @papas, @abarrotes...)
             if (row.colC_inventoryGroup?.toLowerCase().includes(tag)) return true;
@@ -684,12 +799,59 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         return matchesTags;
     };
 
+    // Helper para determinar si una fila específica tiene cualquier movimiento o saldo en las columnas E a X
+    const hasRowMovement = useCallback((r: InventoryDailyRow | undefined | null): boolean => {
+        if (!r) return false;
+        return (
+            (r.colE_initialStock || 0) > 0.001 ||
+            Math.abs(r.colF_corrections || 0) > 0.001 ||
+            (r.colG_purchases || 0) > 0.001 ||
+            (r.colH_salesKg || 0) > 0.001 ||
+            (r.colI_salesUnits || 0) > 0.001 ||
+            (r.colJ_weightSalesUnits || 0) > 0.001 ||
+            (r.colK_shortage || 0) > 0.001 ||
+            (r.colL_unshipped || 0) > 0.001 ||
+            (r.colM_additionalSales || 0) > 0.001 ||
+            (r.colN_employeeSales || 0) > 0.001 ||
+            (r.colO_returns || 0) > 0.001 ||
+            (r.colP_weighingWaste || 0) > 0.001 ||
+            (r.colQ_damageWaste || 0) > 0.001 ||
+            (r.colR_cleaningWaste || 0) > 0.001 ||
+            Math.abs(r.colS_calculated || 0) > 0.001 ||
+            (Boolean(r.hasPhysicalCount) && r.colT_physicalCount !== null) ||
+            (r.colU_bodegaPost10am !== null && (r.colU_bodegaPost10am || 0) > 0.001) ||
+            (r.colV_missing || 0) > 0.001 ||
+            (r.colW_surplus || 0) > 0.001 ||
+            (r.colX_foodBank || 0) > 0.001
+        );
+    }, []);
+
+    // Helper para determinar si una familia entera (padre o cualquiera de sus hijos) tuvo movimientos
+    const hasFamilyMovement = useCallback((family: DailyFamily): boolean => {
+        if (family.isParent) {
+            if (hasRowMovement(family.consolidated)) return true;
+            if (hasRowMovement(family.parent)) return true;
+            return family.children.some(child => hasRowMovement(child));
+        }
+        return hasRowMovement(family.parent);
+    }, [hasRowMovement]);
+
+    // Conteo total de familias que registraron movimientos en el día
+    const countFamiliesWithMovement = useMemo(() => {
+        return dailyFamilies.filter(f => hasFamilyMovement(f)).length;
+    }, [dailyFamilies, hasFamilyMovement]);
+
     // Filtrado interactivo sobre las familias
     const filteredFamilies = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
         const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
 
         return dailyFamilies.filter(family => {
+            // Filtro exclusivo: Solo familias/SKUs con movimiento en el turno
+            if (onlyWithMovement && !hasFamilyMovement(family)) {
+                return false;
+            }
+
             // Filtro por Célula / Grupo
             if (selectedCell !== 'ALL') {
                 const groupUpper = (family.parent.colC_inventoryGroup || '').toUpperCase();
@@ -715,27 +877,15 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
             return true;
         });
-    }, [dailyFamilies, selectedCell, searchQuery]);
+    }, [dailyFamilies, selectedCell, searchQuery, onlyWithMovement, hasFamilyMovement]);
 
     // Total de SKUs activos representados (padres + hijos)
     const totalActiveSkusCount = useMemo(() => {
         return filteredFamilies.reduce((acc, f) => acc + 1 + f.children.length, 0);
     }, [filteredFamilies]);
 
-    // Paginación
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState<number | 'ALL'>(50);
-
-    const totalPages = useMemo(() => {
-        if (pageSize === 'ALL') return 1;
-        return Math.max(1, Math.ceil(filteredFamilies.length / pageSize));
-    }, [filteredFamilies.length, pageSize]);
-
-    const paginatedFamilies = useMemo(() => {
-        if (pageSize === 'ALL') return filteredFamilies;
-        const startIndex = (currentPage - 1) * pageSize;
-        return filteredFamilies.slice(startIndex, startIndex + pageSize);
-    }, [filteredFamilies, currentPage, pageSize]);
+    // Modo Lista Continua (100% de las familias y SKUs en una sola sábana continua sin fragmentación)
+    const displayedFamilies = filteredFamilies;
 
     // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta)
     const [collapsedFamilies, setCollapsedFamilies] = useState<Record<string, boolean>>({});
@@ -799,9 +949,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             totalEmployeeSalesKg += r.colN_employeeSales;
             totalEmployeeSalesVal += (r.colN_employeeSales * r.base_price);
 
-            if (r.colV_missing < 0) {
-                totalMissingKg += Math.abs(r.colV_missing);
-                totalMissingVal += (Math.abs(r.colV_missing) * r.base_price);
+            if (r.colV_missing > 0) {
+                totalMissingKg += r.colV_missing;
+                totalMissingVal += (r.colV_missing * r.base_price);
             }
             if (r.colW_surplus > 0) {
                 totalSurplusKg += r.colW_surplus;
@@ -825,6 +975,33 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             totalFoodBankKg,
             totalEmployeeSalesKg,
             totalEmployeeSalesVal
+        };
+    }, [filteredFamilies]);
+
+    // Totales verticales para cada una de las 24 columnas (Consolidado sin duplicación Padre-Hijo)
+    const columnTotals = useMemo(() => {
+        const list = filteredFamilies.map(f => f.isParent ? f.consolidated : f.parent);
+        return {
+            totalE: list.reduce((acc, r) => acc + (r.colE_initialStock || 0), 0),
+            totalF: list.reduce((acc, r) => acc + (r.colF_corrections || 0), 0),
+            totalG: list.reduce((acc, r) => acc + (r.colG_purchases || 0), 0),
+            totalH: list.reduce((acc, r) => acc + (r.colH_salesKg || 0), 0),
+            totalI: list.reduce((acc, r) => acc + (r.colI_salesUnits || 0), 0),
+            totalJ: list.reduce((acc, r) => acc + (r.colJ_weightSalesUnits || 0), 0),
+            totalK: list.reduce((acc, r) => acc + (r.colK_shortage || 0), 0),
+            totalL: list.reduce((acc, r) => acc + (r.colL_unshipped || 0), 0),
+            totalM: list.reduce((acc, r) => acc + (r.colM_additionalSales || 0), 0),
+            totalN: list.reduce((acc, r) => acc + (r.colN_employeeSales || 0), 0),
+            totalO: list.reduce((acc, r) => acc + (r.colO_returns || 0), 0),
+            totalP: list.reduce((acc, r) => acc + (r.colP_weighingWaste || 0), 0),
+            totalQ: list.reduce((acc, r) => acc + (r.colQ_damageWaste || 0), 0),
+            totalR: list.reduce((acc, r) => acc + (r.colR_cleaningWaste || 0), 0),
+            totalS: list.reduce((acc, r) => acc + (r.colS_calculated || 0), 0),
+            totalT: list.reduce((acc, r) => acc + (r.hasPhysicalCount && r.colT_physicalCount !== null ? r.colT_physicalCount : 0), 0),
+            totalU: list.reduce((acc, r) => acc + (r.colU_bodegaPost10am || 0), 0),
+            totalV: list.reduce((acc, r) => acc + (r.colV_missing || 0), 0),
+            totalW: list.reduce((acc, r) => acc + (r.colW_surplus || 0), 0),
+            totalX: list.reduce((acc, r) => acc + (r.colX_foodBank || 0), 0),
         };
     }, [filteredFamilies]);
 
@@ -937,9 +1114,32 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         }
     };
 
+    // Helper de parseo numérico con norma colombiana (punto = miles, coma = decimales)
+    const parseColombianInput = (val: string): number => {
+        const trimmed = val.trim();
+        if (!trimmed) return 0;
+        if (trimmed.includes(',')) {
+            const normalized = trimmed.replace(/\./g, '').replace(',', '.');
+            const parsed = parseFloat(normalized);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+        if (trimmed.includes('.')) {
+            const parts = trimmed.split('.');
+            if (parts.length > 2 || parts[1].length === 3) {
+                const normalized = trimmed.replace(/\./g, '');
+                const parsed = parseFloat(normalized);
+                return isNaN(parsed) ? 0 : parsed;
+            }
+            const parsed = parseFloat(trimmed);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+        const parsed = parseFloat(trimmed);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
     const numFormat = (n: number | null | undefined, decimals = 2) => {
         if (n === null || n === undefined || isNaN(n) || n === 0) return '-';
-        return n.toFixed(decimals);
+        return formatNumber(n, decimals);
     };
 
     const renderNumericCell = (n: number | null | undefined, decimals = 2, prefix = '') => {
@@ -948,8 +1148,253 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         }
         return (
             <span style={{ fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace, sans-serif' }}>
-                {prefix}{n.toFixed(decimals)}
+                {prefix}{formatNumber(n, decimals)}
             </span>
+        );
+    };
+
+    // Guardado de edición en celda estilo Excel (Idempotente y a prueba de acumulaciones erróneas)
+    const handleCommitCellEdit = async () => {
+        if (!editingCell || isSavingCell) return;
+        const { productId, colKey, initialValue, currentValue } = editingCell;
+        const newVal = parseColombianInput(currentValue);
+
+        if (isNaN(newVal) || Math.abs(newVal - initialValue) < 0.0001) {
+            setEditingCell(null);
+            return;
+        }
+
+        setIsSavingCell(true);
+
+        try {
+            const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
+            const warehouseId = whData?.id;
+            const timestampIso = `${balanceDate}T12:00:00.000Z`;
+
+            let movType: 'entry' | 'exit' | 'adjustment' = 'adjustment';
+            let refType: string = INVENTORY_MOVEMENT_SUBTYPES.CORRECTION;
+            let qty = newVal;
+            let noteDesc = `[EDICIÓN MANUAL] Columna ${colKey}: ${formatNumber(newVal, 2)}`;
+
+            if (colKey === 'E' || colKey === 'F') {
+                movType = 'adjustment';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.CORRECTION;
+                qty = newVal;
+            } else if (colKey === 'G') {
+                movType = 'entry';
+                refType = 'purchase_reception';
+                qty = newVal;
+            } else if (colKey === 'H' || colKey === 'J') {
+                movType = 'exit';
+                refType = 'order_item';
+                qty = -newVal;
+            } else if (colKey === 'I') {
+                movType = 'exit';
+                refType = 'order_item';
+                qty = -newVal;
+                noteDesc = `[EDICIÓN MANUAL] Venta UN: ${newVal} un`;
+            } else if (colKey === 'K') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.ORDER_SHORTAGE;
+                qty = -newVal;
+            } else if (colKey === 'L') {
+                movType = 'entry';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.ORDER_UNSHIPPED;
+                qty = newVal;
+            } else if (colKey === 'M') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE;
+                qty = -newVal;
+            } else if (colKey === 'N') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.EMPLOYEE_SALE;
+                qty = -newVal;
+            } else if (colKey === 'O') {
+                movType = 'entry';
+                refType = 'route_return';
+                qty = newVal;
+            } else if (colKey === 'P') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING;
+                qty = -newVal;
+            } else if (colKey === 'Q') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.WASTE_DAMAGE;
+                qty = -newVal;
+            } else if (colKey === 'R') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.WASTE_CLEANING;
+                qty = -newVal;
+            } else if (colKey === 'X') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.FOOD_BANK;
+                qty = -newVal;
+            } else if (colKey === 'T') {
+                movType = 'adjustment';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
+                qty = 0;
+                noteDesc = `[EDICIÓN MANUAL] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)}`;
+            }
+
+            // Si el nuevo valor es 0, eliminar movimientos de esta columna para este producto y fecha
+            if (Math.abs(newVal) < 0.0001) {
+                const { error: delErr } = await supabase
+                    .from('inventory_movements')
+                    .delete()
+                    .eq('product_id', productId)
+                    .eq('reference_type', refType)
+                    .gte('created_at', `${balanceDate}T00:00:00.000Z`)
+                    .lte('created_at', `${balanceDate}T23:59:59.999Z`);
+
+                if (delErr) throw delErr;
+
+                // Actualizar estado local eliminando los movimientos
+                setMovements(prev => prev.filter(m => {
+                    const mDate = (m.created_at || '').split('T')[0];
+                    return !(m.product_id === productId && m.reference_type === refType && mDate === balanceDate);
+                }));
+
+                (window as any).showToast?.(`Columna ${colKey} restablecida a 0,00`, 'info');
+            } else {
+                // Si el valor es > 0, buscar movimientos existentes para actualizar en lugar de acumular deltas
+                const { data: existingMovs } = await supabase
+                    .from('inventory_movements')
+                    .select('id')
+                    .eq('product_id', productId)
+                    .eq('reference_type', refType)
+                    .gte('created_at', `${balanceDate}T00:00:00.000Z`)
+                    .lte('created_at', `${balanceDate}T23:59:59.999Z`);
+
+                if (existingMovs && existingMovs.length > 0) {
+                    const targetId = existingMovs[0].id;
+                    const { data: updatedMov, error: updErr } = await supabase
+                        .from('inventory_movements')
+                        .update({
+                            quantity: qty,
+                            type: movType,
+                            notes: noteDesc
+                        })
+                        .eq('id', targetId)
+                        .select()
+                        .single();
+
+                    if (updErr) throw updErr;
+
+                    // Si existían duplicados anteriores, eliminarlos
+                    if (existingMovs.length > 1) {
+                        const extraIds = existingMovs.slice(1).map(x => x.id);
+                        await supabase.from('inventory_movements').delete().in('id', extraIds);
+                    }
+
+                    // Sincronizar estado local
+                    setMovements(prev => {
+                        const filtered = prev.filter(m => !existingMovs.slice(1).some(ex => ex.id === m.id));
+                        return filtered.map(m => m.id === targetId ? (updatedMov as any) : m);
+                    });
+                } else {
+                    // Insertar nuevo registro limpio
+                    const { data: insertedMov, error: insErr } = await supabase
+                        .from('inventory_movements')
+                        .insert([{
+                            product_id: productId,
+                            warehouse_id: warehouseId,
+                            quantity: qty,
+                            type: movType,
+                            reference_type: refType,
+                            notes: noteDesc,
+                            created_at: timestampIso
+                        }])
+                        .select()
+                        .single();
+
+                    if (insErr) throw insErr;
+
+                    if (insertedMov) {
+                        setMovements(prev => [insertedMov as any, ...prev]);
+                    }
+                }
+
+                (window as any).showToast?.(`Columna ${colKey} actualizada a ${formatNumber(newVal, 2)}`, 'success');
+            }
+        } catch (err: any) {
+            console.error('Error en edición de celda:', err);
+            alert('Error al guardar cambio: ' + (err.message || 'Error desconocido'));
+        } finally {
+            setIsSavingCell(false);
+            setEditingCell(null);
+        }
+    };
+
+    // Renderizado de celda editable invisible estilo Excel
+    const renderEditableCell = (
+        productId: string,
+        colKey: string,
+        val: number | null,
+        style: React.CSSProperties = {},
+        decimals: number = 2,
+        isReadonly: boolean = false,
+        extraChildren?: React.ReactNode
+    ) => {
+        const isEditing = !isReadonly && editingCell?.productId === productId && editingCell?.colKey === colKey;
+
+        if (isEditing) {
+            return (
+                <td style={{ ...style, padding: '2px 4px', textAlign: 'right' }}>
+                    <input
+                        type="text"
+                        autoFocus
+                        value={editingCell.currentValue}
+                        onChange={e => setEditingCell(prev => prev ? { ...prev, currentValue: e.target.value } : null)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') handleCommitCellEdit();
+                            if (e.key === 'Escape') setEditingCell(null);
+                        }}
+                        onBlur={handleCommitCellEdit}
+                        style={{
+                            width: '100%',
+                            minWidth: '55px',
+                            maxWidth: '85px',
+                            padding: '2px 4px',
+                            borderRadius: '4px',
+                            border: '1.5px solid #0D7A57',
+                            textAlign: 'right',
+                            fontSize: '0.76rem',
+                            fontWeight: '700',
+                            fontFamily: 'monospace, sans-serif',
+                            backgroundColor: '#FFFFFF',
+                            color: '#0F172A',
+                            outline: 'none',
+                            boxShadow: '0 0 0 2px rgba(13, 122, 87, 0.25)'
+                        }}
+                    />
+                </td>
+            );
+        }
+
+        return (
+            <td
+                onClick={() => {
+                    if (!isReadonly) {
+                        setEditingCell({
+                            productId,
+                            colKey,
+                            initialValue: val || 0,
+                            currentValue: (val === null || val === 0) ? '' : formatNumber(val, decimals)
+                        });
+                    }
+                }}
+                style={{
+                    ...style,
+                    cursor: isReadonly ? 'default' : 'pointer',
+                    userSelect: 'none'
+                }}
+                title={isReadonly ? undefined : 'Clic para editar este valor'}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                    {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#CBD5E1' }}>-</span>}
+                    {extraChildren}
+                </div>
+            </td>
         );
     };
 
@@ -959,24 +1404,32 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         key: string,
         opts: {
             isChild?: boolean;
+            isBaseChild?: boolean;
             isParent?: boolean;
             isCollapsed?: boolean;
             onToggle?: () => void;
             childCount?: number;
             isAlternate?: boolean;
+            isConsolidatedSummary?: boolean;
         } = {}
     ) => {
-        const { isChild = false, isParent = false, isCollapsed = true, onToggle, childCount = 0, isAlternate = false } = opts;
+        const { isChild = false, isBaseChild = false, isParent = false, isCollapsed = true, onToggle, childCount = 0, isAlternate = false } = opts;
         const cellInfo = cellByGroup.get((row.colC_inventoryGroup || '').toUpperCase());
-        const rowBg = isChild ? '#F8FAFC' : (isAlternate ? '#F8FAFC' : '#FFFFFF');
+        const rowBg = isParent 
+            ? '#FEF9C3' // Amarillo cálido idéntico al Excel oficial (#FFFF00)
+            : (isChild ? (isAlternate ? '#FBFDFF' : '#FFFFFF') : (isAlternate ? '#F8FAFC' : '#FFFFFF'));
+
+        const cellBorderBottom = isParent ? '2px solid #FACC15' : (isChild ? '1px solid #F1F5F9' : '1px solid #E2E8F0');
 
         return (
             <tr
                 key={key}
                 style={{
                     backgroundColor: rowBg,
-                    borderBottom: '1px solid #E2E8F0',
-                    borderLeft: isParent ? '4px solid #6366F1' : (isChild ? '4px solid #CBD5E1' : 'none'),
+                    borderBottom: cellBorderBottom,
+                    borderTop: isParent ? '2px solid #FACC15' : undefined,
+                    borderLeft: isParent ? '4px solid #EAB308' : (isChild ? '4px solid #CBD5E1' : 'none'),
+                    boxShadow: isParent && !isCollapsed ? '0 2px 6px -1px rgba(234, 179, 8, 0.25)' : undefined,
                     transition: 'background-color 0.15s'
                 }}
             >
@@ -992,7 +1445,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         zIndex: 10,
                         backgroundColor: rowBg,
                         borderRight: '2px solid #CBD5E1',
-                        borderBottom: '1px solid #E2E8F0',
+                        borderBottom: cellBorderBottom,
                         boxShadow: '4px 0 10px -2px rgba(0,0,0,0.06)'
                     }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' }}>
@@ -1004,12 +1457,12 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                             type="button"
                                             onClick={onToggle}
                                             style={{
-                                                background: isCollapsed ? '#EEF2FF' : '#4F46E5',
-                                                border: '1px solid #C7D2FE',
+                                                background: isCollapsed ? '#FEF08A' : '#EAB308',
+                                                border: isCollapsed ? '1px solid #FDE047' : '1px solid #CA8A04',
                                                 cursor: 'pointer',
                                                 padding: '1px 5px',
                                                 borderRadius: '4px',
-                                                color: isCollapsed ? '#4F46E5' : '#FFFFFF',
+                                                color: isCollapsed ? '#854D0E' : '#FFFFFF',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '2px',
@@ -1028,8 +1481,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
                                     <span 
                                         style={{ 
-                                            fontWeight: isParent ? '800' : isChild ? '600' : '700', 
-                                            color: isParent ? '#1E1B4B' : isChild ? '#334155' : '#0F172A',
+                                            fontWeight: isParent ? '900' : isChild ? '600' : '700', 
+                                            color: isParent ? '#854D0E' : isChild ? '#334155' : '#0F172A',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
@@ -1042,21 +1495,96 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 </div>
 
                                 {isParent ? (
-                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 4px', borderRadius: '3px', flexShrink: 0 }}>
-                                        FAMILIA
-                                    </span>
-                                ) : row.unit_of_measure ? (
-                                    <span style={{ fontSize: '0.6rem', fontWeight: '700', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1px 4px', borderRadius: '3px', flexShrink: 0 }}>
-                                        {row.unit_of_measure}
-                                    </span>
-                                ) : null}
+                                    <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
+                                        <div style={{
+                                            fontSize: '0.58rem',
+                                            fontWeight: '700',
+                                            padding: '1px 4px',
+                                            borderRadius: '3px',
+                                            backgroundColor: '#4F46E5',
+                                            color: 'white',
+                                            display: 'inline-flex',
+                                            minWidth: '14px',
+                                            justifyContent: 'center',
+                                            lineHeight: '1.2'
+                                        }} title="Producto Padre (Cabeza de Familia)">
+                                            P
+                                        </div>
+                                        <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#854D0E', backgroundColor: '#FEF08A', border: '1px solid #FDE047', padding: '1px 5px', borderRadius: '4px' }}>
+                                            FAMILIA
+                                        </span>
+                                    </div>
+                                ) : isChild ? (
+                                    <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
+                                        <div style={{
+                                            fontSize: '0.58rem',
+                                            fontWeight: '700',
+                                            padding: '1px 4px',
+                                            borderRadius: '3px',
+                                            backgroundColor: '#0D7A57',
+                                            color: 'white',
+                                            display: 'inline-flex',
+                                            minWidth: '14px',
+                                            justifyContent: 'center',
+                                            lineHeight: '1.2'
+                                        }} title={isBaseChild ? "Producto Hijo / SKU Base de la Familia" : "Producto Hijo / SKU Fraccionado"}>
+                                            H
+                                        </div>
+                                        {row.unit_of_measure ? (
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '700', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1px 4px', borderRadius: '3px' }}>
+                                                {row.unit_of_measure}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
+                                        {row.isP && (
+                                            <div style={{
+                                                fontSize: '0.58rem',
+                                                fontWeight: '700',
+                                                padding: '1px 4px',
+                                                borderRadius: '3px',
+                                                backgroundColor: '#4F46E5',
+                                                color: 'white',
+                                                display: 'inline-flex',
+                                                minWidth: '14px',
+                                                justifyContent: 'center',
+                                                lineHeight: '1.2'
+                                            }} title="Producto Padre">
+                                                P
+                                            </div>
+                                        )}
+                                        {row.isH && (
+                                            <div style={{
+                                                fontSize: '0.58rem',
+                                                fontWeight: '700',
+                                                padding: '1px 4px',
+                                                borderRadius: '3px',
+                                                backgroundColor: '#0D7A57',
+                                                color: 'white',
+                                                display: 'inline-flex',
+                                                minWidth: '14px',
+                                                justifyContent: 'center',
+                                                lineHeight: '1.2'
+                                            }} title="Producto Hijo">
+                                                H
+                                            </div>
+                                        )}
+                                        {row.unit_of_measure ? (
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '700', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1px 4px', borderRadius: '3px' }}>
+                                                {row.unit_of_measure}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Fila 2: ID + Célula con icono Lucide */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.66rem' }}>
                                 <span style={{ 
-                                    backgroundColor: isChild ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)', 
-                                    color: isChild ? '#64748B' : '#0F172A',
+                                    backgroundColor: isParent ? '#FEF08A' : (isChild ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)'), 
+                                    color: isParent ? '#854D0E' : (isChild ? '#64748B' : '#0F172A'),
+                                    border: isParent ? '1px solid #FDE047' : undefined,
                                     padding: '1px 4px', 
                                     borderRadius: '3px',
                                     fontWeight: '800',
@@ -1099,13 +1627,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         {/* A: Fecha (Sticky) */}
                         <td style={{ 
                             padding: '6px 8px', 
-                            color: isChild ? '#94A3B8' : '#64748B', 
+                            color: isParent ? '#854D0E' : (isChild ? '#94A3B8' : '#64748B'), 
                             fontSize: '0.72rem',
+                            fontWeight: isParent ? '800' : 'normal',
                             position: 'sticky',
                             left: 0,
                             zIndex: 10,
                             backgroundColor: rowBg,
-                            borderBottom: '1px solid #E2E8F0'
+                            borderBottom: cellBorderBottom
                         }}>
                             {row.colA_date}
                         </td>
@@ -1115,16 +1644,17 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             padding: '6px 8px', 
                             textAlign: 'center', 
                             fontWeight: '800', 
-                            color: '#1E293B',
+                            color: isParent ? '#854D0E' : '#1E293B',
                             position: 'sticky',
                             left: '85px',
                             zIndex: 10,
                             backgroundColor: rowBg,
-                            borderBottom: '1px solid #E2E8F0'
+                            borderBottom: cellBorderBottom
                         }}>
                             <span style={{ 
-                                backgroundColor: isChild ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)', 
-                                color: isChild ? '#64748B' : '#0F172A',
+                                backgroundColor: isParent ? '#FEF08A' : (isChild ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)'), 
+                                color: isParent ? '#854D0E' : (isChild ? '#64748B' : '#0F172A'),
+                                border: isParent ? '1px solid #FDE047' : undefined,
                                 padding: '2px 5px', 
                                 borderRadius: '4px',
                                 fontSize: '0.7rem'
@@ -1133,33 +1663,60 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             </span>
                         </td>
 
-                        {/* C: Célula / Lista (Sticky) */}
-                        <td style={{ 
-                            padding: '6px 8px',
-                            position: 'sticky',
-                            left: '155px',
-                            zIndex: 10,
-                            backgroundColor: rowBg,
-                            borderBottom: '1px solid #E2E8F0'
-                        }}>
+                        {/* C: Célula / Lista (Sticky - Colapsable a Icono + Inicial) */}
+                        <td 
+                            title={isCellCollapsed ? (cellInfo ? `Célula: ${cellInfo.name || cellInfo.short_name}` : `Célula: ${row.colC_inventoryGroup}`) : undefined}
+                            style={{ 
+                                padding: isCellCollapsed ? '6px 4px' : '6px 8px', 
+                                textAlign: isCellCollapsed ? 'center' : 'left', 
+                                position: 'sticky', 
+                                left: '155px', 
+                                zIndex: 10, 
+                                backgroundColor: rowBg, 
+                                borderBottom: cellBorderBottom,
+                                width: isCellCollapsed ? '44px' : '130px', 
+                                minWidth: isCellCollapsed ? '44px' : '130px', 
+                                maxWidth: isCellCollapsed ? '44px' : '130px', 
+                                transition: 'width 0.2s ease, min-width 0.2s ease, padding 0.2s ease'
+                            }}
+                        >
                             {cellInfo ? (
                                 <span style={{
                                     backgroundColor: cellInfo.badge_bg || '#FEF3C7',
                                     color: cellInfo.badge_text || '#92400E',
-                                    padding: '2px 6px',
+                                    padding: isCellCollapsed ? '2px 4px' : '2px 6px',
                                     borderRadius: '5px',
                                     fontSize: '0.67rem',
                                     fontWeight: '800',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px'
+                                    justifyContent: 'center',
+                                    gap: isCellCollapsed ? '3px' : '4px',
+                                    boxShadow: isCellCollapsed ? '0 1px 2px rgba(0,0,0,0.04)' : undefined
                                 }}>
                                     {renderCellLucideIcon(cellInfo, 11)}
-                                    <span>{cellInfo.short_name || cellInfo.name}</span>
+                                    {isCellCollapsed ? (
+                                        <span style={{ fontSize: '0.66rem', fontWeight: '900' }}>
+                                            {(cellInfo.short_name || cellInfo.name || 'G').charAt(0).toUpperCase()}
+                                        </span>
+                                    ) : (
+                                        <span>{cellInfo.short_name || cellInfo.name}</span>
+                                    )}
                                 </span>
                             ) : (
-                                <span style={{ color: '#64748B', fontSize: '0.7rem' }}>
-                                    {row.colC_inventoryGroup}
+                                <span style={{ 
+                                    color: '#64748B', 
+                                    fontSize: isCellCollapsed ? '0.66rem' : '0.7rem',
+                                    fontWeight: isCellCollapsed ? '800' : 'normal',
+                                    backgroundColor: isCellCollapsed ? 'rgba(0,0,0,0.04)' : undefined,
+                                    padding: isCellCollapsed ? '2px 4px' : undefined,
+                                    borderRadius: isCellCollapsed ? '4px' : undefined,
+                                    display: isCellCollapsed ? 'inline-block' : undefined
+                                }}>
+                                    {isCellCollapsed 
+                                        ? (row.colC_inventoryGroup || 'G').charAt(0).toUpperCase()
+                                        : row.colC_inventoryGroup
+                                    }
                                 </span>
                             )}
                         </td>
@@ -1167,15 +1724,16 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         {/* D: Producto (Sticky) */}
                         <td style={{ 
                             padding: '6px 10px', 
-                            fontWeight: '700', 
-                            color: '#0F172A', 
+                            fontWeight: isParent ? '800' : '700', 
+                            color: isParent ? '#854D0E' : '#0F172A', 
                             borderRight: '2px solid #CBD5E1',
-                            borderBottom: '1px solid #E2E8F0',
-                            position: 'sticky',
-                            left: '285px',
-                            zIndex: 10,
-                            backgroundColor: rowBg,
-                            boxShadow: '4px 0 10px -2px rgba(0,0,0,0.06)'
+                            borderBottom: cellBorderBottom,
+                            position: 'sticky', 
+                            left: isCellCollapsed ? '199px' : '285px', 
+                            zIndex: 10, 
+                            backgroundColor: rowBg, 
+                            boxShadow: '4px 0 10px -2px rgba(0,0,0,0.06)', 
+                            transition: 'left 0.2s ease'
                         }}>
                             {isParent ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1183,12 +1741,12 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         type="button"
                                         onClick={onToggle}
                                         style={{
-                                            background: isCollapsed ? '#EEF2FF' : '#4F46E5',
-                                            border: '1px solid #C7D2FE',
+                                            background: isCollapsed ? '#FEF08A' : '#EAB308',
+                                            border: isCollapsed ? '1px solid #FDE047' : '1px solid #CA8A04',
                                             cursor: 'pointer',
                                             padding: '2px 6px',
                                             borderRadius: '5px',
-                                            color: isCollapsed ? '#4F46E5' : '#FFFFFF',
+                                            color: isCollapsed ? '#854D0E' : '#FFFFFF',
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '3px',
@@ -1201,15 +1759,55 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         {isCollapsed ? <ChevronRight size={11} strokeWidth={2.5} /> : <ChevronDown size={11} strokeWidth={2.5} />}
                                         <span>{childCount} pres.</span>
                                     </button>
-                                    <span style={{ fontWeight: '800', color: '#1E1B4B' }}>{row.colD_productName}</span>
-                                    <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 5px', borderRadius: '4px' }}>
-                                        FAMILIA
-                                    </span>
+                                    <span style={{ fontWeight: '900', color: '#854D0E', fontSize: '0.8rem' }}>{row.colD_productName}</span>
+                                    
+                                    <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
+                                        <div style={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: '700',
+                                            padding: '1px 5px',
+                                            borderRadius: '3px',
+                                            backgroundColor: '#4F46E5',
+                                            color: 'white',
+                                            display: 'inline-flex',
+                                            minWidth: '15px',
+                                            justifyContent: 'center',
+                                            lineHeight: '1.2'
+                                        }} title="Producto Padre (Cabeza de Familia)">
+                                            P
+                                        </div>
+                                        <span style={{ 
+                                            fontSize: '0.6rem', 
+                                            fontWeight: '800', 
+                                            color: '#854D0E', 
+                                            backgroundColor: '#FEF08A', 
+                                            border: '1px solid #FDE047', 
+                                            padding: '1px 5px', 
+                                            borderRadius: '4px', 
+                                            letterSpacing: '0.04em' 
+                                        }}>
+                                            FAMILIA
+                                        </span>
+                                    </div>
                                 </div>
                             ) : isChild ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', paddingLeft: '18px' }}>
                                     <span style={{ color: '#94A3B8', fontWeight: '900', fontSize: '0.75rem' }}>↳</span>
                                     <span style={{ fontWeight: '600', color: '#334155' }}>{row.colD_productName}</span>
+                                    <div style={{
+                                        fontSize: '0.6rem',
+                                        fontWeight: '700',
+                                        padding: '1px 5px',
+                                        borderRadius: '3px',
+                                        backgroundColor: '#0D7A57',
+                                        color: 'white',
+                                        display: 'inline-flex',
+                                        minWidth: '15px',
+                                        justifyContent: 'center',
+                                        lineHeight: '1.2'
+                                    }} title={isBaseChild ? "Producto Hijo / SKU Base de la Familia" : "Producto Hijo / SKU Fraccionado"}>
+                                        H
+                                    </div>
                                     <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>
                                         {row.unit_of_measure}
                                     </span>
@@ -1217,6 +1815,38 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             ) : (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <span style={{ fontWeight: '800' }}>{row.colD_productName}</span>
+                                    {row.isP && (
+                                        <div style={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: '700',
+                                            padding: '1px 5px',
+                                            borderRadius: '3px',
+                                            backgroundColor: '#4F46E5',
+                                            color: 'white',
+                                            display: 'inline-flex',
+                                            minWidth: '15px',
+                                            justifyContent: 'center',
+                                            lineHeight: '1.2'
+                                        }} title="Producto Padre">
+                                            P
+                                        </div>
+                                    )}
+                                    {row.isH && (
+                                        <div style={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: '700',
+                                            padding: '1px 5px',
+                                            borderRadius: '3px',
+                                            backgroundColor: '#0D7A57',
+                                            color: 'white',
+                                            display: 'inline-flex',
+                                            minWidth: '15px',
+                                            justifyContent: 'center',
+                                            lineHeight: '1.2'
+                                        }} title="Producto Hijo">
+                                            H
+                                        </div>
+                                    )}
                                     <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>
                                         {row.unit_of_measure}
                                     </span>
@@ -1227,146 +1857,126 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 )}
 
                 {/* E: Inventario Inicial (+) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', color: row.colE_initialStock > 0 ? '#0D7A57' : '#94A3B8', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colE_initialStock)}
-                </td>
+                {renderEditableCell(row.productId, 'E', row.colE_initialStock, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '4px 6px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8', borderBottom: cellBorderBottom }, 2)}
 
                 {/* F: Corrección (±) */}
-                <td style={{
-                    padding: '6px 8px',
+                {renderEditableCell(row.productId, 'F', row.colF_corrections, {
+                    width: '95px', minWidth: '95px', maxWidth: '95px',
+                    padding: '4px 6px',
                     textAlign: 'right',
-                    fontWeight: row.colF_corrections !== 0 ? '700' : '400',
+                    fontWeight: isParent ? '800' : (row.colF_corrections !== 0 ? '700' : '400'),
                     color: row.colF_corrections > 0 ? '#059669' : row.colF_corrections < 0 ? '#DC2626' : '#94A3B8',
-                    borderBottom: '1px solid #E2E8F0'
-                }}>
-                    {row.colF_corrections > 0 ? renderNumericCell(row.colF_corrections, 2, '+') : renderNumericCell(row.colF_corrections)}
-                </td>
+                    borderBottom: cellBorderBottom
+                }, 2)}
 
                 {/* G: Compra del Día (+) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colG_purchases)}
-                </td>
+                {renderEditableCell(row.productId, 'G', row.colG_purchases, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colG_purchases > 0 ? '#0F172A' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
 
                 {/* H: Venta del Día KG (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: '700', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colH_salesKg)}
-                </td>
+                {renderEditableCell(row.productId, 'H', row.colH_salesKg, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colH_salesKg > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderBottom: cellBorderBottom }, 2)}
 
                 {/* I: Venta del Día UN (Informativo) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
-                    {row.colI_salesUnits > 0 ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{row.colI_salesUnits} un</span> : <span style={{ color: '#CBD5E1' }}>-</span>}
-                </td>
+                {renderEditableCell(row.productId, 'I', row.colI_salesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: '#64748B', fontWeight: isParent ? '700' : '400', borderBottom: cellBorderBottom }, 0)}
 
                 {/* J: Peso Venta UN (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', borderRight: '2px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colJ_weightSalesUnits)}
-                </td>
+                {renderEditableCell(row.productId, 'J', row.colJ_weightSalesUnits, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
 
                 {/* K: Producto Escaso (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: row.colK_shortage > 0 ? '700' : '400', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colK_shortage)}
-                </td>
+                {renderEditableCell(row.productId, 'K', row.colK_shortage, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* L: Producto Sin Enviar (+) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colL_unshipped)}
-                </td>
+                {renderEditableCell(row.productId, 'L', row.colL_unshipped, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2)}
 
                 {/* M: Venta Adicional Cliente (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: row.colM_additionalSales > 0 ? '700' : '400', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colM_additionalSales)}
-                </td>
+                {renderEditableCell(row.productId, 'M', row.colM_additionalSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* N: Venta Adicional Empleado (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: row.colN_employeeSales > 0 ? '700' : '400', borderRight: '2px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colN_employeeSales)}
-                </td>
+                {renderEditableCell(row.productId, 'N', row.colN_employeeSales, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2)}
 
                 {/* O: Devoluciones (+) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: row.colO_returns > 0 ? '700' : '400', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colO_returns)}
-                </td>
+                {renderEditableCell(row.productId, 'O', row.colO_returns, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colO_returns > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO_returns > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* P: Pesada (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: row.colP_weighingWaste > 0 ? '700' : '400', borderBottom: '1px solid #E2E8F0' }}>
-                    {renderNumericCell(row.colP_weighingWaste)}
-                </td>
+                {renderEditableCell(row.productId, 'P', row.colP_weighingWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* Q: Desperdicio (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: row.colQ_damageWaste > 0 ? '700' : '400', borderBottom: '1px solid #E2E8F0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                        {renderNumericCell(row.colQ_damageWaste)}
-                        {row.evidencePhotosQ?.length > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => setPreviewImageUrl(row.evidencePhotosQ[0])}
-                                title="Ver evidencia fotográfica"
-                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#DC2626' }}
-                            >
-                                <Camera size={12} />
-                            </button>
-                        )}
-                    </div>
-                </td>
+                {renderEditableCell(row.productId, 'Q', row.colQ_damageWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                    row.evidencePhotosQ?.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosQ[0]); }}
+                            title="Ver evidencia fotográfica"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#DC2626' }}
+                        >
+                            <Camera size={12} />
+                        </button>
+                    ) : null
+                )}
 
                 {/* R: Basura (-) */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: row.colR_cleaningWaste > 0 ? '700' : '400', borderRight: '2px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                        {renderNumericCell(row.colR_cleaningWaste)}
-                        {row.evidencePhotosR?.length > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => setPreviewImageUrl(row.evidencePhotosR[0])}
-                                title="Ver evidencia de limpieza"
-                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#B45309' }}
-                            >
-                                <Camera size={12} />
-                            </button>
-                        )}
-                    </div>
-                </td>
+                {renderEditableCell(row.productId, 'R', row.colR_cleaningWaste, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colR_cleaningWaste > 0 ? '#B45309' : '#94A3B8', fontWeight: isParent ? '800' : (row.colR_cleaningWaste > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, false,
+                    row.evidencePhotosR?.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosR[0]); }}
+                            title="Ver evidencia de limpieza"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#B45309' }}
+                        >
+                            <Camera size={12} />
+                        </button>
+                    ) : null
+                )}
 
-                {/* S: Inventario Calculado */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: '#0F172A', backgroundColor: isChild ? '#F1F5F9' : '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                {/* S: Inventario Calculado (RESALTADO GLASSMORPHISM RESULTADO) */}
+                <td style={{ 
+                    padding: '6px 8px', 
+                    textAlign: 'right', 
+                    fontWeight: '900', 
+                    width: '95px',
+                    minWidth: '95px',
+                    maxWidth: '95px',
+                    color: isParent ? '#064E3B' : '#0F172A', 
+                    backgroundColor: isParent ? 'rgba(13, 148, 136, 0.18)' : (isChild ? 'rgba(13, 148, 136, 0.05)' : 'rgba(13, 148, 136, 0.08)'),
+                    borderLeft: '2px solid #0D9488',
+                    borderRight: '2px solid #0D9488',
+                    borderBottom: cellBorderBottom,
+                    boxShadow: isParent ? 'inset 0 0 0 1px rgba(13, 148, 136, 0.3)' : undefined,
+                    fontFamily: 'monospace, sans-serif'
+                }}>
                     {renderNumericCell(row.colS_calculated)}
                 </td>
 
                 {/* T: Conteo Físico Real */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isChild ? '#F1F5F9' : '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                    {row.hasPhysicalCount ? renderNumericCell(row.colT_physicalCount) : <span style={{ color: '#CBD5E1' }}>-</span>}
-                </td>
+                {renderEditableCell(row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? (isCollapsed ? '#F1F5F9' : '#E0E7FF') : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* U: Bodega Post-10 AM */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: '#0F172A', backgroundColor: isChild ? '#F1F5F9' : '#F8FAFC', borderRight: '2px solid #CBD5E1', borderBottom: '1px solid #E2E8F0' }}>
+                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? (isCollapsed ? '#F1F5F9' : '#E0E7FF') : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
                     {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
                 </td>
 
                 {/* V: Faltantes */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing < 0 ? '#DC2626' : '#94A3B8', borderBottom: '1px solid #E2E8F0' }}>
-                    {row.colV_missing < 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
+                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }}>
+                    {row.colV_missing > 0 ? renderNumericCell(row.colV_missing) : <span style={{ color: '#CBD5E1' }}>-</span>}
                 </td>
 
                 {/* W: Sobrantes */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: '1px solid #E2E8F0' }}>
-                    {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus, 2, '+') : <span style={{ color: '#CBD5E1' }}>-</span>}
+                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
+                    {row.colW_surplus > 0 ? renderNumericCell(row.colW_surplus) : <span style={{ color: '#CBD5E1' }}>-</span>}
                 </td>
 
                 {/* X: Banco de Alimentos */}
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: row.colX_foodBank > 0 ? '700' : '400', borderBottom: '1px solid #E2E8F0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                        {renderNumericCell(row.colX_foodBank)}
-                        {row.evidencePhotosX?.length > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => setPreviewImageUrl(row.evidencePhotosX[0])}
-                                title="Ver evidencia banco alimentos"
-                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#EC4899' }}
-                            >
-                                <Camera size={12} />
-                            </button>
-                        )}
-                    </div>
-                </td>
+                {renderEditableCell(row.productId, 'X', row.colX_foodBank, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
+                    row.evidencePhotosX?.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(row.evidencePhotosX[0]); }}
+                            title="Ver evidencia banco alimentos"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#EC4899' }}
+                        >
+                            <Camera size={12} />
+                        </button>
+                    ) : null
+                )}
             </tr>
         );
     };
@@ -1408,10 +2018,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         </div>
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1A231E', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                        {kpis.totalEntradas.toFixed(1)} <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B' }}>kg in</span>
+                        {formatNumber(kpis.totalEntradas, 1)} <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B' }}>kg in</span>
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '1px' }}>
-                        Salidas: <b style={{ color: '#1A231E' }}>{kpis.totalSalidas.toFixed(1)} kg</b>
+                        Salidas: <b style={{ color: '#1A231E' }}>{formatNumber(kpis.totalSalidas, 1)} kg</b>
                     </div>
                 </div>
 
@@ -1437,10 +2047,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         </div>
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#D97706', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                        {kpis.wastePercent.toFixed(2)}%
+                        {formatNumber(kpis.wastePercent, 2)}%
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '1px' }}>
-                        Total: <b style={{ color: '#1A231E' }}>{kpis.totalWasteKg.toFixed(1)} kg</b>
+                        Total: <b style={{ color: '#1A231E' }}>{formatNumber(kpis.totalWasteKg, 1)} kg</b>
                     </div>
                 </div>
 
@@ -1466,10 +2076,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         </div>
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#DC2626', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                        -{kpis.totalMissingKg.toFixed(1)} <span style={{ fontSize: '0.68rem', fontWeight: '700' }}>kg</span>
+                        -{formatNumber(kpis.totalMissingKg, 1)} <span style={{ fontSize: '0.68rem', fontWeight: '700' }}>kg</span>
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#DC2626', marginTop: '1px', fontWeight: '800' }}>
-                        ${Math.round(kpis.totalMissingVal).toLocaleString('es-CO')}
+                        ${formatNumber(Math.round(kpis.totalMissingVal), 0)}
                     </div>
                 </div>
 
@@ -1495,10 +2105,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         </div>
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#059669', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                        +{kpis.totalSurplusKg.toFixed(1)} <span style={{ fontSize: '0.68rem', fontWeight: '700' }}>kg</span>
+                        +{formatNumber(kpis.totalSurplusKg, 1)} <span style={{ fontSize: '0.68rem', fontWeight: '700' }}>kg</span>
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#059669', marginTop: '1px', fontWeight: '800' }}>
-                        ${Math.round(kpis.totalSurplusVal).toLocaleString('es-CO')}
+                        ${formatNumber(Math.round(kpis.totalSurplusVal), 0)}
                     </div>
                 </div>
 
@@ -1524,80 +2134,96 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         </div>
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#2563EB', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                        ${Math.round(kpis.totalEmployeeSalesVal).toLocaleString('es-CO')}
+                        ${formatNumber(Math.round(kpis.totalEmployeeSalesVal), 0)}
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '1px' }}>
-                        Volumen: <b style={{ color: '#1A231E' }}>{kpis.totalEmployeeSalesKg.toFixed(1)} kg</b>
+                        Volumen: <b style={{ color: '#1A231E' }}>{formatNumber(kpis.totalEmployeeSalesKg, 1)} kg</b>
                     </div>
                 </div>
             </div>
 
-            {/* 2. TOOLBAR UNIFICADA ULTRA-COMPACTA (STICKY FLOTANTE COMO EN LAS DEMÁS PESTAÑAS) */}
+            {/* 2. MASTER COMMAND CONSOLE: TOOLBAR ENTERPRISE UNIFICADA DE 2 NIVELES */}
             <div 
                 ref={dockRef}
                 style={{
                     position: 'sticky',
-                    top: '85px',
+                    top: '80px',
                     zIndex: 70,
                     backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    borderRadius: '12px',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    borderRadius: '14px',
                     border: '1px solid #E2E8F0',
-                    padding: '0.45rem 0.85rem',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                    padding: '0.55rem 0.85rem',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.45rem',
+                    marginBottom: '0.55rem',
+                    transition: 'all 0.2s ease-in-out'
+                }}
+            >
+                {/* FILA 1: CONTEXTO OPERATIVO, FILTRO DE MOVIMIENTO, BÚSQUEDA Y ACCIONES PRINCIPALES */}
+                <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '0.5rem',
-                    flexWrap: 'nowrap',
-                    overflow: 'visible',
-                    transition: 'all 0.2s ease-in-out'
-                }}
-            >
-                {/* IZQUIERDA: Filtros Compactos */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: '0' }}>
-                    {/* Fecha */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha:</span>
-                        <input
-                            type="date"
-                            value={balanceDate}
-                            onChange={e => { setBalanceDate(e.target.value); setCurrentPage(1); }}
-                            style={{
-                                padding: '0.3rem 0.55rem',
-                                borderRadius: '7px',
-                                border: '1.5px solid #0D7A57',
-                                fontSize: '0.78rem',
-                                fontWeight: '700',
-                                color: '#0F172A',
-                                outline: 'none',
-                                backgroundColor: '#FFFFFF'
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => { setBalanceDate(todayStr); setCurrentPage(1); }}
-                            style={{
-                                padding: '0.3rem 0.55rem',
-                                borderRadius: '7px',
-                                border: '1px solid #E2E8F0',
-                                backgroundColor: balanceDate === todayStr ? '#EAEFEA' : '#FFFFFF',
-                                color: balanceDate === todayStr ? '#0D7A57' : '#64748B',
-                                fontSize: '0.72rem',
-                                fontWeight: '800',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Hoy
-                        </button>
-                    </div>
+                    flexWrap: 'nowrap'
+                }}>
+                    {/* IZQUIERDA: Selector Temporal + Célula + Toggle "Solo con Movimiento" */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                        {/* Selector de Fecha */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '8px',
+                            padding: '2px 4px 2px 7px',
+                            gap: '5px',
+                            height: '32px',
+                            boxSizing: 'border-box',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                        }}>
+                            <Calendar size={13} color="#0D7A57" strokeWidth={2.2} />
+                            <input
+                                type="date"
+                                value={balanceDate}
+                                onChange={e => { setBalanceDate(e.target.value); setCurrentPage(1); }}
+                                style={{
+                                    padding: '0.15rem 0.2rem',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    color: '#0F172A',
+                                    outline: 'none',
+                                    backgroundColor: 'transparent',
+                                    cursor: 'pointer'
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => { setBalanceDate(todayStr); setCurrentPage(1); }}
+                                style={{
+                                    padding: '0.2rem 0.45rem',
+                                    borderRadius: '5px',
+                                    border: 'none',
+                                    backgroundColor: balanceDate === todayStr ? '#0D7A57' : '#FFFFFF',
+                                    color: balanceDate === todayStr ? '#FFFFFF' : '#64748B',
+                                    fontSize: '0.7rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    boxShadow: balanceDate === todayStr ? '0 1px 2px rgba(13, 122, 87, 0.3)' : '0 1px 2px rgba(0,0,0,0.05)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                Hoy
+                            </button>
+                        </div>
 
-                    <div style={{ height: '18px', width: '1px', backgroundColor: '#E2E8F0' }} />
-
-                    {/* Combobox de Célula */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Célula:</span>
+                        {/* Combobox de Célula */}
                         <div ref={cellComboboxRef} style={{ position: 'relative' }}>
                             <button
                                 type="button"
@@ -1609,8 +2235,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    padding: '0.28rem 0.65rem',
-                                    borderRadius: '7px',
+                                    padding: '0 0.65rem',
+                                    borderRadius: '8px',
                                     border: `1px solid ${selectedCell !== 'ALL' ? '#0D7A57' : '#CBD5E1'}`,
                                     backgroundColor: selectedCell !== 'ALL' ? '#EAEFEA' : '#FFFFFF',
                                     color: selectedCell !== 'ALL' ? '#0D7A57' : '#1E293B',
@@ -1618,10 +2244,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     fontSize: '0.78rem',
                                     cursor: 'pointer',
                                     outline: 'none',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                                     transition: 'all 0.2s',
-                                    height: '28px',
-                                    maxWidth: '200px'
+                                    height: '32px',
+                                    maxWidth: '180px'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.borderColor = '#0D7A57'}
                                 onMouseLeave={(e) => e.currentTarget.style.borderColor = selectedCell !== 'ALL' ? '#0D7A57' : '#CBD5E1'}
@@ -1738,22 +2364,104 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 </div>
                             )}
                         </div>
+
+                        {/* SEGMENTED CONTROL: Solo con Movimiento vs Todos */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: '#F1F5F9',
+                            borderRadius: '8px',
+                            padding: '2px',
+                            border: '1px solid #CBD5E1',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                            height: '32px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setOnlyWithMovement(true)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: onlyWithMovement ? '#0D7A57' : 'transparent',
+                                    color: onlyWithMovement ? '#FFFFFF' : '#475569',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: onlyWithMovement ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
+                                }}
+                                title="Mostrar exclusivamente familias y productos que registraron movimientos o existencias hoy (Col E a X)"
+                            >
+                                <Zap size={12} color={onlyWithMovement ? '#FCD34D' : '#0D7A57'} strokeWidth={2.5} />
+                                <span>Con Movimiento</span>
+                                <span style={{
+                                    backgroundColor: onlyWithMovement ? 'rgba(255,255,255,0.22)' : '#E2E8F0',
+                                    color: onlyWithMovement ? '#FFFFFF' : '#0F172A',
+                                    padding: '1px 5px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.64rem',
+                                    fontWeight: '900'
+                                }}>
+                                    {countFamiliesWithMovement}
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setOnlyWithMovement(false)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: !onlyWithMovement ? '#FFFFFF' : 'transparent',
+                                    color: !onlyWithMovement ? '#0F172A' : '#64748B',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: !onlyWithMovement ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                                }}
+                                title="Mostrar todo el catálogo de familias activas"
+                            >
+                                <span>Todos</span>
+                                <span style={{
+                                    backgroundColor: !onlyWithMovement ? '#F1F5F9' : '#E2E8F0',
+                                    color: !onlyWithMovement ? '#0F172A' : '#64748B',
+                                    padding: '1px 5px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.64rem',
+                                    fontWeight: '800'
+                                }}>
+                                    {dailyFamilies.length}
+                                </span>
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Buscador Inteligente Potenciado + Contador + Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: '200px', maxWidth: '360px' }}>
+                    {/* CENTRO: Buscador Inteligente Potenciado + Contador + Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: 1, minWidth: '220px', maxWidth: '340px' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
                             <div style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
-                                <Search size={14} strokeWidth={1.5} />
+                                <Search size={14} strokeWidth={1.8} />
                             </div>
                             <input
                                 type="text"
-                                placeholder="Buscar por nombre, ID (#), grupo (@)..."
+                                placeholder="Buscar nombre, #ID, @tag..."
                                 value={searchQuery}
-                                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                onChange={e => setSearchQuery(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '0.35rem 2rem 0.35rem 2rem',
+                                    padding: '0.35rem 1.8rem 0.35rem 2rem',
                                     borderRadius: '8px',
                                     border: '1px solid #CBD5E1',
                                     fontSize: '0.78rem',
@@ -1812,36 +2520,23 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             color: (searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#64748B',
                             border: `1px solid ${(searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#CBD5E1'}`,
                             borderRadius: '8px',
-                            padding: '0 0 0 0.65rem',
-                            fontSize: '0.75rem',
+                            padding: '0 0 0 0.55rem',
+                            fontSize: '0.74rem',
                             fontWeight: '700',
                             flexShrink: 0,
                             position: 'relative',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                             transition: 'all 0.2s ease'
                         }}>
-                            {/* Conteo de Familias */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', paddingRight: '0.45rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', paddingRight: '0.35rem' }}>
                                 {(searchQuery || selectedCell !== 'ALL') ? <Search size={12} strokeWidth={2} /> : <Database size={12} strokeWidth={2} />}
                                 <span>
-                                    {(searchQuery || selectedCell !== 'ALL') ? (
-                                        <>
-                                            <strong style={{ color: '#0D7A57' }}>{formatNumber(filteredFamilies.length)}</strong>
-                                            <span style={{ fontWeight: '450', color: '#64748B', marginLeft: '3px' }}>de {formatNumber(dailyFamilies.length)}</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <strong style={{ color: '#0F172A' }}>{formatNumber(dailyFamilies.length)}</strong>
-                                            <span style={{ fontWeight: '450', color: '#64748B', marginLeft: '3px' }}>familias</span>
-                                        </>
-                                    )}
+                                    <strong style={{ color: (searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#0F172A' }}>{formatNumber(filteredFamilies.length)}</strong>
                                 </span>
                             </div>
 
-                            {/* Divisor vertical */}
-                            <div style={{ width: '1px', height: '18px', backgroundColor: (searchQuery || selectedCell !== 'ALL') ? '#A7D7C5' : '#E2E8F0' }} />
+                            <div style={{ width: '1px', height: '16px', backgroundColor: (searchQuery || selectedCell !== 'ALL') ? '#A7D7C5' : '#E2E8F0' }} />
 
-                            {/* Botón Info Integrado */}
                             <button
                                 type="button"
                                 onClick={(e) => {
@@ -1850,7 +2545,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 }}
                                 style={{
                                     height: '100%',
-                                    padding: '0 0.55rem',
+                                    padding: '0 0.5rem',
                                     border: 'none',
                                     backgroundColor: showHelpTooltip ? '#0D7A57' : 'transparent',
                                     color: showHelpTooltip ? '#FFFFFF' : '#0D7A57',
@@ -1913,8 +2608,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                                 { tag: '@disponible', desc: 'Stock positivo' },
                                                 { tag: '@agotado', desc: 'Sin stock' },
                                                 { tag: '@sobrantes', desc: 'Con sobrantes (+)' },
-                                                { tag: '@padre', desc: 'Familias / Base' },
-                                                { tag: '@hijo', desc: 'Fraccionados' },
+                                                { tag: '@padre', desc: 'Familias / Cabezas' },
+                                                { tag: '@hijo', desc: 'Presentaciones' },
+                                                { tag: '@padrehijo', desc: 'Doble rol (P y H)' },
                                                 { tag: '@fresas', desc: 'Fresas y Moras' },
                                                 { tag: '@hortalizas', desc: 'Hortalizas' },
                                                 { tag: '@verduras', desc: 'Verduras' },
@@ -1957,451 +2653,513 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         </div>
                     </div>
 
-                    {/* Toggle expandir / colapsar familias */}
-                    <button
-                        type="button"
-                        onClick={toggleAllFamilies}
-                        style={{
-                            padding: '0.28rem 0.55rem',
-                            borderRadius: '7px',
-                            border: '1px solid #E2E8F0',
-                            backgroundColor: '#F8FAFC',
-                            color: '#475569',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            cursor: 'pointer',
+                    {/* DERECHA: Grupos de Acciones Operativas y Excel */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                        {/* Grupo 1: Registro de Novedades (Segmented Pill Group) */}
+                        <div style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px',
-                            flexShrink: 0
-                        }}
-                        title={allCollapsed ? "Expandir todas las presentaciones" : "Colapsar todas las familias"}
-                    >
-                        {allCollapsed ? <FolderPlus size={13} /> : <FolderMinus size={13} />}
-                        <span>{allCollapsed ? "Expandir" : "Colapsar"}</span>
-                    </button>
+                            backgroundColor: '#F1F5F9',
+                            borderRadius: '8px',
+                            padding: '2px',
+                            border: '1px solid #CBD5E1',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                            height: '32px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsWasteModalOpen(true)}
+                                style={{
+                                    padding: '0 0.65rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: '#0D7A57',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: '0 1px 3px rgba(13, 122, 87, 0.3)'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0A5F43')}
+                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0D7A57')}
+                                title="Registrar Merma / Novedad"
+                            >
+                                <Plus size={13} strokeWidth={2.5} />
+                                <span>+ Merma</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsPayrollModalOpen(true)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    color: '#334155',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '700',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
+                                title="Descuento de Nómina a Empleados (Columna N)"
+                            >
+                                <User size={13} color="#2563EB" strokeWidth={2} />
+                                <span>Nómina</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsAdditionalSalesModalOpen(true)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    color: '#334155',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '700',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
+                                title="Venta Extra / Mostrador (Columna M)"
+                            >
+                                <ShoppingCart size={13} color="#7E22CE" strokeWidth={2} />
+                                <span>Extra</span>
+                            </button>
+                        </div>
+
+                        {/* Grupo 2: Excel y Refrescar */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '8px',
+                            border: '1px solid #CBD5E1',
+                            padding: '2px',
+                            gap: '2px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                            height: '32px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={handleExportOfficialExcel}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: '#ECFDF5',
+                                    color: '#0D7A57',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#D1FAE5')}
+                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ECFDF5')}
+                                title="Descargar Balance Oficial en Excel (24 Columnas)"
+                            >
+                                <FileSpreadsheet size={13} color="#0D7A57" strokeWidth={2} />
+                                <span>Excel</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsExcelImportModalOpen(true)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: '#EFF6FF',
+                                    color: '#1D4ED8',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#DBEAFE')}
+                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
+                                title="Cargar / Simular Operación Diaria desde Excel (.xlsx)"
+                            >
+                                <Upload size={13} color="#1D4ED8" strokeWidth={2} />
+                                <span>Cargar Excel</span>
+                            </button>
+
+                            <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
+
+                            <button
+                                type="button"
+                                onClick={() => loadDailyData(true)}
+                                title="Refrescar balance diario"
+                                style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    color: '#64748B',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.color = '#0F172A'; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
+                            >
+                                <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                {/* DERECHA: Grupos de Acciones y Herramientas Compactas */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                    {/* Grupo 1: Registro de Novedades (Segmented Pill Group) */}
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        backgroundColor: '#F1F5F9',
-                        borderRadius: '8px',
-                        padding: '2px',
-                        border: '1px solid #CBD5E1',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                    }}>
+                {/* FILA 2: CONTROLES DE VISTA Y NAVEGADOR DE 24 COLUMNAS (SALTAR A BLOQUE) */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.55rem',
+                    flexWrap: 'nowrap'
+                }}>
+                    {/* IZQUIERDA: Herramientas de Árbol y Densidad */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                        {/* Toggle expandir / colapsar familias */}
                         <button
                             type="button"
-                            onClick={() => setIsWasteModalOpen(true)}
+                            onClick={toggleAllFamilies}
                             style={{
-                                padding: '0.3rem 0.65rem',
-                                borderRadius: '6px',
-                                border: 'none',
-                                backgroundColor: '#0D7A57',
-                                color: '#FFFFFF',
-                                fontSize: '0.74rem',
-                                fontWeight: '800',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
+                                padding: '0 0.6rem',
                                 height: '28px',
-                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.25)'
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0A5F43')}
-                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0D7A57')}
-                            title="Registrar Merma / Novedad"
-                        >
-                            <Plus size={13} strokeWidth={2.5} />
-                            <span>+ Merma</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setIsPayrollModalOpen(true)}
-                            style={{
-                                padding: '0.3rem 0.55rem',
                                 borderRadius: '6px',
-                                border: 'none',
-                                backgroundColor: 'transparent',
+                                border: '1px solid #CBD5E1',
+                                backgroundColor: '#FFFFFF',
                                 color: '#334155',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                height: '28px'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
-                            title="Descuento de Nómina a Empleados (Columna N)"
-                        >
-                            <User size={13} color="#2563EB" strokeWidth={2} />
-                            <span>Nómina</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setIsAdditionalSalesModalOpen(true)}
-                            style={{
-                                padding: '0.3rem 0.55rem',
-                                borderRadius: '6px',
-                                border: 'none',
-                                backgroundColor: 'transparent',
-                                color: '#334155',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                height: '28px'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
-                            title="Venta Extra / Mostrador (Columna M)"
-                        >
-                            <ShoppingCart size={13} color="#7E22CE" strokeWidth={2} />
-                            <span>Extra</span>
-                        </button>
-                    </div>
-
-                    {/* Grupo 2: Herramientas de Exportación y Vista (Tool Group) */}
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: '8px',
-                        border: '1px solid #CBD5E1',
-                        padding: '2px',
-                        gap: '2px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                    }}>
-                        <button
-                            type="button"
-                            onClick={handleExportOfficialExcel}
-                            style={{
-                                padding: '0.3rem 0.6rem',
-                                borderRadius: '6px',
-                                border: 'none',
-                                backgroundColor: '#ECFDF5',
-                                color: '#0D7A57',
-                                fontSize: '0.74rem',
+                                fontSize: '0.72rem',
                                 fontWeight: '800',
+                                cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
-                                cursor: 'pointer',
-                                height: '28px',
+                                gap: '5px',
+                                flexShrink: 0,
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                 transition: 'all 0.15s ease'
                             }}
-                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#D1FAE5')}
-                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ECFDF5')}
-                            title="Descargar Balance Oficial en Excel (24 Columnas)"
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                            title={allCollapsed ? "Expandir todas las presentaciones hijas" : "Colapsar todas las familias a vista compacta"}
                         >
-                            <FileSpreadsheet size={13} color="#0D7A57" strokeWidth={2} />
-                            <span>Excel</span>
+                            {allCollapsed ? <FolderPlus size={12} color="#0D7A57" strokeWidth={2.2} /> : <FolderMinus size={12} color="#D97706" strokeWidth={2.2} />}
+                            <span>{allCollapsed ? "Expandir Todo" : "Colapsar Todo"}</span>
                         </button>
 
-                        <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
-
+                        {/* Toggle Columnas A-D Compacto */}
                         <button
                             type="button"
                             onClick={() => setIsCompactIdentification(!isCompactIdentification)}
-                            title={isCompactIdentification ? "Cambiar a vista de 24 columnas separadas (A, B, C, D)" : "Modo Compacto: Fusionar identificación (ahorra 235px)"}
+                            title={isCompactIdentification ? "Cambiar a vista de 4 columnas separadas (A: Fecha, B: ID, C: Célula, D: Producto)" : "Modo Compacto: Fusiona A-D en una sola columna de 220px (Ahorra hasta 170px para ver más datos)"}
                             style={{
-                                padding: '0.3rem 0.5rem',
+                                padding: '0 0.55rem',
+                                height: '28px',
                                 borderRadius: '6px',
-                                border: 'none',
-                                backgroundColor: isCompactIdentification ? '#EAEFEA' : 'transparent',
+                                border: isCompactIdentification ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
+                                backgroundColor: isCompactIdentification ? '#ECFDF5' : '#FFFFFF',
                                 color: isCompactIdentification ? '#0D7A57' : '#64748B',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
+                                gap: '5px',
                                 cursor: 'pointer',
-                                height: '28px',
-                                transition: 'all 0.15s ease'
+                                transition: 'all 0.15s ease',
+                                flexShrink: 0
                             }}
                             onMouseEnter={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
-                            onMouseLeave={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            onMouseLeave={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = isCompactIdentification ? '#ECFDF5' : '#FFFFFF'; }}
                         >
-                            <Columns size={13} color={isCompactIdentification ? '#0D7A57' : '#64748B'} strokeWidth={2} />
-                            <span style={{ fontSize: '0.72rem' }}>{isCompactIdentification ? 'Compacta' : 'Cols A-D'}</span>
+                            <Columns size={12} color={isCompactIdentification ? '#0D7A57' : '#64748B'} strokeWidth={2.2} />
+                            <span>{isCompactIdentification ? 'A-D Compacto' : 'Cols A-D'}</span>
+                            {isCompactIdentification && (
+                                <span style={{ fontSize: '0.58rem', backgroundColor: '#D1FAE5', color: '#065F46', padding: '1px 4px', borderRadius: '3px', fontWeight: '800' }}>
+                                    -170px
+                                </span>
+                            )}
                         </button>
 
-                        <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
+                        {!isCompactIdentification && (
+                            <button
+                                type="button"
+                                onClick={() => setCellColumnMode(prev => (isCellCollapsed ? 'expanded' : 'collapsed'))}
+                                title={isCellCollapsed ? "Célula colapsada a icono + inicial (ahorra 86px). Clic para expandir." : "Colapsar Célula a Icono + Inicial (ahorra 86px)"}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '28px',
+                                    borderRadius: '6px',
+                                    border: isCellCollapsed ? '1px solid #FDE68A' : '1px solid #CBD5E1',
+                                    backgroundColor: isCellCollapsed ? '#FEF3C7' : '#FFFFFF',
+                                    color: isCellCollapsed ? '#92400E' : '#64748B',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '700',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    flexShrink: 0
+                                }}
+                                onMouseEnter={e => { if (!isCellCollapsed) e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                                onMouseLeave={e => { if (!isCellCollapsed) e.currentTarget.style.backgroundColor = isCellCollapsed ? '#FEF3C7' : '#FFFFFF'; }}
+                            >
+                                <Sprout size={12} color={isCellCollapsed ? '#92400E' : '#64748B'} strokeWidth={2} />
+                                <span>{isCellCollapsed ? 'Célula: Inicial' : 'Célula: Completa'}</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* DERECHA: NAVEGADOR DE BLOQUES DE COLUMNAS (SALTAR A BLOQUE) */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '2px 4px',
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        height: '30px',
+                        boxSizing: 'border-box',
+                        overflowX: 'auto',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        <span style={{ color: '#64748B', fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 3px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <Layers size={12} color="#0D7A57" />
+                            <span>Saltar a Bloque:</span>
+                        </span>
 
                         <button
                             type="button"
-                            onClick={() => loadDailyData(true)}
-                            title="Refrescar balance diario"
+                            onClick={() => scrollToColumnGroup('identificacion')}
+                            title="Ir a columnas de Identificación (Cols A - D)"
                             style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                backgroundColor: 'transparent',
-                                color: '#64748B',
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'identificacion' ? '1.5px solid #64748B' : '1px solid #CBD5E1',
+                                backgroundColor: activeBlock === 'identificacion' ? '#F1F5F9' : '#FFFFFF',
+                                color: '#334155',
                                 cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'identificacion' ? '800' : '700',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'all 0.15s ease'
+                                gap: '4px',
+                                transition: 'all 0.15s'
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.color = '#0F172A'; }}
-                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
                         >
-                            <RefreshCw size={13} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
+                            <FileText size={11} color="#475569" />
+                            <span>Identificación (A-D)</span>
                         </button>
+
+                        <button
+                            type="button"
+                            onClick={() => scrollToColumnGroup('entradas')}
+                            title="Centrar en pantalla columnas de Entradas y Compras (Cols E - G)"
+                            style={{
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'entradas' ? '1.5px solid #16A34A' : '1px solid #86EFAC',
+                                backgroundColor: activeBlock === 'entradas' ? '#DCFCE7' : '#F0FDF4',
+                                color: '#15803D',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'entradas' ? '800' : '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <ArrowDownToLine size={11} color="#15803D" />
+                            <span>Entradas (E-G)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => scrollToColumnGroup('ventas')}
+                            title="Centrar en pantalla columnas de Ventas y Pedidos (Cols H - J)"
+                            style={{
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'ventas' ? '1.5px solid #2563EB' : '1px solid #93C5FD',
+                                backgroundColor: activeBlock === 'ventas' ? '#DBEAFE' : '#EFF6FF',
+                                color: '#1D4ED8',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'ventas' ? '800' : '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <ShoppingCart size={11} color="#1D4ED8" />
+                            <span>Ventas (H-J)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => scrollToColumnGroup('excepciones')}
+                            title="Centrar en pantalla columnas de Excepciones y Ventas Extras (Cols K - N)"
+                            style={{
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'excepciones' ? '1.5px solid #9333EA' : '1px solid #D8B4FE',
+                                backgroundColor: activeBlock === 'excepciones' ? '#F3E8FF' : '#FAF5FF',
+                                color: '#7E22CE',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'excepciones' ? '800' : '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <AlertTriangle size={11} color="#7E22CE" />
+                            <span>Excepciones (K-N)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => scrollToColumnGroup('mermas')}
+                            title="Centrar en pantalla columnas de Devoluciones y Mermas (Cols O - R)"
+                            style={{
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'mermas' ? '1.5px solid #D97706' : '1px solid #FCD34D',
+                                backgroundColor: activeBlock === 'mermas' ? '#FEF3C7' : '#FFFBEB',
+                                color: '#B45309',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'mermas' ? '800' : '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <Trash2 size={11} color="#B45309" />
+                            <span>Mermas (O-R)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => scrollToColumnGroup('cierre')}
+                            title="Centrar en pantalla columnas de Cierre y Bodega Post-10 (Cols S - U)"
+                            style={{
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'cierre' ? '1.5px solid #0D9488' : '1px solid #5EEAD4',
+                                backgroundColor: activeBlock === 'cierre' ? '#CCFBF1' : '#F0FDFA',
+                                color: '#0F766E',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'cierre' ? '800' : '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <Package size={11} color="#0F766E" />
+                            <span>Cierre & Bodega (S-U)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => scrollToColumnGroup('conciliacion')}
+                            title="Centrar en pantalla columnas de Conciliación y Diferencias (Cols V - X)"
+                            style={{
+                                padding: '2px 7px',
+                                borderRadius: '5px',
+                                border: activeBlock === 'conciliacion' ? '1.5px solid #059669' : '1px solid #6EE7B7',
+                                backgroundColor: activeBlock === 'conciliacion' ? '#D1FAE5' : '#ECFDF5',
+                                color: '#065F46',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontWeight: activeBlock === 'conciliacion' ? '800' : '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <Scale size={11} color="#065F46" />
+                            <span>Conciliación (V-X)</span>
+                        </button>
+
+                        {/* Flechas de desplazamiento lateral paso a paso */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '2px' }}>
+                            <button
+                                type="button"
+                                onClick={() => scrollStepHorizontal('left')}
+                                title="Desplazar columnas a la izquierda"
+                                style={{
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <ChevronLeft size={11} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => scrollStepHorizontal('right')}
+                                title="Desplazar columnas a la derecha"
+                                style={{
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <ChevronRight size={11} />
+                            </button>
+                        </div>
                     </div>
-                </div>
-            </div>
-
-            {/* BARRA DE NAVEGACIÓN Y SELECTORES DE BLOQUES DE COLUMNAS */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '0.5rem',
-                padding: '0.4rem 0.85rem',
-                backgroundColor: '#F8FAFC',
-                borderRadius: '10px',
-                border: '1px solid #E2E8F0',
-                marginBottom: '0.55rem',
-                overflowX: 'auto',
-                whiteSpace: 'nowrap',
-                fontSize: '0.72rem',
-                fontWeight: '700',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'nowrap' }}>
-                    <span style={{ color: '#64748B', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Layers size={13} color="#0D7A57" />
-                        <span>Saltar a Bloque:</span>
-                    </span>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(0)}
-                        title="Ir a columnas de Identificación (Cols A - D)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #CBD5E1',
-                            backgroundColor: '#FFFFFF',
-                            color: '#334155',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFFFF'}
-                    >
-                        <FileText size={12} color="#475569" />
-                        <span>Identificación (A-D)</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(blockOffsets.entradas)}
-                        title="Ir a columnas de Entradas y Compras (Cols E - G)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #86EFAC',
-                            backgroundColor: '#F0FDF4',
-                            color: '#15803D',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DCFCE7'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F0FDF4'}
-                    >
-                        <ArrowDownToLine size={12} color="#15803D" />
-                        <span>Entradas (E-G)</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(blockOffsets.ventas)}
-                        title="Ir a columnas de Ventas y Pedidos (Cols H - J)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #93C5FD',
-                            backgroundColor: '#EFF6FF',
-                            color: '#1D4ED8',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                    >
-                        <ShoppingCart size={12} color="#1D4ED8" />
-                        <span>Ventas (H-J)</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(blockOffsets.excepciones)}
-                        title="Ir a columnas de Excepciones y Ventas Extras (Cols K - N)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #D8B4FE',
-                            backgroundColor: '#FAF5FF',
-                            color: '#7E22CE',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F3E8FF'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FAF5FF'}
-                    >
-                        <AlertTriangle size={12} color="#7E22CE" />
-                        <span>Excepciones (K-N)</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(blockOffsets.mermas)}
-                        title="Ir a columnas de Devoluciones y Mermas (Cols O - R)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #FCD34D',
-                            backgroundColor: '#FFFBEB',
-                            color: '#B45309',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEF3C7'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFBEB'}
-                    >
-                        <Trash2 size={12} color="#B45309" />
-                        <span>Mermas (O-R)</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(blockOffsets.cierre)}
-                        title="Ir a columnas de Cierre y Bodega Post-10 (Cols S - U)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #5EEAD4',
-                            backgroundColor: '#F0FDFA',
-                            color: '#0F766E',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#CCFBF1'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F0FDFA'}
-                    >
-                        <Package size={12} color="#0F766E" />
-                        <span>Cierre & Bodega (S-U)</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => scrollToColumnGroup(blockOffsets.conciliacion)}
-                        title="Ir a columnas de Conciliación y Diferencias (Cols V - X)"
-                        style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            border: '1px solid #6EE7B7',
-                            backgroundColor: '#ECFDF5',
-                            color: '#065F46',
-                            cursor: 'pointer',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1FAE5'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ECFDF5'}
-                    >
-                        <Scale size={12} color="#065F46" />
-                        <span>Conciliación (V-X)</span>
-                    </button>
-                </div>
-
-                {/* Flechas de desplazamiento lateral paso a paso */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <button
-                        type="button"
-                        onClick={() => scrollStepHorizontal('left')}
-                        title="Desplazar columnas a la izquierda"
-                        style={{
-                            padding: '3px 6px',
-                            borderRadius: '6px',
-                            border: '1px solid #CBD5E1',
-                            backgroundColor: '#FFFFFF',
-                            color: '#475569',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center'
-                        }}
-                    >
-                        <ChevronLeft size={13} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => scrollStepHorizontal('right')}
-                        title="Desplazar columnas a la derecha"
-                        style={{
-                            padding: '3px 6px',
-                            borderRadius: '6px',
-                            border: '1px solid #CBD5E1',
-                            backgroundColor: '#FFFFFF',
-                            color: '#475569',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center'
-                        }}
-                    >
-                        <ChevronRight size={13} />
-                    </button>
                 </div>
             </div>
 
@@ -2416,6 +3174,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             }}>
                 <div 
                     ref={tableScrollRef}
+                    onScroll={handleTableScroll}
                     style={{ 
                         overflow: 'auto', 
                         maxHeight: 'calc(100vh - 215px)',
@@ -2434,25 +3193,27 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         }}>
                             <tr>
                                 <th 
+                                    data-block-id="identificacion"
                                     colSpan={isCompactIdentification ? 1 : 4} 
-                                    onClick={() => scrollToColumnGroup(0)}
+                                    onClick={() => scrollToColumnGroup('identificacion')}
                                     title="Clic para enfocar Identificación"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
-                                        borderBottom: '1px solid #1E293B',
+                                        borderBottom: '1px solid #1E293B', 
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #64748B',
                                         fontWeight: '800', 
                                         position: 'sticky',
                                         left: 0,
                                         zIndex: 45,
-                                        width: isCompactIdentification ? '240px' : undefined,
-                                        minWidth: isCompactIdentification ? '240px' : undefined,
-                                        maxWidth: isCompactIdentification ? '240px' : undefined,
+                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
+                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
+                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
                                     }}
                                 >
                                     <span style={{ 
@@ -2467,9 +3228,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </span>
                                 </th>
                                 <th 
+                                    data-block-id="entradas"
                                     colSpan={3} 
-                                    onClick={() => scrollToColumnGroup(blockOffsets.entradas)}
-                                    title="Clic para enfocar Entradas (+)"
+                                    onClick={() => scrollToColumnGroup('entradas')}
+                                    title="Clic para centrar Entradas (+)"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
@@ -2477,7 +3239,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #10B981',
-                                        fontWeight: '800',
+                                        fontWeight: '800', 
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -2493,9 +3255,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </span>
                                 </th>
                                 <th 
+                                    data-block-id="ventas"
                                     colSpan={3} 
-                                    onClick={() => scrollToColumnGroup(blockOffsets.ventas)}
-                                    title="Clic para enfocar Ventas & Pedidos (-)"
+                                    onClick={() => scrollToColumnGroup('ventas')}
+                                    title="Clic para centrar Ventas & Pedidos (-)"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
@@ -2503,7 +3266,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #3B82F6',
-                                        fontWeight: '800',
+                                        fontWeight: '800', 
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -2519,9 +3282,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </span>
                                 </th>
                                 <th 
+                                    data-block-id="excepciones"
                                     colSpan={4} 
-                                    onClick={() => scrollToColumnGroup(blockOffsets.excepciones)}
-                                    title="Clic para enfocar Excepciones"
+                                    onClick={() => scrollToColumnGroup('excepciones')}
+                                    title="Clic para centrar Excepciones"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
@@ -2529,7 +3293,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #A855F7',
-                                        fontWeight: '800',
+                                        fontWeight: '800', 
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -2545,9 +3309,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </span>
                                 </th>
                                 <th 
+                                    data-block-id="mermas"
                                     colSpan={4} 
-                                    onClick={() => scrollToColumnGroup(blockOffsets.mermas)}
-                                    title="Clic para enfocar Devoluciones & Mermas"
+                                    onClick={() => scrollToColumnGroup('mermas')}
+                                    title="Clic para centrar Devoluciones & Mermas"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
@@ -2555,7 +3320,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #F59E0B',
-                                        fontWeight: '800',
+                                        fontWeight: '800', 
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -2571,9 +3336,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </span>
                                 </th>
                                 <th 
+                                    data-block-id="cierre"
                                     colSpan={3} 
-                                    onClick={() => scrollToColumnGroup(blockOffsets.cierre)}
-                                    title="Clic para enfocar Cierre & Bodega"
+                                    onClick={() => scrollToColumnGroup('cierre')}
+                                    title="Clic para centrar Cierre & Bodega"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
@@ -2581,7 +3347,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #0D9488',
-                                        fontWeight: '800',
+                                        fontWeight: '800', 
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -2597,16 +3363,17 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </span>
                                 </th>
                                 <th 
+                                    data-block-id="conciliacion"
                                     colSpan={3} 
-                                    onClick={() => scrollToColumnGroup(blockOffsets.conciliacion)}
-                                    title="Clic para enfocar Conciliación"
+                                    onClick={() => scrollToColumnGroup('conciliacion')}
+                                    title="Clic para centrar Conciliación"
                                     style={{ 
                                         padding: '7px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderTop: '3px solid #0D7A57',
-                                        fontWeight: '800',
+                                        fontWeight: '800', 
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -2627,21 +3394,24 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             <tr style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: '2px solid #334155' }}>
                                 {/* Sticky A, B, C, D (Compacto o Tradicional) */}
                                 {isCompactIdentification ? (
-                                    <th style={{
-                                        padding: '6px 10px',
-                                        textAlign: 'left',
-                                        width: '240px',
-                                        minWidth: '240px',
-                                        maxWidth: '240px',
-                                        borderRight: '2px solid #334155',
-                                        position: 'sticky',
-                                        left: 0,
-                                        zIndex: 45,
-                                        backgroundColor: '#0F172A',
-                                        boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
-                                        fontSize: '0.7rem',
-                                        color: '#E2E8F0'
-                                    }}>
+                                    <th 
+                                        data-sticky-last="true"
+                                        style={{
+                                            padding: '6px 8px',
+                                            textAlign: 'left',
+                                            width: '240px',
+                                            minWidth: '240px',
+                                            maxWidth: '240px',
+                                            borderRight: '2px solid #334155',
+                                            position: 'sticky',
+                                            left: 0,
+                                            zIndex: 45,
+                                            backgroundColor: '#0F172A',
+                                            boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                            fontSize: '0.7rem',
+                                            color: '#E2E8F0'
+                                        }}
+                                    >
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <span>A-D: PRODUCTO & SKU</span>
                                             <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: '500', textTransform: 'none' }}>Célula / Fecha</span>
@@ -2649,44 +3419,108 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </th>
                                 ) : (
                                     <>
-                                        <th style={{ padding: '6px 8px', textAlign: 'left', width: '85px', minWidth: '85px', position: 'sticky', left: 0, zIndex: 45, backgroundColor: '#0F172A' }}>A: Fecha</th>
-                                        <th style={{ padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', position: 'sticky', left: '85px', zIndex: 45, backgroundColor: '#0F172A' }}>B: ID Prod</th>
-                                        <th style={{ padding: '6px 8px', textAlign: 'left', width: '130px', minWidth: '130px', position: 'sticky', left: '155px', zIndex: 45, backgroundColor: '#0F172A' }}>C: Célula</th>
-                                        <th style={{ padding: '6px 10px', textAlign: 'left', width: '190px', minWidth: '190px', borderRight: '2px solid #334155', position: 'sticky', left: '285px', zIndex: 45, backgroundColor: '#0F172A', boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)' }}>D: Producto</th>
+                                        <th style={{ padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: 'sticky', left: 0, zIndex: 45, backgroundColor: '#0F172A' }}>A: Fecha</th>
+                                        <th style={{ padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', left: '85px', zIndex: 45, backgroundColor: '#0F172A' }}>B: ID Prod</th>
+                                        <th 
+                                            onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
+                                            title={isCellCollapsed ? "C: Célula colapsada (Clic para expandir nombre completo)" : "C: Célula (Clic para colapsar y maximizar espacio de datos)"}
+                                            style={{ 
+                                                padding: isCellCollapsed ? '6px 4px' : '6px 8px', 
+                                                textAlign: isCellCollapsed ? 'center' : 'left', 
+                                                width: isCellCollapsed ? '44px' : '130px', 
+                                                minWidth: isCellCollapsed ? '44px' : '130px', 
+                                                maxWidth: isCellCollapsed ? '44px' : '130px', 
+                                                position: 'sticky', 
+                                                left: '155px', 
+                                                zIndex: 45, 
+                                                backgroundColor: '#0F172A', 
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            {isCellCollapsed ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8' }}>C</span>
+                                                    <span style={{ fontSize: '0.55rem', color: '#64748B' }}>▶</span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                    <span>C: Célula</span>
+                                                    <span style={{ fontSize: '0.58rem', color: '#64748B' }} title="Colapsar célula">◀</span>
+                                                </div>
+                                            )}
+                                        </th>
+                                        <th 
+                                            data-sticky-last="true"
+                                            style={{ 
+                                                padding: '6px 10px', 
+                                                textAlign: 'left', 
+                                                width: '190px', 
+                                                minWidth: '190px', 
+                                                maxWidth: '190px', 
+                                                borderRight: '2px solid #334155', 
+                                                position: 'sticky', 
+                                                left: isCellCollapsed ? '199px' : '285px', 
+                                                zIndex: 45, 
+                                                backgroundColor: '#0F172A', 
+                                                boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                                transition: 'left 0.2s ease, width 0.2s ease'
+                                            }}
+                                        >
+                                            D: Producto
+                                        </th>
                                     </>
                                 )}
 
                                 {/* Columnas E - G */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399' }}>E: Inicial (+)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399' }}>F: Correc. (±)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155' }}>G: Compra (+)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>E: Inicial (+)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>F: Correc. (±)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>G: Compra (+)</th>
 
                                 {/* Columnas H - J */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA' }}>H: Venta KG (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#94A3B8' }}>I: Venta UN (Info)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155' }}>J: Peso UN (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px' }}>H: Venta KG (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px' }}>I: Venta UN (Info)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>J: Peso UN (-)</th>
 
                                 {/* Columnas K - N */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171' }}>K: Escaso (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399' }}>L: Sin Enviar (+)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#C084FC' }}>M: Vta Extra (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155' }}>N: Vta Nómina (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>K: Escaso (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>L: Sin Enviar (+)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px' }}>M: Vta Extra (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>N: Vta Nómina (-)</th>
 
                                 {/* Columnas O - R */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24' }}>O: Devol. (+)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24' }}>P: Pesada (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171' }}>Q: Desperd. (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155' }}>R: Basura (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>O: Devol. (+)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>P: Pesada (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>Q: Desperd. (-)</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>R: Basura (-)</th>
 
                                 {/* Columnas S - U */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B' }}>S: Calc. Final</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B' }}>T: Conteo Real</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155' }}>U: Bodega Post-10</th>
+                                <th style={{ 
+                                    padding: '6px 8px', 
+                                    textAlign: 'right', 
+                                    color: '#5EEAD4', 
+                                    backgroundColor: '#042F2E', 
+                                    borderLeft: '2px solid #0D9488', 
+                                    borderRight: '2px solid #0D9488',
+                                    width: '95px',
+                                    minWidth: '95px',
+                                    maxWidth: '95px'
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                        <span style={{ fontSize: '0.52rem', fontWeight: '900', backgroundColor: '#0D9488', color: '#FFFFFF', padding: '1px 4px', borderRadius: '3px', letterSpacing: '0.04em' }}>
+                                            RESULTADO
+                                        </span>
+                                        <span>S: Calc. Final</span>
+                                    </div>
+                                </th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>U: Bodega Post-10</th>
 
                                 {/* Columnas V - X */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171' }}>V: Faltantes</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399' }}>W: Sobrantes</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F472B6' }}>X: Donación</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>W: Sobrantes</th>
+                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px' }}>X: Donación</th>
                             </tr>
                         </thead>
 
@@ -2701,7 +3535,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         </div>
                                     </td>
                                 </tr>
-                            ) : paginatedFamilies.length === 0 ? (
+                            ) : displayedFamilies.length === 0 ? (
                                 <tr>
                                     <td colSpan={isCompactIdentification ? 21 : 24} style={{ textAlign: 'center', padding: '3.5rem', color: '#94A3B8' }}>
                                         <Package size={32} strokeWidth={1.5} style={{ margin: '0 auto 0.5rem', opacity: 0.6 }} />
@@ -2710,28 +3544,42 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedFamilies.map((family, idx) => {
+                                displayedFamilies.map((family, idx) => {
                                     const isAlternate = idx % 2 === 1;
                                     const isCollapsed = collapsedFamilies[family.id] !== false; // default true
 
                                     if (family.isParent) {
                                         return (
                                             <React.Fragment key={`family-${family.id}`}>
-                                                {/* Fila Padre / Consolidada */}
+                                                {/* Fila Padre Resaltada (Consolidado Maestro de Familia) */}
                                                 {renderRow(family.consolidated, `parent-${family.id}`, {
                                                     isParent: true,
                                                     isCollapsed,
                                                     onToggle: () => toggleFamily(family.id),
-                                                    childCount: family.children.length,
+                                                    childCount: family.children.length + 1,
                                                     isAlternate
                                                 })}
 
                                                 {/* Filas Hijas (si está expandido) */}
-                                                {!isCollapsed && family.children.map((child, chIdx) => 
-                                                    renderRow(child, `child-${child.productId}`, {
-                                                        isChild: true,
-                                                        isAlternate: chIdx % 2 === 1
-                                                    })
+                                                {!isCollapsed && (
+                                                    <>
+                                                        {/* Desglose de presentación base fija (siempre visible y editable como en fila 106 de Excel) */}
+                                                        {renderRow({
+                                                            ...family.parent,
+                                                            colD_productName: `${family.parent.colD_productName} (Base / Estándar)`
+                                                        }, `child-base-${family.parent.productId}`, {
+                                                            isChild: true,
+                                                            isBaseChild: true,
+                                                            isAlternate: false
+                                                        })}
+                                                        {family.children.map((child, chIdx) => 
+                                                            renderRow(child, `child-${child.productId}`, {
+                                                                isChild: true,
+                                                                isBaseChild: false,
+                                                                isAlternate: chIdx % 2 === 1
+                                                            })
+                                                        )}
+                                                    </>
                                                 )}
                                             </React.Fragment>
                                         );
@@ -2744,146 +3592,185 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 })
                             )}
                         </tbody>
+
+                        {/* Fila Fija de Totales Consolidada (∑ 24 Columnas Lean) */}
+                        <tfoot style={{
+                            position: 'sticky',
+                            bottom: 0,
+                            zIndex: 30,
+                            backgroundColor: '#0F172A',
+                            color: '#F8FAFC',
+                            boxShadow: '0 -4px 10px -2px rgba(0, 0, 0, 0.25)'
+                        }}>
+                            <tr style={{ fontWeight: '900', fontSize: '0.78rem' }}>
+                                {/* Sticky Cols A-D */}
+                                <td
+                                    colSpan={isCompactIdentification ? 1 : 4}
+                                    style={{
+                                        padding: '7px 10px',
+                                        textAlign: 'left',
+                                        backgroundColor: '#0F172A',
+                                        color: '#F8FAFC',
+                                        borderRight: '2px solid #334155',
+                                        borderTop: '2px solid #334155',
+                                        position: 'sticky',
+                                        left: 0,
+                                        bottom: 0,
+                                        zIndex: 35,
+                                        boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
+                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
+                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
+                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.72rem', color: '#E2E8F0' }}>
+                                            TOTAL ({filteredFamilies.length} FAMILIAS)
+                                        </span>
+                                        <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: '700' }}>
+                                            {totalActiveSkusCount} SKUs
+                                        </span>
+                                    </div>
+                                </td>
+
+                                {/* E: Inicial */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalE)}
+                                </td>
+                                {/* F: Corrección */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalF)}
+                                </td>
+                                {/* G: Compra */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalG)}
+                                </td>
+
+                                {/* H: Venta KG */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalH)}
+                                </td>
+                                {/* I: Venta UN */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalI, 0)}
+                                </td>
+                                {/* J: Peso UN */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalJ)}
+                                </td>
+
+                                {/* K: Escaso */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalK)}
+                                </td>
+                                {/* L: Sin Enviar */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalL)}
+                                </td>
+                                {/* M: Vta Extra */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalM)}
+                                </td>
+                                {/* N: Vta Nómina */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalN)}
+                                </td>
+
+                                {/* O: Devoluciones */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalO)}
+                                </td>
+                                {/* P: Pesada */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalP)}
+                                </td>
+                                {/* Q: Desperdicio */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalQ)}
+                                </td>
+                                {/* R: Basura */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalR)}
+                                </td>
+
+                                {/* S: Inventario Calculado (RESALTADO GLASSMORPHISM RESULTADO) */}
+                                <td style={{
+                                    position: 'sticky',
+                                    bottom: 0,
+                                    zIndex: 31,
+                                    padding: '6px 8px',
+                                    textAlign: 'right',
+                                    color: '#5EEAD4',
+                                    backgroundColor: '#042F2E',
+                                    borderLeft: '2px solid #0D9488',
+                                    borderRight: '2px solid #0D9488',
+                                    borderTop: '2px solid #0D9488',
+                                    width: '95px',
+                                    minWidth: '95px',
+                                    maxWidth: '95px',
+                                    fontWeight: '900',
+                                    fontSize: '0.84rem',
+                                    boxShadow: '0 0 10px rgba(13, 148, 136, 0.4)'
+                                }}>
+                                    {renderNumericCell(columnTotals.totalS)}
+                                </td>
+
+                                {/* T: Conteo Real */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalT)}
+                                </td>
+                                {/* U: Bodega Post-10 */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalU)}
+                                </td>
+
+                                {/* V: Faltantes */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalV)}
+                                </td>
+                                {/* W: Sobrantes */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalW)}
+                                </td>
+                                {/* X: Donación */}
+                                <td style={{ position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
+                                    {renderNumericCell(columnTotals.totalX)}
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
 
-            {/* BARRA DE PAGINACIÓN Y CONTROL DE LONGITUD */}
+            {/* BARRA DE ESTADO INFORMATIVA CONTINUA */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                padding: '0.5rem 0.85rem',
+                padding: '0.6rem 1rem',
                 backgroundColor: '#FFFFFF',
                 borderRadius: '10px',
                 border: '1px solid #E2E8F0',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 flexWrap: 'wrap',
-                gap: '0.65rem',
+                gap: '0.75rem',
                 fontSize: '0.78rem',
                 color: '#64748B'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span>
-                        Mostrando <strong>{pageSize === 'ALL' ? filteredFamilies.length : Math.min((currentPage - 1) * pageSize + 1, filteredFamilies.length)}</strong> - <strong>{pageSize === 'ALL' ? filteredFamilies.length : Math.min(currentPage * pageSize, filteredFamilies.length)}</strong> de <strong>{filteredFamilies.length}</strong> familias ({totalActiveSkusCount} SKUs activos)
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} />
+                        <span>Modo: <strong style={{ color: '#0F172A' }}>Vista Continua (100% en Pantalla)</strong></span>
                     </span>
                     <div style={{ height: '14px', width: '1px', backgroundColor: '#CBD5E1' }} />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <span>Por página:</span>
-                        <select
-                            value={pageSize}
-                            onChange={e => {
-                                const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
-                                setPageSize(val);
-                                setCurrentPage(1);
-                            }}
-                            style={{
-                                padding: '0.2rem 0.45rem',
-                                borderRadius: '6px',
-                                border: '1px solid #CBD5E1',
-                                fontSize: '0.76rem',
-                                fontWeight: '700',
-                                color: '#1E293B',
-                                outline: 'none',
-                                backgroundColor: '#F8FAFC'
-                            }}
-                        >
-                            <option value={25}>25</option>
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                            <option value="ALL">Todas</option>
-                        </select>
-                    </div>
+                    <span>
+                        Mostrando <strong style={{ color: '#0F172A' }}>{displayedFamilies.length}</strong> familias ({totalActiveSkusCount} SKUs activos) {onlyWithMovement ? 'con movimiento hoy' : 'del catálogo activo'}
+                    </span>
                 </div>
 
-                {pageSize !== 'ALL' && totalPages > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <button
-                            type="button"
-                            onClick={() => setCurrentPage(1)}
-                            disabled={currentPage === 1}
-                            style={{
-                                padding: '0.25rem 0.45rem',
-                                borderRadius: '6px',
-                                border: '1px solid #E2E8F0',
-                                backgroundColor: currentPage === 1 ? '#F8FAFC' : '#FFFFFF',
-                                color: currentPage === 1 ? '#CBD5E1' : '#334155',
-                                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                                fontSize: '0.74rem',
-                                display: 'inline-flex',
-                                alignItems: 'center'
-                            }}
-                            title="Primera página"
-                        >
-                            <ChevronsLeft size={13} />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            style={{
-                                padding: '0.25rem 0.55rem',
-                                borderRadius: '6px',
-                                border: '1px solid #E2E8F0',
-                                backgroundColor: currentPage === 1 ? '#F8FAFC' : '#FFFFFF',
-                                color: currentPage === 1 ? '#CBD5E1' : '#334155',
-                                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '2px'
-                            }}
-                        >
-                            <ChevronLeft size={13} />
-                            <span>Anterior</span>
-                        </button>
-
-                        <span style={{ padding: '0 0.45rem', fontSize: '0.76rem', fontWeight: '800', color: '#1E293B' }}>
-                            Pág. {currentPage} / {totalPages}
-                        </span>
-
-                        <button
-                            type="button"
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages}
-                            style={{
-                                padding: '0.25rem 0.55rem',
-                                borderRadius: '6px',
-                                border: '1px solid #E2E8F0',
-                                backgroundColor: currentPage === totalPages ? '#F8FAFC' : '#FFFFFF',
-                                color: currentPage === totalPages ? '#CBD5E1' : '#334155',
-                                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '2px'
-                            }}
-                        >
-                            <span>Siguiente</span>
-                            <ChevronRight size={13} />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setCurrentPage(totalPages)}
-                            disabled={currentPage === totalPages}
-                            style={{
-                                padding: '0.25rem 0.45rem',
-                                borderRadius: '6px',
-                                border: '1px solid #E2E8F0',
-                                backgroundColor: currentPage === totalPages ? '#F8FAFC' : '#FFFFFF',
-                                color: currentPage === totalPages ? '#CBD5E1' : '#334155',
-                                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                                fontSize: '0.74rem',
-                                display: 'inline-flex',
-                                alignItems: 'center'
-                            }}
-                            title="Última página"
-                        >
-                            <ChevronsRight size={13} />
-                        </button>
-                    </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.74rem', color: '#94A3B8' }}>
+                    <span>Tip: Usa <strong style={{ color: '#64748B' }}>Ctrl + F</strong> para búsqueda rápida en toda la sábana</span>
+                </div>
             </div>
 
             {/* MODAL LIGHTBOX PARA VISUALIZAR FOTO DE EVIDENCIA */}
@@ -2964,6 +3851,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             <InventoryAdditionalSalesModal
                 isOpen={isAdditionalSalesModalOpen}
                 onClose={() => setIsAdditionalSalesModalOpen(false)}
+            />
+
+            <DailyBalanceExcelImportModal
+                isOpen={isExcelImportModalOpen}
+                onClose={() => setIsExcelImportModalOpen(false)}
+                onSuccess={() => loadDailyData(true)}
+                currentDate={balanceDate}
+                products={products}
             />
         </div>
     );

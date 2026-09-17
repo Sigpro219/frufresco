@@ -2804,6 +2804,50 @@ export default function InventoryAdminPage() {
                                     <option value="in_process">En Proceso</option>
                                 </select>
 
+                                {sortedFamilies.some(f => f.isParent) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const parentIds = sortedFamilies.filter(f => f.isParent).map(f => f.parent.product_id);
+                                            const allExpanded = parentIds.every(id => collapsedParents[id] === false);
+                                            const nextState: Record<string, boolean> = {};
+                                            parentIds.forEach(id => {
+                                                nextState[id] = allExpanded; // if all expanded -> collapse (true), else expand (false)
+                                            });
+                                            setCollapsedParents(nextState);
+                                        }}
+                                        style={{
+                                            fontSize: '0.74rem',
+                                            fontWeight: '600',
+                                            padding: '0.45rem 0.75rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: '#FFFFFF',
+                                            color: '#475569',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                        title="Contraer o desplegar presentaciones de las familias"
+                                    >
+                                        {sortedFamilies.filter(f => f.isParent).every(f => collapsedParents[f.parent.product_id] === false) ? (
+                                            <>
+                                                <ChevronRight size={13} strokeWidth={2.5} />
+                                                <span>Colapsar Familias</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ChevronDown size={13} strokeWidth={2.5} />
+                                                <span>Expandir Familias</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+
                                 {sortField !== 'default' && (
                                     <button
                                         type="button"
@@ -3159,284 +3203,105 @@ export default function InventoryAdminPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {paginatedFamilies.map((family, familyIdx) => {
-                                                const parent = family.parent;
-                                                const isCollapsed = !!collapsedParents[parent.product_id];
+                                            {sortedFamilies.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} style={{ padding: '3.5rem', textAlign: 'center', backgroundColor: '#F8FAF9' }}>
+                                                        <Package size={36} strokeWidth={1.5} style={{ color: '#94A3B8', margin: '0 auto 0.5rem' }} />
+                                                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#334155' }}>
+                                                            No se encontraron productos en el catálogo
+                                                        </div>
+                                                        <p style={{ fontSize: '0.8rem', color: '#64748B', maxWidth: '380px', margin: '0.25rem auto' }}>
+                                                            Verifica el término de búsqueda o selecciona otro grupo de inventario.
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                sortedFamilies.map((family, familyIdx) => {
+                                                    const parent = family.parent;
+                                                    const isCollapsed = collapsedParents[parent.product_id] !== false; // default true
 
-                                                if (family.isParent) {
-                                                    return (
-                                                        <React.Fragment key={`family-${parent.product_id}-${parent.status}-${familyIdx}`}>
-                                                            {/* FILA PADRE */}
-                                                            <tr 
-                                                                style={{ 
-                                                                    backgroundColor: '#F8FAFC',
-                                                                    borderLeft: '4px solid #4F46E5',
-                                                                    transition: 'background-color 0.15s ease'
-                                                                }} 
-                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} 
-                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            >
-                                                                <td style={styles.td}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => toggleParentCollapse(parent.product_id)}
-                                                                            style={{
-                                                                                background: isCollapsed ? '#EEF2FF' : '#E0E7FF',
-                                                                                border: '1px solid #C7D2FE',
-                                                                                cursor: 'pointer',
-                                                                                padding: '4px',
-                                                                                borderRadius: '6px',
-                                                                                color: '#4F46E5',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                transition: 'all 0.15s ease'
-                                                                            }}
-                                                                            title={isCollapsed ? `Expandir ${family.children.length} hijos` : "Colapsar hijos"}
-                                                                        >
-                                                                            {isCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronDown size={14} strokeWidth={2.5} />}
-                                                                        </button>
-                                                                        <div style={{ width: '44px', height: '44px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, flexShrink: 0 }}>
-                                                                            {parent.products?.image_url ? (
-                                                                                <img 
-                                                                                    src={parent.products.image_url} 
-                                                                                    alt={parent.products.name} 
-                                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                                                                />
-                                                                            ) : (
-                                                                                <Package size={20} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
-                                                                            )}
-                                                                        </div>
-                                                                        <div>
-                                                                            <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                                <span>{parent.products?.name || 'Desconocido'}</span>
-                                                                            </div>
-                                                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                                <code style={{ fontSize: '0.75rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 8px', borderRadius: '5px', fontWeight: '800', border: '1px solid #C6E7D9', letterSpacing: '0.02em' }}>
-                                                                                    ID: {parent.products?.accounting_id ?? '—'}
-                                                                                </code>
-                                                                                {renderCellBadge(parent.products?.inventory_group)}
-                                                                                {parent.products?.is_active === false && (
-                                                                                    <span style={{
-                                                                                        fontSize: '0.62rem',
-                                                                                        backgroundColor: '#FEF2F2',
-                                                                                        color: '#991B1B',
-                                                                                        padding: '2px 6px',
-                                                                                        borderRadius: '4px',
-                                                                                        fontWeight: '800',
-                                                                                        border: '1px solid #FECACA',
-                                                                                        textAlign: 'center',
-                                                                                        letterSpacing: '0.04em'
-                                                                                    }}>
-                                                                                        MASTER OFF
-                                                                                    </span>
-                                                                                )}
-                                                                                <span style={{
-                                                                                    fontSize: '0.62rem',
-                                                                                    fontWeight: '800',
-                                                                                    padding: '2px 7px',
-                                                                                    borderRadius: '6px',
-                                                                                    backgroundColor: '#EEF2FF',
-                                                                                    color: '#4F46E5',
-                                                                                    border: '1px solid #C7D2FE',
-                                                                                    letterSpacing: '0.04em'
-                                                                                }}>
-                                                                                    PADRE
-                                                                                </span>
-                                                                                <span style={{
-                                                                                    fontSize: '0.62rem',
-                                                                                    fontWeight: '700',
-                                                                                    padding: '2px 7px',
-                                                                                    borderRadius: '6px',
-                                                                                    backgroundColor: '#ECFDF5',
-                                                                                    color: '#065F46',
-                                                                                    border: '1px solid #A7F3D0'
-                                                                                }}>
-                                                                                    {family.children.length} {family.children.length === 1 ? 'Hijo' : 'Hijos'}
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td style={{ 
-                                                                    ...styles.td, 
-                                                                    textAlign: 'center' as const,
-                                                                    backgroundColor: (parent.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
-                                                                }}>
-                                                                    {(parent.products?.min_inventory_level || 0) > 0 ? (
-                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                                            <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
-                                                                                {formatNumber(parent.products?.min_inventory_level, 0)}
-                                                                            </span>
-                                                                            {family.totalQuantity <= (parent.products?.min_inventory_level || 0) && (
-                                                                                <span title="Bajo el mínimo crítico consolidado" style={{ display: 'inline-flex', alignItems: 'center' }}>
-                                                                                    <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
-                                                                    )}
-                                                                </td>
-                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                    <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
-                                                                        {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
-                                                                    </div>
-                                                                </td>
-                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.85rem' }}>
-                                                                        {family.totalValue > 0 ? formatMoney(family.totalValue) : (avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * family.totalQuantity) : '—')}
-                                                                    </div>
-                                                                </td>
-                                                                <td style={styles.td}>
-                                                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                                        {parent.products?.unit_of_measure}
-                                                                    </span>
-                                                                </td>
-                                                                <td style={styles.td}>
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                                                        <div style={{ 
-                                                                            fontSize: '1rem', 
-                                                                            fontWeight: '800', 
-                                                                            color: family.totalQuantity <= (parent.products?.min_inventory_level || 0) ? '#B91C1C' : '#0F172A',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '4px'
-                                                                        }}>
-                                                                            <span style={{ fontSize: '0.85rem', color: '#4F46E5', fontWeight: '800' }} title="Sumatoria de stock físico de sus SKUs hijos">∑</span>
-                                                                            <span>{formatNumber(family.totalQuantity)}</span>
-                                                                        </div>
-                                                                        <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: '600' }}>
-                                                                            Consolidado
-                                                                        </span>
-                                                                    </div>
-                                                                </td>
-                                                                <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', alignItems: 'center' }}>
-                                                                        <button 
-                                                                            title="Ver Kardex del grupo familiar"
-                                                                            onClick={() => {
-                                                                                setActiveTab('movements');
-                                                                                setSearchQuery(parent.products?.name || '');
-                                                                            }}
-                                                                            style={{
-                                                                                backgroundColor: '#EEF2FF',
-                                                                                color: '#4338CA',
-                                                                                border: '1px solid #C7D2FE',
-                                                                                padding: '0.35rem 0.65rem',
-                                                                                borderRadius: '6px',
-                                                                                fontWeight: '600',
-                                                                                cursor: 'pointer',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '4px',
-                                                                                fontSize: '0.75rem',
-                                                                                transition: 'all 0.15s ease-in-out'
-                                                                            }}
-                                                                            onMouseEnter={(e) => {
-                                                                                e.currentTarget.style.backgroundColor = '#E0E7FF';
-                                                                                e.currentTarget.style.borderColor = '#A5B4FC';
-                                                                            }}
-                                                                            onMouseLeave={(e) => {
-                                                                                e.currentTarget.style.backgroundColor = '#EEF2FF';
-                                                                                e.currentTarget.style.borderColor = '#C7D2FE';
-                                                                            }}
-                                                                        >
-                                                                            <History size={12} />
-                                                                            <span>Kardex</span>
-                                                                        </button>
-                                                                        <button 
-                                                                            onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
-                                                                            style={{ 
-                                                                                backgroundColor: '#FFFFFF', 
-                                                                                color: '#4B5563',
-                                                                                border: '1px solid #D1D5DB', 
-                                                                                padding: '0.35rem 0.75rem', 
-                                                                                borderRadius: '6px', 
-                                                                                fontWeight: '600', 
-                                                                                cursor: 'pointer',
-                                                                                transition: 'all 0.15s ease-in-out',
-                                                                                fontSize: '0.75rem'
-                                                                            }}
-                                                                            onMouseEnter={(e) => {
-                                                                                e.currentTarget.style.backgroundColor = '#F1F5F9';
-                                                                                e.currentTarget.style.borderColor = '#94A3B8';
-                                                                                e.currentTarget.style.color = '#0F172A';
-                                                                            }}
-                                                                            onMouseLeave={(e) => {
-                                                                                e.currentTarget.style.backgroundColor = '#FFFFFF';
-                                                                                e.currentTarget.style.borderColor = '#D1D5DB';
-                                                                                e.currentTarget.style.color = '#4B5563';
-                                                                            }}
-                                                                        >
-                                                                            Ajustar
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-
-                                                            {/* FILAS HIJOS */}
-                                                            {!isCollapsed && getSortedChildren(family.children).map((child, childIdx) => (
-                                                                <tr
-                                                                    key={`child-${child.product_id}-${child.status}-${childIdx}`}
+                                                    if (family.isParent) {
+                                                        return (
+                                                            <React.Fragment key={`family-${parent.product_id}-${parent.status}-${familyIdx}`}>
+                                                                {/* FILA PADRE (Consolidado de Familia) */}
+                                                                <tr 
                                                                     style={{ 
-                                                                        backgroundColor: '#FFFFFF',
-                                                                        borderLeft: '4px solid #CBD5E1',
+                                                                        backgroundColor: '#FEF9C3',
+                                                                        borderLeft: '4px solid #F59E0B',
+                                                                        borderBottom: '1px solid #FDE047',
                                                                         transition: 'background-color 0.15s ease'
-                                                                    }}
-                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
-                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                                    }} 
+                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF08A'} 
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF9C3'}
                                                                 >
                                                                     <td style={styles.td}>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
-                                                                            {/* Tree branch connector line */}
-                                                                            <div style={{
-                                                                                position: 'absolute',
-                                                                                left: '1.25rem',
-                                                                                top: '-50%',
-                                                                                bottom: '50%',
-                                                                                width: '14px',
-                                                                                borderLeft: '2px solid #CBD5E1',
-                                                                                borderBottom: '2px solid #CBD5E1',
-                                                                                borderBottomLeftRadius: '6px'
-                                                                            }} />
-                                                                            <div style={{ width: '38px', height: '38px', backgroundColor: '#F8FAFC', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E2E8F0', flexShrink: 0 }}>
-                                                                                {child.products?.image_url ? (
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleParentCollapse(parent.product_id)}
+                                                                                style={{
+                                                                                    background: isCollapsed ? '#FEF3C7' : '#FDE68A',
+                                                                                    border: '1px solid #FCD34D',
+                                                                                    cursor: 'pointer',
+                                                                                    padding: '4px',
+                                                                                    borderRadius: '6px',
+                                                                                    color: '#B45309',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    transition: 'all 0.15s ease'
+                                                                                }}
+                                                                                title={isCollapsed ? `Expandir ${family.children.length + 1} presentaciones` : "Colapsar presentaciones"}
+                                                                            >
+                                                                                {isCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronDown size={14} strokeWidth={2.5} />}
+                                                                            </button>
+                                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #FCD34D', flexShrink: 0 }}>
+                                                                                {parent.products?.image_url ? (
                                                                                     <img 
-                                                                                        src={child.products.image_url} 
-                                                                                        alt={child.products.name} 
+                                                                                        src={parent.products.image_url} 
+                                                                                        alt={parent.products.name} 
                                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                     />
                                                                                 ) : (
-                                                                                    <Package size={18} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                                                                                    <Package size={18} strokeWidth={1.5} style={{ color: '#D97706' }} />
                                                                                 )}
                                                                             </div>
                                                                             <div>
-                                                                                <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#334155' }}>
-                                                                                    {child.products?.name || 'Desconocido'}
+                                                                                <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                    <span>{parent.products?.name || 'Desconocido'}</span>
                                                                                 </div>
-                                                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem', flexWrap: 'wrap' }}>
-                                                                                    <code style={{ fontSize: '0.72rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '2px 7px', borderRadius: '5px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
-                                                                                        ID: {child.products?.accounting_id ?? '—'}
+                                                                                <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                                    <code style={{ fontSize: '0.72rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '1px 7px', borderRadius: '4px', fontWeight: '800', border: '1px solid #C6E7D9' }}>
+                                                                                        ID: {parent.products?.accounting_id ?? '—'}
                                                                                     </code>
-                                                                                    {renderCellBadge(child.products?.inventory_group || parent.products?.inventory_group)}
-                                                                                    {child.products?.is_active === false && (
-                                                                                        <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF2F2', color: '#991B1B', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', border: '1px solid #FECACA' }}>
+                                                                                    {renderCellBadge(parent.products?.inventory_group)}
+                                                                                    {parent.products?.is_active === false && (
+                                                                                        <span style={{ fontSize: '0.62rem', backgroundColor: '#FEF2F2', color: '#991B1B', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #FECACA' }}>
                                                                                             MASTER OFF
                                                                                         </span>
                                                                                     )}
                                                                                     <span style={{
                                                                                         fontSize: '0.62rem',
-                                                                                        fontWeight: '700',
-                                                                                        padding: '1px 6px',
-                                                                                        borderRadius: '4px',
-                                                                                        backgroundColor: '#F0F9FF',
-                                                                                        color: '#0284C7',
-                                                                                        border: '1px solid #BAE6FD',
-                                                                                        letterSpacing: '0.02em'
+                                                                                        fontWeight: '800',
+                                                                                        padding: '2px 7px',
+                                                                                        borderRadius: '6px',
+                                                                                        backgroundColor: '#EEF2FF',
+                                                                                        color: '#4F46E5',
+                                                                                        border: '1px solid #C7D2FE',
+                                                                                        letterSpacing: '0.04em'
                                                                                     }}>
-                                                                                        HIJO
+                                                                                        P FAMILIA
+                                                                                    </span>
+                                                                                    <span style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '800',
+                                                                                        padding: '2px 7px',
+                                                                                        borderRadius: '6px',
+                                                                                        backgroundColor: '#FEF3C7',
+                                                                                        color: '#B45309',
+                                                                                        border: '1px solid #FDE68A'
+                                                                                    }}>
+                                                                                        ⚡ {family.children.length + 1} pres.
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
@@ -3445,15 +3310,15 @@ export default function InventoryAdminPage() {
                                                                     <td style={{ 
                                                                         ...styles.td, 
                                                                         textAlign: 'center' as const,
-                                                                        backgroundColor: (child.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
+                                                                        backgroundColor: (parent.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.05)' : 'transparent',
                                                                     }}>
-                                                                        {(child.products?.min_inventory_level || 0) > 0 ? (
+                                                                        {(parent.products?.min_inventory_level || 0) > 0 ? (
                                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                                                <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.85rem' }}>
-                                                                                    {formatNumber(child.products?.min_inventory_level, 0)}
+                                                                                <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.88rem' }}>
+                                                                                    {formatNumber(parent.products?.min_inventory_level, 0)}
                                                                                 </span>
-                                                                                {child.quantity <= (child.products?.min_inventory_level || 0) && (
-                                                                                    <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                                {family.totalQuantity <= (parent.products?.min_inventory_level || 0) && (
+                                                                                    <span title="Bajo el mínimo crítico consolidado" style={{ display: 'inline-flex', alignItems: 'center' }}>
                                                                                         <AlertTriangle size={13} strokeWidth={2} style={{ color: '#B91C1C' }} />
                                                                                     </span>
                                                                                 )}
@@ -3463,87 +3328,116 @@ export default function InventoryAdminPage() {
                                                                         )}
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                        <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.82rem' }}>
-                                                                            {avgCosts[child.product_id] ? formatMoney(avgCosts[child.product_id]) : '—'}
+                                                                        <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                                            {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
                                                                         </div>
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                        <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem' }}>
-                                                                            {avgCosts[child.product_id] ? formatMoney(avgCosts[child.product_id] * child.quantity) : '—'}
+                                                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>
+                                                                            {family.totalValue > 0 ? formatMoney(family.totalValue) : (avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * family.totalQuantity) : '—')}
                                                                         </div>
                                                                     </td>
                                                                     <td style={styles.td}>
                                                                         <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                                            {child.products?.unit_of_measure}
+                                                                            {parent.products?.unit_of_measure}
                                                                         </span>
                                                                     </td>
                                                                     <td style={styles.td}>
-                                                                        <div style={{ 
-                                                                            fontSize: '0.9rem', 
-                                                                            fontWeight: '700', 
-                                                                            color: child.quantity <= (child.products?.min_inventory_level || 0) ? '#B91C1C' : '#334155' 
-                                                                        }}>
-                                                                            {formatNumber(child.quantity)}
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                                                            <div style={{ 
+                                                                                fontSize: '0.98rem', 
+                                                                                fontWeight: '800', 
+                                                                                color: family.totalQuantity <= (parent.products?.min_inventory_level || 0) ? '#B91C1C' : '#0F172A',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px'
+                                                                            }}>
+                                                                                <span style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: '800' }} title="Sumatoria de existencias de todas sus variantes">∑</span>
+                                                                                <span>{formatNumber(family.totalQuantity)}</span>
+                                                                            </div>
+                                                                            <span style={{ fontSize: '0.62rem', color: '#B45309', fontWeight: '700' }}>
+                                                                                Consolidado Total
+                                                                            </span>
                                                                         </div>
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', alignItems: 'center' }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
                                                                             <button 
-                                                                                title="Ver Kardex de esta variante"
+                                                                                type="button"
+                                                                                title="Ver cuadre operativo de hoy en la Sábana Diaria (24 Cols)"
                                                                                 onClick={() => {
-                                                                                    setActiveTab('movements');
-                                                                                    setSearchQuery(child.products?.name || '');
+                                                                                    setSearchQuery(parent.products?.name || '');
+                                                                                    setActiveTab('daily_balance');
                                                                                 }}
                                                                                 style={{
-                                                                                    backgroundColor: '#F8FAFC',
-                                                                                    color: '#475569',
-                                                                                    border: '1px solid #E2E8F0',
-                                                                                    padding: '0.35rem 0.55rem',
+                                                                                    backgroundColor: '#DCFCE7',
+                                                                                    color: '#15803D',
+                                                                                    border: '1px solid #86EFAC',
+                                                                                    padding: '0.32rem 0.6rem',
                                                                                     borderRadius: '6px',
-                                                                                    fontWeight: '600',
+                                                                                    fontWeight: '700',
                                                                                     cursor: 'pointer',
                                                                                     display: 'inline-flex',
                                                                                     alignItems: 'center',
                                                                                     gap: '4px',
-                                                                                    fontSize: '0.72rem',
+                                                                                    fontSize: '0.74rem',
                                                                                     transition: 'all 0.15s ease-in-out'
                                                                                 }}
-                                                                                onMouseEnter={(e) => {
-                                                                                    e.currentTarget.style.backgroundColor = '#EEF2FF';
-                                                                                    e.currentTarget.style.borderColor = '#C7D2FE';
-                                                                                    e.currentTarget.style.color = '#4338CA';
-                                                                                }}
-                                                                                onMouseLeave={(e) => {
-                                                                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
-                                                                                    e.currentTarget.style.borderColor = '#E2E8F0';
-                                                                                    e.currentTarget.style.color = '#475569';
-                                                                                }}
+                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#BBF7D0'}
+                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
                                                                             >
-                                                                                <History size={11} />
+                                                                                <FileSpreadsheet size={12} color="#15803D" />
+                                                                                <span>Sábana</span>
+                                                                            </button>
+                                                                            <button 
+                                                                                type="button"
+                                                                                title="Ver Kardex transaccional de esta familia"
+                                                                                onClick={() => {
+                                                                                    setSearchQuery(parent.products?.name || '');
+                                                                                    setActiveTab('movements');
+                                                                                }}
+                                                                                style={{
+                                                                                    backgroundColor: '#EEF2FF',
+                                                                                    color: '#4338CA',
+                                                                                    border: '1px solid #C7D2FE',
+                                                                                    padding: '0.32rem 0.6rem',
+                                                                                    borderRadius: '6px',
+                                                                                    fontWeight: '700',
+                                                                                    cursor: 'pointer',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    fontSize: '0.74rem',
+                                                                                    transition: 'all 0.15s ease-in-out'
+                                                                                }}
+                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0E7FF'}
+                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EEF2FF'}
+                                                                            >
+                                                                                <History size={12} color="#4338CA" />
                                                                                 <span>Kardex</span>
                                                                             </button>
                                                                             <button 
-                                                                                onClick={() => { setSelectedProduct({id: child.product_id, name: child.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                                onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
                                                                                 style={{ 
-                                                                                    backgroundColor: 'transparent', 
-                                                                                    color: '#4B5563',
-                                                                                    border: '1px solid #D1D5DB', 
-                                                                                    padding: '0.35rem 0.75rem', 
+                                                                                    backgroundColor: '#FFFFFF', 
+                                                                                    color: '#475569',
+                                                                                    border: '1px solid #CBD5E1', 
+                                                                                    padding: '0.32rem 0.65rem', 
                                                                                     borderRadius: '6px', 
-                                                                                    fontWeight: '500', 
+                                                                                    fontWeight: '600', 
                                                                                     cursor: 'pointer',
                                                                                     transition: 'all 0.15s ease-in-out',
-                                                                                    fontSize: '0.75rem'
+                                                                                    fontSize: '0.74rem'
                                                                                 }}
                                                                                 onMouseEnter={(e) => {
-                                                                                    e.currentTarget.style.backgroundColor = '#F9FAFB';
-                                                                                    e.currentTarget.style.borderColor = '#94A3AF';
-                                                                                    e.currentTarget.style.color = '#111827';
+                                                                                    e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                                                                    e.currentTarget.style.borderColor = '#94A3B8';
+                                                                                    e.currentTarget.style.color = '#0F172A';
                                                                                 }}
                                                                                 onMouseLeave={(e) => {
-                                                                                    e.currentTarget.style.backgroundColor = 'transparent';
-                                                                                    e.currentTarget.style.borderColor = '#D1D5DB';
-                                                                                    e.currentTarget.style.color = '#4B5563';
+                                                                                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                                                                    e.currentTarget.style.borderColor = '#CBD5E1';
+                                                                                    e.currentTarget.style.color = '#475569';
                                                                                 }}
                                                                             >
                                                                                 Ajustar
@@ -3551,167 +3445,450 @@ export default function InventoryAdminPage() {
                                                                         </div>
                                                                     </td>
                                                                 </tr>
-                                                            ))}
-                                                        </React.Fragment>
-                                                    );
-                                                }
 
-                                                // FILA STANDALONE (producto independiente)
-                                                return (
-                                                    <tr 
-                                                        key={parent.id ? `${parent.id}-${familyIdx}` : `stock-${parent.product_id}-${parent.status}-${familyIdx}`} 
-                                                        style={{ transition: 'background-color 0.2s' }} 
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} 
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                    >
-                                                        <td style={styles.td}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                                <div style={{ width: '44px', height: '44px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}` }}>
-                                                                    {parent.products?.image_url ? (
-                                                                        <img 
-                                                                            src={parent.products.image_url} 
-                                                                            alt={parent.products.name} 
-                                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                                                        />
-                                                                    ) : (
-                                                                        <Package size={20} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
-                                                                    )}
+                                                                {/* FILAS HIJOS (Variantes y Presentaciones) */}
+                                                                {!isCollapsed && (
+                                                                    <>
+                                                                        {/* Presentación Base */}
+                                                                        <tr
+                                                                            style={{ 
+                                                                                backgroundColor: '#FFFFFF',
+                                                                                borderLeft: '4px solid #CBD5E1',
+                                                                                borderBottom: '1px solid #F1F5F9',
+                                                                                transition: 'background-color 0.15s ease'
+                                                                            }}
+                                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
+                                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                                        >
+                                                                            <td style={styles.td}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
+                                                                                    <div style={{
+                                                                                        position: 'absolute',
+                                                                                        left: '1.25rem',
+                                                                                        top: '-50%',
+                                                                                        bottom: '50%',
+                                                                                        width: '14px',
+                                                                                        borderLeft: '2px solid #CBD5E1',
+                                                                                        borderBottom: '2px solid #CBD5E1',
+                                                                                        borderBottomLeftRadius: '6px'
+                                                                                    }} />
+                                                                                    <div>
+                                                                                        <div style={{ fontWeight: '700', fontSize: '0.86rem', color: '#1E293B' }}>
+                                                                                            {parent.products?.name} <span style={{ color: '#64748B', fontWeight: '500' }}>(Base / Estándar)</span>
+                                                                                        </div>
+                                                                                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                                                                            <code style={{ fontSize: '0.7rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
+                                                                                                ID: {parent.products?.accounting_id ?? '—'}
+                                                                                            </code>
+                                                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0' }}>
+                                                                                                H BASE
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </td>
+                                                                            <td style={{ ...styles.td, textAlign: 'center' as const, color: '#94A3B8' }}>—</td>
+                                                                            <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.82rem' }}>
+                                                                                    {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem' }}>
+                                                                                    {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * (parent.quantity || 0)) : '—'}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td style={styles.td}>
+                                                                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                                    {parent.products?.unit_of_measure}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td style={styles.td}>
+                                                                                <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#334155' }}>
+                                                                                    {formatNumber(parent.quantity || 0)}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                                    <button 
+                                                                                        type="button"
+                                                                                        title="Ver cuadre operativo de hoy"
+                                                                                        onClick={() => {
+                                                                                            setSearchQuery(parent.products?.name || '');
+                                                                                            setActiveTab('daily_balance');
+                                                                                        }}
+                                                                                        style={{
+                                                                                            backgroundColor: '#F8FAFC',
+                                                                                            color: '#15803D',
+                                                                                            border: '1px solid #E2E8F0',
+                                                                                            padding: '0.3rem 0.55rem',
+                                                                                            borderRadius: '6px',
+                                                                                            fontWeight: '600',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '3px',
+                                                                                            fontSize: '0.72rem'
+                                                                                        }}
+                                                                                    >
+                                                                                        <FileSpreadsheet size={11} color="#15803D" />
+                                                                                        <span>Sábana</span>
+                                                                                    </button>
+                                                                                    <button 
+                                                                                        onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                                        style={{ backgroundColor: 'transparent', color: '#4B5563', border: '1px solid #D1D5DB', padding: '0.3rem 0.6rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', fontSize: '0.72rem' }}
+                                                                                    >
+                                                                                        Ajustar
+                                                                                    </button>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+
+                                                                        {/* Presentaciones Hijas */}
+                                                                        {getSortedChildren(family.children).map((child, childIdx) => (
+                                                                            <tr
+                                                                                key={`child-${child.product_id}-${child.status}-${childIdx}`}
+                                                                                style={{ 
+                                                                                    backgroundColor: '#FFFFFF',
+                                                                                    borderLeft: '4px solid #CBD5E1',
+                                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                                    transition: 'background-color 0.15s ease'
+                                                                                }}
+                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
+                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                                            >
+                                                                                <td style={styles.td}>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
+                                                                                        <div style={{
+                                                                                            position: 'absolute',
+                                                                                            left: '1.25rem',
+                                                                                            top: '-50%',
+                                                                                            bottom: '50%',
+                                                                                            width: '14px',
+                                                                                            borderLeft: '2px solid #CBD5E1',
+                                                                                            borderBottom: '2px solid #CBD5E1',
+                                                                                            borderBottomLeftRadius: '6px'
+                                                                                        }} />
+                                                                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                                                            {child.products?.image_url ? (
+                                                                                                <img 
+                                                                                                    src={child.products.image_url} 
+                                                                                                    alt={child.products.name} 
+                                                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                                                />
+                                                                                            ) : (
+                                                                                                <Package size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#334155' }}>
+                                                                                                {child.products?.name || 'Desconocido'}
+                                                                                            </div>
+                                                                                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                                                                                <code style={{ fontSize: '0.7rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
+                                                                                                    ID: {child.products?.accounting_id ?? '—'}
+                                                                                                </code>
+                                                                                                {renderCellBadge(child.products?.inventory_group || parent.products?.inventory_group)}
+                                                                                                {child.products?.is_active === false && (
+                                                                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#FEF2F2', color: '#991B1B', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', border: '1px solid #FECACA' }}>
+                                                                                                        MASTER OFF
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                <span style={{
+                                                                                                    fontSize: '0.62rem',
+                                                                                                    fontWeight: '800',
+                                                                                                    padding: '1px 6px',
+                                                                                                    borderRadius: '4px',
+                                                                                                    backgroundColor: '#ECFDF5',
+                                                                                                    color: '#065F46',
+                                                                                                    border: '1px solid #A7F3D0',
+                                                                                                    letterSpacing: '0.02em'
+                                                                                                }}>
+                                                                                                    H HIJO
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td style={{ 
+                                                                                    ...styles.td, 
+                                                                                    textAlign: 'center' as const,
+                                                                                    backgroundColor: (child.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
+                                                                                }}>
+                                                                                    {(child.products?.min_inventory_level || 0) > 0 ? (
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                                            <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.85rem' }}>
+                                                                                                {formatNumber(child.products?.min_inventory_level, 0)}
+                                                                                            </span>
+                                                                                            {child.quantity <= (child.products?.min_inventory_level || 0) && (
+                                                                                                <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                                                    <AlertTriangle size={13} strokeWidth={2} style={{ color: '#B91C1C' }} />
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
+                                                                                    )}
+                                                                                </td>
+                                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                    <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.82rem' }}>
+                                                                                        {avgCosts[child.product_id] ? formatMoney(avgCosts[child.product_id]) : '—'}
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                    <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem' }}>
+                                                                                        {avgCosts[child.product_id] ? formatMoney(avgCosts[child.product_id] * child.quantity) : '—'}
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td style={styles.td}>
+                                                                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                                        {child.products?.unit_of_measure}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td style={styles.td}>
+                                                                                    <div style={{ 
+                                                                                        fontSize: '0.9rem', 
+                                                                                        fontWeight: '700', 
+                                                                                        color: child.quantity <= (child.products?.min_inventory_level || 0) ? '#B91C1C' : '#334155' 
+                                                                                    }}>
+                                                                                        {formatNumber(child.quantity)}
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                                        <button 
+                                                                                            type="button"
+                                                                                            title="Ver cuadre operativo de hoy"
+                                                                                            onClick={() => {
+                                                                                                setSearchQuery(child.products?.name || '');
+                                                                                                setActiveTab('daily_balance');
+                                                                                            }}
+                                                                                            style={{
+                                                                                                backgroundColor: '#F8FAFC',
+                                                                                                color: '#15803D',
+                                                                                                border: '1px solid #E2E8F0',
+                                                                                                padding: '0.3rem 0.55rem',
+                                                                                                borderRadius: '6px',
+                                                                                                fontWeight: '600',
+                                                                                                cursor: 'pointer',
+                                                                                                display: 'inline-flex',
+                                                                                                alignItems: 'center',
+                                                                                                gap: '3px',
+                                                                                                fontSize: '0.72rem'
+                                                                                            }}
+                                                                                        >
+                                                                                            <FileSpreadsheet size={11} color="#15803D" />
+                                                                                            <span>Sábana</span>
+                                                                                        </button>
+                                                                                        <button 
+                                                                                            type="button"
+                                                                                            title="Ver Kardex de esta variante"
+                                                                                            onClick={() => {
+                                                                                                setActiveTab('movements');
+                                                                                                setSearchQuery(child.products?.name || '');
+                                                                                            }}
+                                                                                            style={{
+                                                                                                backgroundColor: '#F8FAFC',
+                                                                                                color: '#475569',
+                                                                                                border: '1px solid #E2E8F0',
+                                                                                                padding: '0.3rem 0.55rem',
+                                                                                                borderRadius: '6px',
+                                                                                                fontWeight: '600',
+                                                                                                cursor: 'pointer',
+                                                                                                display: 'inline-flex',
+                                                                                                alignItems: 'center',
+                                                                                                gap: '3px',
+                                                                                                fontSize: '0.72rem'
+                                                                                            }}
+                                                                                        >
+                                                                                            <History size={11} />
+                                                                                            <span>Kardex</span>
+                                                                                        </button>
+                                                                                        <button 
+                                                                                            onClick={() => { setSelectedProduct({id: child.product_id, name: child.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                                            style={{ backgroundColor: 'transparent', color: '#4B5563', border: '1px solid #D1D5DB', padding: '0.3rem 0.6rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', fontSize: '0.72rem' }}
+                                                                                        >
+                                                                                            Ajustar
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </>
+                                                                )}
+                                                            </React.Fragment>
+                                                        );
+                                                    }
+
+                                                    // FILA STANDALONE (producto independiente sin variantes)
+                                                    return (
+                                                        <tr 
+                                                            key={parent.id ? `${parent.id}-${familyIdx}` : `stock-${parent.product_id}-${parent.status}-${familyIdx}`} 
+                                                            style={{ borderBottom: '1px solid #F1F5F9', transition: 'background-color 0.2s' }} 
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} 
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                        >
+                                                            <td style={styles.td}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                                                    <div style={{ width: '40px', height: '40px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, flexShrink: 0 }}>
+                                                                        {parent.products?.image_url ? (
+                                                                            <img 
+                                                                                src={parent.products.image_url} 
+                                                                                alt={parent.products.name} 
+                                                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                            />
+                                                                        ) : (
+                                                                            <Package size={18} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                                                        )}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>{parent.products?.name || 'Desconocido'}</div>
+                                                                        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                            <code style={{ fontSize: '0.72rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '1px 7px', borderRadius: '4px', fontWeight: '800', border: '1px solid #C6E7D9' }}>
+                                                                                ID: {parent.products?.accounting_id ?? '—'}
+                                                                            </code>
+                                                                            {renderCellBadge(parent.products?.inventory_group)}
+                                                                            {parent.products?.is_active === false && (
+                                                                                <span style={{ fontSize: '0.62rem', backgroundColor: '#FEF2F2', color: '#991B1B', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #FECACA' }}>
+                                                                                    MASTER OFF
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>{parent.products?.name || 'Desconocido'}</div>
-                                                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                        <code style={{ fontSize: '0.75rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 8px', borderRadius: '5px', fontWeight: '800', border: '1px solid #C6E7D9', letterSpacing: '0.02em' }}>
-                                                                            ID: {parent.products?.accounting_id ?? '—'}
-                                                                        </code>
-                                                                        {renderCellBadge(parent.products?.inventory_group)}
-                                                                        {parent.products?.is_active === false && (
-                                                                            <span style={{
-                                                                                fontSize: '0.62rem',
-                                                                                backgroundColor: '#FEF2F2',
-                                                                                color: '#991B1B',
-                                                                                padding: '2px 6px',
-                                                                                borderRadius: '4px',
-                                                                                fontWeight: '800',
-                                                                                border: '1px solid #FECACA',
-                                                                                textAlign: 'center',
-                                                                                letterSpacing: '0.04em'
-                                                                            }}>
-                                                                                MASTER OFF
+                                                            </td>
+                                                            <td style={{ 
+                                                                ...styles.td, 
+                                                                textAlign: 'center' as const,
+                                                                backgroundColor: (parent.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
+                                                            }}>
+                                                                {(parent.products?.min_inventory_level || 0) > 0 ? (
+                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                        <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
+                                                                            {formatNumber(parent.products?.min_inventory_level, 0)}
+                                                                        </span>
+                                                                        {parent.quantity <= (parent.products?.min_inventory_level || 0) && (
+                                                                            <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                                <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
                                                                             </span>
                                                                         )}
                                                                     </div>
+                                                                ) : (
+                                                                    <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                                    {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
                                                                 </div>
-                                                            </div>
-                                                        </td>
-                                                        <td style={{ 
-                                                            ...styles.td, 
-                                                            textAlign: 'center' as const,
-                                                            backgroundColor: (parent.products?.min_inventory_level || 0) > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
-                                                        }}>
-                                                            {(parent.products?.min_inventory_level || 0) > 0 ? (
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                                    <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
-                                                                        {formatNumber(parent.products?.min_inventory_level, 0)}
-                                                                    </span>
-                                                                    {parent.quantity <= (parent.products?.min_inventory_level || 0) && (
-                                                                        <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
-                                                                            <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
-                                                                        </span>
-                                                                    )}
+                                                            </td>
+                                                            <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
+                                                                    {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * parent.quantity) : '—'}
                                                                 </div>
-                                                            ) : (
-                                                                <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                            <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
-                                                                {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id]) : '—'}
-                                                            </div>
-                                                        </td>
-                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                            <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
-                                                                {avgCosts[parent.product_id] ? formatMoney(avgCosts[parent.product_id] * parent.quantity) : '—'}
-                                                            </div>
-                                                        </td>
-                                                        <td style={styles.td}>
-                                                            <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                                {parent.products?.unit_of_measure}
-                                                            </span>
-                                                        </td>
-                                                        <td style={styles.td}>
-                                                            <div style={{ 
-                                                                fontSize: '0.95rem', 
-                                                                fontWeight: '700', 
-                                                                color: parent.quantity <= (parent.products?.min_inventory_level || 0) ? '#B91C1C' : THEME.colors.textMain 
-                                                            }}>
-                                                                {formatNumber(parent.quantity)}
-                                                            </div>
-                                                        </td>
-                                                        <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', alignItems: 'center' }}>
-                                                                <button 
-                                                                    title="Ver Kardex de este producto"
-                                                                    onClick={() => {
-                                                                        setActiveTab('movements');
-                                                                        setSearchQuery(parent.products?.name || '');
-                                                                    }}
-                                                                    style={{
-                                                                        backgroundColor: '#EEF2FF',
-                                                                        color: '#4338CA',
-                                                                        border: '1px solid #C7D2FE',
-                                                                        padding: '0.35rem 0.65rem',
-                                                                        borderRadius: '6px',
-                                                                        fontWeight: '600',
-                                                                        cursor: 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '4px',
-                                                                        fontSize: '0.75rem',
-                                                                        transition: 'all 0.15s ease-in-out'
-                                                                    }}
-                                                                    onMouseEnter={(e) => {
-                                                                        e.currentTarget.style.backgroundColor = '#E0E7FF';
-                                                                        e.currentTarget.style.borderColor = '#A5B4FC';
-                                                                    }}
-                                                                    onMouseLeave={(e) => {
-                                                                        e.currentTarget.style.backgroundColor = '#EEF2FF';
-                                                                        e.currentTarget.style.borderColor = '#C7D2FE';
-                                                                    }}
-                                                                >
-                                                                    <History size={12} />
-                                                                    <span>Kardex</span>
-                                                                </button>
-                                                                <button 
-                                                                    onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
-                                                                    style={{ 
-                                                                        backgroundColor: 'transparent', 
-                                                                        color: '#4B5563',
-                                                                        border: '1px solid #D1D5DB', 
-                                                                        padding: '0.35rem 0.75rem', 
-                                                                        borderRadius: '6px', 
-                                                                        fontWeight: '500', 
-                                                                        cursor: 'pointer',
-                                                                        transition: 'all 0.2s ease-in-out',
-                                                                        fontSize: '0.75rem'
-                                                                    }}
-                                                                    onMouseEnter={(e) => {
-                                                                        e.currentTarget.style.backgroundColor = '#F9FAFB';
-                                                                        e.currentTarget.style.borderColor = '#9CA3AF';
-                                                                        e.currentTarget.style.color = '#111827';
-                                                                    }}
-                                                                    onMouseLeave={(e) => {
-                                                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                                                        e.currentTarget.style.borderColor = '#D1D5DB';
-                                                                        e.currentTarget.style.color = '#4B5563';
-                                                                    }}
-                                                                >
-                                                                    Ajustar
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                            </td>
+                                                            <td style={styles.td}>
+                                                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                    {parent.products?.unit_of_measure}
+                                                                </span>
+                                                            </td>
+                                                            <td style={styles.td}>
+                                                                <div style={{ 
+                                                                    fontSize: '0.95rem', 
+                                                                    fontWeight: '700', 
+                                                                    color: parent.quantity <= (parent.products?.min_inventory_level || 0) ? '#B91C1C' : THEME.colors.textMain 
+                                                                }}>
+                                                                    {formatNumber(parent.quantity)}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                    <button 
+                                                                        type="button"
+                                                                        title="Ver cuadre operativo de hoy en la Sábana Diaria (24 Cols)"
+                                                                        onClick={() => {
+                                                                            setSearchQuery(parent.products?.name || '');
+                                                                            setActiveTab('daily_balance');
+                                                                        }}
+                                                                        style={{
+                                                                            backgroundColor: '#DCFCE7',
+                                                                            color: '#15803D',
+                                                                            border: '1px solid #86EFAC',
+                                                                            padding: '0.32rem 0.6rem',
+                                                                            borderRadius: '6px',
+                                                                            fontWeight: '700',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px',
+                                                                            fontSize: '0.74rem',
+                                                                            transition: 'all 0.15s ease-in-out'
+                                                                        }}
+                                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#BBF7D0'}
+                                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
+                                                                    >
+                                                                        <FileSpreadsheet size={12} color="#15803D" />
+                                                                        <span>Sábana</span>
+                                                                    </button>
+                                                                    <button 
+                                                                        type="button"
+                                                                        title="Ver Kardex de este producto"
+                                                                        onClick={() => {
+                                                                            setActiveTab('movements');
+                                                                            setSearchQuery(parent.products?.name || '');
+                                                                        }}
+                                                                        style={{
+                                                                            backgroundColor: '#EEF2FF',
+                                                                            color: '#4338CA',
+                                                                            border: '1px solid #C7D2FE',
+                                                                            padding: '0.32rem 0.6rem',
+                                                                            borderRadius: '6px',
+                                                                            fontWeight: '700',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px',
+                                                                            fontSize: '0.74rem',
+                                                                            transition: 'all 0.15s ease-in-out'
+                                                                        }}
+                                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0E7FF'}
+                                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EEF2FF'}
+                                                                    >
+                                                                        <History size={12} color="#4338CA" />
+                                                                        <span>Kardex</span>
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                        style={{ 
+                                                                            backgroundColor: '#FFFFFF', 
+                                                                            color: '#475569',
+                                                                            border: '1px solid #CBD5E1', 
+                                                                            padding: '0.32rem 0.65rem', 
+                                                                            borderRadius: '6px', 
+                                                                            fontWeight: '600', 
+                                                                            cursor: 'pointer',
+                                                                            transition: 'all 0.15s ease-in-out',
+                                                                            fontSize: '0.74rem'
+                                                                        }}
+                                                                        onMouseEnter={(e) => {
+                                                                            e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                                                            e.currentTarget.style.borderColor = '#94A3B8';
+                                                                            e.currentTarget.style.color = '#0F172A';
+                                                                        }}
+                                                                        onMouseLeave={(e) => {
+                                                                            e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                                                            e.currentTarget.style.borderColor = '#CBD5E1';
+                                                                            e.currentTarget.style.color = '#475569';
+                                                                        }}
+                                                                    >
+                                                                        Ajustar
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -3883,21 +4060,22 @@ export default function InventoryAdminPage() {
                                             ) : (
                                                 kardexFamilies.map((kf, kfIdx) => {
                                                     const parent = kf.parent;
-                                                    const isParentCollapsed = !!collapsedKardexParents[parent.product_id];
+                                                    const isParentCollapsed = collapsedKardexParents[parent.product_id] !== false; // default collapsed (true)
                                                     const isParentExpandedDrilldown = !!expandedKardexItems[parent.product_id];
 
                                                     if (kf.isParent) {
                                                         return (
                                                             <React.Fragment key={`kardex-family-${parent.product_id}-${kfIdx}`}>
-                                                                {/* FILA PADRE KARDEX */}
+                                                                {/* FILA PADRE KARDEX (Familia Agregada) */}
                                                                 <tr 
                                                                     style={{ 
-                                                                        backgroundColor: '#F8FAFC',
-                                                                        borderLeft: '4px solid #4F46E5',
+                                                                        backgroundColor: '#FEF9C3',
+                                                                        borderLeft: '4px solid #F59E0B',
+                                                                        borderBottom: '1px solid #FDE047',
                                                                         transition: 'background-color 0.15s ease'
                                                                     }} 
-                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} 
-                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF08A'} 
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF9C3'}
                                                                 >
                                                                     <td style={styles.td}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -3905,22 +4083,22 @@ export default function InventoryAdminPage() {
                                                                                 type="button"
                                                                                 onClick={() => toggleKardexParentCollapse(parent.product_id)}
                                                                                 style={{
-                                                                                    background: isParentCollapsed ? '#EEF2FF' : '#E0E7FF',
-                                                                                    border: '1px solid #C7D2FE',
+                                                                                    background: isParentCollapsed ? '#FEF3C7' : '#FDE68A',
+                                                                                    border: '1px solid #FCD34D',
                                                                                     cursor: 'pointer',
                                                                                     padding: '4px',
                                                                                     borderRadius: '6px',
-                                                                                    color: '#4F46E5',
+                                                                                    color: '#B45309',
                                                                                     display: 'inline-flex',
                                                                                     alignItems: 'center',
                                                                                     justifyContent: 'center',
                                                                                     transition: 'all 0.15s ease'
                                                                                 }}
-                                                                                title={isParentCollapsed ? `Expandir ${kf.childrenWithSummary.length} variantes` : "Colapsar variantes"}
+                                                                                title={isParentCollapsed ? `Expandir ${kf.childrenWithSummary.length + 1} presentaciones` : "Colapsar presentaciones"}
                                                                             >
                                                                                 {isParentCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronDown size={14} strokeWidth={2.5} />}
                                                                             </button>
-                                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, flexShrink: 0 }}>
+                                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #FCD34D', flexShrink: 0 }}>
                                                                                 {parent.products?.image_url ? (
                                                                                     <img 
                                                                                         src={parent.products.image_url} 
@@ -3928,23 +4106,40 @@ export default function InventoryAdminPage() {
                                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                     />
                                                                                 ) : (
-                                                                                    <Package size={18} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                                                                    <Package size={18} strokeWidth={1.5} style={{ color: '#D97706' }} />
                                                                                 )}
                                                                             </div>
                                                                             <div>
-                                                                                <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                                     <span>{parent.products?.name || 'Desconocido'}</span>
                                                                                 </div>
-                                                                                <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                                    <code style={{ fontSize: '0.72rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2px 7px', borderRadius: '5px', fontWeight: '800', border: '1px solid #C6E7D9' }}>
+                                                                                <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                                    <code style={{ fontSize: '0.72rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '1px 7px', borderRadius: '4px', fontWeight: '800', border: '1px solid #C6E7D9' }}>
                                                                                         ID: {parent.products?.accounting_id ?? '—'}
                                                                                     </code>
                                                                                     {renderCellBadge(parent.products?.inventory_group)}
-                                                                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '2px 6px', borderRadius: '5px', backgroundColor: '#EEF2FF', color: '#4F46E5', border: '1px solid #C7D2FE' }}>
-                                                                                        PADRE
+                                                                                    <span style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '800',
+                                                                                        padding: '2px 7px',
+                                                                                        borderRadius: '6px',
+                                                                                        backgroundColor: '#EEF2FF',
+                                                                                        color: '#4F46E5',
+                                                                                        border: '1px solid #C7D2FE',
+                                                                                        letterSpacing: '0.04em'
+                                                                                    }}>
+                                                                                        P FAMILIA
                                                                                     </span>
-                                                                                    <span style={{ fontSize: '0.62rem', fontWeight: '700', padding: '2px 6px', borderRadius: '5px', backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0' }}>
-                                                                                        {kf.childrenWithSummary.length} Variantes
+                                                                                    <span style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '800',
+                                                                                        padding: '2px 7px',
+                                                                                        borderRadius: '6px',
+                                                                                        backgroundColor: '#FEF3C7',
+                                                                                        color: '#B45309',
+                                                                                        border: '1px solid #FDE68A'
+                                                                                    }}>
+                                                                                        ⚡ {kf.childrenWithSummary.length + 1} pres.
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
@@ -3975,33 +4170,72 @@ export default function InventoryAdminPage() {
                                                                         </span>
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                        <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.92rem' }}>
-                                                                            {formatNumber(kf.summary.currentStock)}
-                                                                        </span>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                                            <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: '800' }} title="Sumatoria de existencias de todas sus variantes">∑</span>
+                                                                                <span>{formatNumber(kf.summary.currentStock)}</span>
+                                                                            </div>
+                                                                            <span style={{ fontSize: '0.62rem', color: '#B45309', fontWeight: '700' }}>Consolidado</span>
+                                                                        </div>
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => toggleKardexItemExpanded(parent.product_id)}
-                                                                            style={{
-                                                                                backgroundColor: isParentExpandedDrilldown ? '#4F46E5' : '#F1F5F9',
-                                                                                color: isParentExpandedDrilldown ? '#FFFFFF' : '#475569',
-                                                                                border: `1px solid ${isParentExpandedDrilldown ? '#4F46E5' : '#CBD5E1'}`,
-                                                                                padding: '0.35rem 0.75rem',
-                                                                                borderRadius: '6px',
-                                                                                fontWeight: '600',
-                                                                                fontSize: '0.75rem',
-                                                                                cursor: 'pointer',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '5px',
-                                                                                transition: 'all 0.15s ease'
-                                                                            }}
-                                                                        >
-                                                                            <History size={13} strokeWidth={2} />
-                                                                            <span>{kf.summary.movementsCount} transacciones</span>
-                                                                            {isParentExpandedDrilldown ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                                        </button>
+                                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                            <button 
+                                                                                type="button"
+                                                                                title="Ver cuadre operativo de hoy en la Sábana Diaria (24 Cols)"
+                                                                                onClick={() => {
+                                                                                    setSearchQuery(parent.products?.name || '');
+                                                                                    setActiveTab('daily_balance');
+                                                                                }}
+                                                                                style={{
+                                                                                    backgroundColor: '#DCFCE7',
+                                                                                    color: '#15803D',
+                                                                                    border: '1px solid #86EFAC',
+                                                                                    padding: '0.32rem 0.6rem',
+                                                                                    borderRadius: '6px',
+                                                                                    fontWeight: '700',
+                                                                                    cursor: 'pointer',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    fontSize: '0.74rem',
+                                                                                    transition: 'all 0.15s ease-in-out'
+                                                                                }}
+                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#BBF7D0'}
+                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
+                                                                            >
+                                                                                <FileSpreadsheet size={12} color="#15803D" />
+                                                                                <span>Sábana</span>
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleKardexItemExpanded(parent.product_id)}
+                                                                                style={{
+                                                                                    backgroundColor: isParentExpandedDrilldown ? '#4F46E5' : '#EEF2FF',
+                                                                                    color: isParentExpandedDrilldown ? '#FFFFFF' : '#4338CA',
+                                                                                    border: `1px solid ${isParentExpandedDrilldown ? '#4F46E5' : '#C7D2FE'}`,
+                                                                                    padding: '0.32rem 0.65rem',
+                                                                                    borderRadius: '6px',
+                                                                                    fontWeight: '700',
+                                                                                    fontSize: '0.74rem',
+                                                                                    cursor: 'pointer',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    transition: 'all 0.15s ease'
+                                                                                }}
+                                                                                onMouseEnter={(e) => {
+                                                                                    if (!isParentExpandedDrilldown) e.currentTarget.style.backgroundColor = '#E0E7FF';
+                                                                                }}
+                                                                                onMouseLeave={(e) => {
+                                                                                    if (!isParentExpandedDrilldown) e.currentTarget.style.backgroundColor = '#EEF2FF';
+                                                                                }}
+                                                                            >
+                                                                                <History size={12} strokeWidth={2} />
+                                                                                <span>{kf.summary.movementsCount} movs</span>
+                                                                                {isParentExpandedDrilldown ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                                            </button>
+                                                                        </div>
                                                                     </td>
                                                                 </tr>
 
@@ -4068,161 +4302,314 @@ export default function InventoryAdminPage() {
                                                                 )}
 
                                                                 {/* FILAS HIJOS KARDEX */}
-                                                                {!isParentCollapsed && kf.childrenWithSummary.map((cws, cIdx) => {
-                                                                    const child = cws.child;
-                                                                    const cSummary = cws.summary;
-                                                                    const isChildDrilldown = !!expandedKardexItems[child.product_id];
-
-                                                                    return (
-                                                                        <React.Fragment key={`kardex-child-${parent.product_id}-${child.product_id}-${cIdx}`}>
-                                                                            <tr 
-                                                                                style={{ 
-                                                                                    backgroundColor: '#FFFFFF',
-                                                                                    borderLeft: '4px solid #CBD5E1',
-                                                                                    transition: 'background-color 0.15s ease'
-                                                                                }} 
-                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
-                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
-                                                                            >
-                                                                                <td style={styles.td}>
-                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
-                                                                                        <div style={{
-                                                                                            position: 'absolute',
-                                                                                            left: '1.25rem',
-                                                                                            top: '-50%',
-                                                                                            bottom: '50%',
-                                                                                            width: '14px',
-                                                                                            borderLeft: '2px solid #CBD5E1',
-                                                                                            borderBottom: '2px solid #CBD5E1',
-                                                                                            borderBottomLeftRadius: '6px'
-                                                                                        }} />
-                                                                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E2E8F0', flexShrink: 0 }}>
-                                                                                            {child.products?.image_url ? (
-                                                                                                <img 
-                                                                                                    src={child.products.image_url} 
-                                                                                                    alt={child.products.name} 
-                                                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                                                                                />
-                                                                                            ) : (
-                                                                                                <Package size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <div>
-                                                                                            <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#334155' }}>
-                                                                                                {child.products?.name || 'Desconocido'}
-                                                                                            </div>
-                                                                                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem' }}>
-                                                                                                <code style={{ fontSize: '0.7rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
-                                                                                                    ID: {child.products?.accounting_id ?? '—'}
-                                                                                                </code>
-                                                                                                <span style={{ fontSize: '0.6rem', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#F0F9FF', color: '#0284C7', border: '1px solid #BAE6FD' }}>
-                                                                                                    HIJO
-                                                                                                </span>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </td>
-                                                                                <td style={styles.td}>
-                                                                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                                                        {child.products?.unit_of_measure}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                                    <span style={{ fontWeight: '700', color: cSummary.entries > 0 ? '#059669' : '#94A3B8', fontSize: '0.85rem' }}>
-                                                                                        {cSummary.entries > 0 ? `+${formatNumber(cSummary.entries)}` : '0'}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                                    <span style={{ fontWeight: '700', color: cSummary.exits > 0 ? '#DC2626' : '#94A3B8', fontSize: '0.85rem' }}>
-                                                                                        {cSummary.exits > 0 ? `-${formatNumber(cSummary.exits)}` : '0'}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                                    <span style={{ 
-                                                                                        fontWeight: '800', 
-                                                                                        fontSize: '0.85rem',
-                                                                                        color: cSummary.netFlow > 0 ? '#059669' : cSummary.netFlow < 0 ? '#DC2626' : '#64748B' 
-                                                                                    }}>
-                                                                                        {cSummary.netFlow > 0 ? `+${formatNumber(cSummary.netFlow)}` : formatNumber(cSummary.netFlow)}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td style={{ ...styles.td, textAlign: 'center' as const }}>
-                                                                                    <span style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.88rem' }}>
-                                                                                        {formatNumber(cSummary.currentStock)}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => toggleKardexItemExpanded(child.product_id)}
-                                                                                        style={{
-                                                                                            backgroundColor: isChildDrilldown ? '#4F46E5' : 'transparent',
-                                                                                            color: isChildDrilldown ? '#FFFFFF' : '#64748B',
-                                                                                            border: `1px solid ${isChildDrilldown ? '#4F46E5' : '#E2E8F0'}`,
-                                                                                            padding: '0.3rem 0.65rem',
-                                                                                            borderRadius: '6px',
-                                                                                            fontWeight: '500',
-                                                                                            fontSize: '0.72rem',
-                                                                                            cursor: 'pointer',
-                                                                                            display: 'inline-flex',
-                                                                                            alignItems: 'center',
-                                                                                            gap: '4px',
-                                                                                            transition: 'all 0.15s ease'
-                                                                                        }}
+                                                                {!isParentCollapsed && (
+                                                                    <>
+                                                                        {/* Presentación Base Kardex */}
+                                                                        {(() => {
+                                                                            const ownSummary = kf.ownSummary;
+                                                                            const isOwnDrilldown = !!expandedKardexItems[parent.product_id + '_own'];
+                                                                            return (
+                                                                                <React.Fragment key={`kardex-base-${parent.product_id}`}>
+                                                                                    <tr 
+                                                                                        style={{ 
+                                                                                            backgroundColor: '#FFFFFF',
+                                                                                            borderLeft: '4px solid #CBD5E1',
+                                                                                            borderBottom: '1px solid #F1F5F9',
+                                                                                            transition: 'background-color 0.15s ease'
+                                                                                        }} 
+                                                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
+                                                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
                                                                                     >
-                                                                                        <span>{cSummary.movementsCount} movs</span>
-                                                                                        {isChildDrilldown ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                                                                                    </button>
-                                                                                </td>
-                                                                            </tr>
-
-                                                                            {/* DRILLDOWN HIJO */}
-                                                                            {isChildDrilldown && (
-                                                                                <tr>
-                                                                                    <td colSpan={7} style={{ padding: '0.5rem 1.5rem 0.8rem 5rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                                                        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                                                                                            <div style={{ padding: '0.45rem 0.75rem', backgroundColor: '#F1F5F9', borderBottom: '1px solid #E2E8F0', fontSize: '0.72rem', fontWeight: '700', color: '#475569' }}>
-                                                                                                Movimientos de {child.products?.name} ({cSummary.transactions.length})
-                                                                                            </div>
-                                                                                            {cSummary.transactions.length === 0 ? (
-                                                                                                <div style={{ padding: '0.75rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.72rem' }}>
-                                                                                                    Sin transacciones en este período
+                                                                                        <td style={styles.td}>
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
+                                                                                                <div style={{
+                                                                                                    position: 'absolute',
+                                                                                                    left: '1.25rem',
+                                                                                                    top: '-50%',
+                                                                                                    bottom: '50%',
+                                                                                                    width: '14px',
+                                                                                                    borderLeft: '2px solid #CBD5E1',
+                                                                                                    borderBottom: '2px solid #CBD5E1',
+                                                                                                    borderBottomLeftRadius: '6px'
+                                                                                                }} />
+                                                                                                <div>
+                                                                                                    <div style={{ fontWeight: '700', fontSize: '0.86rem', color: '#1E293B' }}>
+                                                                                                        {parent.products?.name} <span style={{ color: '#64748B', fontWeight: '500' }}>(Base / Estándar)</span>
+                                                                                                    </div>
+                                                                                                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                                                                                        <code style={{ fontSize: '0.7rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
+                                                                                                            ID: {parent.products?.accounting_id ?? '—'}
+                                                                                                        </code>
+                                                                                                        <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0' }}>
+                                                                                                            H BASE
+                                                                                                        </span>
+                                                                                                    </div>
                                                                                                 </div>
-                                                                                            ) : (
-                                                                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
-                                                                                                    <tbody>
-                                                                                                        {cSummary.transactions.map(tx => (
-                                                                                                            <tr key={tx.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                                                                                <td style={{ padding: '0.35rem 0.6rem', color: '#475569' }}>{new Date(tx.created_at).toLocaleString('es-CO')}</td>
-                                                                                                                <td style={{ padding: '0.35rem 0.6rem' }}>
-                                                                                                                    <span style={{
-                                                                                                                        padding: '1px 5px',
-                                                                                                                        borderRadius: '4px',
-                                                                                                                        fontWeight: '700',
-                                                                                                                        fontSize: '0.62rem',
-                                                                                                                        backgroundColor: tx.type === 'entry' ? '#ECFDF5' : tx.type === 'exit' ? '#FEF2F2' : '#EFF6FF',
-                                                                                                                        color: tx.type === 'entry' ? '#065F46' : tx.type === 'exit' ? '#991B1B' : '#1E40AF'
-                                                                                                                    }}>
-                                                                                                                        {tx.type === 'entry' ? 'ENTRADA' : tx.type === 'exit' ? 'SALIDA' : tx.type?.toUpperCase() || 'AJUSTE'}
-                                                                                                                    </span>
-                                                                                                                </td>
-                                                                                                                <td style={{ padding: '0.35rem 0.6rem', textAlign: 'center', fontWeight: '700', color: tx.type === 'entry' || tx.quantity > 0 ? '#059669' : '#DC2626' }}>
-                                                                                                                    {tx.quantity > 0 ? `+${formatNumber(tx.quantity)}` : formatNumber(tx.quantity)}
-                                                                                                                </td>
-                                                                                                                <td style={{ padding: '0.35rem 0.6rem', color: '#475569' }}>{tx.reference_type || 'Manual'}</td>
-                                                                                                                <td style={{ padding: '0.35rem 0.6rem', color: '#64748B' }}>{tx.notes || '—'}</td>
-                                                                                                            </tr>
-                                                                                                        ))}
-                                                                                                    </tbody>
-                                                                                                </table>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </td>
-                                                                                </tr>
-                                                                            )}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
+                                                                                            </div>
+                                                                                        </td>
+                                                                                        <td style={styles.td}>
+                                                                                            <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                                                {parent.products?.unit_of_measure}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ fontWeight: '700', color: ownSummary.entries > 0 ? '#059669' : '#94A3B8', fontSize: '0.85rem' }}>
+                                                                                                {ownSummary.entries > 0 ? `+${formatNumber(ownSummary.entries)}` : '0'}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ fontWeight: '700', color: ownSummary.exits > 0 ? '#DC2626' : '#94A3B8', fontSize: '0.85rem' }}>
+                                                                                                {ownSummary.exits > 0 ? `-${formatNumber(ownSummary.exits)}` : '0'}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ 
+                                                                                                fontWeight: '800', 
+                                                                                                fontSize: '0.85rem',
+                                                                                                color: ownSummary.netFlow > 0 ? '#059669' : ownSummary.netFlow < 0 ? '#DC2626' : '#64748B' 
+                                                                                            }}>
+                                                                                                {ownSummary.netFlow > 0 ? `+${formatNumber(ownSummary.netFlow)}` : formatNumber(ownSummary.netFlow)}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.88rem' }}>
+                                                                                                {formatNumber(ownSummary.currentStock)}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                                                <button 
+                                                                                                    type="button"
+                                                                                                    title="Ver cuadre operativo de hoy"
+                                                                                                    onClick={() => {
+                                                                                                        setSearchQuery(parent.products?.name || '');
+                                                                                                        setActiveTab('daily_balance');
+                                                                                                    }}
+                                                                                                    style={{
+                                                                                                        backgroundColor: '#F8FAFC',
+                                                                                                        color: '#15803D',
+                                                                                                        border: '1px solid #E2E8F0',
+                                                                                                        padding: '0.28rem 0.55rem',
+                                                                                                        borderRadius: '6px',
+                                                                                                        fontWeight: '600',
+                                                                                                        cursor: 'pointer',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '3px',
+                                                                                                        fontSize: '0.72rem',
+                                                                                                        transition: 'all 0.15s ease'
+                                                                                                    }}
+                                                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
+                                                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                                                                >
+                                                                                                    <FileSpreadsheet size={11} color="#15803D" />
+                                                                                                    <span>Sábana</span>
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        })()}
+
+                                                                        {/* Variantes Hijas Kardex */}
+                                                                        {kf.childrenWithSummary.map((cws, cIdx) => {
+                                                                            const child = cws.child;
+                                                                            const cSummary = cws.summary;
+                                                                            const isChildDrilldown = !!expandedKardexItems[child.product_id];
+
+                                                                            return (
+                                                                                <React.Fragment key={`kardex-child-${parent.product_id}-${child.product_id}-${cIdx}`}>
+                                                                                    <tr 
+                                                                                        style={{ 
+                                                                                            backgroundColor: '#FFFFFF',
+                                                                                            borderLeft: '4px solid #CBD5E1',
+                                                                                            borderBottom: '1px solid #F1F5F9',
+                                                                                            transition: 'background-color 0.15s ease'
+                                                                                        }} 
+                                                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} 
+                                                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                                                    >
+                                                                                        <td style={styles.td}>
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '2.5rem', position: 'relative' }}>
+                                                                                                <div style={{
+                                                                                                    position: 'absolute',
+                                                                                                    left: '1.25rem',
+                                                                                                    top: '-50%',
+                                                                                                    bottom: '50%',
+                                                                                                    width: '14px',
+                                                                                                    borderLeft: '2px solid #CBD5E1',
+                                                                                                    borderBottom: '2px solid #CBD5E1',
+                                                                                                    borderBottomLeftRadius: '6px'
+                                                                                                }} />
+                                                                                                <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                                                                    {child.products?.image_url ? (
+                                                                                                        <img 
+                                                                                                            src={child.products.image_url} 
+                                                                                                            alt={child.products.name} 
+                                                                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                                                        />
+                                                                                                    ) : (
+                                                                                                        <Package size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#334155' }}>
+                                                                                                        {child.products?.name || 'Desconocido'}
+                                                                                                    </div>
+                                                                                                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                                                                                        <code style={{ fontSize: '0.7rem', color: '#334155', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
+                                                                                                            ID: {child.products?.accounting_id ?? '—'}
+                                                                                                        </code>
+                                                                                                        {renderCellBadge(child.products?.inventory_group || parent.products?.inventory_group)}
+                                                                                                        <span style={{
+                                                                                                            fontSize: '0.62rem',
+                                                                                                            fontWeight: '800',
+                                                                                                            padding: '1px 6px',
+                                                                                                            borderRadius: '4px',
+                                                                                                            backgroundColor: '#ECFDF5',
+                                                                                                            color: '#065F46',
+                                                                                                            border: '1px solid #A7F3D0',
+                                                                                                            letterSpacing: '0.02em'
+                                                                                                        }}>
+                                                                                                            H HIJO
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                        <td style={styles.td}>
+                                                                                            <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                                                                                {child.products?.unit_of_measure}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ fontWeight: '700', color: cSummary.entries > 0 ? '#059669' : '#94A3B8', fontSize: '0.85rem' }}>
+                                                                                                {cSummary.entries > 0 ? `+${formatNumber(cSummary.entries)}` : '0'}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ fontWeight: '700', color: cSummary.exits > 0 ? '#DC2626' : '#94A3B8', fontSize: '0.85rem' }}>
+                                                                                                {cSummary.exits > 0 ? `-${formatNumber(cSummary.exits)}` : '0'}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ 
+                                                                                                fontWeight: '800', 
+                                                                                                fontSize: '0.85rem',
+                                                                                                color: cSummary.netFlow > 0 ? '#059669' : cSummary.netFlow < 0 ? '#DC2626' : '#64748B' 
+                                                                                            }}>
+                                                                                                {cSummary.netFlow > 0 ? `+${formatNumber(cSummary.netFlow)}` : formatNumber(cSummary.netFlow)}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                                                            <span style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.88rem' }}>
+                                                                                                {formatNumber(cSummary.currentStock)}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td style={{ ...styles.td, textAlign: 'right' as const }}>
+                                                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                                                <button 
+                                                                                                    type="button"
+                                                                                                    title="Ver cuadre operativo de hoy"
+                                                                                                    onClick={() => {
+                                                                                                        setSearchQuery(child.products?.name || '');
+                                                                                                        setActiveTab('daily_balance');
+                                                                                                    }}
+                                                                                                    style={{
+                                                                                                        backgroundColor: '#F8FAFC',
+                                                                                                        color: '#15803D',
+                                                                                                        border: '1px solid #E2E8F0',
+                                                                                                        padding: '0.28rem 0.55rem',
+                                                                                                        borderRadius: '6px',
+                                                                                                        fontWeight: '600',
+                                                                                                        cursor: 'pointer',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '3px',
+                                                                                                        fontSize: '0.72rem',
+                                                                                                        transition: 'all 0.15s ease'
+                                                                                                    }}
+                                                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
+                                                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                                                                >
+                                                                                                    <FileSpreadsheet size={11} color="#15803D" />
+                                                                                                    <span>Sábana</span>
+                                                                                                </button>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => toggleKardexItemExpanded(child.product_id)}
+                                                                                                    style={{
+                                                                                                        backgroundColor: isChildDrilldown ? '#4F46E5' : 'transparent',
+                                                                                                        color: isChildDrilldown ? '#FFFFFF' : '#64748B',
+                                                                                                        border: `1px solid ${isChildDrilldown ? '#4F46E5' : '#E2E8F0'}`,
+                                                                                                        padding: '0.28rem 0.55rem',
+                                                                                                        borderRadius: '6px',
+                                                                                                        fontWeight: '500',
+                                                                                                        fontSize: '0.72rem',
+                                                                                                        cursor: 'pointer',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '4px',
+                                                                                                        transition: 'all 0.15s ease'
+                                                                                                    }}
+                                                                                                >
+                                                                                                    <span>{cSummary.movementsCount} movs</span>
+                                                                                                    {isChildDrilldown ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                    </tr>
+
+                                                                                    {/* DRILLDOWN HIJO */}
+                                                                                    {isChildDrilldown && (
+                                                                                        <tr>
+                                                                                            <td colSpan={7} style={{ padding: '0.5rem 1.5rem 0.8rem 5rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                                                                                <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                                                                                                    <div style={{ padding: '0.45rem 0.75rem', backgroundColor: '#F1F5F9', borderBottom: '1px solid #E2E8F0', fontSize: '0.72rem', fontWeight: '700', color: '#475569' }}>
+                                                                                                        Movimientos de {child.products?.name} ({cSummary.transactions.length})
+                                                                                                    </div>
+                                                                                                    {cSummary.transactions.length === 0 ? (
+                                                                                                        <div style={{ padding: '0.75rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.72rem' }}>
+                                                                                                            Sin transacciones en este período
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                                                                                                            <tbody>
+                                                                                                                {cSummary.transactions.map(tx => (
+                                                                                                                    <tr key={tx.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                                                                                        <td style={{ padding: '0.35rem 0.6rem', color: '#475569' }}>{new Date(tx.created_at).toLocaleString('es-CO')}</td>
+                                                                                                                        <td style={{ padding: '0.35rem 0.6rem' }}>
+                                                                                                                            <span style={{
+                                                                                                                                padding: '1px 5px',
+                                                                                                                                borderRadius: '4px',
+                                                                                                                                fontWeight: '700',
+                                                                                                                                fontSize: '0.62rem',
+                                                                                                                                backgroundColor: tx.type === 'entry' ? '#ECFDF5' : tx.type === 'exit' ? '#FEF2F2' : '#EFF6FF',
+                                                                                                                                color: tx.type === 'entry' ? '#065F46' : tx.type === 'exit' ? '#991B1B' : '#1E40AF'
+                                                                                                                            }}>
+                                                                                                                                {tx.type === 'entry' ? 'ENTRADA' : tx.type === 'exit' ? 'SALIDA' : tx.type?.toUpperCase() || 'AJUSTE'}
+                                                                                                                            </span>
+                                                                                                                        </td>
+                                                                                                                        <td style={{ padding: '0.35rem 0.6rem', textAlign: 'center', fontWeight: '700', color: tx.type === 'entry' || tx.quantity > 0 ? '#059669' : '#DC2626' }}>
+                                                                                                                            {tx.quantity > 0 ? `+${formatNumber(tx.quantity)}` : formatNumber(tx.quantity)}
+                                                                                                                        </td>
+                                                                                                                        <td style={{ padding: '0.35rem 0.6rem', color: '#475569' }}>{tx.reference_type || 'Manual'}</td>
+                                                                                                                        <td style={{ padding: '0.35rem 0.6rem', color: '#64748B' }}>{tx.notes || '—'}</td>
+                                                                                                                    </tr>
+                                                                                                                ))}
+                                                                                                            </tbody>
+                                                                                                        </table>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    )}
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        })}
+                                                                    </>
+                                                                )}
                                                             </React.Fragment>
                                                         );
                                                     }
@@ -4296,28 +4683,57 @@ export default function InventoryAdminPage() {
                                                                     </span>
                                                                 </td>
                                                                 <td style={{ ...styles.td, textAlign: 'right' as const }}>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => toggleKardexItemExpanded(parent.product_id)}
-                                                                        style={{
-                                                                            backgroundColor: isParentExpandedDrilldown ? '#4F46E5' : 'transparent',
-                                                                            color: isParentExpandedDrilldown ? '#FFFFFF' : '#4B5563',
-                                                                            border: `1px solid ${isParentExpandedDrilldown ? '#4F46E5' : '#D1D5DB'}`,
-                                                                            padding: '0.35rem 0.75rem',
-                                                                            borderRadius: '6px',
-                                                                            fontWeight: '500',
-                                                                            cursor: 'pointer',
-                                                                            transition: 'all 0.15s ease-in-out',
-                                                                            fontSize: '0.75rem',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '4px'
-                                                                        }}
-                                                                    >
-                                                                        <History size={13} strokeWidth={2} />
-                                                                        <span>{kf.summary.movementsCount} transacciones</span>
-                                                                        {isParentExpandedDrilldown ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                                                                    </button>
+                                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
+                                                                        <button 
+                                                                            type="button"
+                                                                            title="Ver cuadre operativo de hoy en la Sábana Diaria (24 Cols)"
+                                                                            onClick={() => {
+                                                                                setSearchQuery(parent.products?.name || '');
+                                                                                setActiveTab('daily_balance');
+                                                                            }}
+                                                                            style={{
+                                                                                backgroundColor: '#DCFCE7',
+                                                                                color: '#15803D',
+                                                                                border: '1px solid #86EFAC',
+                                                                                padding: '0.32rem 0.6rem',
+                                                                                borderRadius: '6px',
+                                                                                fontWeight: '700',
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px',
+                                                                                fontSize: '0.74rem',
+                                                                                transition: 'all 0.15s ease-in-out'
+                                                                            }}
+                                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#BBF7D0'}
+                                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
+                                                                        >
+                                                                            <FileSpreadsheet size={12} color="#15803D" />
+                                                                            <span>Sábana</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleKardexItemExpanded(parent.product_id)}
+                                                                            style={{
+                                                                                backgroundColor: isParentExpandedDrilldown ? '#4F46E5' : 'transparent',
+                                                                                color: isParentExpandedDrilldown ? '#FFFFFF' : '#4B5563',
+                                                                                border: `1px solid ${isParentExpandedDrilldown ? '#4F46E5' : '#D1D5DB'}`,
+                                                                                padding: '0.32rem 0.65rem',
+                                                                                borderRadius: '6px',
+                                                                                fontWeight: '500',
+                                                                                cursor: 'pointer',
+                                                                                transition: 'all 0.15s ease-in-out',
+                                                                                fontSize: '0.74rem',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px'
+                                                                            }}
+                                                                        >
+                                                                            <History size={13} strokeWidth={2} />
+                                                                            <span>{kf.summary.movementsCount} movs</span>
+                                                                            {isParentExpandedDrilldown ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                                                                        </button>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
 
@@ -5607,67 +6023,46 @@ export default function InventoryAdminPage() {
                         </>
                     )}
                 </div>
-                {activeTab === 'stock' && (
+                {(activeTab === 'stock' || activeTab === 'movements') && (
                     <div style={{ 
-                        padding: '1.5rem 2.5rem', 
+                        padding: '0.85rem 1.5rem', 
                         borderTop: `1px solid ${THEME.colors.border}`, 
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center', 
-                        backgroundColor: '#F4F7F6' 
+                        backgroundColor: '#F8FAFC',
+                        borderBottomLeftRadius: THEME.radius.lg,
+                        borderBottomRightRadius: THEME.radius.lg
                     }}>
-                        <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                            Página <span style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(currentPage, 0)}</span> de <span style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(totalPages || 1, 0)}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <span style={{ 
+                                fontSize: '0.78rem', 
+                                color: THEME.colors.textSecondary, 
+                                fontWeight: '600',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                            }}>
+                                <Sparkles size={14} color="#0D7A57" />
+                                Modo Continuo 100%: Mostrando <strong>{activeTab === 'stock' ? sortedFamilies.length : kardexFamilies.length}</strong> familias en pantalla
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>•</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                Total catálogo: <strong>{hierarchyStats.childrenCount}</strong> SKUs hijos distribuidos
+                            </span>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <button 
-                                disabled={currentPage === 1} 
-                                onClick={() => setCurrentPage(p => p - 1)} 
-                                style={{ 
-                                    padding: '0.5rem 1.1rem', 
-                                    borderRadius: '8px', 
-                                    border: `1px solid ${currentPage === 1 ? '#E2E8F0' : THEME.colors.border}`, 
-                                    backgroundColor: currentPage === 1 ? 'transparent' : '#FFFFFF', 
-                                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer', 
-                                    fontWeight: '600', 
-                                    fontSize: '0.8rem',
-                                    color: currentPage === 1 ? '#A0AEC0' : THEME.colors.textMain, 
-                                    transition: 'all 0.2s',
-                                    boxShadow: currentPage === 1 ? 'none' : THEME.shadow.sm
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (currentPage !== 1) e.currentTarget.style.borderColor = THEME.colors.primary;
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (currentPage !== 1) e.currentTarget.style.borderColor = THEME.colors.border;
-                                }}
-                            >
-                                Anterior
-                            </button>
-                            <button 
-                                disabled={currentPage === totalPages || totalPages === 0} 
-                                onClick={() => setCurrentPage(p => p + 1)} 
-                                style={{ 
-                                    padding: '0.5rem 1.1rem', 
-                                    borderRadius: '8px', 
-                                    border: `1px solid ${(currentPage === totalPages || totalPages === 0) ? '#E2E8F0' : THEME.colors.border}`, 
-                                    backgroundColor: (currentPage === totalPages || totalPages === 0) ? 'transparent' : '#FFFFFF', 
-                                    cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', 
-                                    fontWeight: '600', 
-                                    fontSize: '0.8rem',
-                                    color: (currentPage === totalPages || totalPages === 0) ? '#A0AEC0' : THEME.colors.textMain, 
-                                    transition: 'all 0.2s',
-                                    boxShadow: (currentPage === totalPages || totalPages === 0) ? 'none' : THEME.shadow.sm
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (currentPage !== totalPages && totalPages !== 0) e.currentTarget.style.borderColor = THEME.colors.primary;
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (currentPage !== totalPages && totalPages !== 0) e.currentTarget.style.borderColor = THEME.colors.border;
-                                }}
-                            >
-                                Siguiente
-                            </button>
+                            <span style={{
+                                fontSize: '0.72rem',
+                                fontWeight: '700',
+                                color: '#0D7A57',
+                                backgroundColor: '#ECFDF5',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #A7F3D0'
+                            }}>
+                                SSOT Sincronizada
+                            </span>
                         </div>
                     </div>
                 )}
