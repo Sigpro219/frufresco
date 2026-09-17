@@ -819,14 +819,16 @@ export async function POST(req: Request) {
           deliverySlot: parsedAttachments[0].deliverySlot,
           deliveryDate: parsedAttachments[0].deliveryDate,
           clientType: parsedAttachments[0].clientType,
-          items: parsedAttachments[0].items
+          items: parsedAttachments[0].items || []
         };
       }
     }
     
-    if (attachments.length === 0) {
-      console.log('[Email Inbound] Processing plain text email body');
-      // No attachments, parse the email text body directly
+    // Si no hay adjuntos, o los adjuntos eran solo firmas/logos que no contenían productos, procesar el cuerpo del correo
+    const hasValidAttachmentItems = Array.isArray(extractedData.items) && extractedData.items.length > 0;
+    if (attachments.length === 0 || !hasValidAttachmentItems) {
+      console.log('[Email Inbound] Processing plain text email body (no attachments or attachments had 0 items)');
+      // Parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
@@ -913,11 +915,11 @@ export async function POST(req: Request) {
       if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
         extractedData.items = [];
         const lines = cleanedBodyText.split('\n');
-        const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|kls?|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
+        const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|kls?|g|grs?|lb|lbs?|litros?|paquetes?|unidades?|unds?|cubetas?|manojos?|atados?|matas?|racimos?|canastillas?|cajas?)?\s*(de\s+)?(.+)/i;
         for (let line of lines) {
           line = line.trim();
           if (line === '-' || line === '') continue;
-          if (line.toLowerCase().includes('dirección') || line.toLowerCase().includes('celular') || line.toLowerCase().includes('atentamente')) continue;
+          if (line.toLowerCase().includes('dirección') || line.toLowerCase().includes('celular') || line.toLowerCase().includes('atentamente') || line.toLowerCase().includes('buenas') || line.toLowerCase().includes('favor')) continue;
           const match = line.match(regex);
           if (match) {
             extractedData.items.push({
