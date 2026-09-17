@@ -1326,7 +1326,7 @@ export async function POST(req: Request) {
     if (validAttachments.length > 1) {
       for (let index = 0; index < validAttachments.length; index++) {
         const att = validAttachments[index];
-        const draftId = index === 0 ? uniqueDraftUuid : crypto.randomUUID();
+        const draftId = index === 0 ? draftUuid : crypto.randomUUID();
         const shortCode = `EML-${draftId.substring(0, 6).toUpperCase()}`;
         const attSubject = `[${shortCode}] [Adjunto ${index + 1}/${validAttachments.length}] ${subject}`.trim().replace(/\s+/g, ' ');
         const processedItems = processItemsArray(att.items || [], index, att.name || `Adjunto_${index + 1}`);
@@ -1363,7 +1363,7 @@ export async function POST(req: Request) {
       }
     } else {
       const primarySource = validAttachments.length > 0 ? validAttachments[0] : extractedData;
-      const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
+      const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
       const finalSubject = `[${shortCode}] ${subject}`.trim().replace(/\s+/g, ' ');
       
       const sourceItems = Array.isArray(primarySource.items) && primarySource.items.length > 0
@@ -1375,7 +1375,7 @@ export async function POST(req: Request) {
       const hasValid = processedItems.length > 0;
 
       draftsToInsert.push({
-        id: uniqueDraftUuid,
+        id: draftUuid,
         profile_id: profile ? profile.id : null,
         client_detected_name: clientDetected,
         source_email: senderEmail,
@@ -1683,7 +1683,6 @@ export async function POST(req: Request) {
             source_email: fromField || 'desconocido',
             status: 'rejected',
             client_type: 'b2b_client',
-            items: [],
             extracted_items: { 
               error: err?.message || 'Fatal error in processMailAsync',
               stack: err?.stack,

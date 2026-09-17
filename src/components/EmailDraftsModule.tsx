@@ -3763,21 +3763,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const fetchDrafts = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // Regla de retención: Solo cargar borradores de los últimos 30 días para máxima velocidad y limpieza
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const minDateIso = thirtyDaysAgo.toISOString();
-
       const { data, error } = await supabase
         .from('order_drafts')
         .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
         .in('status', ['pending', 'approved', 'rejected'])
-        .gte('created_at', minDateIso)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setDrafts(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching drafts:', err);
     } finally {
       if (!quiet) setLoading(false);
