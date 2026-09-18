@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { useAuth } from '@/lib/authContext';
 import GeofencingManager from '@/components/admin/GeofencingManager';
+import StrategyControlTower from '@/components/admin/StrategyControlTower';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
@@ -17,11 +18,12 @@ import {
     Wrench, 
     ArrowRight,
     Cpu,
-    Home
+    Home,
+    BarChart3
 } from 'lucide-react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 
-type Tab = 'geofencing' | 'seo' | 'it' | 'hierarchy';
+type Tab = 'control_tower' | 'geofencing' | 'seo' | 'it' | 'hierarchy';
 
 interface AppSetting {
     key: string;
@@ -47,7 +49,7 @@ interface SEOStrategy {
 }
 
 export default function AdminStrategyPage() {
-    const [activeTab, setActiveTab] = useState<Tab>('geofencing');
+    const [activeTab, setActiveTab] = useState<Tab>('control_tower');
     const [hoveredTab, setHoveredTab] = useState<Tab | null>(null);
     const { profile } = useAuth();
     const [settings, setSettings] = useState<AppSetting[]>([]);
@@ -229,6 +231,7 @@ export default function AdminStrategyPage() {
                 }}>
                     <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
                         {[
+                            { id: 'control_tower', label: 'Torre de Control (BI)', icon: <BarChart3 size={14} strokeWidth={2.2} /> },
                             { id: 'geofencing', label: 'Geocercas & Cobertura', icon: <MapPin size={14} strokeWidth={2} /> },
                             { id: 'seo', label: 'Estrategia SEO Local', icon: <TrendingUp size={14} strokeWidth={2} /> },
                             { id: 'hierarchy', label: 'Jerarquía & Conversiones', icon: <Layers size={14} strokeWidth={2} /> },
@@ -249,7 +252,7 @@ export default function AdminStrategyPage() {
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!isActive) {
-                                            e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                             e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
                                             e.currentTarget.style.color = THEME.colors.textMain;
                                         }
                                     }}
@@ -274,6 +277,7 @@ export default function AdminStrategyPage() {
 
                 {/* ── MAIN CONTENT WORKSPACE ── */}
                 <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.25rem', minHeight: '620px', boxShadow: THEME.shadow.sm }}>
+                    {activeTab === 'control_tower' && <StrategyControlTower />}
                     {activeTab === 'geofencing' && (
                         <APIProvider apiKey={MAPS_KEY}>
                             <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />
