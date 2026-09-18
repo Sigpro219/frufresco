@@ -38,7 +38,8 @@ import {
     Truck,
     Globe,
     LayoutGrid,
-    Navigation
+    Navigation,
+    Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import { Map as GoogleMap, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
@@ -430,6 +431,7 @@ export default function CommercialUnifiedDashboard({
     const [refreshing, setRefreshing] = useState(false);
     const [searchClient, setSearchClient] = useState('');
     const [clientSort, setClientSort] = useState<'amount' | 'volume' | 'growth' | 'risk'>('amount');
+    const [useCompactUnits, setUseCompactUnits] = useState(true);
 
     // Scarcity state
     const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
@@ -2206,7 +2208,7 @@ export default function CommercialUnifiedDashboard({
                             {(
                                 [
                                     { id: 'amount', label: 'Mayor Facturación' },
-                                    { id: 'volume', label: 'Mayor Kg' },
+                                    { id: 'volume', label: useCompactUnits ? 'Mayor Ton' : 'Mayor Kg' },
                                     { id: 'growth', label: 'Creciendo (↑)' },
                                     { id: 'risk', label: 'En Riesgo (↓)' }
                                 ] as const
@@ -2233,6 +2235,31 @@ export default function CommercialUnifiedDashboard({
                                 );
                             })}
                         </div>
+
+                        {/* Toggle Units: Compact (M / Ton) vs Detailed ($ / Kg) */}
+                        <button
+                            type="button"
+                            onClick={() => setUseCompactUnits(prev => !prev)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '0.3rem 0.7rem',
+                                borderRadius: '8px',
+                                border: useCompactUnits ? `1.5px solid ${THEME.colors.primary}` : '1px solid #CBD5E1',
+                                backgroundColor: useCompactUnits ? '#ECFDF5' : '#FFFFFF',
+                                color: useCompactUnits ? '#065F46' : '#64748B',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                boxShadow: useCompactUnits ? '0 1px 3px rgba(16, 185, 129, 0.15)' : 'none',
+                                transition: 'all 0.15s'
+                            }}
+                            title="Alternar entre cifras limpias (Millones / Toneladas) y cifras completas ($ / Kg)"
+                        >
+                            <Sparkles size={12} color={useCompactUnits ? '#059669' : '#94A3B8'} />
+                            <span>{useCompactUnits ? 'Cifras en M / Ton' : 'Cifras en $ / Kg'}</span>
+                        </button>
                     </div>
                 </div>
 
@@ -2243,9 +2270,15 @@ export default function CommercialUnifiedDashboard({
                             <tr>
                                 <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem' }}>Cliente / Razón Social</th>
                                 <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem' }}>Canal</th>
-                                <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>Volumen (Kg)</th>
-                                <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>Facturado ($)</th>
-                                <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>Histórico ($)</th>
+                                <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>
+                                    {useCompactUnits ? 'Volumen (Ton)' : 'Volumen (Kg)'}
+                                </th>
+                                <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>
+                                    {useCompactUnits ? 'Facturado (M/K)' : 'Facturado ($)'}
+                                </th>
+                                <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>
+                                    {useCompactUnits ? 'Histórico (M/K)' : 'Histórico ($)'}
+                                </th>
                                 <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Variación (Δ%)</th>
                                 <th style={{ ...THEME.typography.tableHeader, padding: '0.75rem 1rem', textAlign: 'right' }}>Pedidos</th>
                             </tr>
@@ -2283,14 +2316,23 @@ export default function CommercialUnifiedDashboard({
                                                     {c.type}
                                                 </span>
                                             </td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', color: THEME.colors.textMain }}>
-                                                {formatNumber(c.currentVolume, 1)} Kg
+                                            <td 
+                                                style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', color: THEME.colors.textMain }}
+                                                title={`${formatNumber(c.currentVolume, 1)} Kg exactos`}
+                                            >
+                                                {useCompactUnits ? formatVolumeTon(c.currentVolume) : `${formatNumber(c.currentVolume, 1)} Kg`}
                                             </td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.primary }}>
-                                                {formatMoney(c.currentAmount)}
+                                            <td 
+                                                style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.primary }}
+                                                title={`${formatMoney(c.currentAmount)} COP exactos`}
+                                            >
+                                                {useCompactUnits ? formatCompactMoney(c.currentAmount) : formatMoney(c.currentAmount)}
                                             </td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#64748B' }}>
-                                                {formatMoney(c.prevAmount)}
+                                            <td 
+                                                style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#64748B' }}
+                                                title={`${formatMoney(c.prevAmount)} COP exactos`}
+                                            >
+                                                {useCompactUnits ? (c.prevAmount > 0 ? formatCompactMoney(c.prevAmount) : '$0') : formatMoney(c.prevAmount)}
                                             </td>
                                             <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                                 <span style={{
