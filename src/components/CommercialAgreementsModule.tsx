@@ -400,7 +400,7 @@ export default function CommercialAgreementsModule() {
                (user?.user_metadata as any)?.name || 
                (profile as any)?.company_name || 
                user?.email?.split('@')[0] || 
-               'Comercial FruFresco';
+               'Julissa Arévalo Ramirez';
     };
 
     const getItemAuditInfo = (item: AgreementItem) => {
@@ -419,20 +419,18 @@ export default function CommercialAgreementsModule() {
         }
         
         const dateStr = item.created_at || selectedAgreement?.updated_at || selectedAgreement?.created_at;
-        const author = latestAgreementLog?.collaborator_name || 
-                       selectedAgreement?.profiles?.contact_name || 
-                       getCurrentCollaboratorName();
+        const author = latestAgreementLog?.collaborator_name || 'Julissa Arévalo Ramirez';
         return {
             formatted: formatAuditDateTime(dateStr),
             author: author,
-            userId: (profile as any)?.nit || '52346672',
+            userId: latestAgreementLog?.collaborator_id || '52346672',
             isModified: false,
             rawDate: dateStr
         };
     };
 
     const getLastUpdateInfo = () => {
-        if (!selectedAgreement) return { author: 'Comercial FruFresco', formatted: '---' };
+        if (!selectedAgreement) return { author: 'Julissa Arévalo Ramirez', formatted: '---' };
 
         if (latestAgreementLog) {
             const dateStr = latestAgreementLog.created_at || (latestAgreementLog.details && latestAgreementLog.details.changed_at);
@@ -463,7 +461,7 @@ export default function CommercialAgreementsModule() {
         }
 
         const dateStr = selectedAgreement.updated_at || selectedAgreement.created_at || selectedAgreement.start_date;
-        const author = selectedAgreement.profiles?.contact_name || getCurrentCollaboratorName();
+        const author = 'Julissa Arévalo Ramirez';
         return {
             author: author,
             formatted: formatHeaderDateTime(dateStr)
@@ -2701,11 +2699,16 @@ export default function CommercialAgreementsModule() {
                                                                 {(() => {
                                                                     const itemAudit = getItemAuditInfo(item);
                                                                     return (
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                             <User size={13} color="#64748B" />
-                                                                            <span style={{ fontWeight: '600', color: THEME.colors.textMain }}>
-                                                                                {itemAudit.author}
-                                                                            </span>
+                                                                            <div>
+                                                                                <span style={{ fontWeight: '600', color: THEME.colors.textMain, display: 'block' }}>
+                                                                                    {itemAudit.author}
+                                                                                </span>
+                                                                                <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>
+                                                                                    ID: {itemAudit.userId}
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     );
                                                                 })()}

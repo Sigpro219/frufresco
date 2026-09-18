@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { 
     ArrowLeft, 
@@ -569,6 +569,20 @@ export default function AuditLogPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [dateRange, setDateRange] = useState('all');
     const [actionType, setActionType] = useState('all');
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const [toolbarHeight, setToolbarHeight] = useState(63);
+
+    useEffect(() => {
+        if (!toolbarRef.current) return;
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const height = entry.borderBoxSize?.[0]?.blockSize || entry.contentRect.height;
+                if (height) setToolbarHeight(Math.ceil(height));
+            }
+        });
+        observer.observe(toolbarRef.current);
+        return () => observer.disconnect();
+    }, []);
 
     const PAGE_SIZE = 50;
 
@@ -862,12 +876,28 @@ export default function AuditLogPage() {
                     </div>
                 </div>
 
-                {/* Filtros de Auditoría */}
-                <div style={{ 
-                    backgroundColor: THEME.colors.surface, padding: '1.2rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, 
-                    display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap', alignItems: 'center',
-                    boxShadow: THEME.shadow.sm
-                }}>
+                {/* Filtros de Auditoría - Barra Flotante Sticky Frosted Glass (Estándar Diseñador-Web) */}
+                <div 
+                    ref={toolbarRef}
+                    style={{ 
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        padding: '0.65rem 1.25rem', 
+                        borderRadius: '16px', 
+                        border: '1px solid #E2E8F0', 
+                        display: 'flex', 
+                        gap: '0.85rem', 
+                        marginBottom: '1rem', 
+                        flexWrap: 'wrap', 
+                        alignItems: 'center',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 70,
+                        transition: 'all 0.2s ease-in-out'
+                    }}
+                >
                     <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
                         <Search size={18} strokeWidth={1.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                         <input 
@@ -914,36 +944,90 @@ export default function AuditLogPage() {
                     </div>
                 </div>
 
-                {/* Tabla de Auditoría */}
-                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', minHeight: '400px', display: 'flex', flexDirection: 'column', boxShadow: THEME.shadow.sm }}>
-                    <div style={{ overflowX: 'auto', flex: 1 }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                <tr>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '170px' }}>Fecha y Hora</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '180px' }}>Usuario</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '160px' }}>Acción</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '140px' }}>Módulo</th>
-                                    <th style={{ padding: '0.85rem 1.25rem', fontSize: THEME.typography.tableHeader.fontSize, letterSpacing: THEME.typography.tableHeader.letterSpacing, fontWeight: THEME.typography.tableHeader.fontWeight, color: THEME.typography.tableHeader.color, textTransform: THEME.typography.tableHeader.textTransform, minWidth: '320px' }}>Detalles</th>
-                                    <th style={{ 
-                                        padding: '0.85rem 1rem', 
-                                        width: '90px', 
-                                        minWidth: '90px', 
-                                        textAlign: 'center', 
-                                        position: 'sticky', 
-                                        right: 0, 
-                                        backgroundColor: '#F9FAFB', 
-                                        boxShadow: '-4px 0 8px rgba(0,0,0,0.03)',
-                                        fontSize: THEME.typography.tableHeader.fontSize, 
-                                        letterSpacing: THEME.typography.tableHeader.letterSpacing, 
-                                        fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                        color: THEME.typography.tableHeader.color, 
-                                        textTransform: THEME.typography.tableHeader.textTransform 
-                                    }}>
-                                        Detalle
-                                    </th>
-                                </tr>
-                            </thead>
+                {/* Tabla de Auditoría con Encabezados Sticky (Estándar Diseñador-Web) */}
+                <div style={{ 
+                    backgroundColor: THEME.colors.surface, 
+                    borderRadius: THEME.radius.xl, 
+                    border: `1px solid ${THEME.colors.border}`, 
+                    minHeight: '400px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    boxShadow: THEME.shadow.sm,
+                    overflow: 'visible'
+                }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead style={{ position: 'sticky', top: `${85 + toolbarHeight - 2}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
+                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                                <th style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    fontSize: THEME.typography.tableHeader.fontSize, 
+                                    letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                    fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                    color: THEME.typography.tableHeader.color, 
+                                    textTransform: THEME.typography.tableHeader.textTransform, 
+                                    minWidth: '170px'
+                                }}>
+                                    Fecha y Hora
+                                </th>
+                                <th style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    fontSize: THEME.typography.tableHeader.fontSize, 
+                                    letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                    fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                    color: THEME.typography.tableHeader.color, 
+                                    textTransform: THEME.typography.tableHeader.textTransform, 
+                                    minWidth: '180px'
+                                }}>
+                                    Usuario
+                                </th>
+                                <th style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    fontSize: THEME.typography.tableHeader.fontSize, 
+                                    letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                    fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                    color: THEME.typography.tableHeader.color, 
+                                    textTransform: THEME.typography.tableHeader.textTransform, 
+                                    minWidth: '160px'
+                                }}>
+                                    Acción
+                                </th>
+                                <th style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    fontSize: THEME.typography.tableHeader.fontSize, 
+                                    letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                    fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                    color: THEME.typography.tableHeader.color, 
+                                    textTransform: THEME.typography.tableHeader.textTransform, 
+                                    minWidth: '140px'
+                                }}>
+                                    Módulo
+                                </th>
+                                <th style={{ 
+                                    padding: '0.85rem 1.25rem', 
+                                    fontSize: THEME.typography.tableHeader.fontSize, 
+                                    letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                    fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                    color: THEME.typography.tableHeader.color, 
+                                    textTransform: THEME.typography.tableHeader.textTransform, 
+                                    minWidth: '320px'
+                                }}>
+                                    Detalles
+                                </th>
+                                <th style={{ 
+                                    padding: '0.85rem 1rem', 
+                                    width: '90px', 
+                                    minWidth: '90px', 
+                                    textAlign: 'center', 
+                                    fontSize: THEME.typography.tableHeader.fontSize, 
+                                    letterSpacing: THEME.typography.tableHeader.letterSpacing, 
+                                    fontWeight: THEME.typography.tableHeader.fontWeight, 
+                                    color: THEME.typography.tableHeader.color, 
+                                    textTransform: THEME.typography.tableHeader.textTransform
+                                }}>
+                                    Detalle
+                                </th>
+                            </tr>
+                        </thead>
                             {loading && logs.length === 0 ? (
                                 <tbody style={{ fontFamily: THEME.typography.fontFamilySecondary }}>
                                     <tr>
@@ -975,36 +1059,47 @@ export default function AuditLogPage() {
                                         return (
                                             <tr 
                                                 key={`${log.id}-${index}`} 
-                                                style={{ borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', verticalAlign: 'middle', transition: 'background-color 0.15s', cursor: 'pointer' }} 
+                                                style={{ fontSize: '0.85rem', verticalAlign: 'middle', transition: 'background-color 0.15s', cursor: 'pointer' }} 
                                                 onClick={() => setSelectedLog(log)}
-                                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
-                                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                onMouseOver={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#F9FAFB';
+                                                    const stickyCell = e.currentTarget.querySelector('.sticky-action-cell') as HTMLElement;
+                                                    if (stickyCell) stickyCell.style.backgroundColor = '#F9FAFB';
+                                                }} 
+                                                onMouseOut={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                    const stickyCell = e.currentTarget.querySelector('.sticky-action-cell') as HTMLElement;
+                                                    if (stickyCell) stickyCell.style.backgroundColor = '#FFFFFF';
+                                                }}
                                             >
-                                                <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '600', whiteSpace: 'nowrap', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     {new Date(log.created_at).toLocaleString('es-CO')}
                                                 </td>
-                                                <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '700', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     {formatCollaboratorName(log.collaborator_name)}
                                                 </td>
-                                                <td style={{ padding: '0.85rem 1.25rem' }}>
+                                                <td style={{ padding: '0.85rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <span style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px', backgroundColor: badge.bg, color: badge.text, fontWeight: '700', fontSize: '0.75rem' }}>
                                                         {formatActionName(log)}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '0.85rem 1.25rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
+                                                <td style={{ padding: '0.85rem 1.25rem', fontWeight: '700', color: THEME.colors.textSecondary, borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     {translateModule(log)}
                                                 </td>
-                                                <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textSecondary }}>
+                                                <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textSecondary, borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     {formatDetailsSummary(log)}
                                                 </td>
                                                 <td 
+                                                    className="sticky-action-cell"
                                                     style={{ 
                                                         padding: '0.85rem 1rem', 
                                                         textAlign: 'center', 
                                                         position: 'sticky', 
                                                         right: 0, 
-                                                        backgroundColor: 'inherit', 
-                                                        boxShadow: '-4px 0 8px rgba(0,0,0,0.03)' 
+                                                        backgroundColor: '#FFFFFF', 
+                                                        boxShadow: '-4px 0 8px rgba(0,0,0,0.03)',
+                                                        zIndex: 10,
+                                                        borderBottom: `1px solid ${THEME.colors.border}`
                                                     }}
                                                     onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
                                                 >
@@ -1048,7 +1143,6 @@ export default function AuditLogPage() {
                                 </tbody>
                             )}
                         </table>
-                    </div>
 
                     {/* Pagination / Load More */}
                     {hasMore && !loading && (
