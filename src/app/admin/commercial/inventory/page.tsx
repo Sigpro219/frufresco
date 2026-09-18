@@ -6,7 +6,6 @@ import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
 import InventoryDailyBalanceTab from '@/components/InventoryDailyBalanceTab';
@@ -258,12 +257,33 @@ export default function InventoryAdminPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<{ id: string, name: string } | null>(null);
-    const [stockStatusFilter, setStockStatusFilter] = useState<'available' | 'returned' | 'in_process' | 'all'>('all');
+    const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; currentStock?: number; uom?: string; accounting_id?: number | null } | null>(null);
+    const [adjModalType, setAdjModalType] = useState<'exit' | 'entry' | 'adjustment'>('exit');
+    const [adjModalReason, setAdjModalReason] = useState<string>('MERMA_MADURACION');
+    const [adjModalQty, setAdjModalQty] = useState<string>('');
+    const [adjModalNotes, setAdjModalNotes] = useState<string>('');
+    const [adjModalStatus, setAdjModalStatus] = useState<string>('available');
+    const [stockStatusFilter, setStockStatusFilter] = useState<'all' | 'with_stock' | 'low_stock' | 'available' | 'returned' | 'in_process'>('all');
     const [filterInventoryGroup, setFilterInventoryGroup] = useState<string>('all');
     const [isGroupComboboxOpen, setIsGroupComboboxOpen] = useState(false);
     const [groupComboboxSearch, setGroupComboboxSearch] = useState('');
     const groupComboboxRef = useRef<HTMLDivElement>(null);
+
+    const stockCounts = useMemo(() => {
+        let withStock = 0;
+        let lowStock = 0;
+        (stocks || []).forEach(s => {
+            const qty = s.quantity || 0;
+            const min = s.products?.min_inventory_level || 0;
+            if (qty > 0) withStock++;
+            if (qty <= min && qty > 0) lowStock++;
+        });
+        return {
+            total: (stocks || []).length,
+            withStock,
+            lowStock
+        };
+    }, [stocks]);
 
     const INVENTORY_GROUP_OPTIONS = useMemo(() => [
         { value: 'all', label: 'Todos los Grupos de Inv.', icon: <Boxes size={14} color="#0D7A57" strokeWidth={2} /> },
@@ -1395,10 +1415,15 @@ export default function InventoryAdminPage() {
         const query = searchQuery.trim().toLowerCase();
         const segments = query ? query.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-        // 1. Aplicar Filtro de Estado y Filtro de Grupo de Inventario
-        let currentStocks = stockStatusFilter === 'all' 
-            ? stocks 
-            : stocks.filter(s => s.status === stockStatusFilter);
+        // 1. Aplicar Filtro Rápido de Stock / Estado y Filtro de Grupo de Inventario
+        let currentStocks = stocks;
+        if (stockStatusFilter === 'with_stock') {
+            currentStocks = stocks.filter(s => (s.quantity || 0) > 0);
+        } else if (stockStatusFilter === 'low_stock') {
+            currentStocks = stocks.filter(s => (s.quantity || 0) <= (s.products?.min_inventory_level || 0) && (s.quantity || 0) > 0);
+        } else if (stockStatusFilter !== 'all') {
+            currentStocks = stocks.filter(s => s.status === stockStatusFilter);
+        }
 
         if (filterInventoryGroup !== 'all') {
             if (filterInventoryGroup === 'none') {
@@ -1792,6 +1817,7 @@ export default function InventoryAdminPage() {
             parent: InventoryItem;
             isParent: boolean;
             childrenWithSummary: { child: InventoryItem; summary: ReturnType<typeof computeKardexSummary> }[];
+            ownSummary: ReturnType<typeof computeKardexSummary>;
             summary: {
                 entries: number;
                 exits: number;
@@ -1860,6 +1886,7 @@ export default function InventoryAdminPage() {
                 parent: parentItem,
                 isParent,
                 childrenWithSummary,
+                ownSummary,
                 summary: familySummary
             });
         });
@@ -1887,9 +1914,10 @@ export default function InventoryAdminPage() {
         );
     }, [returnMovements, searchQuery]);
 
-    const handleExportKardexExcel = useCallback(() => {
+    const handleExportKardexExcel = useCallback(async () => {
         try {
             setExportingExcel(true);
+            const XLSX = await import('xlsx');
             
             const summaryRows: any[] = [];
             kardexFamilies.forEach(kf => {
@@ -2735,75 +2763,121 @@ export default function InventoryAdminPage() {
                                     )}
                                 </div>
 
-                                {filteredFamilies.some(f => f.isParent) && (
+                                {/* 1. Pill Segmentado: Todos / Con Stock / Bajo Mínimo */}
+                                <div style={{ 
+                                    display: 'flex', 
+                                    backgroundColor: '#F1F5F9', 
+                                    padding: '3px', 
+                                    borderRadius: '8px', 
+                                    gap: '2px',
+                                    border: '1px solid #E2E8F0',
+                                    height: '35px',
+                                    alignItems: 'center',
+                                    boxSizing: 'border-box'
+                                }}>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            const parentIds = filteredFamilies.filter(f => f.isParent).map(f => f.parent.product_id);
-                                            const anyCollapsed = parentIds.some(id => collapsedParents[id]);
-                                            const nextState: Record<string, boolean> = {};
-                                            parentIds.forEach(id => {
-                                                nextState[id] = !anyCollapsed;
-                                            });
-                                            setCollapsedParents(nextState);
-                                        }}
+                                        onClick={() => { setStockStatusFilter('all'); setCurrentPage(1); }}
                                         style={{
+                                            padding: '0.35rem 0.75rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
                                             fontSize: '0.74rem',
-                                            fontWeight: '600',
-                                            padding: '0.45rem 0.75rem',
-                                            borderRadius: '8px',
-                                            border: '1px solid #CBD5E1',
-                                            backgroundColor: '#FFFFFF',
-                                            color: '#475569',
+                                            fontWeight: stockStatusFilter === 'all' ? '700' : '500',
+                                            backgroundColor: stockStatusFilter === 'all' ? '#FFFFFF' : 'transparent',
+                                            color: stockStatusFilter === 'all' ? '#0F172A' : '#64748B',
                                             cursor: 'pointer',
-                                            display: 'inline-flex',
+                                            boxShadow: stockStatusFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                            transition: 'all 0.15s ease',
+                                            display: 'flex',
                                             alignItems: 'center',
-                                            gap: '5px',
-                                            transition: 'all 0.15s ease'
+                                            gap: '5px'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
-                                        title="Contraer o desplegar los productos hijos de todas las familias"
+                                        title="Mostrar todos los productos registrados"
                                     >
-                                        {filteredFamilies.filter(f => f.isParent).some(f => collapsedParents[f.parent.product_id]) ? (
-                                            <>
-                                                <ChevronDown size={13} strokeWidth={2.5} />
-                                                <span>Desplegar Hijos</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <ChevronRight size={13} strokeWidth={2.5} />
-                                                <span>Contraer Hijos</span>
-                                            </>
-                                        )}
+                                        <span>Todos</span>
+                                        <span style={{
+                                            fontSize: '0.65rem',
+                                            padding: '1px 5px',
+                                            borderRadius: '10px',
+                                            backgroundColor: stockStatusFilter === 'all' ? '#E2E8F0' : 'rgba(0,0,0,0.05)',
+                                            color: stockStatusFilter === 'all' ? '#0F172A' : '#64748B',
+                                            fontWeight: '700'
+                                        }}>
+                                            {stockCounts.total}
+                                        </span>
                                     </button>
-                                )}
 
-                                <select 
-                                    value={stockStatusFilter}
-                                    onChange={(e) => { setStockStatusFilter(e.target.value as any); setCurrentPage(1); }}
-                                    style={{ 
-                                        padding: '0.45rem 1rem', 
-                                        borderRadius: '8px', 
-                                        border: `1px solid ${stockStatusFilter !== 'all' ? THEME.colors.primary : THEME.colors.border}`, 
-                                        backgroundColor: stockStatusFilter !== 'all' ? THEME.colors.primaryLight : '#FFFFFF',
-                                        color: stockStatusFilter !== 'all' ? THEME.colors.primary : THEME.colors.textMain,
-                                        fontWeight: '600',
-                                        fontSize: '0.78rem',
-                                        cursor: 'pointer',
-                                        outline: 'none',
-                                        boxShadow: THEME.shadow.sm,
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
-                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = stockStatusFilter !== 'all' ? THEME.colors.primary : THEME.colors.border}
-                                >
-                                    <option value="all">Ver Todos</option>
-                                    <option value="available">Disponible</option>
-                                    <option value="returned">Devuelto</option>
-                                    <option value="in_process">En Proceso</option>
-                                </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setStockStatusFilter('with_stock'); setCurrentPage(1); }}
+                                        style={{
+                                            padding: '0.35rem 0.75rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            fontSize: '0.74rem',
+                                            fontWeight: stockStatusFilter === 'with_stock' ? '700' : '500',
+                                            backgroundColor: stockStatusFilter === 'with_stock' ? '#FFFFFF' : 'transparent',
+                                            color: stockStatusFilter === 'with_stock' ? '#0D7A57' : '#64748B',
+                                            cursor: 'pointer',
+                                            boxShadow: stockStatusFilter === 'with_stock' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                            transition: 'all 0.15s ease',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                        title="Mostrar únicamente productos con existencia física mayor a cero"
+                                    >
+                                        <Sparkles size={12} strokeWidth={2.5} style={{ color: '#0D7A57' }} />
+                                        <span>Con Stock</span>
+                                        <span style={{
+                                            fontSize: '0.65rem',
+                                            padding: '1px 5px',
+                                            borderRadius: '10px',
+                                            backgroundColor: stockStatusFilter === 'with_stock' ? '#D1FAE5' : 'rgba(0,0,0,0.05)',
+                                            color: stockStatusFilter === 'with_stock' ? '#065F46' : '#64748B',
+                                            fontWeight: '700'
+                                        }}>
+                                            {stockCounts.withStock}
+                                        </span>
+                                    </button>
 
+                                    <button
+                                        type="button"
+                                        onClick={() => { setStockStatusFilter('low_stock'); setCurrentPage(1); }}
+                                        style={{
+                                            padding: '0.35rem 0.75rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            fontSize: '0.74rem',
+                                            fontWeight: stockStatusFilter === 'low_stock' ? '700' : '500',
+                                            backgroundColor: stockStatusFilter === 'low_stock' ? '#FFFFFF' : 'transparent',
+                                            color: stockStatusFilter === 'low_stock' ? '#B45309' : '#64748B',
+                                            cursor: 'pointer',
+                                            boxShadow: stockStatusFilter === 'low_stock' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                            transition: 'all 0.15s ease',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                        title="Mostrar productos bajo su punto de reorden / stock mínimo"
+                                    >
+                                        <AlertTriangle size={12} strokeWidth={2.5} style={{ color: '#D97706' }} />
+                                        <span>Bajo Mínimo</span>
+                                        <span style={{
+                                            fontSize: '0.65rem',
+                                            padding: '1px 5px',
+                                            borderRadius: '10px',
+                                            backgroundColor: stockStatusFilter === 'low_stock' ? '#FEF3C7' : 'rgba(0,0,0,0.05)',
+                                            color: stockStatusFilter === 'low_stock' ? '#92400E' : '#64748B',
+                                            fontWeight: '700'
+                                        }}>
+                                            {stockCounts.lowStock}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                {/* 2. Botón Unificado de Jerarquía Familiar */}
                                 {sortedFamilies.some(f => f.isParent) && (
                                     <button
                                         type="button"
@@ -2812,36 +2886,44 @@ export default function InventoryAdminPage() {
                                             const allExpanded = parentIds.every(id => collapsedParents[id] === false);
                                             const nextState: Record<string, boolean> = {};
                                             parentIds.forEach(id => {
-                                                nextState[id] = allExpanded; // if all expanded -> collapse (true), else expand (false)
+                                                nextState[id] = allExpanded;
                                             });
                                             setCollapsedParents(nextState);
                                         }}
                                         style={{
-                                            fontSize: '0.74rem',
+                                            fontSize: '0.75rem',
                                             fontWeight: '600',
-                                            padding: '0.45rem 0.75rem',
+                                            padding: '0.45rem 0.85rem',
                                             borderRadius: '8px',
                                             border: '1px solid #CBD5E1',
                                             backgroundColor: '#FFFFFF',
-                                            color: '#475569',
+                                            color: '#334155',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '5px',
+                                            gap: '6px',
+                                            height: '35px',
+                                            boxShadow: THEME.shadow.sm,
                                             transition: 'all 0.15s ease'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
-                                        title="Contraer o desplegar presentaciones de las familias"
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                            e.currentTarget.style.borderColor = '#94A3B8';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                            e.currentTarget.style.borderColor = '#CBD5E1';
+                                        }}
+                                        title="Contraer o desplegar presentaciones e hijos de todas las familias"
                                     >
                                         {sortedFamilies.filter(f => f.isParent).every(f => collapsedParents[f.parent.product_id] === false) ? (
                                             <>
-                                                <ChevronRight size={13} strokeWidth={2.5} />
+                                                <ChevronRight size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
                                                 <span>Colapsar Familias</span>
                                             </>
                                         ) : (
                                             <>
-                                                <ChevronDown size={13} strokeWidth={2.5} />
+                                                <ChevronDown size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
                                                 <span>Expandir Familias</span>
                                             </>
                                         )}
@@ -2880,15 +2962,18 @@ export default function InventoryAdminPage() {
                         )}
 
                         {activeTab === 'movements' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                {/* Date Range Pills */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                {/* 1. Rango de Fechas (Pill Segmentado) */}
                                 <div style={{ 
                                     display: 'flex', 
                                     backgroundColor: '#F1F5F9', 
                                     padding: '3px', 
                                     borderRadius: '8px', 
                                     gap: '2px',
-                                    border: '1px solid #E2E8F0'
+                                    border: '1px solid #E2E8F0',
+                                    height: '35px',
+                                    alignItems: 'center',
+                                    boxSizing: 'border-box'
                                 }}>
                                     <button
                                         type="button"
@@ -2905,6 +2990,7 @@ export default function InventoryAdminPage() {
                                             boxShadow: movementsDateRange === '8days' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                                             transition: 'all 0.15s ease'
                                         }}
+                                        title="Movimientos de los últimos 8 días"
                                     >
                                         Últimos 8 días
                                     </button>
@@ -2923,6 +3009,7 @@ export default function InventoryAdminPage() {
                                             boxShadow: movementsDateRange === 'today' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                                             transition: 'all 0.15s ease'
                                         }}
+                                        title="Movimientos registrados hoy"
                                     >
                                         Hoy
                                     </button>
@@ -2941,6 +3028,7 @@ export default function InventoryAdminPage() {
                                             boxShadow: movementsDateRange === 'custom' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                                             transition: 'all 0.15s ease'
                                         }}
+                                        title="Seleccionar rango de fechas personalizado"
                                     >
                                         Personalizado
                                     </button>
@@ -2948,45 +3036,54 @@ export default function InventoryAdminPage() {
 
                                 {/* Custom Date Range Inputs */}
                                 {movementsDateRange === 'custom' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '35px' }}>
                                         <input 
                                             type="date" 
                                             value={customStartDate} 
                                             onChange={(e) => setCustomStartDate(e.target.value)} 
                                             style={{
-                                                padding: '0.32rem 0.5rem',
-                                                borderRadius: '6px',
+                                                height: '35px',
+                                                padding: '0 0.5rem',
+                                                borderRadius: '8px',
                                                 border: '1px solid #CBD5E1',
                                                 fontSize: '0.74rem',
                                                 color: '#334155',
-                                                backgroundColor: '#FFFFFF'
+                                                backgroundColor: '#FFFFFF',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
                                             }}
                                         />
-                                        <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>a</span>
+                                        <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>a</span>
                                         <input 
                                             type="date" 
                                             value={customEndDate} 
                                             onChange={(e) => setCustomEndDate(e.target.value)} 
                                             style={{
-                                                padding: '0.32rem 0.5rem',
-                                                borderRadius: '6px',
+                                                height: '35px',
+                                                padding: '0 0.5rem',
+                                                borderRadius: '8px',
                                                 border: '1px solid #CBD5E1',
                                                 fontSize: '0.74rem',
                                                 color: '#334155',
-                                                backgroundColor: '#FFFFFF'
+                                                backgroundColor: '#FFFFFF',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
                                             }}
                                         />
                                     </div>
                                 )}
 
-                                {/* Sub-view Switcher: Kardex General vs Novedades / Retornos */}
+                                {/* 2. Sub-view Switcher: Kardex General vs Novedades / Retornos */}
                                 <div style={{ 
                                     display: 'flex', 
                                     backgroundColor: '#F1F5F9', 
                                     padding: '3px', 
                                     borderRadius: '8px', 
                                     gap: '2px',
-                                    border: '1px solid #E2E8F0'
+                                    border: '1px solid #E2E8F0',
+                                    height: '35px',
+                                    alignItems: 'center',
+                                    boxSizing: 'border-box'
                                 }}>
                                     <button
                                         type="button"
@@ -3046,33 +3143,47 @@ export default function InventoryAdminPage() {
                                     </button>
                                 </div>
 
+                                {/* 3. Toggle: Solo con rotación (Pill Ergonométrico) */}
                                 {movementsViewMode === 'all' && (
-                                    <>
-                                        {/* Checkbox / Toggle: Solo con rotación */}
-                                        <label style={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            gap: '6px', 
-                                            fontSize: '0.74rem', 
-                                            fontWeight: '600', 
-                                            color: movementsFilterActiveOnly ? '#0D7A57' : '#475569', 
-                                            cursor: 'pointer',
-                                            userSelect: 'none',
-                                            backgroundColor: movementsFilterActiveOnly ? '#ECFDF5' : '#F8FAFC',
-                                            padding: '0.35rem 0.7rem',
+                                    <button
+                                        type="button"
+                                        onClick={() => setMovementsFilterActiveOnly(prev => !prev)}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontSize: '0.74rem',
+                                            fontWeight: movementsFilterActiveOnly ? '700' : '600',
+                                            color: movementsFilterActiveOnly ? '#0D7A57' : '#64748B',
+                                            backgroundColor: movementsFilterActiveOnly ? '#ECFDF5' : '#FFFFFF',
+                                            padding: '0.45rem 0.8rem',
                                             borderRadius: '8px',
-                                            border: `1px solid ${movementsFilterActiveOnly ? '#A7F3D0' : '#E2E8F0'}`,
+                                            border: `1px solid ${movementsFilterActiveOnly ? '#A7F3D0' : '#CBD5E1'}`,
+                                            cursor: 'pointer',
+                                            height: '35px',
+                                            boxShadow: movementsFilterActiveOnly ? '0 1px 3px rgba(13, 122, 87, 0.1)' : THEME.shadow.sm,
                                             transition: 'all 0.15s ease'
-                                        }}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={movementsFilterActiveOnly} 
-                                                onChange={(e) => setMovementsFilterActiveOnly(e.target.checked)} 
-                                                style={{ accentColor: '#0D7A57', cursor: 'pointer' }}
-                                            />
-                                            <span>Solo con rotación</span>
-                                        </label>
-                                    </>
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (!movementsFilterActiveOnly) {
+                                                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                                e.currentTarget.style.borderColor = '#94A3B8';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (!movementsFilterActiveOnly) {
+                                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                                e.currentTarget.style.borderColor = '#CBD5E1';
+                                            }
+                                        }}
+                                        title="Alternar entre mostrar todo el catálogo o solo SKUs con movimientos en el período"
+                                    >
+                                        <TrendingUp size={13} strokeWidth={2.5} style={{ color: movementsFilterActiveOnly ? '#0D7A57' : '#94A3B8' }} />
+                                        <span>Solo con rotación</span>
+                                        {movementsFilterActiveOnly && (
+                                            <Check size={12} strokeWidth={3} style={{ color: '#0D7A57', marginLeft: '2px' }} />
+                                        )}
+                                    </button>
                                 )}
 
                                 {movementsViewMode === 'returns' && (
@@ -3081,60 +3192,72 @@ export default function InventoryAdminPage() {
                                         fontWeight: '600',
                                         color: '#64748B',
                                         backgroundColor: '#F8FAFC',
-                                        padding: '0.35rem 0.75rem',
+                                        padding: '0.45rem 0.75rem',
                                         borderRadius: '8px',
-                                        border: '1px solid #E2E8F0'
+                                        border: '1px solid #E2E8F0',
+                                        height: '35px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        boxSizing: 'border-box'
                                     }}>
-                                        Mostrando <strong>{filteredReturnMovements.length}</strong> {filteredReturnMovements.length === 1 ? 'retorno con evidencia' : 'retornos con evidencia'}
+                                        Mostrando <strong>&nbsp;{filteredReturnMovements.length}&nbsp;</strong> {filteredReturnMovements.length === 1 ? 'retorno con evidencia' : 'retornos con evidencia'}
                                     </div>
                                 )}
 
-                                {/* Desplegar / Contraer Hijos en Kardex */}
+                                {/* 4. Botón Unificado de Jerarquía Familiar en Kardex */}
                                 {movementsViewMode === 'all' && kardexFamilies.some(f => f.isParent) && (
                                     <button
                                         type="button"
                                         onClick={() => {
                                             const parentIds = kardexFamilies.filter(f => f.isParent).map(f => f.parent.product_id);
-                                            const anyCollapsed = parentIds.some(id => collapsedKardexParents[id]);
+                                            const allExpanded = parentIds.every(id => collapsedKardexParents[id] === false);
                                             const nextState: Record<string, boolean> = {};
                                             parentIds.forEach(id => {
-                                                nextState[id] = !anyCollapsed;
+                                                nextState[id] = allExpanded;
                                             });
                                             setCollapsedKardexParents(nextState);
                                         }}
                                         style={{
-                                            fontSize: '0.74rem',
+                                            fontSize: '0.75rem',
                                             fontWeight: '600',
-                                            padding: '0.45rem 0.75rem',
+                                            padding: '0.45rem 0.85rem',
                                             borderRadius: '8px',
                                             border: '1px solid #CBD5E1',
                                             backgroundColor: '#FFFFFF',
-                                            color: '#475569',
+                                            color: '#334155',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '5px',
+                                            gap: '6px',
+                                            height: '35px',
+                                            boxShadow: THEME.shadow.sm,
                                             transition: 'all 0.15s ease'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
-                                        title="Contraer o desplegar hijos de las familias del Kardex"
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                            e.currentTarget.style.borderColor = '#94A3B8';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                            e.currentTarget.style.borderColor = '#CBD5E1';
+                                        }}
+                                        title="Contraer o desplegar presentaciones e hijos de todas las familias en Kardex"
                                     >
-                                        {kardexFamilies.filter(f => f.isParent).some(f => collapsedKardexParents[f.parent.product_id]) ? (
+                                        {kardexFamilies.filter(f => f.isParent).every(f => collapsedKardexParents[f.parent.product_id] === false) ? (
                                             <>
-                                                <ChevronDown size={13} strokeWidth={2.5} />
-                                                <span>Desplegar Hijos</span>
+                                                <ChevronRight size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+                                                <span>Colapsar Familias</span>
                                             </>
                                         ) : (
                                             <>
-                                                <ChevronRight size={13} strokeWidth={2.5} />
-                                                <span>Contraer Hijos</span>
+                                                <ChevronDown size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+                                                <span>Expandir Familias</span>
                                             </>
                                         )}
                                     </button>
                                 )}
 
-                                {/* Botón Descarga Masiva Excel */}
+                                {/* 5. Botón Descarga Masiva Excel */}
                                 <button
                                     type="button"
                                     onClick={handleExportKardexExcel}
@@ -3153,7 +3276,8 @@ export default function InventoryAdminPage() {
                                         cursor: 'pointer',
                                         boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)',
                                         transition: 'all 0.15s ease-in-out',
-                                        opacity: exportingExcel ? 0.7 : 1
+                                        opacity: exportingExcel ? 0.7 : 1,
+                                        height: '35px'
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!exportingExcel) {
@@ -3205,14 +3329,45 @@ export default function InventoryAdminPage() {
                                         <tbody>
                                             {sortedFamilies.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} style={{ padding: '3.5rem', textAlign: 'center', backgroundColor: '#F8FAF9' }}>
-                                                        <Package size={36} strokeWidth={1.5} style={{ color: '#94A3B8', margin: '0 auto 0.5rem' }} />
-                                                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#334155' }}>
-                                                            No se encontraron productos en el catálogo
+                                                    <td colSpan={7} style={{ padding: '3.5rem 1.5rem', textAlign: 'center', backgroundColor: '#F8FAF9' }}>
+                                                        <Package size={40} strokeWidth={1.5} style={{ color: '#94A3B8', margin: '0 auto 0.6rem' }} />
+                                                        <div style={{ fontSize: '0.98rem', fontWeight: '800', color: '#1E293B' }}>
+                                                            No se encontraron productos con los filtros actuales
                                                         </div>
-                                                        <p style={{ fontSize: '0.8rem', color: '#64748B', maxWidth: '380px', margin: '0.25rem auto' }}>
-                                                            Verifica el término de búsqueda o selecciona otro grupo de inventario.
+                                                        <p style={{ fontSize: '0.8rem', color: '#64748B', maxWidth: '420px', margin: '0.35rem auto 1rem' }}>
+                                                            Verifica el término de búsqueda o cambia los filtros de grupo de inventario y estado de existencias.
                                                         </p>
+                                                        {(searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all') && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSearchQuery('');
+                                                                    setFilterInventoryGroup('all');
+                                                                    setStockStatusFilter('all');
+                                                                    setCurrentPage(1);
+                                                                }}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px',
+                                                                    padding: '0.45rem 1rem',
+                                                                    borderRadius: '8px',
+                                                                    backgroundColor: '#ECFDF5',
+                                                                    border: '1px solid #A7F3D0',
+                                                                    color: '#065F46',
+                                                                    fontSize: '0.78rem',
+                                                                    fontWeight: '700',
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 1px 2px rgba(16, 185, 129, 0.1)',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                                            >
+                                                                <RefreshCw size={13} strokeWidth={2.5} />
+                                                                <span>Restablecer Filtros y Búsqueda</span>
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ) : (
@@ -3260,6 +3415,8 @@ export default function InventoryAdminPage() {
                                                                                     <img 
                                                                                         src={parent.products.image_url} 
                                                                                         alt={parent.products.name} 
+                                                                                        loading="lazy"
+                                                                                        decoding="async"
                                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                     />
                                                                                 ) : (
@@ -3535,7 +3692,21 @@ export default function InventoryAdminPage() {
                                                                                         <span>Sábana</span>
                                                                                     </button>
                                                                                     <button 
-                                                                                        onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                                        onClick={() => { 
+                                                                                            setSelectedProduct({
+                                                                                                id: parent.product_id, 
+                                                                                                name: parent.products?.name || 'Desconocido',
+                                                                                                currentStock: parent.quantity || 0,
+                                                                                                uom: parent.products?.unit_of_measure || 'UND',
+                                                                                                accounting_id: parent.products?.accounting_id
+                                                                                            }); 
+                                                                                            setAdjModalType('exit');
+                                                                                            setAdjModalReason('MERMA_MADURACION');
+                                                                                            setAdjModalQty('');
+                                                                                            setAdjModalNotes('');
+                                                                                            setAdjModalStatus('available');
+                                                                                            setIsMovementModalOpen(true); 
+                                                                                        }}
                                                                                         style={{ backgroundColor: 'transparent', color: '#4B5563', border: '1px solid #D1D5DB', padding: '0.3rem 0.6rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', fontSize: '0.72rem' }}
                                                                                     >
                                                                                         Ajustar
@@ -3574,6 +3745,8 @@ export default function InventoryAdminPage() {
                                                                                                 <img 
                                                                                                     src={child.products.image_url} 
                                                                                                     alt={child.products.name} 
+                                                                                                    loading="lazy"
+                                                                                                    decoding="async"
                                                                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                                 />
                                                                                             ) : (
@@ -3705,7 +3878,21 @@ export default function InventoryAdminPage() {
                                                                                             <span>Kardex</span>
                                                                                         </button>
                                                                                         <button 
-                                                                                            onClick={() => { setSelectedProduct({id: child.product_id, name: child.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                                            onClick={() => { 
+                                                                                                setSelectedProduct({
+                                                                                                    id: child.product_id, 
+                                                                                                    name: child.products?.name || 'Desconocido',
+                                                                                                    currentStock: child.quantity || 0,
+                                                                                                    uom: child.products?.unit_of_measure || 'UND',
+                                                                                                    accounting_id: child.products?.accounting_id
+                                                                                                }); 
+                                                                                                setAdjModalType('exit');
+                                                                                                setAdjModalReason('MERMA_MADURACION');
+                                                                                                setAdjModalQty('');
+                                                                                                setAdjModalNotes('');
+                                                                                                setAdjModalStatus('available');
+                                                                                                setIsMovementModalOpen(true); 
+                                                                                            }}
                                                                                             style={{ backgroundColor: 'transparent', color: '#4B5563', border: '1px solid #D1D5DB', padding: '0.3rem 0.6rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', fontSize: '0.72rem' }}
                                                                                         >
                                                                                             Ajustar
@@ -3735,6 +3922,8 @@ export default function InventoryAdminPage() {
                                                                             <img 
                                                                                 src={parent.products.image_url} 
                                                                                 alt={parent.products.name} 
+                                                                                loading="lazy"
+                                                                                decoding="async"
                                                                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                             />
                                                                         ) : (
@@ -3858,7 +4047,21 @@ export default function InventoryAdminPage() {
                                                                         <span>Kardex</span>
                                                                     </button>
                                                                     <button 
-                                                                        onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                        onClick={() => { 
+                                                                            setSelectedProduct({
+                                                                                id: parent.product_id, 
+                                                                                name: parent.products?.name || 'Desconocido',
+                                                                                currentStock: parent.quantity || 0,
+                                                                                uom: parent.products?.unit_of_measure || 'UND',
+                                                                                accounting_id: parent.products?.accounting_id
+                                                                            }); 
+                                                                            setAdjModalType('exit');
+                                                                            setAdjModalReason('MERMA_MADURACION');
+                                                                            setAdjModalQty('');
+                                                                            setAdjModalNotes('');
+                                                                            setAdjModalStatus('available');
+                                                                            setIsMovementModalOpen(true); 
+                                                                        }}
                                                                         style={{ 
                                                                             backgroundColor: '#FFFFFF', 
                                                                             color: '#475569',
@@ -4103,6 +4306,8 @@ export default function InventoryAdminPage() {
                                                                                     <img 
                                                                                         src={parent.products.image_url} 
                                                                                         alt={parent.products.name} 
+                                                                                        loading="lazy"
+                                                                                        decoding="async"
                                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                     />
                                                                                 ) : (
@@ -4447,6 +4652,8 @@ export default function InventoryAdminPage() {
                                                                                                         <img 
                                                                                                             src={child.products.image_url} 
                                                                                                             alt={child.products.name} 
+                                                                                                            loading="lazy"
+                                                                                                            decoding="async"
                                                                                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                                         />
                                                                                                     ) : (
@@ -4629,6 +4836,8 @@ export default function InventoryAdminPage() {
                                                                                 <img 
                                                                                     src={parent.products.image_url} 
                                                                                     alt={parent.products.name} 
+                                                                                    loading="lazy"
+                                                                                    decoding="async"
                                                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                                 />
                                                                             ) : (
@@ -6070,13 +6279,13 @@ export default function InventoryAdminPage() {
                 )}
             </div>
 
-            {/* Adjustment Modal */}
+            {/* Lean Poka-Yoke Adjustment Modal */}
             {isMovementModalOpen && selectedProduct && (
                 <div style={{ 
                     position: 'fixed', 
                     inset: 0, 
-                    backgroundColor: 'rgba(11, 15, 25, 0.4)', 
-                    backdropFilter: 'blur(8px)', 
+                    backgroundColor: 'rgba(15, 23, 42, 0.55)', 
+                    backdropFilter: 'blur(6px)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
@@ -6084,85 +6293,299 @@ export default function InventoryAdminPage() {
                     padding: '1rem' 
                 }}>
                     <div style={{ 
-                        backgroundColor: THEME.colors.surface, 
+                        backgroundColor: '#FFFFFF', 
                         borderRadius: '16px', 
                         width: '100%', 
-                        maxWidth: '460px', 
-                        padding: '2rem', 
-                        boxShadow: THEME.shadow.xl,
-                        border: `1px solid ${THEME.colors.border}`
+                        maxWidth: '500px', 
+                        padding: '1.75rem', 
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        animation: 'fadeIn 0.15s ease-out'
                     }}>
-                        <h2 style={{ margin: 0, fontWeight: '800', fontSize: '1.4rem', color: THEME.colors.textMain, letterSpacing: '-0.02em' }}>Ajuste de Inventario</h2>
-                        <p style={{ color: THEME.colors.textSecondary, marginBottom: '1.5rem', fontSize: '0.85rem', fontWeight: '500', marginTop: '0.25rem' }}>{selectedProduct.name}</p>
+                        {/* Header Modal */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ 
+                                        padding: '4px 8px', 
+                                        borderRadius: '6px', 
+                                        backgroundColor: '#ECFDF5', 
+                                        color: '#065F46', 
+                                        fontSize: '0.7rem', 
+                                        fontWeight: '800',
+                                        border: '1px solid #A7F3D0'
+                                    }}>
+                                        POKA-YOKE CONTROL
+                                    </span>
+                                    {selectedProduct.accounting_id && (
+                                        <span style={{ 
+                                            padding: '4px 8px', 
+                                            borderRadius: '6px', 
+                                            backgroundColor: '#F1F5F9', 
+                                            color: '#334155', 
+                                            fontSize: '0.7rem', 
+                                            fontWeight: '700',
+                                            border: '1px solid #E2E8F0'
+                                        }}>
+                                            ID #{selectedProduct.accounting_id}
+                                        </span>
+                                    )}
+                                </div>
+                                <h2 style={{ margin: '0.4rem 0 0 0', fontWeight: '800', fontSize: '1.25rem', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                    Ajuste de Existencias
+                                </h2>
+                                <p style={{ color: '#475569', margin: '0.15rem 0 0 0', fontSize: '0.85rem', fontWeight: '600' }}>
+                                    {selectedProduct.name}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsMovementModalOpen(false)}
+                                style={{
+                                    border: 'none',
+                                    background: '#F1F5F9',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    color: '#64748B'
+                                }}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Banner Saldo Actual */}
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: '10px',
+                            padding: '0.75rem 1rem',
+                            border: '1px solid #E2E8F0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '1.25rem'
+                        }}>
+                            <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>
+                                Saldo Actual en Sistema:
+                            </span>
+                            <span style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>
+                                {formatNumber(selectedProduct.currentStock ?? 0)} <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{selectedProduct.uom || 'UND'}</span>
+                            </span>
+                        </div>
                         
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Selector Tipo Movimiento */}
                             <div>
-                                <label style={styles.label}>TIPO DE MOVIMIENTO</label>
-                                <select id="adj_type" style={{ ...styles.input, fontWeight: '500', fontSize: '0.85rem', padding: '0.55rem' }}>
-                                    <option value="adjustment">Ajuste Manual (Inventario físico)</option>
-                                    <option value="entry">Entrada por Devolución/Compra</option>
-                                    <option value="exit">Salida por Merma/Daño</option>
+                                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', marginBottom: '0.4rem', letterSpacing: '0.04em' }}>
+                                    TIPO DE MOVIMIENTO
+                                </label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAdjModalType('exit')}
+                                        style={{
+                                            padding: '0.55rem 0.4rem',
+                                            borderRadius: '8px',
+                                            border: adjModalType === 'exit' ? '2px solid #DC2626' : '1px solid #E2E8F0',
+                                            backgroundColor: adjModalType === 'exit' ? '#FEF2F2' : '#FFFFFF',
+                                            color: adjModalType === 'exit' ? '#991B1B' : '#475569',
+                                            fontSize: '0.76rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '2px',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        <ArrowDownRight size={15} color={adjModalType === 'exit' ? '#DC2626' : '#64748B'} />
+                                        <span>Salida / Merma</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAdjModalType('entry')}
+                                        style={{
+                                            padding: '0.55rem 0.4rem',
+                                            borderRadius: '8px',
+                                            border: adjModalType === 'entry' ? '2px solid #16A34A' : '1px solid #E2E8F0',
+                                            backgroundColor: adjModalType === 'entry' ? '#F0FDF4' : '#FFFFFF',
+                                            color: adjModalType === 'entry' ? '#166534' : '#475569',
+                                            fontSize: '0.76rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '2px',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        <ArrowUpRight size={15} color={adjModalType === 'entry' ? '#16A34A' : '#64748B'} />
+                                        <span>Entrada / Ingreso</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAdjModalType('adjustment')}
+                                        style={{
+                                            padding: '0.55rem 0.4rem',
+                                            borderRadius: '8px',
+                                            border: adjModalType === 'adjustment' ? '2px solid #2563EB' : '1px solid #E2E8F0',
+                                            backgroundColor: adjModalType === 'adjustment' ? '#EFF6FF' : '#FFFFFF',
+                                            color: adjModalType === 'adjustment' ? '#1E40AF' : '#475569',
+                                            fontSize: '0.76rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '2px',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        <Scale size={15} color={adjModalType === 'adjustment' ? '#2563EB' : '#64748B'} />
+                                        <span>Cuadre Conteo</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Motivo Tipificado Lean */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                                    MOTIVO ESTANDARIZADO (LEAN CAUSE)
+                                </label>
+                                <select 
+                                    value={adjModalReason}
+                                    onChange={(e) => setAdjModalReason(e.target.value)}
+                                    style={{ ...styles.input, fontWeight: '600', fontSize: '0.82rem', padding: '0.55rem', backgroundColor: '#FFFFFF' }}
+                                >
+                                    {adjModalType === 'exit' && (
+                                        <>
+                                            <option value="MERMA_MADURACION">🍂 Merma Operativa por Maduración / Vencimiento</option>
+                                            <option value="AVERIA_MANIPULACION">📦 Avería en Transporte / Manipulación</option>
+                                            <option value="MUESTRA_COMERCIAL">🎁 Muestra Comercial / Degustación a Cliente</option>
+                                            <option value="CUADRE_FISICO_FALTANTE">⚖️ Conteo Físico: Faltante de Piso</option>
+                                            <option value="REPROCESO_CORTE">🔪 Salida para Célula de Reproceso / Porcionado</option>
+                                            <option value="OTRO">📝 Otro Motivo Operativo</option>
+                                        </>
+                                    )}
+                                    {adjModalType === 'entry' && (
+                                        <>
+                                            <option value="DEVOLUCION_CLIENTE">🚚 Devolución / Rechazo en Ruta de Entrega</option>
+                                            <option value="COMPRA_EXTRA">🛒 Compra Extraordinaria / Entrada de Emergencia</option>
+                                            <option value="CUADRE_FISICO_SOBRANTE">⚖️ Conteo Físico: Sobrante de Piso</option>
+                                            <option value="REPROCESO_ENTRADA">✨ Entrada desde Célula de Reproceso</option>
+                                            <option value="OTRO">📝 Otro Motivo Operativo</option>
+                                        </>
+                                    )}
+                                    {adjModalType === 'adjustment' && (
+                                        <>
+                                            <option value="CUADRE_FISICO_CONTEO">⚖️ Ajuste General por Conteo Físico Célula</option>
+                                            <option value="CORRECCION_DIGITACION">✏️ Corrección de Error de Digitación</option>
+                                            <option value="OTRO">📝 Otro Motivo</option>
+                                        </>
+                                    )}
                                 </select>
                             </div>
- 
+
+                            {/* Cantidad & Proyección */}
                             <div>
-                                <label style={styles.label}>ESTADO DESTINO</label>
-                                <select id="adj_status" style={{ ...styles.input, fontWeight: '500', fontSize: '0.85rem', padding: '0.55rem' }}>
-                                    <option value="available">Disponible para venta</option>
-                                    <option value="returned">En camión (Devuelto)</option>
-                                    <option value="in_process">En Reproceso</option>
-                                </select>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                    <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                        CANTIDAD ({selectedProduct.uom || 'UND'})
+                                    </label>
+                                    {Number(adjModalQty) > 0 && (
+                                        <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '700' }}>
+                                            Proyección: {formatNumber(
+                                                adjModalType === 'exit' 
+                                                    ? Math.max(0, (selectedProduct.currentStock || 0) - Number(adjModalQty))
+                                                    : (selectedProduct.currentStock || 0) + Number(adjModalQty)
+                                            )} {selectedProduct.uom || 'UND'}
+                                        </span>
+                                    )}
+                                </div>
+                                <input 
+                                    type="number" 
+                                    min="0.01"
+                                    step="any"
+                                    placeholder="0,00" 
+                                    value={adjModalQty}
+                                    onChange={(e) => setAdjModalQty(e.target.value)}
+                                    style={{ 
+                                        ...styles.input, 
+                                        fontWeight: '700', 
+                                        fontSize: '1rem', 
+                                        padding: '0.55rem 0.85rem',
+                                        borderColor: (adjModalType === 'exit' && Number(adjModalQty) > (selectedProduct.currentStock || 0)) ? '#F59E0B' : undefined
+                                    }} 
+                                />
+
+                                {/* Alerta Poka-Yoke si excede stock */}
+                                {adjModalType === 'exit' && Number(adjModalQty) > (selectedProduct.currentStock || 0) && (
+                                    <div style={{
+                                        marginTop: '0.4rem',
+                                        padding: '0.45rem 0.65rem',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FCD34D',
+                                        color: '#92400E',
+                                        fontSize: '0.72rem',
+                                        fontWeight: '600',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}>
+                                        <AlertTriangle size={14} color="#D97706" />
+                                        <span>⚠️ Alerta: La salida ({adjModalQty}) supera el saldo actual ({selectedProduct.currentStock}). El saldo se ajustará a 0.</span>
+                                    </div>
+                                )}
                             </div>
- 
+
+                            {/* Notas / Observaciones */}
                             <div>
-                                <label style={styles.label}>CANTIDAD</label>
-                                <input id="adj_qty" type="number" placeholder="0,00" style={{ ...styles.input, fontWeight: '600', fontSize: '0.85rem', padding: '0.55rem' }} />
-                            </div>
- 
-                            <div>
-                                <label style={styles.label}>MOTIVO / OBSERVACIONES</label>
-                                <textarea id="adj_notes" placeholder="Describa el motivo del ajuste..." style={{ ...styles.input, fontWeight: '500', fontSize: '0.85rem', padding: '0.55rem', minHeight: '80px', resize: 'none' }} />
+                                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                                    NOTAS / DETALLES OPERATIVOS (OPCIONAL)
+                                </label>
+                                <textarea 
+                                    placeholder="Ej: Lote dañado en descargue de camión..." 
+                                    value={adjModalNotes}
+                                    onChange={(e) => setAdjModalNotes(e.target.value)}
+                                    style={{ ...styles.input, fontWeight: '500', fontSize: '0.8rem', padding: '0.5rem', minHeight: '60px', resize: 'none' }} 
+                                />
                             </div>
                         </div>
- 
-                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2rem' }}>
+
+                        {/* Acciones */}
+                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
                             <button 
                                 onClick={() => setIsMovementModalOpen(false)} 
                                 style={{ 
                                     flex: 1, 
                                     padding: '0.65rem', 
                                     borderRadius: '8px', 
-                                    border: `1.5px solid ${THEME.colors.border}`, 
+                                    border: '1.5px solid #E2E8F0', 
                                     background: 'white', 
                                     fontWeight: '700', 
-                                    fontSize: '0.85rem',
-                                    color: THEME.colors.textSecondary,
+                                    fontSize: '0.82rem',
+                                    color: '#64748B',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#F4F7F6';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'white';
+                                    transition: 'all 0.15s'
                                 }}
                             >
                                 Cancelar
                             </button>
                             <button 
                                 onClick={() => {
-                                    const qtyInput = document.getElementById('adj_qty') as HTMLInputElement;
-                                    const typeSelect = document.getElementById('adj_type') as HTMLSelectElement;
-                                    const statusSelect = document.getElementById('adj_status') as HTMLSelectElement;
-                                    const notesText = document.getElementById('adj_notes') as HTMLTextAreaElement;
-                                    
-                                    const qty = parseFloat(qtyInput.value);
-                                    const type = typeSelect.value as 'entry' | 'exit' | 'adjustment';
-                                    const status = statusSelect.value;
-                                    const notes = notesText.value;
-                                    
-                                    if(qty) handleApplyMovement(selectedProduct.id, qty, type, status, notes);
-                                    else alert('Por favor ingrese una cantidad válida');
+                                    const qty = parseFloat(adjModalQty);
+                                    if (!qty || isNaN(qty) || qty <= 0) {
+                                        alert('Por favor ingrese una cantidad numérica mayor a cero.');
+                                        return;
+                                    }
+                                    const fullNotes = `[${adjModalReason}] ${adjModalNotes.trim()}`.trim();
+                                    handleApplyMovement(selectedProduct.id, qty, adjModalType, adjModalStatus, fullNotes);
                                 }}
                                 style={{ 
                                     flex: 1.5, 
@@ -6172,10 +6595,10 @@ export default function InventoryAdminPage() {
                                     background: THEME.colors.primary, 
                                     color: 'white', 
                                     fontWeight: '700', 
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.82rem',
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
-                                    transition: 'all 0.2s'
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
+                                    transition: 'all 0.15s'
                                 }}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
@@ -6186,7 +6609,7 @@ export default function InventoryAdminPage() {
                                     e.currentTarget.style.transform = 'translateY(0)';
                                 }}
                             >
-                                Guardar Ajuste
+                                Confirmar y Registrar Ajuste
                             </button>
                         </div>
                     </div>

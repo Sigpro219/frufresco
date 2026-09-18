@@ -141,7 +141,7 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
     }, [pdfDoc, zoom]);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '560px', backgroundColor: '#F1F5F9', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, flex: 1, backgroundColor: '#F1F5F9', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1' }}>
             {/* Toolbar Superior */}
             <div style={{
                 display: 'flex',
@@ -151,7 +151,8 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                 backgroundColor: '#FFFFFF',
                 borderBottom: '1px solid #E2E8F0',
                 fontSize: '0.8rem',
-                color: '#334155'
+                color: '#334155',
+                flexShrink: 0
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '800' }}>
                     <FileText size={14} color="#0D7A57" />
@@ -199,8 +200,9 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: loading ? 'center' : 'flex-start',
-                    minHeight: '520px',
-                    maxHeight: '600px'
+                    minHeight: 0,
+                    height: '100%',
+                    width: '100%'
                 }}
             >
                 {loading && (

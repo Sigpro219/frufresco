@@ -2190,7 +2190,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             <input
                                 type="date"
                                 value={balanceDate}
-                                onChange={e => { setBalanceDate(e.target.value); setCurrentPage(1); }}
+                                onChange={e => setBalanceDate(e.target.value)}
                                 style={{
                                     padding: '0.15rem 0.2rem',
                                     borderRadius: '4px',
@@ -2205,7 +2205,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             />
                             <button
                                 type="button"
-                                onClick={() => { setBalanceDate(todayStr); setCurrentPage(1); }}
+                                onClick={() => setBalanceDate(todayStr)}
                                 style={{
                                     padding: '0.2rem 0.45rem',
                                     borderRadius: '5px',
@@ -2319,7 +2319,6 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                                         type="button"
                                                         onClick={() => {
                                                             setSelectedCell(opt.value);
-                                                            setCurrentPage(1);
                                                             setIsCellComboboxOpen(false);
                                                         }}
                                                         style={{
@@ -2487,7 +2486,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             {searchQuery && (
                                 <button
                                     type="button"
-                                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                    onClick={() => setSearchQuery('')}
                                     style={{
                                         position: 'absolute',
                                         right: '0.5rem',
@@ -2628,7 +2627,6 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                                             if (prev.toLowerCase().includes(cleanTag.toLowerCase())) return prev;
                                                             return `${prev}, ${cleanTag}`;
                                                         });
-                                                        setCurrentPage(1);
                                                     }}
                                                     style={{
                                                         cursor: 'pointer',
