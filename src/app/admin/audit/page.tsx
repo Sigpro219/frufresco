@@ -2,7 +2,33 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, ShieldAlert, AlertTriangle, Search, Calendar, User, Settings, Loader2, RefreshCw, Eye } from 'lucide-react';
+import { 
+    ArrowLeft, 
+    Download, 
+    ShieldAlert, 
+    AlertTriangle, 
+    Search, 
+    Calendar, 
+    User, 
+    Settings, 
+    Loader2, 
+    RefreshCw, 
+    Eye, 
+    Users, 
+    CheckCircle2, 
+    Sprout, 
+    Carrot, 
+    Apple, 
+    Boxes, 
+    Layers, 
+    Wheat, 
+    Milk, 
+    Beef, 
+    Package, 
+    Copy, 
+    Check, 
+    FileSpreadsheet 
+} from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -44,6 +70,12 @@ const translateStatus = (status: string) => {
 const translateDetailsKey = (key: string) => {
     if (!key) return '';
     const k = key.toLowerCase();
+    if (k === 'work_cells_governance') return 'Gobernanza de Células de Trabajo';
+    if (k === 'system_roles') return 'Roles y Permisos del Sistema';
+    if (k === 'ai_product_aliases') return 'Sinónimos IA';
+    if (k === 'out_of_bounds_requests') return 'Solicitudes Fuera de Horario';
+    if (k === 'scarcity_locked_skus') return 'SKUs Bloqueados por Escasez';
+    if (k === 'warehouse_crate_stock') return 'Stock de Canastillas';
     if (k === 'sku') return 'Código (SKU)';
     if (k === 'name') return 'Nombre';
     if (k === 'role') return 'Rol / Permiso';
@@ -77,8 +109,104 @@ const formatDetailsValue = (key: string, value: any) => {
     if (k === 'role') return translateRole(String(value));
     if (k === 'status') return translateStatus(String(value));
     if (k === 'total' || k === 'total_price') return `$${Number(value).toLocaleString('es-CO')}`;
-    if (typeof value === 'object') return JSON.stringify(value);
+    
+    // Check structured objects or arrays
+    if (typeof value === 'object') {
+        if (Array.isArray(value)) return `[${value.length} elementos estructurados]`;
+        return `{${Object.keys(value).length} propiedades estructuradas}`;
+    }
+
+    // Check stringified JSON
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return `[${parsed.length} elementos configurados]`;
+                return `{${Object.keys(parsed).length} propiedades configuradas}`;
+            } catch (e) {}
+        }
+        if (trimmed.length > 70) {
+            return trimmed.substring(0, 67) + '...';
+        }
+        return trimmed;
+    }
+
     return String(value);
+};
+
+export interface GovernanceAnalysis {
+    isGovernance: boolean;
+    cellCount: number;
+    added: string[];
+    removed: string[];
+    leaderChanges: { cell: string; oldL: string; newL: string }[];
+    descChange: boolean;
+    oldDesc?: string;
+    newDesc?: string;
+    newCells: any[];
+}
+
+export const analyzeGovernanceChanges = (d: any): GovernanceAnalysis => {
+    if (!d || (d.key !== 'work_cells_governance' && !d.work_cells_governance)) {
+        return { isGovernance: false, cellCount: 0, added: [], removed: [], leaderChanges: [], descChange: false, newCells: [] };
+    }
+    let oldCells: any[] = [];
+    let newCells: any[] = [];
+    try {
+        const rawOld = d.changes?.value?.old;
+        if (typeof rawOld === 'string') oldCells = JSON.parse(rawOld);
+        else if (Array.isArray(rawOld)) oldCells = rawOld;
+    } catch(e) {}
+
+    try {
+        const rawNew = d.changes?.value?.new || d.value;
+        if (typeof rawNew === 'string') newCells = JSON.parse(rawNew);
+        else if (Array.isArray(rawNew)) newCells = rawNew;
+    } catch(e) {}
+
+    const added = newCells.filter(nc => !oldCells.some(oc => oc.id === nc.id)).map(c => c.name || c.short_name || c.id);
+    const removed = oldCells.filter(oc => !newCells.some(nc => nc.id === oc.id)).map(c => c.name || c.short_name || c.id);
+    const leaderChanges: { cell: string; oldL: string; newL: string }[] = [];
+    newCells.forEach(nc => {
+        const oc = oldCells.find(o => o.id === nc.id);
+        if (oc && (nc.leader_id !== oc.leader_id || nc.leader_name !== oc.leader_name)) {
+            leaderChanges.push({ 
+                cell: nc.name || nc.short_name || nc.id, 
+                oldL: oc.leader_name || 'Sin asignar', 
+                newL: nc.leader_name || 'Sin asignar' 
+            });
+        }
+    });
+
+    const descChange = !!d.changes?.description;
+    const oldDesc = d.changes?.description?.old;
+    const newDesc = d.changes?.description?.new || d.description;
+
+    return {
+        isGovernance: true,
+        cellCount: newCells.length || oldCells.length,
+        added,
+        removed,
+        leaderChanges,
+        descChange,
+        oldDesc,
+        newDesc,
+        newCells
+    };
+};
+
+const renderGovernanceLucideIcon = (iconKey?: string, size = 18) => {
+    const key = (iconKey || '').toLowerCase().trim();
+    if (key === 'sprout' || key.includes('hortaliza')) return <Sprout size={size} />;
+    if (key === 'carrot' || key.includes('verdura')) return <Carrot size={size} />;
+    if (key === 'apple' || key.includes('fruta') || key.includes('mora') || key.includes('fresa')) return <Apple size={size} />;
+    if (key === 'boxes' || key.includes('abarrote')) return <Boxes size={size} />;
+    if (key === 'layers' || key.includes('papa') || key.includes('tubérculo') || key.includes('tomate') || key.includes('aguacate')) return <Layers size={size} />;
+    if (key === 'wheat' || key.includes('grano')) return <Wheat size={size} />;
+    if (key === 'milk' || key.includes('lácteo')) return <Milk size={size} />;
+    if (key === 'beef' || key.includes('carne')) return <Beef size={size} />;
+    return <Package size={size} />;
 };
 
 const formatActionName = (log: any) => {
@@ -86,6 +214,13 @@ const formatActionName = (log: any) => {
     const action = typeof log === 'string' ? log : log.action;
     if (!action) return '-';
     
+    if (typeof log === 'object' && log.details?.key === 'work_cells_governance') {
+        const gov = analyzeGovernanceChanges(log.details);
+        if (gov.added.length > 0) return 'CREAR Célula de Trabajo';
+        if (gov.leaderChanges.length > 0) return 'REASIGNAR Líder de Célula';
+        return 'ACTUALIZAR Gobernanza de Células';
+    }
+
     if (action === 'LOGIN' || action === 'USER_LOGIN') return 'INGRESO AL SISTEMA';
     if (action === 'LOGOUT' || action === 'USER_LOGOUT') return 'SALIDA DEL SISTEMA';
 
@@ -120,6 +255,10 @@ const translateModule = (log: any) => {
     const module = typeof log === 'string' ? log : log.module;
     if (!module) return '-';
     
+    if (typeof log === 'object' && log.details?.key === 'work_cells_governance') {
+        return 'GOBERNANZA OPERATIVA';
+    }
+
     // Check if it's a security/profiles module action but targeting a client
     if (typeof log === 'object' && module === 'SECURITY' && log.details) {
         const role = log.details.role || '';
@@ -150,6 +289,73 @@ const formatCollaboratorName = (name: string) => {
 const formatDetailsSummary = (log: any) => {
     if (!log.details) return '-';
     const d = log.details;
+
+    // 1. Detección visual dedicada para Gobernanza de Células
+    const gov = analyzeGovernanceChanges(d);
+    if (gov.isGovernance) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: '700', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Users size={14} color="#0D7A57" />
+                        Gobernanza de Células de Trabajo
+                    </span>
+                    <span style={{ 
+                        fontSize: '0.72rem', 
+                        fontWeight: '800', 
+                        padding: '1px 8px', 
+                        borderRadius: '12px', 
+                        backgroundColor: '#DCFCE7', 
+                        color: '#15803D' 
+                    }}>
+                        {gov.cellCount} Células Activas
+                    </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '0.78rem' }}>
+                    {gov.added.length > 0 && (
+                        <span style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '3px',
+                            backgroundColor: '#FEF3C7', 
+                            color: '#92400E', 
+                            padding: '2px 8px', 
+                            borderRadius: '6px', 
+                            fontWeight: '700' 
+                        }}>
+                            + Célula Creada: {gov.added.join(', ')}
+                        </span>
+                    )}
+                    {gov.leaderChanges.length > 0 && (
+                        <span style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '3px',
+                            backgroundColor: '#E0F2FE', 
+                            color: '#0369A1', 
+                            padding: '2px 8px', 
+                            borderRadius: '6px', 
+                            fontWeight: '700' 
+                        }}>
+                            Líder Reasignado: {gov.leaderChanges.map(l => `${l.cell} (${l.oldL} → ${l.newL})`).join('; ')}
+                        </span>
+                    )}
+                    {gov.descChange && (
+                        <span style={{ color: '#64748B', fontSize: '0.75rem' }}>
+                            Descripción actualizada
+                        </span>
+                    )}
+                    {gov.added.length === 0 && gov.leaderChanges.length === 0 && !gov.descChange && (
+                        <span style={{ color: '#64748B' }}>
+                            Configuración operativa actualizada
+                        </span>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     if (log.action === 'BULK_IMPORT_CLIENTS') {
         return `Clientes creados: ${d.parents_created || 0}, Sucursales creadas: ${d.children_created || 0}`;
     }
@@ -166,16 +372,15 @@ const formatDetailsSummary = (log: any) => {
         return `Cierre de sesión realizado${d.email ? ` (${d.email})` : ''}`;
     }
     
-    let parts = [];
+    let parts: string[] = [];
     if (d.sku) parts.push(`Código (SKU): ${d.sku}`);
     if (d.name) parts.push(`Nombre: ${d.name}`);
     if (d.role) parts.push(`Rol: ${translateRole(d.role)}`);
     if (d.company_name) parts.push(`Empresa: ${d.company_name}`);
     if (d.contact_name) parts.push(`Contacto: ${d.contact_name}`);
-    if (d.key) parts.push(`Parámetro: ${d.key}`);
+    if (d.key) parts.push(`Parámetro: ${translateDetailsKey(d.key)}`);
     if (d.value !== undefined) {
-        const valStr = typeof d.value === 'object' ? JSON.stringify(d.value) : String(d.value);
-        parts.push(`Valor: ${valStr}`);
+        parts.push(`Valor: ${formatDetailsValue(d.key || 'valor', d.value)}`);
     }
     if (d.sequence_id) parts.push(`Consecutivo Pedido: ${d.sequence_id}`);
     if (d.total_price) parts.push(`Total: $${Number(d.total_price).toLocaleString('es-CO')}`);
@@ -195,7 +400,7 @@ const formatDetailsSummary = (log: any) => {
             });
             return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <div>{baseInfo}</div>
+                    {baseInfo && <div>{baseInfo}</div>}
                     <div style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: '600' }}>
                         Cambios: {changeParts.join(', ')}
                     </div>
@@ -204,7 +409,7 @@ const formatDetailsSummary = (log: any) => {
         } else {
             return (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span>{baseInfo}</span>
+                    {baseInfo && <span>{baseInfo}</span>}
                     <span 
                         style={{ 
                             display: 'inline-flex', 
@@ -225,8 +430,81 @@ const formatDetailsSummary = (log: any) => {
         }
     }
     
-    return baseInfo || JSON.stringify(d);
+    return baseInfo || formatDetailsValue('detalle', d);
 };
+
+// Generador de texto plano puro para evitar [object Object] en exportación Excel
+const formatDetailsSummaryText = (log: any): string => {
+    if (!log.details) return '-';
+    const d = log.details;
+
+    const gov = analyzeGovernanceChanges(d);
+    if (gov.isGovernance) {
+        const parts: string[] = [];
+        if (gov.added.length > 0) parts.push(`+ Célula Creada: ${gov.added.join(', ')}`);
+        if (gov.leaderChanges.length > 0) parts.push(`Líder Reasignado: ${gov.leaderChanges.map(l => `${l.cell} (${l.oldL} → ${l.newL})`).join('; ')}`);
+        if (gov.descChange) parts.push('Descripción actualizada');
+        parts.push(`${gov.cellCount} células configuradas`);
+        return `Gobernanza de Células: ${parts.join(' | ')}`;
+    }
+
+    if (log.action === 'BULK_IMPORT_CLIENTS') {
+        return `Clientes creados: ${d.parents_created || 0}, Sucursales creadas: ${d.children_created || 0}`;
+    }
+    if (log.action === 'BULK_IMPORT_COST_MATRIX') {
+        return `Archivo: ${d.file_name || 'Excel'} | Productos actualizados: ${d.products_updated || 0}${d.summary ? ` (${d.summary})` : ''}`;
+    }
+    if (log.action === 'UPDATE_COST_MATRIX') {
+        return `Producto: ${d.product_name || d.product_id} | Nuevo Costo: $${Number(d.manual_cost).toLocaleString('es-CO')}`;
+    }
+    if (log.action === 'LOGIN' || log.action === 'USER_LOGIN') {
+        return `Inicio de sesión exitoso${d.email ? ` (${d.email})` : ''}`;
+    }
+    if (log.action === 'LOGOUT' || log.action === 'USER_LOGOUT') {
+        return `Cierre de sesión realizado${d.email ? ` (${d.email})` : ''}`;
+    }
+
+    let parts: string[] = [];
+    if (d.sku) parts.push(`Código (SKU): ${d.sku}`);
+    if (d.name) parts.push(`Nombre: ${d.name}`);
+    if (d.role) parts.push(`Rol: ${translateRole(d.role)}`);
+    if (d.company_name) parts.push(`Empresa: ${d.company_name}`);
+    if (d.contact_name) parts.push(`Contacto: ${d.contact_name}`);
+    if (d.key) parts.push(`Parámetro: ${translateDetailsKey(d.key)}`);
+    if (d.value !== undefined) {
+        parts.push(`Valor: ${formatDetailsValue(d.key || 'valor', d.value)}`);
+    }
+    if (d.sequence_id) parts.push(`Consecutivo Pedido: ${d.sequence_id}`);
+    if (d.total_price) parts.push(`Total: $${Number(d.total_price).toLocaleString('es-CO')}`);
+    if (d.status) parts.push(`Estado: ${translateStatus(d.status)}`);
+
+    let res = parts.join(' | ');
+    if (d.changes && typeof d.changes === 'object' && Object.keys(d.changes).length > 0) {
+        const changeParts = Object.entries(d.changes).map(([k, val]: [string, any]) => {
+            const tk = translateDetailsKey(k);
+            const ov = formatDetailsValue(k, val.old);
+            const nv = formatDetailsValue(k, val.new);
+            return `${tk}: ${ov} → ${nv}`;
+        });
+        res = `${res ? res + ' | ' : ''}Cambios: ${changeParts.join(', ')}`;
+    }
+
+    return res || '-';
+};
+
+const sanitizeJsonForExcel = (details: any): string => {
+    if (!details) return '';
+    try {
+        const str = JSON.stringify(details);
+        if (str.length > 3000) {
+            return str.substring(0, 3000) + '... [TRUNCADO_POR_TAMAÑO]';
+        }
+        return str;
+    } catch (e) {
+        return '';
+    }
+};
+
 
 export default function AuditLogPage() {
     const { profile, loading: authLoading } = useAuth();
@@ -246,6 +524,7 @@ export default function AuditLogPage() {
     const [loadingOrderItems, setLoadingOrderItems] = useState(false);
     const [auditOrderItems, setAuditOrderItems] = useState<any[]>([]);
     const [systemRoles, setSystemRoles] = useState<any[]>([]);
+    const [copiedJson, setCopiedJson] = useState(false);
 
     useEffect(() => {
         if (selectedLog && selectedLog.module === 'ORDERS' && selectedLog.details?.id) {
@@ -421,24 +700,58 @@ export default function AuditLogPage() {
     const handleExportXLSX = async () => {
         setExporting(true);
         try {
-            let query = supabase
-                .from('audit_logs')
-                .select('*');
-            query = applyFilters(query);
-            const { data, error } = await query.order('created_at', { ascending: false });
-            if (error) throw error;
+            // Carga optimizada de hasta 2.500 registros con columnas específicas para máxima velocidad
+            let allLogs: any[] = [];
+            let from = 0;
+            const batchSize = 1000;
+            const maxExportLimit = 2500;
+            let keepFetching = true;
+
+            while (keepFetching && allLogs.length < maxExportLimit) {
+                let query = supabase
+                    .from('audit_logs')
+                    .select('id, created_at, collaborator_name, collaborator_id, action, module, details');
+                query = applyFilters(query);
+                const { data, error } = await query
+                    .order('created_at', { ascending: false })
+                    .range(from, from + batchSize - 1);
+
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    keepFetching = false;
+                } else {
+                    allLogs = [...allLogs, ...data];
+                    if (data.length < batchSize || allLogs.length >= maxExportLimit) {
+                        keepFetching = false;
+                    } else {
+                        from += batchSize;
+                    }
+                }
+            }
             
-            const exportData = (data || []).map((log: any) => ({
+            const exportData = allLogs.map((log: any) => ({
                 'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CO'),
                 'Usuario': formatCollaboratorName(log.collaborator_name),
                 'ID de Usuario': log.collaborator_id || 'Sistema',
-                'Acción': formatActionName(log.action),
-                'Módulo': translateModule(log.module),
-                'Resumen Detalles': formatDetailsSummary(log),
-                'Detalles JSON': JSON.stringify(log.details)
+                'Acción': formatActionName(log),
+                'Módulo': translateModule(log),
+                'Resumen Detalles': formatDetailsSummaryText(log),
+                'Detalles JSON': sanitizeJsonForExcel(log.details)
             }));
             
             const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Configuración de anchos de columna para legibilidad óptima
+            ws['!cols'] = [
+                { wch: 22 }, // Fecha y Hora
+                { wch: 28 }, // Usuario
+                { wch: 20 }, // ID de Usuario
+                { wch: 30 }, // Acción
+                { wch: 24 }, // Módulo
+                { wch: 70 }, // Resumen Detalles
+                { wch: 45 }  // Detalles JSON
+            ];
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Logs de Auditoría");
             XLSX.writeFile(wb, `Reporte_Auditoria_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -782,35 +1095,151 @@ export default function AuditLogPage() {
                                 <strong style={{ color: THEME.colors.textSecondary }}>Módulo:</strong> {translateModule(selectedLog)}
                             </div>
                             
-                            {selectedLog.details && typeof selectedLog.details === 'object' && Object.keys(selectedLog.details).length > 0 && (
-                                <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.4rem' }}>
-                                    <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>Información Procesada:</strong>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '6px', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                                        {Object.entries(selectedLog.details).filter(([k]) => k !== 'changes').map(([k, v]) => (
-                                            <React.Fragment key={k}>
-                                                <span style={{ fontWeight: '700', color: THEME.colors.textSecondary }}>{translateDetailsKey(k)}:</span>
-                                                <span style={{ color: THEME.colors.textMain, wordBreak: 'break-all' }}>{formatDetailsValue(k, v)}</span>
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            {(() => {
+                                const gov = analyzeGovernanceChanges(selectedLog.details);
+                                if (gov.isGovernance) {
+                                    return (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
+                                            {/* Panel Ejecutivo de Modificaciones */}
+                                            <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '1rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <Users size={18} color="#15803D" />
+                                                        <strong style={{ color: '#166534', fontSize: '0.95rem' }}>
+                                                            Gobernanza Operativa: {gov.cellCount} Células de Trabajo Activas
+                                                        </strong>
+                                                    </div>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px' }}>
+                                                        Registro Oficial
+                                                    </span>
+                                                </div>
 
-                            {selectedLog.details?.changes && typeof selectedLog.details.changes === 'object' && Object.keys(selectedLog.details.changes).length > 0 && (
-                                <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
-                                    <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>Campos Modificados:</strong>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {Object.entries(selectedLog.details.changes).map(([k, val]: [string, any]) => (
-                                            <div key={k} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 20px 1fr', gap: '8px', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '6px 12px', borderRadius: THEME.radius.md, border: '1px solid #FEE2E2' }}>
-                                                <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{translateDetailsKey(k)}</span>
-                                                <span style={{ color: '#EF4444', textDecoration: 'line-through', fontSize: '0.8rem' }}>{formatDetailsValue(k, val.old)}</span>
-                                                <span style={{ color: THEME.colors.textSecondary, textAlign: 'center' }}>→</span>
-                                                <span style={{ color: '#10B981', fontWeight: '700' }}>{formatDetailsValue(k, val.new)}</span>
+                                                {gov.added.length > 0 && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.85rem' }}>
+                                                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                                            + Célula Creada:
+                                                        </span>
+                                                        <strong style={{ color: '#0F172A' }}>{gov.added.join(', ')}</strong>
+                                                    </div>
+                                                )}
+
+                                                {gov.leaderChanges.length > 0 && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px', fontSize: '0.85rem' }}>
+                                                        <span style={{ fontWeight: '700', color: '#0369A1' }}>Reasignación de Liderazgo:</span>
+                                                        {gov.leaderChanges.map((lc, idx) => (
+                                                            <div key={idx} style={{ paddingLeft: '10px', color: '#334155' }}>
+                                                                • <strong>{lc.cell}</strong>: <span style={{ textDecoration: 'line-through', color: '#DC2626' }}>{lc.oldL}</span> → <span style={{ color: '#15803D', fontWeight: '700' }}>{lc.newL}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {gov.descChange && (
+                                                    <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#475569' }}>
+                                                        <strong>Descripción Oficial:</strong> {gov.newDesc}
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+
+                                            {/* Visualizador de Células de Trabajo */}
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                                                    <strong style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
+                                                        Células de Trabajo y Responsables Asignados:
+                                                    </strong>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                                        {gov.newCells.length} Células en catálogo
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px' }}>
+                                                    {gov.newCells.map(cell => {
+                                                        const isAdded = gov.added.includes(cell.name || cell.short_name || cell.id);
+                                                        return (
+                                                            <div 
+                                                                key={cell.id} 
+                                                                style={{ 
+                                                                    backgroundColor: isAdded ? '#FEFCE8' : '#F8FAFC', 
+                                                                    border: `1.5px solid ${isAdded ? '#F59E0B' : (cell.color || '#CBD5E1')}`, 
+                                                                    borderLeft: `4px solid ${isAdded ? '#F59E0B' : (cell.color || '#0D7A57')}`,
+                                                                    borderRadius: '8px', 
+                                                                    padding: '0.75rem 0.9rem',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    gap: '5px'
+                                                                }}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                                                        <div style={{ width: '26px', height: '26px', borderRadius: '6px', backgroundColor: `${cell.color || '#0D7A57'}20`, color: cell.color || '#0D7A57', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                            {renderGovernanceLucideIcon(cell.icon, 15)}
+                                                                        </div>
+                                                                        <span style={{ fontWeight: '800', fontSize: '0.82rem', color: '#0F172A' }}>
+                                                                            {cell.name || cell.short_name}
+                                                                        </span>
+                                                                    </div>
+                                                                    {isAdded && (
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                            NUEVA
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.78rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <User size={13} color="#64748B" />
+                                                                    <span><strong>Líder:</strong> {cell.leader_name || 'Sin asignar'}</span>
+                                                                </div>
+                                                                {cell.leader_role && (
+                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B', paddingLeft: '17px' }}>
+                                                                        Rol: {cell.leader_role}
+                                                                    </div>
+                                                                )}
+                                                                {cell.inventory_group && (
+                                                                    <div style={{ fontSize: '0.68rem', color: '#0D7A57', backgroundColor: '#EAEFEA', padding: '2px 6px', borderRadius: '4px', marginTop: '2px', fontWeight: '600' }}>
+                                                                        {cell.inventory_group}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <>
+                                        {selectedLog.details && typeof selectedLog.details === 'object' && Object.keys(selectedLog.details).length > 0 && (
+                                            <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.4rem' }}>
+                                                <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>Información Procesada:</strong>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '6px', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                                    {Object.entries(selectedLog.details).filter(([k]) => k !== 'changes').map(([k, v]) => (
+                                                        <React.Fragment key={k}>
+                                                            <span style={{ fontWeight: '700', color: THEME.colors.textSecondary }}>{translateDetailsKey(k)}:</span>
+                                                            <span style={{ color: THEME.colors.textMain, wordBreak: 'break-all' }}>{formatDetailsValue(k, v)}</span>
+                                                        </React.Fragment>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {selectedLog.details?.changes && typeof selectedLog.details.changes === 'object' && Object.keys(selectedLog.details.changes).length > 0 && (
+                                            <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
+                                                <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>Campos Modificados:</strong>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {Object.entries(selectedLog.details.changes).map(([k, val]: [string, any]) => (
+                                                        <div key={k} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 20px 1fr', gap: '8px', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '6px 12px', borderRadius: THEME.radius.md, border: '1px solid #FEE2E2' }}>
+                                                            <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{translateDetailsKey(k)}</span>
+                                                            <span style={{ color: '#EF4444', textDecoration: 'line-through', fontSize: '0.8rem' }}>{formatDetailsValue(k, val.old)}</span>
+                                                            <span style={{ color: THEME.colors.textSecondary, textAlign: 'center' }}>→</span>
+                                                            <span style={{ color: '#10B981', fontWeight: '700' }}>{formatDetailsValue(k, val.new)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                             
                             {selectedLog.module === 'ORDERS' && selectedLog.details?.id && (
                                  <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
@@ -863,12 +1292,44 @@ export default function AuditLogPage() {
                                  </div>
                              )}
 
-                            <div>
-                                <strong style={{ color: THEME.colors.textSecondary }}>Datos del Objeto (JSON original):</strong>
-                                <pre style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, fontSize: '0.75rem', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto' }}>
-                                    {JSON.stringify(selectedLog.details, null, 2)}
-                                </pre>
-                            </div>
+                            {/* Acordeón Plegable de Detalle Técnico JSON con Botón de Copiado */}
+                            <details style={{ marginTop: '0.8rem', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: '0.6rem 0.85rem', backgroundColor: '#F8FAFC' }}>
+                                <summary style={{ cursor: 'pointer', fontWeight: '700', color: THEME.colors.textSecondary, fontSize: '0.8rem', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span>Ver Registro Técnico Completo (JSON estructurado)</span>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(JSON.stringify(selectedLog.details, null, 2));
+                                            setCopiedJson(true);
+                                            setTimeout(() => setCopiedJson(false), 2000);
+                                        }}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            backgroundColor: '#FFFFFF',
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            padding: '3px 8px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.72rem',
+                                            color: copiedJson ? '#15803D' : THEME.colors.textMain,
+                                            fontWeight: '700',
+                                            cursor: 'pointer'
+                                        }}
+                                        title="Copiar JSON completo al portapapeles"
+                                    >
+                                        {copiedJson ? <Check size={13} color="#15803D" /> : <Copy size={13} />}
+                                        <span>{copiedJson ? '¡Copiado!' : 'Copiar JSON'}</span>
+                                    </button>
+                                </summary>
+                                <div style={{ marginTop: '0.6rem' }}>
+                                    <pre style={{ margin: 0, padding: '0.8rem', backgroundColor: '#0F172A', color: '#E2E8F0', borderRadius: '6px', fontSize: '0.72rem', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: '220px', overflowY: 'auto' }}>
+                                        {JSON.stringify(selectedLog.details, null, 2)}
+                                    </pre>
+                                </div>
+                            </details>
                         </div>
 
                         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>

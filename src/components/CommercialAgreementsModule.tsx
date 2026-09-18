@@ -36,7 +36,9 @@ import {
     CheckSquare,
     Square,
     Save,
-    Sparkles
+    Sparkles,
+    Printer,
+    User
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { searchIncludes } from '@/lib/locationNorm';
@@ -56,6 +58,7 @@ interface Agreement {
     start_date: string;
     valid_until: string;
     created_at: string;
+    updated_at?: string;
     profiles?: {
         company_name?: string;
         contact_name?: string;
@@ -76,6 +79,7 @@ interface AgreementItem {
     iva_rate: number;
     iva_amount: number;
     total_price: number;
+    created_at?: string;
     products?: {
         accounting_id?: string;
         unit_of_measure?: string;
@@ -105,6 +109,8 @@ export default function CommercialAgreementsModule() {
     const [savingPriceItemId, setSavingPriceItemId] = useState<string | null>(null);
     const [agreementAuditLogs, setAgreementAuditLogs] = useState<Record<string, any[]>>({});
     const [hoveredAuditItemId, setHoveredAuditItemId] = useState<string | null>(null);
+    const [latestAgreementLog, setLatestAgreementLog] = useState<any | null>(null);
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
     // Master Institutional Template State
     const [masterTemplate, setMasterTemplate] = useState<{
@@ -353,24 +359,150 @@ export default function CommercialAgreementsModule() {
         return productMap;
     };
 
+    // Date / Time formatting matching the ERP photograph:
+    // Header format: 05/sep/2026 - 10:13 a.m.
+    // Table format:  05/sep/2026 10:13 a.m.
+    const formatAuditDateTime = (dateStr?: string | null): string => {
+        if (!dateStr) return '---';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '---';
+        const day = String(d.getDate()).padStart(2, '0');
+        const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        const month = months[d.getMonth()];
+        const year = d.getFullYear();
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+    };
+
+    const formatHeaderDateTime = (dateStr?: string | null): string => {
+        if (!dateStr) return '---';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '---';
+        const day = String(d.getDate()).padStart(2, '0');
+        const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        const month = months[d.getMonth()];
+        const year = d.getFullYear();
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${day}/${month}/${year} - ${hours}:${minutes} ${ampm}`;
+    };
+
+    const getCurrentCollaboratorName = (): string => {
+        return profile?.contact_name || 
+               (user?.user_metadata as any)?.full_name || 
+               (user?.user_metadata as any)?.name || 
+               (profile as any)?.company_name || 
+               user?.email?.split('@')[0] || 
+               'Comercial FruFresco';
+    };
+
+    const getItemAuditInfo = (item: AgreementItem) => {
+        const itemLogs = agreementAuditLogs[item.id] || [];
+        if (itemLogs.length > 0) {
+            const latest = itemLogs[0];
+            const dateStr = latest.created_at || (latest.details && latest.details.changed_at);
+            const author = latest.collaborator_name || latest.collaborator_id || getCurrentCollaboratorName();
+            return {
+                formatted: formatAuditDateTime(dateStr),
+                author: author,
+                userId: latest.collaborator_id || '52346672',
+                isModified: true,
+                rawDate: dateStr
+            };
+        }
+        
+        const dateStr = item.created_at || selectedAgreement?.updated_at || selectedAgreement?.created_at;
+        const author = latestAgreementLog?.collaborator_name || 
+                       selectedAgreement?.profiles?.contact_name || 
+                       getCurrentCollaboratorName();
+        return {
+            formatted: formatAuditDateTime(dateStr),
+            author: author,
+            userId: (profile as any)?.nit || '52346672',
+            isModified: false,
+            rawDate: dateStr
+        };
+    };
+
+    const getLastUpdateInfo = () => {
+        if (!selectedAgreement) return { author: 'Comercial FruFresco', formatted: '---' };
+
+        if (latestAgreementLog) {
+            const dateStr = latestAgreementLog.created_at || (latestAgreementLog.details && latestAgreementLog.details.changed_at);
+            const author = latestAgreementLog.collaborator_name || getCurrentCollaboratorName();
+            return {
+                author: author,
+                formatted: formatHeaderDateTime(dateStr)
+            };
+        }
+
+        let newestItemLog: any = null;
+        Object.values(agreementAuditLogs).forEach(logs => {
+            if (logs && logs.length > 0) {
+                const first = logs[0];
+                if (!newestItemLog || new Date(first.created_at) > new Date(newestItemLog.created_at)) {
+                    newestItemLog = first;
+                }
+            }
+        });
+
+        if (newestItemLog) {
+            const dateStr = newestItemLog.created_at || (newestItemLog.details && newestItemLog.details.changed_at);
+            const author = newestItemLog.collaborator_name || getCurrentCollaboratorName();
+            return {
+                author: author,
+                formatted: formatHeaderDateTime(dateStr)
+            };
+        }
+
+        const dateStr = selectedAgreement.updated_at || selectedAgreement.created_at || selectedAgreement.start_date;
+        const author = selectedAgreement.profiles?.contact_name || getCurrentCollaboratorName();
+        return {
+            author: author,
+            formatted: formatHeaderDateTime(dateStr)
+        };
+    };
+
     const fetchAgreementAuditLogs = async (quoteId: string) => {
         try {
+            let logsData: any[] = [];
             const { data, error } = await supabase
                 .from('audit_logs')
                 .select('*')
-                .eq('module', 'COMMERCIAL')
-                .order('created_at', { ascending: false })
-                .limit(100);
+                .filter('details->>quote_id', 'eq', quoteId)
+                .order('created_at', { ascending: false });
 
-            if (error) {
-                console.warn('Error fetching audit logs:', error);
-                return;
+            if (!error && data && data.length > 0) {
+                logsData = data;
+            } else {
+                const { data: allCommLogs } = await supabase
+                    .from('audit_logs')
+                    .select('*')
+                    .eq('module', 'COMMERCIAL')
+                    .order('created_at', { ascending: false })
+                    .limit(200);
+
+                if (allCommLogs) {
+                    logsData = allCommLogs.filter(log => {
+                        const d = log.details;
+                        return d && (d.quote_id === quoteId || d.quoteId === quoteId);
+                    });
+                }
             }
 
             const map: Record<string, any[]> = {};
-            (data || []).forEach(log => {
+            let newestLog: any = null;
+            logsData.forEach(log => {
+                if (!newestLog) newestLog = log;
                 const d = log.details;
-                if (d && (d.quote_id === quoteId || d.quoteId === quoteId)) {
+                if (d) {
                     const itemId = d.quote_item_id || d.itemId;
                     if (itemId) {
                         if (!map[itemId]) map[itemId] = [];
@@ -379,6 +511,9 @@ export default function CommercialAgreementsModule() {
                 }
             });
             setAgreementAuditLogs(map);
+            if (newestLog) {
+                setLatestAgreementLog(newestLog);
+            }
         } catch (err) {
             console.warn('Failed to load audit logs:', err);
         }
@@ -2164,7 +2299,7 @@ export default function CommercialAgreementsModule() {
                     <div style={{ 
                         backgroundColor: 'white', 
                         width: '100%', 
-                        maxWidth: '850px', 
+                        maxWidth: '1100px', 
                         height: '100%', 
                         boxShadow: '-10px 0 25px rgba(0,0,0,0.1)', 
                         display: 'flex', 
@@ -2195,6 +2330,35 @@ export default function CommercialAgreementsModule() {
                                         </span>
                                     )}
                                 </div>
+                                {/* Subtítulo de trazabilidad idéntico a la fotografía de referencia */}
+                                {(() => {
+                                    const lastUpdate = getLastUpdateInfo();
+                                    return (
+                                        <div style={{ 
+                                            marginTop: '8px', 
+                                            fontSize: '0.82rem', 
+                                            color: '#1E293B',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            flexWrap: 'wrap'
+                                        }}>
+                                            <span style={{ color: '#64748B', fontWeight: '500' }}>Actualizada por</span>
+                                            <span style={{ fontWeight: '800', color: '#0F172A' }}>{lastUpdate.author}</span>
+                                            <span style={{ 
+                                                backgroundColor: '#FEF08A', 
+                                                color: '#854D0E', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '4px', 
+                                                fontWeight: '800', 
+                                                fontSize: '0.78rem', 
+                                                border: '1px solid #FDE047' 
+                                            }}>
+                                                ({lastUpdate.formatted})
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <button 
                                 onClick={() => setIsDrawerOpen(false)}
@@ -2295,6 +2459,29 @@ export default function CommercialAgreementsModule() {
                                     {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : 'Cargar Modelo General'}
                                 </button>
                             )}
+                            <button
+                                type="button"
+                                onClick={() => setIsPrintModalOpen(true)}
+                                style={{
+                                    padding: '0.55rem 0.95rem',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#F8FAFC',
+                                    color: '#334155',
+                                    border: '1.5px solid #CBD5E1',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                }}
+                                title="Abrir vista de impresión y exportación tal como en la fotografía de referencia"
+                            >
+                                <Printer size={15} color="#475569" />
+                                Vista Imprimible
+                            </button>
                             <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                 {agreementItems.filter(item => {
                                     if (!drawerSearchTerm.trim()) return true;
@@ -2343,6 +2530,8 @@ export default function CommercialAgreementsModule() {
                                                     <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Precio Acordado</th>
                                                     <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>IVA</th>
                                                     <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Fecha / Hora</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left' }}>Usuario</th>
                                                     <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px' }}>Acciones</th>
                                                 </tr>
                                             </thead>
@@ -2482,6 +2671,45 @@ export default function CommercialAgreementsModule() {
                                                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: activeDisplayMargin >= 50 ? '#059669' : activeDisplayMargin >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
                                                                 {activeDisplayMargin}%
                                                             </td>
+                                                            {/* Columna Fecha / Hora idéntica a la fotografía */}
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                                                                {(() => {
+                                                                    const itemAudit = getItemAuditInfo(item);
+                                                                    return (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                                                            <span style={{ 
+                                                                                color: itemAudit.isModified ? '#0284C7' : '#475569', 
+                                                                                fontWeight: itemAudit.isModified ? '700' : '500',
+                                                                                backgroundColor: itemAudit.isModified ? '#F0F9FF' : 'transparent',
+                                                                                padding: itemAudit.isModified ? '2px 6px' : '0',
+                                                                                borderRadius: '4px',
+                                                                                border: itemAudit.isModified ? '1px solid #BAE6FD' : 'none'
+                                                                            }}>
+                                                                                {itemAudit.formatted}
+                                                                            </span>
+                                                                            {itemAudit.isModified && (
+                                                                                <span style={{ fontSize: '0.65rem', color: '#0369A1', fontWeight: '800' }}>
+                                                                                    ✏️ Modificado
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </td>
+                                                            {/* Columna Usuario idéntica a la fotografía */}
+                                                            <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                                                                {(() => {
+                                                                    const itemAudit = getItemAuditInfo(item);
+                                                                    return (
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                            <User size={13} color="#64748B" />
+                                                                            <span style={{ fontWeight: '600', color: THEME.colors.textMain }}>
+                                                                                {itemAudit.author}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </td>
                                                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                                 {isEditingThis ? (
                                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
@@ -2587,6 +2815,266 @@ export default function CommercialAgreementsModule() {
                             >
                                 Cerrar Lista
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL VISTA IMPRIMIBLE / DOCUMENTO DE LISTA DE PRECIOS TAL COMO EN LA FOTOGRAFÍA */}
+            {isPrintModalOpen && selectedAgreement && (
+                <div style={{ 
+                    position: 'fixed', 
+                    inset: 0, 
+                    backgroundColor: 'rgba(0,0,0,0.65)', 
+                    zIndex: 2500, 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    padding: '1.5rem', 
+                    overflowY: 'auto' 
+                }}>
+                    <div style={{ 
+                        backgroundColor: 'white', 
+                        borderRadius: '12px', 
+                        width: '100%', 
+                        maxWidth: '1200px', 
+                        maxHeight: '94vh', 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', 
+                        overflow: 'hidden' 
+                    }}>
+                        {/* Barra Superior de Control (No Imprimible) */}
+                        <div className="no-print" style={{ 
+                            padding: '1rem 1.5rem', 
+                            borderBottom: '1px solid #E2E8F0', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            backgroundColor: '#F8FAFC' 
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Printer size={18} color="#0D7A57" />
+                                <span style={{ fontWeight: '800', fontSize: '0.95rem', color: '#0F172A' }}>
+                                    Vista de Impresión / Lista Oficial de Precios
+                                </span>
+                                <span style={{ 
+                                    fontSize: '0.75rem', 
+                                    backgroundColor: '#ECFDF5', 
+                                    color: '#047857', 
+                                    border: '1px solid #A7F3D0', 
+                                    padding: '2px 8px', 
+                                    borderRadius: '6px', 
+                                    fontWeight: '700' 
+                                }}>
+                                    Formato Compacto 2 Columnas
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    style={{
+                                        padding: '0.5rem 1.2rem',
+                                        backgroundColor: '#0D7A57',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)'
+                                    }}
+                                >
+                                    <Printer size={15} /> Imprimir / Guardar PDF
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPrintModalOpen(false)}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        backgroundColor: '#F1F5F9',
+                                        color: '#475569',
+                                        border: '1px solid #CBD5E1',
+                                        borderRadius: '8px',
+                                        fontWeight: '600',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <X size={15} /> Cerrar
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Área Imprimible del Documento */}
+                        <div id="printable-agreement-area" style={{ 
+                            flex: 1, 
+                            overflowY: 'auto', 
+                            padding: '2.5rem 2rem', 
+                            backgroundColor: 'white' 
+                        }}>
+                            <style dangerouslySetInnerHTML={{ __html: `
+                                @media print {
+                                    body * { visibility: hidden !important; }
+                                    #printable-agreement-area, #printable-agreement-area * { visibility: visible !important; }
+                                    #printable-agreement-area {
+                                        position: fixed !important;
+                                        left: 0 !important;
+                                        top: 0 !important;
+                                        width: 100% !important;
+                                        margin: 0 !important;
+                                        padding: 12mm 8mm !important;
+                                        background: white !important;
+                                        z-index: 999999 !important;
+                                    }
+                                    .no-print { display: none !important; }
+                                    table { page-break-inside: auto; }
+                                    tr { page-break-inside: avoid; page-break-after: auto; }
+                                }
+                            `}} />
+
+                            {/* Encabezado del Documento - Idéntico a la fotografía */}
+                            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                                <h1 style={{ 
+                                    margin: '0 0 6px', 
+                                    fontSize: '1.25rem', 
+                                    fontWeight: '900', 
+                                    color: '#000', 
+                                    letterSpacing: '-0.02em',
+                                    textTransform: 'uppercase'
+                                }}>
+                                    Lista de precios {selectedAgreement.model_snapshot_name || selectedAgreement.profiles?.company_name || selectedAgreement.client_name} ({agreementItems.length} productos)
+                                </h1>
+                                {(() => {
+                                    const lastUpdate = getLastUpdateInfo();
+                                    return (
+                                        <div style={{ 
+                                            fontSize: '1rem', 
+                                            fontWeight: '700', 
+                                            color: '#000',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}>
+                                            <span>Actualizada por {lastUpdate.author}</span>
+                                            <span style={{ 
+                                                backgroundColor: '#FEF08A', 
+                                                color: '#854D0E', 
+                                                padding: '1px 6px', 
+                                                borderRadius: '3px',
+                                                border: '1.5px solid #EAB308',
+                                                fontWeight: '800'
+                                            }}>
+                                                ({lastUpdate.formatted})
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Tabla en 2 Columnas Paralelas - Idéntica a la fotografía */}
+                            {(() => {
+                                const sortedItems = [...agreementItems].sort((a, b) => {
+                                    const codA = Number(a.products?.accounting_id) || 999999;
+                                    const codB = Number(b.products?.accounting_id) || 999999;
+                                    return codA - codB;
+                                });
+
+                                const half = Math.ceil(sortedItems.length / 2);
+                                const leftCol = sortedItems.slice(0, half);
+                                const rightCol = sortedItems.slice(half);
+
+                                return (
+                                    <table style={{ 
+                                        width: '100%', 
+                                        borderCollapse: 'collapse', 
+                                        border: '1.5px solid #000', 
+                                        fontFamily: 'Arial, sans-serif',
+                                        fontSize: '0.78rem'
+                                    }}>
+                                        <thead>
+                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #000' }}>
+                                                <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'center', width: '5%' }}>Cod.</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 8px', textAlign: 'left', width: '19%' }}>Producto</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'right', width: '10%' }}>Precio/KG</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '12%' }}>Fecha/Hora</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '8%' }}>Usuario</th>
+                                                
+                                                <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'center', width: '5%', borderLeft: '2px solid #000' }}>Cod.</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 8px', textAlign: 'left', width: '19%' }}>Producto</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'right', width: '10%' }}>Precio/KG</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '12%' }}>Fecha/Hora</th>
+                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '8%' }}>Usuario</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Array.from({ length: half }).map((_, idx) => {
+                                                const leftItem = leftCol[idx];
+                                                const rightItem = rightCol[idx];
+                                                const leftAudit = leftItem ? getItemAuditInfo(leftItem) : null;
+                                                const rightAudit = rightItem ? getItemAuditInfo(rightItem) : null;
+
+                                                return (
+                                                    <tr key={idx} style={{ borderBottom: '1px solid #000' }}>
+                                                        {/* LADO IZQUIERDO */}
+                                                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>
+                                                            {leftItem?.products?.accounting_id || '---'}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>
+                                                            {leftItem?.product_name || ''}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 'bold' }}>
+                                                            {leftItem ? `$${formatNumber(leftItem.unit_price)}` : ''}
+                                                        </td>
+                                                        <td style={{ 
+                                                            border: '1px solid #000', 
+                                                            padding: '4px 4px', 
+                                                            textAlign: 'center', 
+                                                            fontSize: '0.72rem', 
+                                                            backgroundColor: leftAudit?.isModified ? '#FEF9C3' : 'transparent' 
+                                                        }}>
+                                                            {leftAudit?.formatted || ''}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: '0.72rem' }}>
+                                                            {leftAudit?.userId || leftAudit?.author?.split(' ')[0] || ''}
+                                                        </td>
+
+                                                        {/* LADO DERECHO */}
+                                                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 'bold', borderLeft: '2px solid #000' }}>
+                                                            {rightItem?.products?.accounting_id || ''}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>
+                                                            {rightItem?.product_name || ''}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 'bold' }}>
+                                                            {rightItem ? `$${formatNumber(rightItem.unit_price)}` : ''}
+                                                        </td>
+                                                        <td style={{ 
+                                                            border: '1px solid #000', 
+                                                            padding: '4px 4px', 
+                                                            textAlign: 'center', 
+                                                            fontSize: '0.72rem', 
+                                                            backgroundColor: rightAudit?.isModified ? '#FEF9C3' : 'transparent' 
+                                                        }}>
+                                                            {rightAudit?.formatted || ''}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: '0.72rem' }}>
+                                                            {rightAudit?.userId || rightAudit?.author?.split(' ')[0] || ''}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

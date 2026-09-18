@@ -464,6 +464,7 @@ export default function InventoryAdminPage() {
     const [expandedKardexItems, setExpandedKardexItems] = useState<Record<string, boolean>>({});
     const [collapsedKardexParents, setCollapsedKardexParents] = useState<Record<string, boolean>>({});
     const [exportingExcel, setExportingExcel] = useState(false);
+    const [exportingGovernance, setExportingGovernance] = useState(false);
 
     const toggleKardexParentCollapse = (parentId: string) => {
         setCollapsedKardexParents(prev => ({
@@ -2038,6 +2039,87 @@ export default function InventoryAdminPage() {
             setExportingExcel(false);
         }
     }, [kardexFamilies, movements, movementsDateRange, customStartDate, customEndDate]);
+
+    const handleExportGovernanceExcel = useCallback(async () => {
+        try {
+            setExportingGovernance(true);
+            const XLSX = await import('xlsx');
+
+            // Hoja 1: Células y Liderazgos
+            const cellsData = workCells.map(c => {
+                const activeSkusCount = skuCountsByCell[c.inventory_group?.trim().toUpperCase() || ''] || 0;
+                return {
+                    'ID Célula': c.id,
+                    'Nombre Célula': c.name,
+                    'Nombre Corto': c.short_name,
+                    'Líder Responsable': c.leader_name || 'Sin Asignar',
+                    'Rol del Líder': c.leader_role || '-',
+                    'Grupo de Inventario': c.inventory_group || '-',
+                    'Categorías Asociadas': (c.categories || []).join(', '),
+                    'Equipos de Compra': (c.buying_teams || []).join(', '),
+                    'Total Responsables': (c.responsibles || []).length,
+                    'SKUs Asignados': activeSkusCount,
+                    'Descripción': c.description || '-'
+                };
+            });
+
+            // Hoja 2: Responsables por Célula
+            const responsiblesData: any[] = [];
+            workCells.forEach(c => {
+                (c.responsibles || []).forEach(r => {
+                    responsiblesData.push({
+                        'Célula': c.name,
+                        'Grupo de Inventario': c.inventory_group || '-',
+                        'Nombre Responsable': r.name,
+                        'Rol': r.role || '-',
+                        'Es Líder': r.id === c.leader_id ? 'SÍ' : 'NO',
+                        'Email / Contacto': r.email || '-'
+                    });
+                });
+            });
+
+            // Hoja 3: Mapeo de SKUs por Célula
+            const skusData = activeProductsCatalog.map(p => {
+                const invGroup = p.inventory_group || 'SIN ASIGNAR';
+                const cell = cellByGroup.get(invGroup.trim().toUpperCase());
+                return {
+                    'ID Contable': p.accounting_id || '-',
+                    'Producto': p.name,
+                    'Categoría': CATEGORY_MAP[p.category || ''] || p.category || '-',
+                    'Grupo de Inventario': invGroup,
+                    'Célula Asignada': cell ? cell.name : 'Sin Célula Asignada',
+                    'Líder Célula': cell ? (cell.leader_name || 'Sin Asignar') : '-',
+                    'Estado': p.is_active ? 'Activo' : 'Inactivo'
+                };
+            });
+
+            const wb = XLSX.utils.book_new();
+
+            const wsCells = XLSX.utils.json_to_sheet(cellsData);
+            wsCells['!cols'] = [{ wch: 18 }, { wch: 32 }, { wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 35 }, { wch: 20 }, { wch: 28 }, { wch: 18 }, { wch: 15 }, { wch: 45 }];
+            XLSX.utils.book_append_sheet(wb, wsCells, "Células y Liderazgos");
+
+            if (responsiblesData.length > 0) {
+                const wsResp = XLSX.utils.json_to_sheet(responsiblesData);
+                wsResp['!cols'] = [{ wch: 28 }, { wch: 35 }, { wch: 28 }, { wch: 22 }, { wch: 12 }, { wch: 28 }];
+                XLSX.utils.book_append_sheet(wb, wsResp, "Responsables");
+            }
+
+            if (skusData.length > 0) {
+                const wsSkus = XLSX.utils.json_to_sheet(skusData);
+                wsSkus['!cols'] = [{ wch: 15 }, { wch: 38 }, { wch: 18 }, { wch: 35 }, { wch: 30 }, { wch: 28 }, { wch: 12 }];
+                XLSX.utils.book_append_sheet(wb, wsSkus, "Mapeo de SKUs");
+            }
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `Matriz_Gobernanza_FruFresco_${todayStr}.xlsx`);
+        } catch (err: any) {
+            console.error('Error exportando matriz de gobernanza:', err);
+            alert('Error exportando matriz de gobernanza: ' + (err.message || 'Error desconocido'));
+        } finally {
+            setExportingGovernance(false);
+        }
+    }, [workCells, activeProductsCatalog, skuCountsByCell, cellByGroup]);
 
     const renderSortableTh = (
         field: StockSortField, 
@@ -5215,29 +5297,57 @@ export default function InventoryAdminPage() {
                                             </p>
                                         </div>
 
-                                        <button
-                                            onClick={() => setIsNewCellModalOpen(true)}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                backgroundColor: THEME.colors.primary,
-                                                color: '#FFFFFF',
-                                                padding: '0.6rem 1.15rem',
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                fontSize: '0.82rem',
-                                                fontWeight: '700',
-                                                cursor: 'pointer',
-                                                boxShadow: '0 2px 8px rgba(13, 122, 87, 0.2)',
-                                                transition: 'all 0.15s ease-in-out'
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
-                                        >
-                                            <Plus size={16} strokeWidth={2.5} />
-                                            <span>Nueva Célula de Trabajo</span>
-                                        </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={handleExportGovernanceExcel}
+                                                disabled={exportingGovernance || workCells.length === 0}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    backgroundColor: '#FFFFFF',
+                                                    color: THEME.colors.textMain,
+                                                    padding: '0.6rem 1.15rem',
+                                                    borderRadius: '8px',
+                                                    border: `1px solid ${THEME.colors.border}`,
+                                                    fontSize: '0.82rem',
+                                                    fontWeight: '700',
+                                                    cursor: exportingGovernance || workCells.length === 0 ? 'not-allowed' : 'pointer',
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                    transition: 'all 0.15s ease-in-out',
+                                                    opacity: exportingGovernance ? 0.7 : 1
+                                                }}
+                                                title="Descargar matriz completa de células, liderazgos y SKUs en Excel"
+                                            >
+                                                <Download size={16} color={THEME.colors.primary} />
+                                                <span>{exportingGovernance ? 'Exportando...' : 'Descargar Matriz Gobernanza (XLSX)'}</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => setIsNewCellModalOpen(true)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    backgroundColor: THEME.colors.primary,
+                                                    color: '#FFFFFF',
+                                                    padding: '0.6rem 1.15rem',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    fontSize: '0.82rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 2px 8px rgba(13, 122, 87, 0.2)',
+                                                    transition: 'all 0.15s ease-in-out'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                            >
+                                                <Plus size={16} strokeWidth={2.5} />
+                                                <span>Nueva Célula de Trabajo</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Subtab Navigation Pills */}
