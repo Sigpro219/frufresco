@@ -4150,7 +4150,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
                     style={{ backgroundColor: '#10B981', color: 'white', border: 'none', width: '42px', height: '42px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)' }}
                     title="WhatsApp Directo"
                 >
-                    💬
+                    <MessageSquare size={18} strokeWidth={2} />
                 </button>
                 <button 
                     onClick={onWaitlist}
@@ -5053,6 +5053,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                             let color = '#64748B';
                             let dotColor = '#94A3B8';
                             let text = 'SIN ACUERDO';
+                            let icon = null;
 
                             if (agreementStatus === 'active') {
                                 if (isInheritedAgreement) {
@@ -5060,35 +5061,39 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                     border = '#BAE6FD';
                                     color = '#0284C7';
                                     dotColor = '#0EA5E9';
-                                    text = '🏢 HEREDADO';
+                                    text = 'HEREDADO';
+                                    icon = <Building2 size={11} color="#0284C7" />;
                                 } else {
                                     bg = '#ECFDF5';
                                     border = '#A7F3D0';
                                     color = '#047857';
                                     dotColor = '#10B981';
-                                    text = '⚡ AL DÍA';
+                                    text = 'AL DÍA';
+                                    icon = <CheckCircle2 size={11} color="#047857" />;
                                 }
                             } else if (agreementStatus === 'warning') {
                                 bg = '#FEF3C7';
                                 border = '#F59E0B';
                                 color = '#92400E';
                                 dotColor = '#D97706';
+                                icon = <AlertTriangle size={11} color="#D97706" />;
                                 const daysText = agreementDaysRemaining !== null && agreementDaysRemaining !== undefined
                                     ? (agreementDaysRemaining <= 0 ? 'VENCE HOY' : agreementDaysRemaining === 1 ? '1 DÍA' : `${agreementDaysRemaining} DÍAS`)
                                     : '';
                                 text = isInheritedAgreement 
-                                    ? (daysText ? `⚠️ HEREDADO (${daysText})` : '⚠️ HEREDADO POR VENCER')
+                                    ? (daysText ? `HEREDADO (${daysText})` : 'HEREDADO POR VENCER')
                                     : (agreementDaysRemaining === 0 
-                                        ? '🚨 VENCE HOY' 
+                                        ? 'VENCE HOY' 
                                         : daysText 
-                                            ? `⚠️ POR VENCER (${daysText})` 
-                                            : '⚠️ POR VENCER');
+                                            ? `POR VENCER (${daysText})` 
+                                            : 'POR VENCER');
                             } else if (agreementStatus === 'expired') {
                                 bg = '#FEF2F2';
                                 border = '#FCA5A5';
                                 color = '#991B1B';
                                 dotColor = '#EF4444';
-                                text = isInheritedAgreement ? '🚫 HEREDADO VENCIDO' : '🚫 VENCIDO';
+                                icon = <AlertCircle size={11} color="#DC2626" />;
+                                text = isInheritedAgreement ? 'HEREDADO VENCIDO' : 'VENCIDO';
                             }
 
                             return (
@@ -5104,12 +5109,12 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                         border: agreementStatus === 'warning' ? `1.5px solid ${border}` : `1px solid ${border}`,
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '5px',
+                                        gap: '4px',
                                         whiteSpace: 'nowrap',
                                         boxShadow: agreementStatus === 'warning' ? '0 2px 6px rgba(245, 158, 11, 0.25)' : '0 1px 2px rgba(0,0,0,0.03)'
                                     }}
                                 >
-                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotColor, boxShadow: `0 0 4px ${dotColor}aa` }} />
+                                    {icon || <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotColor, boxShadow: `0 0 4px ${dotColor}aa` }} />}
                                     {text}
                                 </span>
                             );

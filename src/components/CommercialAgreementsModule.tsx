@@ -2292,7 +2292,7 @@ export default function CommercialAgreementsModule() {
                                     title="Sincronizar y cargar los precios del Modelo Institucional General a este acuerdo"
                                 >
                                     <Sparkles size={14} color="#16A34A" />
-                                    {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : '⚡ Cargar Modelo General'}
+                                    {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : 'Cargar Modelo General'}
                                 </button>
                             )}
                             <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
@@ -3524,7 +3524,7 @@ export default function CommercialAgreementsModule() {
                                                 }}
                                             >
                                                 <Sparkles size={14} />
-                                                ⚡ Cargar Precios del Modelo General
+                                                Cargar Precios del Modelo General
                                             </button>
                                         </div>
                                     )}
