@@ -2335,70 +2335,120 @@ function OrderLoadingContent() {
                     }}
                 >
 
-                    {/* TABS FOR ORDERS VS EMAILS */}
+                    {/* TABS FOR ORDERS VS EMAILS (PILL / SEGMENTED CONTROL CORPORATIVO) */}
                     <div style={{ 
-                        display: 'flex', 
-                        gap: '1.5rem', 
-                        marginBottom: activeTab === 'orders' ? '0.6rem' : '0', 
-                        borderBottom: '1px solid #E5E7EB', 
-                        paddingBottom: '2px' 
+                        display: 'inline-flex', 
+                        alignItems: 'center',
+                        gap: '6px', 
+                        backgroundColor: '#E2E8F0',
+                        padding: '4px',
+                        borderRadius: '10px',
+                        marginBottom: activeTab === 'orders' ? '0.6rem' : '0.4rem', 
+                        border: '1px solid #CBD5E1'
                     }}>
                         <button 
+                            type="button"
                             onClick={() => setActiveTab('orders')}
                             style={{
-                                padding: '0.5rem 0.2rem',
+                                padding: '6px 14px',
                                 border: 'none',
-                                background: 'transparent',
-                                color: activeTab === 'orders' ? THEME.colors.primary : '#64748B',
-                                fontWeight: '700',
-                                fontSize: '0.9rem',
+                                borderRadius: '7px',
+                                backgroundColor: activeTab === 'orders' ? THEME.colors.primary : 'transparent',
+                                color: activeTab === 'orders' ? '#FFFFFF' : '#475569',
+                                fontWeight: activeTab === 'orders' ? '800' : '600',
+                                fontSize: '0.85rem',
                                 cursor: 'pointer',
-                                borderBottom: activeTab === 'orders' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.2s',
+                                transition: 'all 0.15s ease-in-out',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px'
+                                gap: '8px',
+                                boxShadow: activeTab === 'orders' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none'
                             }}
                         >
-                            <Package size={16} /> Pedidos del Día
+                            <Package size={16} strokeWidth={activeTab === 'orders' ? 2.2 : 1.8} color={activeTab === 'orders' ? '#FFFFFF' : '#64748B'} />
+                            <span>Pedidos del Día</span>
+                            {totalOrders > 0 && (
+                                <span style={{ 
+                                    backgroundColor: activeTab === 'orders' ? 'rgba(255, 255, 255, 0.25)' : '#CBD5E1', 
+                                    color: activeTab === 'orders' ? '#FFFFFF' : '#334155', 
+                                    padding: '1px 7px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800'
+                                }}>
+                                    {totalOrders}
+                                </span>
+                            )}
                         </button>
                         <button 
+                            type="button"
                             onClick={() => setActiveTab('emails')}
                             style={{
-                                padding: '0.5rem 0.2rem',
+                                padding: '6px 14px',
                                 border: 'none',
-                                background: 'transparent',
-                                color: activeTab === 'emails' ? THEME.colors.primary : '#64748B',
-                                fontWeight: '700',
-                                fontSize: '0.9rem',
+                                borderRadius: '7px',
+                                backgroundColor: activeTab === 'emails' ? THEME.colors.primary : 'transparent',
+                                color: activeTab === 'emails' ? '#FFFFFF' : '#475569',
+                                fontWeight: activeTab === 'emails' ? '800' : '600',
+                                fontSize: '0.85rem',
                                 cursor: 'pointer',
-                                borderBottom: activeTab === 'emails' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.2s',
+                                transition: 'all 0.15s ease-in-out',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px'
+                                gap: '8px',
+                                boxShadow: activeTab === 'emails' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none'
                             }}
                         >
-                            <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
+                            <Mail size={16} strokeWidth={activeTab === 'emails' ? 2.2 : 1.8} color={activeTab === 'emails' ? '#FFFFFF' : '#64748B'} />
+                            <span>Bandeja de Entrada Email</span>
+                            {pendingEmailCount > 0 && (
+                                <span style={{ 
+                                    backgroundColor: activeTab === 'emails' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0', 
+                                    color: activeTab === 'emails' ? '#FFFFFF' : '#0D7A57', 
+                                    padding: '1px 7px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    border: activeTab === 'emails' ? 'none' : '1px solid #CBD5E1'
+                                }}>
+                                    {pendingEmailCount}
+                                </span>
+                            )}
                         </button>
                         <button 
+                            type="button"
                             onClick={() => setActiveTab('outbox')}
                             style={{
-                                padding: '0.5rem 0.2rem',
+                                padding: '6px 14px',
                                 border: 'none',
-                                background: 'transparent',
-                                color: activeTab === 'outbox' ? THEME.colors.primary : '#64748B',
-                                fontWeight: '700',
-                                fontSize: '0.9rem',
+                                borderRadius: '7px',
+                                backgroundColor: activeTab === 'outbox' ? THEME.colors.primary : 'transparent',
+                                color: activeTab === 'outbox' ? '#FFFFFF' : '#475569',
+                                fontWeight: activeTab === 'outbox' ? '800' : '600',
+                                fontSize: '0.85rem',
                                 cursor: 'pointer',
-                                borderBottom: activeTab === 'outbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                                transition: 'all 0.2s',
+                                transition: 'all 0.15s ease-in-out',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px'
+                                gap: '8px',
+                                boxShadow: activeTab === 'outbox' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none'
                             }}
                         >
-                            <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
+                            <Send size={16} strokeWidth={activeTab === 'outbox' ? 2.2 : 1.8} color={activeTab === 'outbox' ? '#FFFFFF' : '#64748B'} />
+                            <span>Bandeja de Salida Email</span>
+                            {sentEmailCount > 0 && (
+                                <span style={{ 
+                                    backgroundColor: activeTab === 'outbox' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0', 
+                                    color: activeTab === 'outbox' ? '#FFFFFF' : '#0D7A57', 
+                                    padding: '1px 7px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    border: activeTab === 'outbox' ? 'none' : '1px solid #CBD5E1'
+                                }}>
+                                    {sentEmailCount}
+                                </span>
+                            )}
                         </button>
                     </div>
 
