@@ -783,6 +783,10 @@ const GmailMessageViewer = ({
   );
 };
 
+const getBogotaTodayStr = () => {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+};
+
 const formatFilterDateLabel = (dateStr: string) => {
   if (!dateStr) return 'Todas las fechas';
   const parts = dateStr.split('-');
@@ -791,18 +795,13 @@ const formatFilterDateLabel = (dateStr: string) => {
   const month = parseInt(parts[1], 10) - 1;
   const day = parseInt(parts[2], 10);
   const d = new Date(year, month, day);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(year, month, day);
-  target.setHours(0, 0, 0, 0);
-
-  const isToday = target.getTime() === today.getTime();
+  const isToday = dateStr === getBogotaTodayStr();
   const monthName = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
   
   if (isToday) {
     return `Hoy (${day} ${monthName})`;
   }
-  return `${day} ${monthName} ${year !== today.getFullYear() ? year : ''}`.trim();
+  return `${day} ${monthName} ${year !== new Date().getFullYear() ? year : ''}`.trim();
 };
 
 const formatDeliveryDateLabel = (dateStr: string) => {
@@ -1695,6 +1694,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedStatus, setSelectedStatus] = useState<string>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const todayBogotaStr = useMemo(() => getBogotaTodayStr(), []);
+  const todayDraftsCount = useMemo(() => {
+    return drafts.filter(d => {
+      if (!d.created_at) return false;
+      const dDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(d.created_at));
+      return dDate === todayBogotaStr;
+    }).length;
+  }, [drafts, todayBogotaStr]);
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
@@ -5532,7 +5539,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       let matchesDate = true;
       if (selectedDate) {
-        const draftDate = new Date(draft.created_at).toISOString().split('T')[0];
+        const draftDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(draft.created_at));
         matchesDate = draftDate === selectedDate;
       }
 
@@ -5839,89 +5846,161 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         ) : (
           <>
-        {/* Date Filter Pill */}
-        <div 
-          onClick={() => {
-            try {
-              mainDateInputRef.current?.showPicker();
-            } catch {
-              mainDateInputRef.current?.focus();
-            }
-          }}
-          style={{ 
-            position: 'relative',
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            backgroundColor: selectedDate ? '#ECFDF5' : 'white', 
-            border: selectedDate ? '1.5px solid #10B981' : `1.5px solid ${THEME.colors.border}`, 
-            borderRadius: THEME.radius.md,
-            padding: '0.42rem 0.85rem',
-            gap: '8px',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            boxShadow: selectedDate ? '0 1px 3px rgba(16, 185, 129, 0.15)' : 'none',
-            userSelect: 'none'
-          }}
-          title={selectedDate ? `Filtro activo: ${selectedDate}. Clic para cambiar.` : 'Filtrar por fecha'}
-        >
-          <Calendar size={16} color={selectedDate ? '#059669' : THEME.colors.textSecondary} />
-          
-          <span style={{ 
-            fontSize: '0.85rem', 
-            fontWeight: 800, 
-            color: selectedDate ? '#065F46' : '#475569',
-            letterSpacing: '-0.01em',
-            whiteSpace: 'nowrap'
-          }}>
-            {formatFilterDateLabel(selectedDate)}
-          </span>
-
-          {selectedDate ? (
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedDate('');
-              }}
-              title="Quitar filtro de fecha"
-              style={{
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: 'none',
-                borderRadius: '50%',
-                width: '18px',
-                height: '18px',
-                cursor: 'pointer',
-                color: '#065F46',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-                marginLeft: '2px',
-                transition: 'background 0.15s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)'}
-            >
-              <X size={12} strokeWidth={2.5} />
-            </button>
-          ) : (
-            <ChevronDown size={14} color="#94A3B8" />
-          )}
-
-          <input 
-            ref={mainDateInputRef}
-            type="date"
-            className="hide-native-date-picker-indicator"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+        {/* Date Filter Quick Group */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Todas (Default) */}
+          <button
+            type="button"
+            onClick={() => setSelectedDate('')}
             style={{
-              position: 'absolute',
-              opacity: 0,
-              width: 0,
-              height: 0,
-              pointerEvents: 'none'
+              height: '38px',
+              padding: '0 12px',
+              borderRadius: THEME.radius.md,
+              border: !selectedDate ? `2px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
+              backgroundColor: !selectedDate ? '#ECFDF5' : '#FFFFFF',
+              color: !selectedDate ? '#065F46' : '#475569',
+              fontWeight: !selectedDate ? 800 : 600,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: !selectedDate ? '0 2px 4px rgba(16, 185, 129, 0.15)' : 'none',
+              transition: 'all 0.15s'
             }}
-          />
+            title="Ver toda la bandeja de entrada acumulada (por defecto)"
+          >
+            <Filter size={14} color={!selectedDate ? '#059669' : '#64748B'} />
+            <span>Todas</span>
+          </button>
+
+          {/* Hoy (Bogota Today) */}
+          <button
+            type="button"
+            onClick={() => {
+              const todayStr = getBogotaTodayStr();
+              setSelectedDate(prev => prev === todayStr ? '' : todayStr);
+            }}
+            style={{
+              height: '38px',
+              padding: '0 12px',
+              borderRadius: THEME.radius.md,
+              border: selectedDate === todayBogotaStr ? `2px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
+              backgroundColor: selectedDate === todayBogotaStr ? '#ECFDF5' : '#FFFFFF',
+              color: selectedDate === todayBogotaStr ? '#065F46' : '#475569',
+              fontWeight: selectedDate === todayBogotaStr ? 800 : 600,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: selectedDate === todayBogotaStr ? '0 2px 4px rgba(16, 185, 129, 0.15)' : 'none',
+              transition: 'all 0.15s'
+            }}
+            title={selectedDate === todayBogotaStr ? 'Quitar filtro de hoy y ver todas' : 'Filtrar solo correos recibidos hoy'}
+          >
+            <Zap size={14} color={selectedDate === todayBogotaStr ? '#059669' : '#64748B'} />
+            <span>Hoy</span>
+            {todayDraftsCount > 0 && (
+              <span style={{
+                backgroundColor: selectedDate === todayBogotaStr ? '#059669' : '#F1F5F9',
+                color: selectedDate === todayBogotaStr ? '#FFFFFF' : '#475569',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontSize: '0.7rem',
+                fontWeight: 800
+              }}>
+                {todayDraftsCount}
+              </span>
+            )}
+          </button>
+
+          {/* Date Picker Pill (Calendario específico) */}
+          <div 
+            onClick={() => {
+              try {
+                mainDateInputRef.current?.showPicker();
+              } catch {
+                mainDateInputRef.current?.focus();
+              }
+            }}
+            style={{ 
+              position: 'relative',
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              height: '38px',
+              boxSizing: 'border-box',
+              backgroundColor: (selectedDate && selectedDate !== todayBogotaStr) ? '#ECFDF5' : 'white', 
+              border: (selectedDate && selectedDate !== todayBogotaStr) ? '2px solid #10B981' : `1px solid ${THEME.colors.border}`, 
+              borderRadius: THEME.radius.md,
+              padding: '0 0.85rem',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              boxShadow: (selectedDate && selectedDate !== todayBogotaStr) ? '0 1px 3px rgba(16, 185, 129, 0.15)' : 'none',
+              userSelect: 'none'
+            }}
+            title={selectedDate ? `Filtro activo: ${selectedDate}. Clic para cambiar.` : 'Elegir otra fecha específica'}
+          >
+            <Calendar size={14} color={(selectedDate && selectedDate !== todayBogotaStr) ? '#059669' : THEME.colors.textSecondary} />
+            
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: (selectedDate && selectedDate !== todayBogotaStr) ? 800 : 600, 
+              color: (selectedDate && selectedDate !== todayBogotaStr) ? '#065F46' : '#475569',
+              letterSpacing: '-0.01em',
+              whiteSpace: 'nowrap'
+            }}>
+              {selectedDate && selectedDate !== todayBogotaStr ? formatFilterDateLabel(selectedDate) : 'Calendario'}
+            </span>
+
+            {selectedDate && selectedDate !== todayBogotaStr ? (
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDate('');
+                }}
+                title="Quitar filtro de fecha"
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '18px',
+                  height: '18px',
+                  cursor: 'pointer',
+                  color: '#065F46',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  marginLeft: '2px',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)'}
+              >
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            ) : (
+              <ChevronDown size={13} color="#94A3B8" />
+            )}
+
+            <input 
+              ref={mainDateInputRef}
+              type="date"
+              className="hide-native-date-picker-indicator"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              style={{
+                position: 'absolute',
+                opacity: 0,
+                width: 0,
+                height: 0,
+                pointerEvents: 'none'
+              }}
+            />
+          </div>
         </div>
 
         {/* Search Input */}
