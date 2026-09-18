@@ -617,12 +617,28 @@ const GmailMessageViewer = ({
     if (!rawHtml) return null;
     let html = rawHtml;
     if (attachments.length > 0) {
+      const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       attachments.forEach((att: any) => {
-        const name = att.name || att.file_name || att.filename;
-        if (name && att.url) {
-          const cleanName = name.replace(/[^a-zA-Z0-9.-]/g, '');
-          html = html.replace(new RegExp(`src=["']cid:[^"']*${cleanName}[^"']*["']`, 'gi'), `src="${att.url}"`);
-          html = html.replace(new RegExp(`src=["']cid:${name}["']`, 'gi'), `src="${att.url}"`);
+        try {
+          const name = att.name || att.file_name || att.filename;
+          const contentId = att.content_id || att.contentId || att.cid;
+          if (contentId && att.url) {
+            const escapedCid = escapeRegex(String(contentId).replace(/^<|>$/g, '').trim());
+            if (escapedCid) {
+              html = html.replace(new RegExp(`src=["']cid:[^"']*${escapedCid}[^"']*["']`, 'gi'), `src="${att.url}"`);
+            }
+          }
+          if (name && att.url) {
+            const cleanName = String(name).replace(/[^a-zA-Z0-9.-]/g, '');
+            if (cleanName) {
+              const escapedClean = escapeRegex(cleanName);
+              html = html.replace(new RegExp(`src=["']cid:[^"']*${escapedClean}[^"']*["']`, 'gi'), `src="${att.url}"`);
+            }
+            const escapedName = escapeRegex(String(name));
+            html = html.replace(new RegExp(`src=["']cid:[^"']*${escapedName}[^"']*["']`, 'gi'), `src="${att.url}"`);
+          }
+        } catch (cidErr) {
+          console.warn('⚠️ Error al resolver CID en HTML:', cidErr);
         }
       });
     }
