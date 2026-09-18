@@ -379,25 +379,32 @@ export default function QuoteDetailPage() {
 
                 {quote.status === 'agreement' && (() => {
                     const days = getDaysRemaining(quote.valid_until);
-                    if (days !== null && days <= 15) {
+                    if (days !== null && days <= 5) {
                         return (
                             <div style={{ 
-                                backgroundColor: days < 0 ? '#FEF2F2' : '#FFFBEB', 
-                                border: `1px solid ${days < 0 ? '#FECACA' : '#FDE68A'}`, 
+                                backgroundColor: days < 0 ? '#FEF2F2' : '#FEF3C7', 
+                                border: `1.5px solid ${days < 0 ? '#FECACA' : '#F59E0B'}`, 
                                 padding: '1rem 1.25rem', 
                                 borderRadius: '14px', 
                                 marginBottom: '1.5rem', 
                                 display: 'flex', 
                                 alignItems: 'center', 
-                                gap: '12px' 
+                                gap: '12px',
+                                boxShadow: days >= 0 ? '0 4px 12px rgba(245, 158, 11, 0.15)' : 'none'
                             }}>
                                 <AlertTriangle size={20} color={days < 0 ? '#DC2626' : '#D97706'} strokeWidth={2} />
                                 <div>
                                     <div style={{ fontWeight: '800', color: days < 0 ? '#991B1B' : '#92400E', fontSize: '0.9rem' }}>
-                                        {days < 0 ? 'Este Acuerdo Comercial ha expirado' : `Este Acuerdo Comercial expira en ${days} días`}
+                                        {days < 0 
+                                            ? 'Este Acuerdo Comercial ha expirado' 
+                                            : days === 0 
+                                                ? '¡Este Acuerdo Comercial vence hoy!' 
+                                                : days === 1 
+                                                    ? 'Este Acuerdo Comercial expira en 1 día' 
+                                                    : `Este Acuerdo Comercial expira en ${days} días`}
                                     </div>
                                     <div style={{ fontSize: '0.8rem', color: days < 0 ? '#B91C1C' : '#B45309' }}>
-                                        Fecha límite: {new Date(quote.valid_until).toLocaleDateString()}. Los precios congelados dejarán de aplicarse después de esta fecha.
+                                        Fecha límite: {new Date(quote.valid_until).toLocaleDateString('es-CO')}. Los precios congelados dejarán de aplicarse después de esta fecha.
                                     </div>
                                 </div>
                             </div>

@@ -30,10 +30,17 @@ import {
     UploadCloud,
     Download,
     Trash2,
-    Edit3
+    Edit3,
+    History,
+    Users,
+    CheckSquare,
+    Square,
+    Save,
+    Sparkles
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { searchIncludes } from '@/lib/locationNorm';
+import { useAuth } from '@/lib/authContext';
 
 interface Agreement {
     id: string;
@@ -76,6 +83,7 @@ interface AgreementItem {
 }
 
 export default function CommercialAgreementsModule() {
+    const { user, profile } = useAuth();
     const [agreements, setAgreements] = useState<Agreement[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -91,6 +99,47 @@ export default function CommercialAgreementsModule() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerSearchTerm, setDrawerSearchTerm] = useState('');
 
+    // In-situ price editing in drawer
+    const [editingItemId, setEditingItemId] = useState<string | null>(null);
+    const [editingPriceValue, setEditingPriceValue] = useState<string>('');
+    const [savingPriceItemId, setSavingPriceItemId] = useState<string | null>(null);
+    const [agreementAuditLogs, setAgreementAuditLogs] = useState<Record<string, any[]>>({});
+    const [hoveredAuditItemId, setHoveredAuditItemId] = useState<string | null>(null);
+
+    // Master Institutional Template State
+    const [masterTemplate, setMasterTemplate] = useState<{
+        id: string;
+        model_snapshot_name: string;
+        created_at: string;
+        subtotal_amount: number;
+        total_amount: number;
+        items: any[];
+    } | null>(null);
+    const [loadingMasterTemplate, setLoadingMasterTemplate] = useState(false);
+    const [isUploadMasterModalOpen, setIsUploadMasterModalOpen] = useState(false);
+    const [masterUploadedItems, setMasterUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
+    const [masterExcelPreviewData, setMasterExcelPreviewData] = useState<{
+        items: Array<{
+            accounting_id: string;
+            product_name: string;
+            unit_price: number;
+            matched_product: any | null;
+            cost_basis: number;
+            margin_percent: number;
+            iva_rate: number;
+        }>;
+        matchedCount: number;
+        unmatchedCount: number;
+        avgMargin: number;
+        totalSubtotal: number;
+    } | null>(null);
+    const [masterParsedFile, setMasterParsedFile] = useState<File | null>(null);
+    const [masterParsing, setMasterParsing] = useState(false);
+    const [masterSaving, setMasterSaving] = useState(false);
+    const [masterModelName, setMasterModelName] = useState('');
+    const [confirmApplyMasterTarget, setConfirmApplyMasterTarget] = useState<Agreement | null>(null);
+    const [isApplyingMasterToAgreement, setIsApplyingMasterToAgreement] = useState<string | null>(null);
+
     // Renewal Modal State
     const [renewTarget, setRenewTarget] = useState<Agreement | null>(null);
     const [newExpiryDate, setNewExpiryDate] = useState('');
@@ -101,6 +150,10 @@ export default function CommercialAgreementsModule() {
     const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
     const [b2bClients, setB2bClients] = useState<any[]>([]);
     const [selectedClientId, setSelectedClientId] = useState('');
+    const [isMultiClientMode, setIsMultiClientMode] = useState(false);
+    const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+    const [agreementName, setAgreementName] = useState('');
+    const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
     const [clientSearchQuery, setClientSearchQuery] = useState('');
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
     const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
@@ -283,21 +336,11 @@ export default function CommercialAgreementsModule() {
                     // Use official Costo Base FruFresco from commercial_cost_matrix or purchases fallback
                     const officialCost = costMatrixMap[p.id] || purchaseFallbackMap[p.id] || p.base_price || 0;
                     p.base_price = officialCost;
-                    p.cost_basis = officialCost;
-
-                    if (p.accounting_id !== null && p.accounting_id !== undefined) {
-                        const rawId = String(p.accounting_id).trim();
-                        productMap[rawId] = p;
-                        const numId = parseInt(rawId, 10);
-                        if (!isNaN(numId)) {
-                            productMap[String(numId)] = p;
-                        }
-                    }
-                    if (p.sku) {
-                        productMap[p.sku.trim()] = p;
+                    productMap[p.id] = p;
+                    if (p.accounting_id) {
+                        productMap[String(p.accounting_id)] = p;
                     }
                 });
-
                 if (data.length < pageSize) {
                     hasMore = false;
                 } else {
@@ -307,35 +350,340 @@ export default function CommercialAgreementsModule() {
                 hasMore = false;
             }
         }
-
         return productMap;
+    };
+
+    const fetchAgreementAuditLogs = async (quoteId: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('audit_logs')
+                .select('*')
+                .eq('module', 'COMMERCIAL')
+                .order('created_at', { ascending: false })
+                .limit(100);
+
+            if (error) {
+                console.warn('Error fetching audit logs:', error);
+                return;
+            }
+
+            const map: Record<string, any[]> = {};
+            (data || []).forEach(log => {
+                const d = log.details;
+                if (d && (d.quote_id === quoteId || d.quoteId === quoteId)) {
+                    const itemId = d.quote_item_id || d.itemId;
+                    if (itemId) {
+                        if (!map[itemId]) map[itemId] = [];
+                        map[itemId].push(log);
+                    }
+                }
+            });
+            setAgreementAuditLogs(map);
+        } catch (err) {
+            console.warn('Failed to load audit logs:', err);
+        }
+    };
+
+    const fetchMasterTemplate = async () => {
+        setLoadingMasterTemplate(true);
+        try {
+            const res = await fetch('/api/commercial/master-template');
+            if (res.ok) {
+                const json = await res.json();
+                if (json.template) {
+                    setMasterTemplate({
+                        ...json.template,
+                        items: json.items || []
+                    });
+                } else {
+                    setMasterTemplate(null);
+                }
+            }
+        } catch (err) {
+            console.warn('Error loading master template:', err);
+        } finally {
+            setLoadingMasterTemplate(false);
+        }
     };
 
     useEffect(() => {
         fetchAgreements();
         fetchB2bClients();
+        fetchMasterTemplate();
     }, []);
 
+    const computeDefaultAgreementName = (clientObj?: any, isMulti?: boolean, startD?: string) => {
+        const dStr = startD || startDate || new Date().toISOString().split('T')[0];
+        const parts = dStr.split('-');
+        const dateTag = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0].slice(-2)}` : dStr;
+        if (isMulti) {
+            return `Acuerdo Multicliente - ${dateTag}`;
+        }
+        if (clientObj?.company_name) {
+            return `${clientObj.company_name} - ${dateTag}`;
+        }
+        return `Acuerdo Comercial - ${dateTag}`;
+    };
+
     const handleOpenCreateModal = () => {
-        setSelectedClientId('');
-        setClientSearchQuery('');
-        setCreateStep(1);
-        setStartDate(new Date().toISOString().split('T')[0]);
+        const today = new Date().toISOString().split('T')[0];
+        setStartDate(today);
         setDurationValue(2);
         setDurationUnit('weeks');
+        setSelectedClientId('');
+        setSelectedClientIds([]);
+        setIsMultiClientMode(false);
+        setClientSearchQuery('');
         setUploadedItems([]);
         setExcelPreviewData(null);
-        setExcelPreviewSearch('');
-        setExcelPreviewFilter('all');
         setParsedFile(null);
-        setFocusedOptionIndex(0);
+        setIsNameManuallyEdited(false);
+        setAgreementName(computeDefaultAgreementName(undefined, false, today));
+        setCreateStep(1);
         setIsCreateModalOpen(true);
+    };
+
+    const handleApplyMasterToCreateFlow = () => {
+        if (!masterTemplate || !masterTemplate.items || masterTemplate.items.length === 0) {
+            showToast('No hay productos cargados en el Modelo Institucional General', 'error');
+            return;
+        }
+
+        const items = masterTemplate.items;
+        const mappedUploadedItems = items.map((it: any) => ({
+            accounting_id: it.products?.accounting_id || it.product_id,
+            unit_price: Number(it.unit_price) || 0,
+            product_name: it.product_name
+        }));
+
+        let subtotal = 0;
+        let totalTax = 0;
+        let totalMargin = 0;
+
+        const previewItems = items.map((it: any) => {
+            const price = Number(it.unit_price) || 0;
+            const cost = Number(it.cost_basis) || 0;
+            const margin = Number(it.margin_percent) || 0;
+            const iva = Number(it.iva_rate) || 0;
+            subtotal += price;
+            totalTax += price * (iva / 100);
+            totalMargin += margin;
+
+            return {
+                accounting_id: it.products?.accounting_id || 'N/A',
+                product_name: it.product_name,
+                unit_price: price,
+                matched_product: it.products || { name: it.product_name, accounting_id: it.products?.accounting_id },
+                cost_basis: cost,
+                margin_percent: margin,
+                iva_rate: iva
+            };
+        });
+
+        const avgMargin = previewItems.length > 0 ? Math.round((totalMargin / previewItems.length) * 100) / 100 : 0;
+
+        setUploadedItems(mappedUploadedItems);
+        setExcelPreviewData({
+            items: previewItems,
+            matchedCount: previewItems.length,
+            unmatchedCount: 0,
+            avgMargin: avgMargin,
+            totalSubtotal: subtotal
+        });
+
+        showToast(`⚡ Precios del Modelo Institucional General (${previewItems.length} SKUs) cargados con éxito`, 'success');
+    };
+
+    const handleApplyMasterToAgreement = async (agreement: Agreement) => {
+        setIsApplyingMasterToAgreement(agreement.id);
+        try {
+            const author = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
+            const res = await fetch('/api/commercial/master-template/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    quote_id: agreement.id,
+                    author
+                })
+            });
+
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json.error || 'Error al aplicar modelo institucional general');
+            }
+
+            showToast(`⚡ Precios del Modelo General aplicados a ${agreement.profiles?.company_name || agreement.client_name}`, 'success');
+            setConfirmApplyMasterTarget(null);
+            
+            // Refresh items in drawer and table
+            await handleViewPrices(agreement);
+            await fetchAgreements();
+        } catch (err: any) {
+            console.error('Error applying master template:', err);
+            showToast('Error: ' + err.message, 'error');
+        } finally {
+            setIsApplyingMasterToAgreement(null);
+        }
+    };
+
+    const handleMasterFileDrop = async (file: File) => {
+        setMasterParsedFile(file);
+        setMasterParsing(true);
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+
+                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                if (rawRows.length === 0) {
+                    throw new Error('El archivo Excel está vacío');
+                }
+
+                const headers = Object.keys(rawRows[0]);
+                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
+                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
+                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
+
+                if (!idCol || !priceCol) {
+                    throw new Error('No se encontraron las columnas requeridas (Código Contable y Precio)');
+                }
+
+                const productMap = await fetchAllProductsMap();
+
+                const parsedItems: any[] = [];
+                const previewItems: any[] = [];
+                let matchedCount = 0;
+                let unmatchedCount = 0;
+                let totalMargin = 0;
+                let subtotal = 0;
+
+                rawRows.forEach(row => {
+                    const accountingId = String(row[idCol]).trim();
+                    const rawPrice = String(row[priceCol]).replace(/[^0-9.]/g, '');
+                    const unitPrice = parseFloat(rawPrice);
+                    const prodName = nameCol && row[nameCol] ? String(row[nameCol]).trim() : '';
+
+                    if (accountingId && !isNaN(unitPrice) && unitPrice > 0) {
+                        parsedItems.push({
+                            accounting_id: accountingId,
+                            unit_price: unitPrice,
+                            product_name: prodName
+                        });
+
+                        const dbProduct = productMap[accountingId];
+                        if (dbProduct) {
+                            matchedCount++;
+                            const costBasis = dbProduct.base_price || 0;
+                            const margin = unitPrice > 0 ? Math.round(((unitPrice - costBasis) / unitPrice) * 10000) / 100 : 0;
+                            const ivaRate = dbProduct.iva_rate || 0;
+                            totalMargin += margin;
+                            subtotal += unitPrice;
+
+                            previewItems.push({
+                                accounting_id: accountingId,
+                                product_name: dbProduct.name,
+                                unit_price: unitPrice,
+                                matched_product: dbProduct,
+                                cost_basis: costBasis,
+                                margin_percent: margin,
+                                iva_rate: ivaRate,
+                                product_id: dbProduct.id
+                            });
+                        } else {
+                            unmatchedCount++;
+                            previewItems.push({
+                                accounting_id: accountingId,
+                                product_name: prodName || 'Producto no encontrado en catálogo',
+                                unit_price: unitPrice,
+                                matched_product: null,
+                                cost_basis: 0,
+                                margin_percent: 0,
+                                iva_rate: 0
+                            });
+                        }
+                    }
+                });
+
+                const avgMargin = matchedCount > 0 ? Math.round((totalMargin / matchedCount) * 100) / 100 : 0;
+
+                setMasterUploadedItems(parsedItems);
+                setMasterExcelPreviewData({
+                    items: previewItems,
+                    matchedCount,
+                    unmatchedCount,
+                    avgMargin,
+                    totalSubtotal: subtotal
+                });
+                showToast(`Excel procesado: ${matchedCount} productos cruzados con el catálogo`, 'success');
+            } catch (err: any) {
+                console.error('Error parsing master excel:', err);
+                showToast('Error al leer Excel: ' + err.message, 'error');
+            } finally {
+                setMasterParsing(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleSaveMasterTemplate = async () => {
+        if (!masterExcelPreviewData || masterExcelPreviewData.matchedCount === 0) {
+            showToast('No hay productos válidos para guardar en el Modelo General', 'error');
+            return;
+        }
+
+        setMasterSaving(true);
+        try {
+            const validItems = masterExcelPreviewData.items
+                .filter(it => it.matched_product && (it as any).product_id)
+                .map(it => ({
+                    product_id: (it as any).product_id,
+                    product_name: it.product_name,
+                    unit_price: it.unit_price,
+                    cost_basis: it.cost_basis,
+                    margin_percent: it.margin_percent,
+                    iva_rate: it.iva_rate
+                }));
+
+            const author = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
+            const res = await fetch('/api/commercial/master-template', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: masterModelName || `Institucional General - ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`,
+                    items: validItems,
+                    author
+                })
+            });
+
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json.error || 'Error al guardar el Modelo General');
+            }
+
+            showToast(`⚡ Modelo Institucional General guardado con éxito (${validItems.length} SKUs)`, 'success');
+            setIsUploadMasterModalOpen(false);
+            setMasterExcelPreviewData(null);
+            setMasterUploadedItems([]);
+            setMasterParsedFile(null);
+            await fetchMasterTemplate();
+        } catch (err: any) {
+            console.error('Error saving master template:', err);
+            showToast('Error al guardar modelo general: ' + err.message, 'error');
+        } finally {
+            setMasterSaving(false);
+        }
     };
 
     const handleViewPrices = async (agreement: Agreement) => {
         setSelectedAgreement(agreement);
         setIsDrawerOpen(true);
         setLoadingItems(true);
+        setEditingItemId(null);
+        setEditingPriceValue('');
         try {
             const { data, error } = await supabase
                 .from('quote_items')
@@ -344,11 +692,123 @@ export default function CommercialAgreementsModule() {
 
             if (error) throw error;
             setAgreementItems(data || []);
+            fetchAgreementAuditLogs(agreement.id);
         } catch (err: any) {
             console.error('Error fetching agreement items:', err);
             showToast('Error al cargar lista de precios: ' + err.message, 'error');
         } finally {
             setLoadingItems(false);
+        }
+    };
+
+    const handleSaveSinglePrice = async (item: AgreementItem) => {
+        const newPrice = Number(editingPriceValue);
+        if (!newPrice || isNaN(newPrice) || newPrice <= 0) {
+            showToast('El precio debe ser un valor numérico mayor a 0', 'error');
+            return;
+        }
+
+        if (newPrice === item.unit_price) {
+            setEditingItemId(null);
+            return;
+        }
+
+        if (!selectedAgreement) return;
+
+        setSavingPriceItemId(item.id);
+        try {
+            const costBasis = Number(item.cost_basis) || 0;
+            const newMarginPercent = newPrice > 0 ? Math.round(((newPrice - costBasis) / newPrice) * 10000) / 100 : 0;
+            const ivaRate = Number(item.iva_rate) || 0;
+            const newIvaAmount = newPrice * (ivaRate / 100);
+            const newTotalPrice = newPrice + newIvaAmount;
+
+            // 1. Update quote_items in Supabase
+            const { error: itemErr } = await supabase
+                .from('quote_items')
+                .update({
+                    unit_price: newPrice,
+                    margin_percent: newMarginPercent,
+                    iva_amount: newIvaAmount,
+                    total_price: newTotalPrice
+                })
+                .eq('id', item.id);
+
+            if (itemErr) throw itemErr;
+
+            // 2. Recalculate quote totals without modifying dates or agreement validity
+            const oldPrice = item.unit_price;
+            const priceDiff = newPrice - oldPrice;
+            const ivaDiff = newIvaAmount - (item.iva_amount || 0);
+
+            const newSubtotal = Math.max(0, (selectedAgreement.subtotal_amount || 0) + priceDiff);
+            const newTotalTax = Math.max(0, (selectedAgreement.total_tax_amount || 0) + ivaDiff);
+            const newTotal = newSubtotal + newTotalTax;
+
+            const { error: quoteErr } = await supabase
+                .from('quotes')
+                .update({
+                    subtotal_amount: newSubtotal,
+                    total_tax_amount: newTotalTax,
+                    total_amount: newTotal
+                })
+                .eq('id', selectedAgreement.id);
+
+            if (quoteErr) console.warn('Could not update quote totals:', quoteErr);
+
+            // 3. Register audit trail in audit_logs
+            const collaboratorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
+            const collaboratorId = user?.id || null;
+
+            try {
+                await supabase.from('audit_logs').insert({
+                    action: 'UPDATE_quote_item_price',
+                    module: 'COMMERCIAL',
+                    collaborator_id: collaboratorId,
+                    collaborator_name: collaboratorName,
+                    details: {
+                        quote_id: selectedAgreement.id,
+                        quote_item_id: item.id,
+                        product_id: item.product_id,
+                        product_name: item.product_name,
+                        old_price: oldPrice,
+                        new_price: newPrice,
+                        old_margin: item.margin_percent,
+                        new_margin: newMarginPercent,
+                        cost_basis: costBasis,
+                        changed_at: new Date().toISOString()
+                    }
+                });
+            } catch (auditErr) {
+                console.warn('Audit log insert warning:', auditErr);
+            }
+
+            // 4. Update local state
+            setAgreementItems(prev => prev.map(it => it.id === item.id ? {
+                ...it,
+                unit_price: newPrice,
+                margin_percent: newMarginPercent,
+                iva_amount: newIvaAmount,
+                total_price: newTotalPrice
+            } : it));
+
+            setSelectedAgreement(prev => prev ? {
+                ...prev,
+                subtotal_amount: newSubtotal,
+                total_tax_amount: newTotalTax,
+                total_amount: newTotal
+            } : null);
+
+            fetchAgreements();
+            fetchAgreementAuditLogs(selectedAgreement.id);
+
+            showToast(`Precio actualizado para ${item.product_name}: $${formatNumber(newPrice)}`, 'success');
+            setEditingItemId(null);
+        } catch (err: any) {
+            console.error('Error saving single price:', err);
+            showToast('Error al actualizar precio: ' + err.message, 'error');
+        } finally {
+            setSavingPriceItemId(null);
         }
     };
 
@@ -498,10 +958,18 @@ export default function CommercialAgreementsModule() {
 
     const handleCreateAgreementSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedClientId) {
-            showToast('Por favor, selecciona un cliente', 'error');
-            return;
+        if (isMultiClientMode) {
+            if (selectedClientIds.length === 0) {
+                showToast('Por favor, selecciona al menos una Casa Matriz en la lista', 'error');
+                return;
+            }
+        } else {
+            if (!selectedClientId) {
+                showToast('Por favor, selecciona un cliente institucional', 'error');
+                return;
+            }
         }
+
         if (uploadedItems.length === 0) {
             showToast('Por favor, carga un archivo Excel con precios', 'error');
             return;
@@ -509,8 +977,11 @@ export default function CommercialAgreementsModule() {
         
         setSavingAgreement(true);
         try {
-            const client = b2bClients.find(c => c.id === selectedClientId);
-            if (!client) throw new Error('Cliente no encontrado');
+            const targetClients = isMultiClientMode 
+                ? b2bClients.filter(c => selectedClientIds.includes(c.id))
+                : [b2bClients.find(c => c.id === selectedClientId)].filter(Boolean);
+
+            if (targetClients.length === 0) throw new Error('No se encontraron clientes seleccionados');
             
             const expiry = new Date(startDate + 'T12:00:00');
             if (durationUnit === 'days') {
@@ -527,29 +998,8 @@ export default function CommercialAgreementsModule() {
             // Query full database catalogue with pagination
             const productMap = await fetchAllProductsMap();
             
-            const { data: existing, error: existErr } = await supabase
-                .from('quotes')
-                .select('id')
-                .eq('client_id', selectedClientId)
-                .eq('status', 'agreement');
-                
-            if (existErr) throw existErr;
-            
-            if (existing && existing.length > 0) {
-                const quoteIds = existing.map(q => q.id);
-                // Mark previous agreements as expired instead of deleting them to preserve history
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                await supabase.from('quotes')
-                    .update({ 
-                        status: 'expired', 
-                        valid_until: yesterday.toISOString().split('T')[0] 
-                    })
-                    .in('id', quoteIds);
-            }
-            
             // Calculate negotiated totals dynamically with actual product IVA rates
-            const itemsToInsert: any[] = [];
+            const itemsTemplate: any[] = [];
             let matchCount = 0;
             let subtotal = 0;
             let totalTax = 0;
@@ -568,7 +1018,7 @@ export default function CommercialAgreementsModule() {
                     subtotal += negotiatedPrice;
                     totalTax += ivaAmount;
                     
-                    itemsToInsert.push({
+                    itemsTemplate.push({
                         product_id: dbProduct.id,
                         product_name: dbProduct.name,
                         quantity: 1,
@@ -583,51 +1033,88 @@ export default function CommercialAgreementsModule() {
             });
             
             const total = subtotal + totalTax;
-            
-            const { data: newQuote, error: insertQErr } = await supabase
-                .from('quotes')
-                .insert({
-                    client_id: selectedClientId,
-                    client_name: client.company_name || client.contact_name,
-                    status: 'agreement',
-                    start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
-                    valid_until: calculatedValidUntil,
-                    version: 1,
-                    subtotal_amount: subtotal,
-                    total_tax_amount: totalTax,
-                    total_amount: total
-                })
-                .select()
-                .single();
-                 
-            if (insertQErr) throw insertQErr;
-            
-            if (itemsToInsert.length > 0) {
-                // Assign quote_id to items
-                const finalItemsToInsert = itemsToInsert.map(item => ({
-                    ...item,
-                    quote_id: newQuote.id
-                }));
-                const batchSize = 100;
-                for (let i = 0; i < finalItemsToInsert.length; i += batchSize) {
-                    const batch = finalItemsToInsert.slice(i, i + batchSize);
-                    const { error: insertItemsErr } = await supabase
-                        .from('quote_items')
-                        .insert(batch);
-                    if (insertItemsErr) throw insertItemsErr;
+            const [y, m, d] = startDate.split('-');
+            const dateSuffix = `${d || '01'}-${m || '01'}-${(y || '26').slice(-2)}`;
+
+            // Iterate over every selected client to create their agreement
+            for (const client of targetClients) {
+                // Expire any existing active agreement for this client to preserve history
+                const { data: existing, error: existErr } = await supabase
+                    .from('quotes')
+                    .select('id')
+                    .eq('client_id', client.id)
+                    .eq('status', 'agreement');
+                    
+                if (existErr) throw existErr;
+                
+                if (existing && existing.length > 0) {
+                    const quoteIds = existing.map(q => q.id);
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    await supabase.from('quotes')
+                        .update({ 
+                            status: 'expired', 
+                            valid_until: yesterday.toISOString().split('T')[0] 
+                        })
+                        .in('id', quoteIds);
+                }
+
+                // Compute client-specific agreement name
+                const clientAgreementName = isMultiClientMode 
+                    ? (isNameManuallyEdited && agreementName.trim() ? `${agreementName.trim()} (${client.company_name})` : `${client.company_name} - ${dateSuffix}`)
+                    : (agreementName.trim() || `${client.company_name || client.contact_name} - ${dateSuffix}`);
+
+                const { data: newQuote, error: insertQErr } = await supabase
+                    .from('quotes')
+                    .insert({
+                        client_id: client.id,
+                        client_name: client.company_name || client.contact_name,
+                        model_id: 'd90a91e5-827c-473d-9d4f-3e28c7c91e15', // General Institucional
+                        model_snapshot_name: clientAgreementName,
+                        status: 'agreement',
+                        start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+                        valid_until: calculatedValidUntil,
+                        version: 1,
+                        subtotal_amount: subtotal,
+                        total_tax_amount: totalTax,
+                        total_amount: total
+                    })
+                    .select()
+                    .single();
+                     
+                if (insertQErr) throw insertQErr;
+                
+                if (itemsTemplate.length > 0) {
+                    const finalItemsToInsert = itemsTemplate.map(item => ({
+                        ...item,
+                        quote_id: newQuote.id
+                    }));
+                    const batchSize = 100;
+                    for (let i = 0; i < finalItemsToInsert.length; i += batchSize) {
+                        const batch = finalItemsToInsert.slice(i, i + batchSize);
+                        const { error: insertItemsErr } = await supabase
+                            .from('quote_items')
+                            .insert(batch);
+                        if (insertItemsErr) throw insertItemsErr;
+                    }
                 }
             }
             
-            showToast(`Acuerdo creado con éxito. ${matchCount} productos asociados.`, 'success');
+            showToast(`🎉 ¡Acuerdo comercial activado con éxito para ${targetClients.length} ${targetClients.length === 1 ? 'cliente' : 'clientes'} (${matchCount} productos asociados)!`, 'success');
             setIsCreateModalOpen(false);
             
-            // Reset
+            // Reset modal states
             setSelectedClientId('');
+            setIsMultiClientMode(false);
+            setSelectedClientIds([]);
+            setAgreementName('');
+            setIsNameManuallyEdited(false);
             setStartDate(new Date().toISOString().split('T')[0]);
             setDurationValue(2);
             setDurationUnit('weeks');
             setParsedFile(null);
             setUploadedItems([]);
+            setExcelPreviewData(null);
             
             fetchAgreements();
         } catch (err: any) {
@@ -962,9 +1449,10 @@ export default function CommercialAgreementsModule() {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) {
-            return { label: 'Vencido', color: '#EF4444', bgColor: '#FEF2F2', type: 'expired' as const, diffDays };
-        } else if (diffDays <= 15) {
-            return { label: `Vence en ${diffDays}d`, color: '#D97706', bgColor: '#FFFBEB', type: 'warning' as const, diffDays };
+            return { label: 'Vencido', color: '#DC2626', bgColor: '#FEF2F2', type: 'expired' as const, diffDays };
+        } else if (diffDays <= 5) {
+            const label = diffDays === 0 ? 'Vence hoy' : diffDays === 1 ? 'Por vencer (1 día)' : `Por vencer (${diffDays} días)`;
+            return { label, color: '#92400E', bgColor: '#FEF3C7', type: 'warning' as const, diffDays };
         } else {
             return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const, diffDays };
         }
@@ -1252,6 +1740,36 @@ export default function CommercialAgreementsModule() {
                             );
                         })}
                         <button
+                            type="button"
+                            onClick={() => {
+                                setMasterUploadedItems([]);
+                                setMasterExcelPreviewData(null);
+                                setMasterParsedFile(null);
+                                setMasterModelName(`Institucional General - ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`);
+                                setIsUploadMasterModalOpen(true);
+                            }}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '0.45rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: '#F0FDF4',
+                                color: '#166534',
+                                border: '1.5px solid #86EFAC',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                marginLeft: '8px',
+                                boxShadow: '0 2px 6px rgba(22, 101, 52, 0.08)'
+                            }}
+                            title="Configurar o actualizar la Plantilla Maestra de Precios Institucionales"
+                        >
+                            <Sparkles size={14} color="#16A34A" />
+                            Modelo General {masterTemplate ? `(${masterTemplate.items?.length || 0} SKUs)` : ''}
+                        </button>
+                        <button
                             onClick={handleOpenCreateModal}
                             onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
                             onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
@@ -1268,7 +1786,7 @@ export default function CommercialAgreementsModule() {
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
-                                marginLeft: '8px',
+                                marginLeft: '6px',
                                 boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)'
                             }}
                         >
@@ -1435,11 +1953,26 @@ export default function CommercialAgreementsModule() {
                                             </span>
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <Building2 size={16} color="#94A3B8" />
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                <Building2 size={16} color="#94A3B8" style={{ marginTop: '2px', flexShrink: 0 }} />
                                                 <div>
-                                                    <div style={{ fontWeight: 'bold', color: THEME.colors.textMain }}>
-                                                        {agreement.profiles?.company_name || agreement.client_name}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                                            {agreement.profiles?.company_name || agreement.client_name}
+                                                        </span>
+                                                        {agreement.model_snapshot_name && (
+                                                            <span style={{ 
+                                                                fontSize: '0.68rem', 
+                                                                backgroundColor: '#ECFDF5', 
+                                                                color: '#047857', 
+                                                                border: '1px solid #A7F3D0', 
+                                                                padding: '1px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontWeight: '600' 
+                                                            }}>
+                                                                {agreement.model_snapshot_name}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {agreement.profiles?.nit && (
                                                         <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
@@ -1477,12 +2010,20 @@ export default function CommercialAgreementsModule() {
                                             <span style={{ 
                                                 backgroundColor: status.bgColor, 
                                                 color: status.color, 
-                                                padding: '3px 8px', 
-                                                borderRadius: '4px', 
+                                                padding: '4px 10px', 
+                                                borderRadius: '6px', 
                                                 fontSize: '0.75rem', 
-                                                fontWeight: 'bold',
-                                                whiteSpace: 'nowrap'
+                                                fontWeight: '800',
+                                                whiteSpace: 'nowrap',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                border: status.type === 'warning' ? '1.5px solid #F59E0B' : status.type === 'expired' ? '1px solid #FCA5A5' : '1px solid #A7F3D0',
+                                                boxShadow: status.type === 'warning' ? '0 2px 6px rgba(245, 158, 11, 0.25)' : 'none'
                                             }}>
+                                                {status.type === 'warning' && <AlertTriangle size={13} color="#D97706" />}
+                                                {status.type === 'expired' && <AlertCircle size={13} color="#DC2626" />}
+                                                {status.type === 'active' && <Check size={13} color="#059669" />}
                                                 {status.label}
                                             </span>
                                         </td>
@@ -1623,7 +2164,7 @@ export default function CommercialAgreementsModule() {
                     <div style={{ 
                         backgroundColor: 'white', 
                         width: '100%', 
-                        maxWidth: '750px', 
+                        maxWidth: '850px', 
                         height: '100%', 
                         boxShadow: '-10px 0 25px rgba(0,0,0,0.1)', 
                         display: 'flex', 
@@ -1636,9 +2177,24 @@ export default function CommercialAgreementsModule() {
                                 <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: 'bold', textTransform: 'uppercase' }}>
                                     Lista de Precios Congelados ({formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at)})
                                 </div>
-                                <h2 style={{ margin: '4px 0 0 0', fontWeight: '900', color: THEME.colors.textMain }}>
-                                    {selectedAgreement.profiles?.company_name || selectedAgreement.client_name}
-                                </h2>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                    <h2 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain }}>
+                                        {selectedAgreement.profiles?.company_name || selectedAgreement.client_name}
+                                    </h2>
+                                    {selectedAgreement.model_snapshot_name && (
+                                        <span style={{ 
+                                            fontSize: '0.75rem', 
+                                            backgroundColor: '#ECFDF5', 
+                                            color: '#047857', 
+                                            border: '1px solid #A7F3D0', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '6px', 
+                                            fontWeight: '700' 
+                                        }}>
+                                            {selectedAgreement.model_snapshot_name}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <button 
                                 onClick={() => setIsDrawerOpen(false)}
@@ -1713,6 +2269,32 @@ export default function CommercialAgreementsModule() {
                                     </button>
                                 )}
                             </div>
+                            {masterTemplate && (
+                                <button
+                                    type="button"
+                                    onClick={() => setConfirmApplyMasterTarget(selectedAgreement)}
+                                    disabled={isApplyingMasterToAgreement === selectedAgreement.id}
+                                    style={{
+                                        padding: '0.55rem 0.95rem',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#F0FDF4',
+                                        color: '#166534',
+                                        border: '1.5px solid #86EFAC',
+                                        fontSize: '0.78rem',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: '0 1px 3px rgba(22, 101, 52, 0.08)'
+                                    }}
+                                    title="Sincronizar y cargar los precios del Modelo Institucional General a este acuerdo"
+                                >
+                                    <Sparkles size={14} color="#16A34A" />
+                                    {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : '⚡ Cargar Modelo General'}
+                                </button>
+                            )}
                             <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                 {agreementItems.filter(item => {
                                     if (!drawerSearchTerm.trim()) return true;
@@ -1754,41 +2336,233 @@ export default function CommercialAgreementsModule() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader }}>Cod. Contable</th>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader }}>Producto</th>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>U.M.</th>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Costo Base</th>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Precio Acordado</th>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>IVA</th>
-                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader }}>Cod. Contable</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader }}>Producto</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>U.M.</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Costo Base</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Precio Acordado</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>IVA</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px' }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {filtered.map(item => (
-                                                    <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        <td style={{ padding: '0.75rem 0.5rem', color: THEME.colors.textSecondary, fontWeight: '500', fontSize: '0.85rem' }}>
-                                                            {item.products?.accounting_id || '---'}
-                                                        </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
-                                                            {item.product_name}
-                                                        </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                                            {item.products?.unit_of_measure || 'Kg'}
-                                                        </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.85rem' }}>
-                                                            {formatMoney(item.cost_basis)}
-                                                        </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.85rem' }}>
-                                                            {formatMoney(item.unit_price)}
-                                                        </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
-                                                            {item.iva_rate}%
-                                                        </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                                                            {Math.round(item.margin_percent * 10) / 10}%
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {filtered.map(item => {
+                                                    const isEditingThis = editingItemId === item.id;
+                                                    const itemLogs = agreementAuditLogs[item.id] || [];
+                                                    const hasAuditLogs = itemLogs.length > 0;
+                                                    const cost = Number(item.cost_basis) || 0;
+                                                    const currentEditNum = Number(editingPriceValue);
+                                                    const activeDisplayMargin = isEditingThis 
+                                                        ? (currentEditNum > 0 ? Math.round(((currentEditNum - cost) / currentEditNum) * 1000) / 10 : 0)
+                                                        : (Math.round(item.margin_percent * 10) / 10);
+
+                                                    return (
+                                                        <tr 
+                                                            key={item.id} 
+                                                            style={{ 
+                                                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                                                backgroundColor: isEditingThis ? '#F0FDF4' : 'transparent',
+                                                                transition: 'background-color 0.15s'
+                                                            }}
+                                                        >
+                                                            <td style={{ padding: '0.75rem 0.5rem', color: THEME.colors.textSecondary, fontWeight: '500', fontSize: '0.85rem' }}>
+                                                                {item.products?.accounting_id || '---'}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span>{item.product_name}</span>
+                                                                    {hasAuditLogs && (
+                                                                        <div 
+                                                                            style={{ position: 'relative', display: 'inline-flex' }}
+                                                                            onMouseEnter={() => setHoveredAuditItemId(item.id)}
+                                                                            onMouseLeave={() => setHoveredAuditItemId(null)}
+                                                                        >
+                                                                            <span 
+                                                                                title="Historial de modificaciones de precio"
+                                                                                style={{ 
+                                                                                    display: 'inline-flex', 
+                                                                                    alignItems: 'center', 
+                                                                                    gap: '3px', 
+                                                                                    backgroundColor: '#ECFDF5', 
+                                                                                    color: '#047857', 
+                                                                                    border: '1px solid #A7F3D0', 
+                                                                                    padding: '1px 5px', 
+                                                                                    borderRadius: '4px', 
+                                                                                    fontSize: '0.68rem', 
+                                                                                    fontWeight: '700',
+                                                                                    cursor: 'pointer'
+                                                                                }}
+                                                                            >
+                                                                                <History size={11} /> {itemLogs.length}
+                                                                            </span>
+                                                                            {hoveredAuditItemId === item.id && (
+                                                                                <div style={{
+                                                                                    position: 'absolute',
+                                                                                    left: 0,
+                                                                                    bottom: '100%',
+                                                                                    marginBottom: '6px',
+                                                                                    backgroundColor: '#1E293B',
+                                                                                    color: 'white',
+                                                                                    borderRadius: '8px',
+                                                                                    padding: '8px 12px',
+                                                                                    fontSize: '0.72rem',
+                                                                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.4)',
+                                                                                    zIndex: 2000,
+                                                                                    width: '260px',
+                                                                                    textAlign: 'left',
+                                                                                    pointerEvents: 'none'
+                                                                                }}>
+                                                                                    <div style={{ fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px', marginBottom: '4px', color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                        <History size={12} /> Trazabilidad de Precios
+                                                                                    </div>
+                                                                                    {itemLogs.slice(0, 3).map((log, idx) => {
+                                                                                        const d = log.details || {};
+                                                                                        const dateStr = log.created_at ? new Date(log.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                                                                                        const author = log.collaborator_name || 'Comercial';
+                                                                                        return (
+                                                                                            <div key={log.id || idx} style={{ marginBottom: '4px', lineHeight: 1.3 }}>
+                                                                                                <div style={{ color: '#94A3B8', fontSize: '0.65rem' }}>{dateStr} • {author}</div>
+                                                                                                <div>
+                                                                                                    <span style={{ textDecoration: 'line-through', color: '#FDA4AF' }}>${formatNumber(d.old_price)}</span>
+                                                                                                    {' → '}
+                                                                                                    <span style={{ color: '#4ADE80', fontWeight: 'bold' }}>${formatNumber(d.new_price)}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
+                                                                {item.products?.unit_of_measure || 'Kg'}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.85rem' }}>
+                                                                {formatMoney(item.cost_basis)}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                                {isEditingThis ? (
+                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>$</span>
+                                                                        <input 
+                                                                            type="number" 
+                                                                            autoFocus
+                                                                            min="1"
+                                                                            step="1"
+                                                                            value={editingPriceValue} 
+                                                                            onChange={(e) => setEditingPriceValue(e.target.value)}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') handleSaveSinglePrice(item);
+                                                                                if (e.key === 'Escape') setEditingItemId(null);
+                                                                            }}
+                                                                            style={{ 
+                                                                                width: '95px', 
+                                                                                padding: '4px 6px', 
+                                                                                borderRadius: '6px', 
+                                                                                border: `2px solid ${THEME.colors.primary}`, 
+                                                                                fontSize: '0.85rem', 
+                                                                                fontWeight: 'bold', 
+                                                                                textAlign: 'right',
+                                                                                color: THEME.colors.textMain,
+                                                                                outline: 'none',
+                                                                                backgroundColor: 'white'
+                                                                            }} 
+                                                                        />
+                                                                    </div>
+                                                                ) : (
+                                                                    formatMoney(item.unit_price)
+                                                                )}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
+                                                                {item.iva_rate}%
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: activeDisplayMargin >= 50 ? '#059669' : activeDisplayMargin >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                                                {activeDisplayMargin}%
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                                {isEditingThis ? (
+                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                        <button
+                                                                            type="button"
+                                                                            title="Guardar nuevo precio"
+                                                                            disabled={savingPriceItemId === item.id}
+                                                                            onClick={() => handleSaveSinglePrice(item)}
+                                                                            style={{
+                                                                                backgroundColor: THEME.colors.primary,
+                                                                                color: 'white',
+                                                                                border: 'none',
+                                                                                borderRadius: '6px',
+                                                                                padding: '5px 8px',
+                                                                                cursor: 'pointer',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)'
+                                                                            }}
+                                                                        >
+                                                                            {savingPriceItemId === item.id ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            title="Cancelar"
+                                                                            disabled={savingPriceItemId === item.id}
+                                                                            onClick={() => setEditingItemId(null)}
+                                                                            style={{
+                                                                                backgroundColor: '#F1F5F9',
+                                                                                color: '#64748B',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                borderRadius: '6px',
+                                                                                padding: '5px 7px',
+                                                                                cursor: 'pointer',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center'
+                                                                            }}
+                                                                        >
+                                                                            <X size={13} />
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        title="Editar precio sin cambiar vigencia"
+                                                                        onClick={() => {
+                                                                            setEditingItemId(item.id);
+                                                                            setEditingPriceValue(String(item.unit_price));
+                                                                        }}
+                                                                        style={{
+                                                                            backgroundColor: 'transparent',
+                                                                            color: '#64748B',
+                                                                            border: '1px solid #E2E8F0',
+                                                                            borderRadius: '6px',
+                                                                            padding: '4px 8px',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px',
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: '500',
+                                                                            transition: 'all 0.15s'
+                                                                        }}
+                                                                        onMouseEnter={e => {
+                                                                            e.currentTarget.style.color = THEME.colors.primary;
+                                                                            e.currentTarget.style.borderColor = THEME.colors.primary;
+                                                                            e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                                                        }}
+                                                                        onMouseLeave={e => {
+                                                                            e.currentTarget.style.color = '#64748B';
+                                                                            e.currentTarget.style.borderColor = '#E2E8F0';
+                                                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                                                        }}
+                                                                    >
+                                                                        <Edit3 size={12} /> Editar
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     );
@@ -1949,6 +2723,10 @@ export default function CommercialAgreementsModule() {
                                 onClick={() => {
                                     setIsCreateModalOpen(false);
                                     setSelectedClientId('');
+                                    setIsMultiClientMode(false);
+                                    setSelectedClientIds([]);
+                                    setAgreementName('');
+                                    setIsNameManuallyEdited(false);
                                     setParsedFile(null);
                                     setUploadedItems([]);
                                     setExcelPreviewData(null);
@@ -1964,23 +2742,29 @@ export default function CommercialAgreementsModule() {
                         <div style={{ display: 'flex', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: '#FFFFFF' }}>
                             {[
                                 { step: 1, label: '1. Cliente Institucional', desc: 'Selección y verificación' },
-                                { step: 2, label: '2. Vigencia & Duración', desc: 'Plazo y vencimiento' },
+                                { step: 2, label: '2. Vigencia & Nomenclatura', desc: 'Plazo y nombre del acuerdo' },
                                 { step: 3, label: '3. Carga de Precios', desc: 'Excel y pre-validación' }
                             ].map(s => {
                                 const isActive = createStep === s.step;
                                 const isPassed = createStep > s.step;
-                                const canClick = s.step < createStep || (s.step === 2 && !!selectedClientId) || (s.step === 3 && !!selectedClientId);
+                                const hasClientSelection = isMultiClientMode ? selectedClientIds.length > 0 : !!selectedClientId;
+                                const canClick = s.step < createStep || (s.step === 2 && hasClientSelection) || (s.step === 3 && hasClientSelection);
 
                                 return (
                                     <div 
                                         key={s.step}
                                         onClick={() => {
-                                            if (canClick) setCreateStep(s.step as 1 | 2 | 3);
+                                            if (canClick) {
+                                                if (s.step === 2 && (!isNameManuallyEdited || !agreementName)) {
+                                                    const c = b2bClients.find(cl => cl.id === selectedClientId);
+                                                    setAgreementName(computeDefaultAgreementName(c, isMultiClientMode, startDate));
+                                                }
+                                                setCreateStep(s.step as 1 | 2 | 3);
+                                            }
                                         }}
                                         style={{
                                             flex: 1,
                                             padding: '0.9rem 1.25rem',
-                                            display: 'flex',
                                             alignItems: 'center',
                                             gap: '12px',
                                             borderBottom: isActive ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
@@ -2024,54 +2808,127 @@ export default function CommercialAgreementsModule() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                                         <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', color: THEME.colors.textMain, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <Building2 size={18} color="#0D7A57" /> Paso 1: Selecciona la Casa Matriz B2B
+                                            <Building2 size={18} color="#0D7A57" /> Paso 1: Selección de Cliente(s) Institucional(es)
                                         </h4>
                                         <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
-                                            Los acuerdos comerciales institucionales se definen a nivel de <strong>Casa Matriz</strong> y sus precios congelados aplican a todas sus sucursales.
+                                            Los acuerdos comerciales se definen a nivel de <strong>Casa Matriz</strong> y aplican automáticamente a todas sus sucursales vinculadas.
                                         </p>
                                     </div>
 
-                                    {/* If NO client selected yet: show search bar and immediate live list */}
-                                    {!selectedClientId ? (
+                                    {/* MODE TOGGLE: INDIVIDUAL VS MASIVO */}
+                                    <div style={{ display: 'flex', gap: '8px', padding: '4px', backgroundColor: '#F1F5F9', borderRadius: '10px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsMultiClientMode(false);
+                                                if (!isNameManuallyEdited) {
+                                                    const c = b2bClients.find(cl => cl.id === selectedClientId);
+                                                    setAgreementName(computeDefaultAgreementName(c, false, startDate));
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '9px 14px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                fontSize: '0.82rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                backgroundColor: !isMultiClientMode ? '#FFFFFF' : 'transparent',
+                                                color: !isMultiClientMode ? THEME.colors.primary : '#64748B',
+                                                boxShadow: !isMultiClientMode ? '0 2px 4px rgba(0,0,0,0.06)' : 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                transition: 'all 0.15s'
+                                            }}
+                                        >
+                                            <Building2 size={16} /> Cliente Individual
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsMultiClientMode(true);
+                                                if (!isNameManuallyEdited) {
+                                                    setAgreementName(computeDefaultAgreementName(undefined, true, startDate));
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '9px 14px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                fontSize: '0.82rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                backgroundColor: isMultiClientMode ? '#FFFFFF' : 'transparent',
+                                                color: isMultiClientMode ? THEME.colors.primary : '#64748B',
+                                                boxShadow: isMultiClientMode ? '0 2px 4px rgba(0,0,0,0.06)' : 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                transition: 'all 0.15s'
+                                            }}
+                                        >
+                                            <Users size={16} /> Institucional General (Múltiples Clientes)
+                                        </button>
+                                    </div>
+
+                                    {/* --- MODO MASIVO: CHECKBOXES --- */}
+                                    {isMultiClientMode ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
-                                                Buscar Casa Matriz por Nombre o NIT:
-                                            </label>
-                                            
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                                    Casas Matrices que recibirán el Acuerdo Institucional General:
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const allIds = filteredB2bClients.map(c => c.id);
+                                                            setSelectedClientIds(allIds);
+                                                        }}
+                                                        style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '3px 8px', fontSize: '0.72rem', fontWeight: 'bold', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                    >
+                                                        Seleccionar Todas ({filteredB2bClients.length})
+                                                    </button>
+                                                    {selectedClientIds.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedClientIds([])}
+                                                            style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '3px 8px', fontSize: '0.72rem', fontWeight: 'bold', color: '#64748B', cursor: 'pointer' }}
+                                                        >
+                                                            Deseleccionar
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Buscador Rápido */}
                                             <div style={{ position: 'relative' }}>
                                                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                                                 <input 
                                                     type="text"
-                                                    autoFocus
-                                                    placeholder="Escribe para buscar... ej: Aldimark, ECCI, Lao Kao, Colsubsidio..."
+                                                    placeholder="Filtrar Casas Matrices por nombre o NIT..."
                                                     value={clientSearchQuery}
                                                     onChange={(e) => setClientSearchQuery(e.target.value)}
                                                     style={{
                                                         width: '100%',
-                                                        padding: '12px 38px 12px 42px',
+                                                        padding: '10px 38px 10px 42px',
                                                         borderRadius: '10px',
-                                                        border: `1.5px solid ${clientSearchQuery ? THEME.colors.primary : '#CBD5E1'}`,
-                                                        fontSize: '0.9rem',
+                                                        border: `1.5px solid #CBD5E1`,
+                                                        fontSize: '0.85rem',
                                                         fontWeight: '600',
-                                                        color: THEME.colors.textMain,
-                                                        outline: 'none',
-                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                                        outline: 'none'
                                                     }}
                                                 />
-                                                {clientSearchQuery && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setClientSearchQuery('')}
-                                                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
-                                                )}
                                             </div>
 
-                                            {/* Live List of Casas Matrices */}
+                                            {/* Lista de Clientes con Checkbox */}
                                             <div style={{
-                                                maxHeight: '280px',
+                                                maxHeight: '260px',
                                                 overflowY: 'auto',
                                                 border: '1.5px solid #E2E8F0',
                                                 borderRadius: '10px',
@@ -2080,221 +2937,401 @@ export default function CommercialAgreementsModule() {
                                                 flexDirection: 'column'
                                             }}>
                                                 {filteredB2bClients.length === 0 ? (
-                                                    <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#64748B' }}>
-                                                        <Building2 size={32} style={{ margin: '0 auto 8px auto', color: '#CBD5E1' }} />
-                                                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#475569' }}>
-                                                            No se encontraron Casas Matrices con "{clientSearchQuery}"
-                                                        </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '4px' }}>
-                                                            Solo se muestran Casas Matrices principales (las sucursales heredan el acuerdo de su matriz).
-                                                        </div>
+                                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
+                                                        No se encontraron Casas Matrices con "{clientSearchQuery}"
                                                     </div>
                                                 ) : (
-                                                    filteredB2bClients.map((c) => (
-                                                        <div
-                                                            key={c.id}
-                                                            onClick={() => {
-                                                                setSelectedClientId(c.id);
-                                                                setClientSearchQuery('');
-                                                            }}
-                                                            style={{
-                                                                padding: '12px 16px',
-                                                                borderBottom: '1px solid #F1F5F9',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                justifyContent: 'space-between',
-                                                                alignItems: 'center',
-                                                                transition: 'all 0.15s ease'
-                                                            }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                        >
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369A1', flexShrink: 0 }}>
-                                                                    <Building2 size={18} />
-                                                                </div>
-                                                                <div>
-                                                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1E293B' }}>
-                                                                        {c.company_name}
+                                                    filteredB2bClients.map(c => {
+                                                        const isChecked = selectedClientIds.includes(c.id);
+                                                        return (
+                                                            <div
+                                                                key={c.id}
+                                                                onClick={() => {
+                                                                    setSelectedClientIds(prev => 
+                                                                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                                                                    );
+                                                                }}
+                                                                style={{
+                                                                    padding: '10px 14px',
+                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center',
+                                                                    backgroundColor: isChecked ? '#F0FDF4' : 'transparent',
+                                                                    transition: 'background 0.15s'
+                                                                }}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                    {isChecked ? (
+                                                                        <CheckSquare size={18} color="#0D7A57" strokeWidth={2.5} />
+                                                                    ) : (
+                                                                        <Square size={18} color="#94A3B8" />
+                                                                    )}
+                                                                    <div>
+                                                                        <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>
+                                                                            {c.company_name}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                                                            {c.nit && <span>NIT: {c.nit} </span>}
+                                                                            {c.branchCount > 0 && <span>• {c.branchCount} {c.branchCount === 1 ? 'sucursal' : 'sucursales'}</span>}
+                                                                        </div>
                                                                     </div>
-                                                                    <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
-                                                                        {c.nit && <span>NIT: <strong>{c.nit}</strong></span>}
-                                                                        {c.contact_name && c.contact_name !== c.company_name && <span>• Contacto: {c.contact_name}</span>}
-                                                                    </div>
                                                                 </div>
+                                                                {isChecked && (
+                                                                    <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
+                                                                        Seleccionada
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0369A1', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
-                                                                </span>
-                                                                <ChevronRight size={16} color="#94A3B8" />
-                                                            </div>
-                                                        </div>
-                                                    ))
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+
+                                            {/* Badge Resumen de Selección */}
+                                            <div style={{ 
+                                                padding: '8px 14px', 
+                                                borderRadius: '8px', 
+                                                backgroundColor: selectedClientIds.length > 0 ? '#F0FDF4' : '#FFFBEB', 
+                                                border: `1px solid ${selectedClientIds.length > 0 ? '#BBF7D0' : '#FDE68A'}`,
+                                                fontSize: '0.78rem',
+                                                fontWeight: '600',
+                                                color: selectedClientIds.length > 0 ? '#15803D' : '#92400E',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between'
+                                            }}>
+                                                <span>
+                                                    {selectedClientIds.length > 0 
+                                                        ? `✓ ${selectedClientIds.length} Casas Matrices seleccionadas para la lista Institucional General` 
+                                                        : 'Selecciona al menos una Casa Matriz para continuar'}
+                                                </span>
+                                                {selectedClientIds.length > 0 && (
+                                                    <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: 'bold' }}>
+                                                        Aplica a {selectedClientIds.reduce((sum, id) => {
+                                                            const c = b2bClients.find(cl => cl.id === id);
+                                                            return sum + (c?.branchCount || 0);
+                                                        }, 0)} sucursales derivadas
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
                                     ) : (
-                                        /* Selected Casa Matriz Card */
-                                        (() => {
-                                            const selectedClient = b2bClients.find(c => c.id === selectedClientId);
-                                            return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                                    <div style={{
-                                                        backgroundColor: '#F0FDF4',
-                                                        border: '2px solid #0D7A57',
-                                                        borderRadius: '12px',
-                                                        padding: '1.25rem 1.5rem',
-                                                        display: 'flex',
-                                                        justifyContent: 'space-between',
-                                                        alignItems: 'center',
-                                                        gap: '1rem',
-                                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.08)'
-                                                    }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                                            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', flexShrink: 0 }}>
-                                                                <Building2 size={24} strokeWidth={2.2} />
-                                                            </div>
-                                                            <div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span style={{ fontSize: '0.7rem', color: '#15803D', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <Check size={13} strokeWidth={2.5} /> Casa Matriz Verificada
-                                                                    </span>
-                                                                    {selectedClient?.branchCount !== undefined && selectedClient.branchCount > 0 && (
-                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
-                                                                            {selectedClient.branchCount} {selectedClient.branchCount === 1 ? 'sucursal vinculada' : 'sucursales vinculadas'}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#064E3B', marginTop: '2px' }}>
-                                                                    {selectedClient?.company_name || 'Cliente B2B'}
-                                                                </div>
-                                                                <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
-                                                                    {selectedClient?.nit ? `NIT: ${selectedClient.nit}` : ''} {selectedClient?.phone ? `• Tel: ${selectedClient.phone}` : ''}
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                        /* --- MODO INDIVIDUAL --- */
+                                        !selectedClientId ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                                    Buscar Casa Matriz por Nombre o NIT:
+                                                </label>
+                                                
+                                                <div style={{ position: 'relative' }}>
+                                                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                                    <input 
+                                                        type="text"
+                                                        autoFocus
+                                                        placeholder="Escribe para buscar... ej: Aldimark, ECCI, Lao Kao, Colsubsidio..."
+                                                        value={clientSearchQuery}
+                                                        onChange={(e) => setClientSearchQuery(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '12px 38px 12px 42px',
+                                                            borderRadius: '10px',
+                                                            border: `1.5px solid ${clientSearchQuery ? THEME.colors.primary : '#CBD5E1'}`,
+                                                            fontSize: '0.9rem',
+                                                            fontWeight: '600',
+                                                            color: THEME.colors.textMain,
+                                                            outline: 'none',
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                                        }}
+                                                    />
+                                                    {clientSearchQuery && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => {
-                                                                setSelectedClientId('');
-                                                                setClientSearchQuery('');
-                                                            }}
-                                                            style={{
-                                                                padding: '8px 14px',
-                                                                borderRadius: '8px',
-                                                                border: '1.5px solid #CBD5E1',
-                                                                backgroundColor: '#FFFFFF',
-                                                                color: '#475569',
-                                                                fontSize: '0.8rem',
-                                                                fontWeight: 'bold',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '6px'
-                                                            }}
+                                                            onClick={() => setClientSearchQuery('')}
+                                                            style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
                                                         >
-                                                            <RefreshCw size={13} /> Cambiar de Cliente
+                                                            <X size={16} />
                                                         </button>
-                                                    </div>
-
-                                                    {/* ACTIVE AGREEMENT STATUS OR SUCCESS CONFIRMATION */}
-                                                    {(() => {
-                                                        const activeAgreement = agreements.find(a => 
-                                                            a.client_id === selectedClientId && 
-                                                            getAgreementStatus(a.valid_until).label === 'Vigente'
-                                                        );
-
-                                                        if (activeAgreement) {
-                                                            const itemsCount = (activeAgreement as any).items?.length || (activeAgreement as any).quote_items?.length || 0;
-                                                            
-                                                            // Format start date with created_at fallback
-                                                            const rawStartDate = activeAgreement.start_date || activeAgreement.created_at;
-                                                            const startDateFormatted = rawStartDate 
-                                                                ? new Date(rawStartDate.includes('T') ? rawStartDate : rawStartDate + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                                                                : 'Inicial';
-
-                                                            // Format expiration date
-                                                            const validUntilFormatted = activeAgreement.valid_until 
-                                                                ? new Date(activeAgreement.valid_until.includes('T') ? activeAgreement.valid_until : activeAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                                                                : 'Indefinida (Sin fecha límite)';
-
-                                                            return (
-                                                                <div style={{ 
-                                                                    backgroundColor: '#FFFBEB', 
-                                                                    border: '1.5px solid #FCD34D', 
-                                                                    borderRadius: '12px', 
-                                                                    padding: '1.25rem', 
-                                                                    display: 'flex', 
-                                                                    gap: '14px', 
-                                                                    alignItems: 'flex-start',
-                                                                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)'
-                                                                }}>
-                                                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                                        <AlertTriangle size={22} color="#D97706" />
-                                                                    </div>
-                                                                    <div style={{ flex: 1 }}>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                                            <strong style={{ color: '#92400E', fontSize: '0.95rem' }}>
-                                                                                Advertencia: Esta Casa Matriz ya tiene un Acuerdo Comercial Vigente
-                                                                            </strong>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', color: '#B45309', fontWeight: 'bold', border: '1px solid #FDE68A' }}>
-                                                                                {formatAgreementNumber(activeAgreement.quote_number, activeAgreement.created_at)}
-                                                                            </span>
-                                                                        </div>
-                                                                        <p style={{ margin: '6px 0 0', color: '#78350F', fontSize: '0.82rem', lineHeight: '1.4' }}>
-                                                                            Actualmente tiene tarifas congeladas válidas desde el <strong>{startDateFormatted}</strong> hasta el <strong>{validUntilFormatted}</strong> ({itemsCount} productos registrados).
-                                                                        </p>
-                                                                        <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: '6px', fontSize: '0.75rem', color: '#92400E', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                            <Info size={14} style={{ flexShrink: 0 }} />
-                                                                            <span>Si continúas creando este nuevo acuerdo, el anterior pasará automáticamente a estado <strong>Vencido / Sustituido</strong>.</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        } else {
-                                                            return (
-                                                                <div style={{ 
-                                                                    backgroundColor: '#F0FDF4', 
-                                                                    border: '1px solid #BBF7D0', 
-                                                                    borderRadius: '10px', 
-                                                                    padding: '0.9rem 1.25rem', 
-                                                                    display: 'flex', 
-                                                                    gap: '10px', 
-                                                                    alignItems: 'center' 
-                                                                }}>
-                                                                    <CheckCircle2 size={18} color="#16A34A" />
-                                                                    <span style={{ fontSize: '0.82rem', color: '#166534', fontWeight: '600' }}>
-                                                                        Casa Matriz verificada sin acuerdos comerciales vigentes previos. Lista para configurar vigencia y precios.
-                                                                    </span>
-                                                                </div>
-                                                            );
-                                                        }
-                                                    })()}
+                                                    )}
                                                 </div>
-                                            );
-                                        })()
+
+                                                {/* Live List of Casas Matrices */}
+                                                <div style={{
+                                                    maxHeight: '280px',
+                                                    overflowY: 'auto',
+                                                    border: '1.5px solid #E2E8F0',
+                                                    borderRadius: '10px',
+                                                    backgroundColor: '#FFFFFF',
+                                                    display: 'flex',
+                                                    flexDirection: 'column'
+                                                }}>
+                                                    {filteredB2bClients.length === 0 ? (
+                                                        <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#64748B' }}>
+                                                            <Building2 size={32} style={{ margin: '0 auto 8px auto', color: '#CBD5E1' }} />
+                                                            <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#475569' }}>
+                                                                No se encontraron Casas Matrices con "{clientSearchQuery}"
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '4px' }}>
+                                                                Solo se muestran Casas Matrices principales (las sucursales heredan el acuerdo de su matriz).
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        filteredB2bClients.map((c) => (
+                                                            <div
+                                                                key={c.id}
+                                                                onClick={() => {
+                                                                    setSelectedClientId(c.id);
+                                                                    setClientSearchQuery('');
+                                                                    if (!isNameManuallyEdited) {
+                                                                        setAgreementName(computeDefaultAgreementName(c, false, startDate));
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    padding: '12px 16px',
+                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369A1', flexShrink: 0 }}>
+                                                                        <Building2 size={18} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1E293B' }}>
+                                                                            {c.company_name}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                                                                            {c.nit && <span>NIT: <strong>{c.nit}</strong></span>}
+                                                                            {c.contact_name && c.contact_name !== c.company_name && <span>• Contacto: {c.contact_name}</span>}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                    <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0369A1', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
+                                                                    </span>
+                                                                    <ChevronRight size={16} color="#94A3B8" />
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            /* Selected Casa Matriz Card */
+                                            (() => {
+                                                const selectedClient = b2bClients.find(c => c.id === selectedClientId);
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                                        <div style={{
+                                                            backgroundColor: '#F0FDF4',
+                                                            border: '2px solid #0D7A57',
+                                                            borderRadius: '12px',
+                                                            padding: '1.25rem 1.5rem',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            gap: '1rem',
+                                                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.08)'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', flexShrink: 0 }}>
+                                                                    <Building2 size={24} strokeWidth={2.2} />
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span style={{ fontSize: '0.7rem', color: '#15803D', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <Check size={13} strokeWidth={2.5} /> Casa Matriz Verificada
+                                                                        </span>
+                                                                        {selectedClient?.branchCount !== undefined && selectedClient.branchCount > 0 && (
+                                                                            <span style={{ fontSize: '0.65rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                                                                                {selectedClient.branchCount} {selectedClient.branchCount === 1 ? 'sucursal vinculada' : 'sucursales vinculadas'}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#064E3B', marginTop: '2px' }}>
+                                                                        {selectedClient?.company_name || 'Cliente B2B'}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
+                                                                        {selectedClient?.nit ? `NIT: ${selectedClient.nit}` : ''} {selectedClient?.phone ? `• Tel: ${selectedClient.phone}` : ''}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedClientId('');
+                                                                    setClientSearchQuery('');
+                                                                }}
+                                                                style={{
+                                                                    padding: '8px 14px',
+                                                                    borderRadius: '8px',
+                                                                    border: '1.5px solid #CBD5E1',
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    color: '#475569',
+                                                                    fontSize: '0.8rem',
+                                                                    fontWeight: 'bold',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px'
+                                                                }}
+                                                            >
+                                                                <RefreshCw size={13} /> Cambiar de Cliente
+                                                            </button>
+                                                        </div>
+
+                                                        {/* ACTIVE AGREEMENT STATUS OR SUCCESS CONFIRMATION */}
+                                                        {(() => {
+                                                            const activeAgreement = agreements.find(a => 
+                                                                a.client_id === selectedClientId && 
+                                                                getAgreementStatus(a.valid_until).type !== 'expired'
+                                                            );
+
+                                                            if (activeAgreement) {
+                                                                const itemsCount = (activeAgreement as any).items?.length || (activeAgreement as any).quote_items?.length || 0;
+                                                                const rawStartDate = activeAgreement.start_date || activeAgreement.created_at;
+                                                                const startDateFormatted = rawStartDate 
+                                                                    ? new Date(rawStartDate.includes('T') ? rawStartDate : rawStartDate + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                    : 'Inicial';
+
+                                                                const validUntilFormatted = activeAgreement.valid_until 
+                                                                    ? new Date(activeAgreement.valid_until.includes('T') ? activeAgreement.valid_until : activeAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                    : 'Indefinida (Sin fecha límite)';
+
+                                                                return (
+                                                                    <div style={{ 
+                                                                        backgroundColor: '#FFFBEB', 
+                                                                        border: '1.5px solid #FCD34D', 
+                                                                        borderRadius: '12px', 
+                                                                        padding: '1.25rem', 
+                                                                        display: 'flex', 
+                                                                        gap: '14px', 
+                                                                        alignItems: 'flex-start',
+                                                                        boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)'
+                                                                    }}>
+                                                                        <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                            <AlertTriangle size={22} color="#D97706" />
+                                                                        </div>
+                                                                        <div style={{ flex: 1 }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                                <strong style={{ color: '#92400E', fontSize: '0.95rem' }}>
+                                                                                    Advertencia: Esta Casa Matriz ya tiene un Acuerdo Comercial Vigente
+                                                                                </strong>
+                                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', color: '#B45309', fontWeight: 'bold', border: '1px solid #FDE68A' }}>
+                                                                                    {formatAgreementNumber(activeAgreement.quote_number, activeAgreement.created_at)}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p style={{ margin: '6px 0 0', color: '#78350F', fontSize: '0.82rem', lineHeight: '1.4' }}>
+                                                                                Actualmente tiene tarifas congeladas válidas desde el <strong>{startDateFormatted}</strong> hasta el <strong>{validUntilFormatted}</strong> ({itemsCount} productos registrados).
+                                                                            </p>
+                                                                            <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: '6px', fontSize: '0.75rem', color: '#92400E', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <Info size={14} style={{ flexShrink: 0 }} />
+                                                                                <span>Si continúas creando este nuevo acuerdo, el anterior pasará automáticamente a estado <strong>Vencido / Sustituido</strong>.</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                    <div style={{ 
+                                                                        backgroundColor: '#F0FDF4', 
+                                                                        border: '1px solid #BBF7D0', 
+                                                                        borderRadius: '10px', 
+                                                                        padding: '0.9rem 1.25rem', 
+                                                                        display: 'flex', 
+                                                                        gap: '10px', 
+                                                                        alignItems: 'center' 
+                                                                    }}>
+                                                                        <CheckCircle2 size={18} color="#16A34A" />
+                                                                        <span style={{ fontSize: '0.82rem', color: '#166534', fontWeight: '600' }}>
+                                                                            Casa Matriz verificada sin acuerdos comerciales vigentes previos. Lista para configurar vigencia y precios.
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                        })()}
+                                                    </div>
+                                                );
+                                            })()
+                                        )
                                     )}
                                 </div>
                             )}
 
-                            {/* ================= STEP 2: DATES & DURATION ================= */}
+                            {/* ================= STEP 2: DATES, DURATION & AGREEMENT NAME ================= */}
                             {createStep === 2 && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
-                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Cliente Seleccionado:</span>
-                                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
-                                                {b2bClients.find(c => c.id === selectedClientId)?.company_name}
+                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                                {isMultiClientMode ? 'Modo de Asignación Masiva:' : 'Cliente Seleccionado:'}
+                                            </span>
+                                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {isMultiClientMode ? (
+                                                    <>
+                                                        <span style={{ color: THEME.colors.primary, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <Users size={18} /> Acuerdo Institucional General
+                                                        </span>
+                                                        <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px' }}>
+                                                            {selectedClientIds.length} Casas Matrices seleccionadas
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    b2bClients.find(c => c.id === selectedClientId)?.company_name || 'Cliente B2B'
+                                                )}
                                             </div>
                                         </div>
                                         <button 
                                             type="button" 
                                             onClick={() => setCreateStep(1)}
-                                            style={{ background: 'none', border: '1px solid #CBD5E1', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', cursor: 'pointer' }}
+                                            style={{ background: 'none', border: '1px solid #CBD5E1', padding: '5px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                                         >
-                                            Cambiar Cliente
+                                            <RefreshCw size={12} /> {isMultiClientMode ? 'Modificar Clientes' : 'Cambiar Cliente'}
                                         </button>
+                                    </div>
+
+                                    {/* NOMENCLATURA AUTOMÁTICA Y EDITABLE */}
+                                    <div style={{ marginTop: '2px' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>
+                                            Nombre del Acuerdo Comercial (Identificador Oficial):
+                                        </label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input 
+                                                type="text" 
+                                                required
+                                                value={agreementName} 
+                                                onChange={(e) => {
+                                                    setIsNameManuallyEdited(true);
+                                                    setAgreementName(e.target.value);
+                                                }}
+                                                placeholder={computeDefaultAgreementName()}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '12px 14px', 
+                                                    borderRadius: '10px', 
+                                                    border: `1.5px solid ${THEME.colors.border}`,
+                                                    fontSize: '0.9rem',
+                                                    fontWeight: 'bold',
+                                                    color: THEME.colors.textMain
+                                                }}
+                                            />
+                                            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.7rem', color: '#94A3B8', pointerEvents: 'none' }}>
+                                                Editable
+                                            </span>
+                                        </div>
+                                        <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#64748B' }}>
+                                            {isMultiClientMode 
+                                                ? 'Este nombre servirá de identificador base. Cada Casa Matriz tendrá además su razón social vinculada automáticamente.' 
+                                                : 'Nomenclatura sugerida: [Nombre Comercial del Cliente] - DD-MM-AA. Visible en el tablero principal, órdenes y documentos.'}
+                                        </p>
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1.5rem', marginTop: '4px' }}>
@@ -2306,7 +3343,14 @@ export default function CommercialAgreementsModule() {
                                                 type="date" 
                                                 required
                                                 value={startDate} 
-                                                onChange={(e) => setStartDate(e.target.value)}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setStartDate(val);
+                                                    if (!isNameManuallyEdited) {
+                                                        const c = b2bClients.find(cl => cl.id === selectedClientId);
+                                                        setAgreementName(computeDefaultAgreementName(c, isMultiClientMode, val));
+                                                    }
+                                                }}
                                                 style={{ 
                                                     width: '100%', 
                                                     padding: '12px', 
@@ -2436,6 +3480,61 @@ export default function CommercialAgreementsModule() {
                                         >
                                             <Download size={14} /> Descargar Plantilla Oficial (.xlsx)
                                         </button>
+                                    </div>
+
+                                    {/* ⚡ Cargar Precios del Modelo Institucional General */}
+                                    {masterTemplate && masterTemplate.items && masterTemplate.items.length > 0 && (
+                                        <div style={{
+                                            background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
+                                            border: '1.5px solid #86EFAC',
+                                            borderRadius: '12px',
+                                            padding: '14px 18px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: '16px',
+                                            boxShadow: '0 2px 8px rgba(22, 101, 52, 0.08)'
+                                        }}>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#166534', fontSize: '0.92rem' }}>
+                                                    <Sparkles size={18} color="#16A34A" />
+                                                    Modelo Institucional General Activo ({masterTemplate.items.length} SKUs)
+                                                </div>
+                                                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#15803D' }}>
+                                                    {masterTemplate.model_snapshot_name || 'Lista de Precios Base Institucional'}. Puedes cargar estos precios con 1 clic para este cliente manteniendo sus fechas individuales.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleApplyMasterToCreateFlow}
+                                                style={{
+                                                    padding: '9px 16px',
+                                                    backgroundColor: '#16A34A',
+                                                    color: 'white',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    fontWeight: 'bold',
+                                                    fontSize: '0.82rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    whiteSpace: 'nowrap',
+                                                    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)'
+                                                }}
+                                            >
+                                                <Sparkles size={14} />
+                                                ⚡ Cargar Precios del Modelo General
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '2px 0' }}>
+                                        <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
+                                        <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                            O sube un archivo Excel específico
+                                        </span>
+                                        <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
                                     </div>
 
                                     {/* Drag-drop or File Input */}
@@ -2747,27 +3846,38 @@ export default function CommercialAgreementsModule() {
 
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 {createStep === 1 && (
-                                    <button 
-                                        type="button"
-                                        disabled={!selectedClientId}
-                                        onClick={() => setCreateStep(2)}
-                                        style={{ 
-                                            padding: '10px 22px', 
-                                            borderRadius: THEME.radius.md, 
-                                            border: 'none', 
-                                            backgroundColor: !selectedClientId ? '#CBD5E1' : THEME.colors.primary, 
-                                            color: 'white', 
-                                            fontWeight: 'bold',
-                                            fontSize: '0.85rem',
-                                            cursor: !selectedClientId ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            boxShadow: !selectedClientId ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
-                                        }}
-                                    >
-                                        Continuar a Vigencia <ArrowRight size={16} />
-                                    </button>
+                                    (() => {
+                                        const isStep1Disabled = isMultiClientMode ? selectedClientIds.length === 0 : !selectedClientId;
+                                        return (
+                                            <button 
+                                                type="button"
+                                                disabled={isStep1Disabled}
+                                                onClick={() => {
+                                                    if (!agreementName || !isNameManuallyEdited) {
+                                                        const clientObj = b2bClients.find(c => c.id === selectedClientId);
+                                                        setAgreementName(computeDefaultAgreementName(clientObj, isMultiClientMode, startDate));
+                                                    }
+                                                    setCreateStep(2);
+                                                }}
+                                                style={{ 
+                                                    padding: '10px 22px', 
+                                                    borderRadius: THEME.radius.md, 
+                                                    border: 'none', 
+                                                    backgroundColor: isStep1Disabled ? '#CBD5E1' : THEME.colors.primary, 
+                                                    color: 'white', 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.85rem', 
+                                                    cursor: isStep1Disabled ? 'not-allowed' : 'pointer', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '8px', 
+                                                    boxShadow: isStep1Disabled ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)' 
+                                                }}
+                                            >
+                                                Continuar a Vigencia <ArrowRight size={16} />
+                                            </button>
+                                        );
+                                    })()
                                 )}
 
                                 {createStep === 2 && (
@@ -3626,6 +4736,379 @@ export default function CommercialAgreementsModule() {
                                     </button>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ================= MODAL: SUBIR / CONFIGURAR MODELO INSTITUCIONAL GENERAL ================= */}
+            {isUploadMasterModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '95%',
+                        maxWidth: '920px',
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Header */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ backgroundColor: '#DCFCE7', padding: '8px', borderRadius: '10px', color: '#16A34A', display: 'flex' }}>
+                                    <Sparkles size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>
+                                        Modelo Institucional General (Plantilla Maestra de Precios)
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748B' }}>
+                                        Esta lista sirve de base oficial para aplicar a cualquier cliente institucional respetando sus fechas individuales.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsUploadMasterModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            {/* Current Active Info */}
+                            {masterTemplate && (
+                                <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <span style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>Modelo Activo en Producción:</span>
+                                        <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#14532D', marginTop: '2px' }}>
+                                            {masterTemplate.model_snapshot_name || 'Modelo Institucional General'}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '16px', textAlign: 'right' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', color: '#166534', display: 'block' }}>SKUs:</span>
+                                            <strong style={{ fontSize: '0.9rem', color: '#14532D' }}>{masterTemplate.items?.length || 0}</strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', color: '#166534', display: 'block' }}>Subtotal Base:</span>
+                                            <strong style={{ fontSize: '0.9rem', color: '#14532D' }}>{formatMoney(masterTemplate.subtotal_amount || 0)}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Template Name Input */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>
+                                    Nombre o Identificador del Nuevo Modelo:
+                                </label>
+                                <input
+                                    type="text"
+                                    value={masterModelName}
+                                    onChange={(e) => setMasterModelName(e.target.value)}
+                                    placeholder="Ej: Institucional General - Septiembre 2026"
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 14px',
+                                        borderRadius: '8px',
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        fontSize: '0.88rem',
+                                        fontWeight: 'bold',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+
+                            {/* Upload Area */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                    Cargar Archivo Excel de Precios
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={downloadTemplate}
+                                    style={{
+                                        padding: '5px 12px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: '#F8FAFC',
+                                        color: '#334155',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '5px'
+                                    }}
+                                >
+                                    <Download size={13} /> Descargar Plantilla Oficial (.xlsx)
+                                </button>
+                            </div>
+
+                            <div style={{
+                                border: `2px dashed ${masterParsedFile ? '#16A34A' : '#CBD5E1'}`,
+                                backgroundColor: masterParsedFile ? '#F0FDF4' : '#F8FAFC',
+                                borderRadius: '12px',
+                                padding: masterParsedFile ? '1rem 1.5rem' : '1.5rem',
+                                textAlign: 'center',
+                                cursor: 'pointer',
+                                position: 'relative',
+                                transition: 'all 0.2s'
+                            }}>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleMasterFileDrop(file);
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        opacity: 0,
+                                        cursor: 'pointer'
+                                    }}
+                                />
+                                <UploadCloud size={masterParsedFile ? 28 : 34} style={{ color: masterParsedFile ? '#16A34A' : '#94A3B8', margin: '0 auto 6px auto' }} />
+                                {masterParsedFile ? (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ textAlign: 'left' }}>
+                                            <div style={{ fontSize: '0.88rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <FileText size={16} color="#16A34A" /> {masterParsedFile.name}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
+                                                Tamaño: {Math.round(masterParsedFile.size / 1024)} KB — Haz clic para reemplazar
+                                            </div>
+                                        </div>
+                                        <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: '20px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Check size={13} strokeWidth={2.5} /> Archivo Listo
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div style={{ fontSize: '0.88rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                            Arrastra el archivo Excel con las tarifas institucionales o haz clic aquí
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
+                                            Requiere: <strong>ID Producto (Accounting ID)</strong> y <strong>Precio Acordado</strong>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Preview & KPI Stats */}
+                            {masterExcelPreviewData && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                        <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas</span>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
+                                                {masterExcelPreviewData.items.length}
+                                            </div>
+                                        </div>
+                                        <div style={{ backgroundColor: '#F0FDF4', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                                            <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>En Catálogo (OK)</span>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#16A34A', marginTop: '2px' }}>
+                                                {masterExcelPreviewData.matchedCount}
+                                            </div>
+                                        </div>
+                                        <div style={{ backgroundColor: masterExcelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${masterExcelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
+                                            <span style={{ fontSize: '0.68rem', color: masterExcelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Coinciden</span>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: masterExcelPreviewData.unmatchedCount > 0 ? '#DC2626' : THEME.colors.textMain, marginTop: '2px' }}>
+                                                {masterExcelPreviewData.unmatchedCount}
+                                            </div>
+                                        </div>
+                                        <div style={{ backgroundColor: '#EFF6FF', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
+                                            <span style={{ fontSize: '0.68rem', color: '#1D4ED8', fontWeight: 'bold', textTransform: 'uppercase' }}>Margen Ponderado</span>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1D4ED8', marginTop: '2px' }}>
+                                                {masterExcelPreviewData.avgMargin}%
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Preview Table Container */}
+                                    <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', zIndex: 1 }}>
+                                                <tr>
+                                                    <th style={{ padding: '8px 12px', textAlign: 'left', color: '#64748B' }}>Cod. Contable</th>
+                                                    <th style={{ padding: '8px 12px', textAlign: 'left', color: '#64748B' }}>Producto Catálogo</th>
+                                                    <th style={{ padding: '8px 12px', textAlign: 'right', color: '#64748B' }}>Costo Base</th>
+                                                    <th style={{ padding: '8px 12px', textAlign: 'right', color: '#64748B' }}>Precio General</th>
+                                                    <th style={{ padding: '8px 12px', textAlign: 'center', color: '#64748B' }}>Margen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {masterExcelPreviewData.items.slice(0, 50).map((it, idx) => (
+                                                    <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                        <td style={{ padding: '6px 12px', fontFamily: 'monospace', color: '#475569' }}>{it.accounting_id}</td>
+                                                        <td style={{ padding: '6px 12px', fontWeight: '600', color: it.matched_product ? '#1E293B' : '#DC2626' }}>
+                                                            {it.product_name}
+                                                        </td>
+                                                        <td style={{ padding: '6px 12px', textAlign: 'right', color: '#64748B' }}>
+                                                            {it.matched_product ? formatMoney(it.cost_basis) : '-'}
+                                                        </td>
+                                                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 'bold', color: '#0F172A' }}>
+                                                            {formatMoney(it.unit_price)}
+                                                        </td>
+                                                        <td style={{ padding: '6px 12px', textAlign: 'center' }}>
+                                                            {it.matched_product ? (
+                                                                <span style={{
+                                                                    fontSize: '0.72rem',
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    fontWeight: 'bold',
+                                                                    backgroundColor: it.margin_percent >= 50 ? '#ECFDF5' : it.margin_percent >= 20 ? '#FFFBEB' : '#FEF2F2',
+                                                                    color: it.margin_percent >= 50 ? '#059669' : it.margin_percent >= 20 ? '#D97706' : '#DC2626'
+                                                                }}>
+                                                                    {it.margin_percent}%
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.7rem', color: '#DC2626', fontWeight: 'bold' }}>Sin SKU</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: '#F8FAFC' }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsUploadMasterModalOpen(false)}
+                                style={{
+                                    padding: '9px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#475569',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={masterSaving || !masterExcelPreviewData || masterExcelPreviewData.matchedCount === 0}
+                                onClick={handleSaveMasterTemplate}
+                                style={{
+                                    padding: '9px 20px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: (masterSaving || !masterExcelPreviewData || masterExcelPreviewData.matchedCount === 0) ? '#CBD5E1' : '#16A34A',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: (masterSaving || !masterExcelPreviewData || masterExcelPreviewData.matchedCount === 0) ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)'
+                                }}
+                            >
+                                <Sparkles size={15} />
+                                {masterSaving ? 'Guardando Modelo...' : 'Guardar como Modelo Institucional Activo'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ================= MODAL DE CONFIRMACIÓN: APLICAR MODELO GENERAL DESDE DRAWER ================= */}
+            {confirmApplyMasterTarget && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '95%',
+                        maxWidth: '520px',
+                        padding: '1.75rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1.25rem',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                            <div style={{ backgroundColor: '#DCFCE7', padding: '12px', borderRadius: '12px', color: '#16A34A', flexShrink: 0 }}>
+                                <Sparkles size={26} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>
+                                    Cargar Precios del Modelo Institucional General
+                                </h3>
+                                <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B', lineHeight: '1.4' }}>
+                                    ¿Deseas sincronizar y cargar los precios del Modelo Institucional General activo en el acuerdo comercial de <strong style={{ color: '#0F172A' }}>{confirmApplyMasterTarget.profiles?.company_name || confirmApplyMasterTarget.client_name}</strong>?
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Check size={14} color="#16A34A" />
+                                <strong>Modelo Activo:</strong> {masterTemplate?.model_snapshot_name || 'Institucional General'} ({masterTemplate?.items?.length || 0} SKUs)
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Check size={14} color="#16A34A" />
+                                <strong>Vigencia Intacta:</strong> Las fechas de inicio y vencimiento de este cliente no cambiarán.
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Check size={14} color="#16A34A" />
+                                <strong>Auditoría:</strong> Se registrará el cambio de lista en el historial forense.
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmApplyMasterTarget(null)}
+                                style={{
+                                    padding: '9px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#475569',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={Boolean(isApplyingMasterToAgreement)}
+                                onClick={() => handleApplyMasterToAgreement(confirmApplyMasterTarget)}
+                                style={{
+                                    padding: '9px 20px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: '#16A34A',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: isApplyingMasterToAgreement ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)'
+                                }}
+                            >
+                                <Sparkles size={14} />
+                                {isApplyingMasterToAgreement ? 'Aplicando Precios...' : 'Sí, Cargar Precios del Modelo'}
+                            </button>
                         </div>
                     </div>
                 </div>

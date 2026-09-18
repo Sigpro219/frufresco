@@ -602,42 +602,56 @@ export default function ClientsModule() {
 
     const [allAgreements, setAllAgreements] = useState<any[]>([]);
 
-    const getAgreementStatus = (clientId: string, parentId?: string): 'active' | 'warning' | 'expired' | 'none' => {
+    const getAgreementInfo = (clientId: string, parentId?: string): {
+        status: 'active' | 'warning' | 'expired' | 'none';
+        daysRemaining: number | null;
+        validUntil: string | null;
+        isInherited: boolean;
+    } => {
         let clientAgreements = allAgreements.filter(a => a.client_id === clientId);
+        let isInherited = false;
         if (clientAgreements.length === 0 && parentId) {
             clientAgreements = allAgreements.filter(a => a.client_id === parentId);
+            if (clientAgreements.length > 0) isInherited = true;
         }
-        if (clientAgreements.length === 0) return 'none';
+        if (clientAgreements.length === 0) {
+            return { status: 'none', daysRemaining: null, validUntil: null, isInherited: false };
+        }
         
         const now = new Date();
-        const fifteenDaysFromNow = new Date();
-        fifteenDaysFromNow.setDate(now.getDate() + 15);
-        
-        // 1. Si hay al menos un acuerdo activo vigente por más de 15 días o sin expiración fija -> active
-        const hasActive = clientAgreements.some(a => {
-            if (!a.valid_until) return true; // Abierto / sin vencimiento
-            const expiry = new Date(a.valid_until);
-            return expiry > fifteenDaysFromNow;
+        now.setHours(0, 0, 0, 0);
+
+        // Sort by valid_until descending to prioritize most recent agreement
+        const sorted = [...clientAgreements].sort((a, b) => {
+            if (!a.valid_until) return 1;
+            if (!b.valid_until) return -1;
+            return new Date(b.valid_until).getTime() - new Date(a.valid_until).getTime();
         });
-        if (hasActive) return 'active';
-        
-        // 2. Si vence en los próximos 15 días -> warning (Por Vencer)
-        const hasWarning = clientAgreements.some(a => {
-            if (!a.valid_until) return false;
-            const expiry = new Date(a.valid_until);
-            return expiry >= now && expiry <= fifteenDaysFromNow;
-        });
-        if (hasWarning) return 'warning';
-        
-        // 3. Si la fecha de vencimiento ya pasó en el pasado -> expired (Vencido)
-        const hasExpired = clientAgreements.some(a => {
-            if (!a.valid_until) return false;
-            const expiry = new Date(a.valid_until);
-            return expiry < now;
-        });
-        if (hasExpired) return 'expired';
-        
-        return 'none';
+        const latest = sorted[0];
+
+        if (!latest.valid_until) {
+            return { status: 'active', daysRemaining: null, validUntil: null, isInherited };
+        }
+
+        const expiry = new Date(latest.valid_until);
+        expiry.setHours(23, 59, 59, 999);
+        const diffMs = expiry.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+            return { status: 'expired', daysRemaining: diffDays, validUntil: latest.valid_until, isInherited };
+        }
+
+        // Umbral exacto solicitado: cuando falten 5 días o menos
+        if (diffDays <= 5) {
+            return { status: 'warning', daysRemaining: diffDays, validUntil: latest.valid_until, isInherited };
+        }
+
+        return { status: 'active', daysRemaining: diffDays, validUntil: latest.valid_until, isInherited };
+    };
+
+    const getAgreementStatus = (clientId: string, parentId?: string): 'active' | 'warning' | 'expired' | 'none' => {
+        return getAgreementInfo(clientId, parentId).status;
     };
 
     const isAgreementInherited = (clientId: string, parentId?: string) => {
@@ -2653,21 +2667,26 @@ export default function ClientsModule() {
                                                     </div>
                                                 );
                                             }
-                                            return filtered.map(client => (
-                                                <ClientCard 
-                                                    key={client.id} 
-                                                    type="b2b" 
-                                                    data={client} 
-                                                    pricingModels={pricingModels} 
-                                                    onUpdatePricingModel={handleUpdatePricingModel}
-                                                    onUpdateDevVerified={handleUpdateDevVerified}
-                                                    onViewDetails={() => handleViewDetails(client)}
-                                                    onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                    agreementStatus={getAgreementStatus(client.id, client.parent_id)}
-                                                    isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
-                                                    branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
-                                                />
-                                            ));
+                                            return filtered.map(client => {
+                                                const agInfo = getAgreementInfo(client.id, client.parent_id);
+                                                return (
+                                                    <ClientCard 
+                                                        key={client.id} 
+                                                        type="b2b" 
+                                                        data={client} 
+                                                        pricingModels={pricingModels} 
+                                                        onUpdatePricingModel={handleUpdatePricingModel}
+                                                        onUpdateDevVerified={handleUpdateDevVerified}
+                                                        onViewDetails={() => handleViewDetails(client)}
+                                                        onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
+                                                        agreementStatus={agInfo.status}
+                                                        agreementDaysRemaining={agInfo.daysRemaining}
+                                                        agreementValidUntil={agInfo.validUntil}
+                                                        isInheritedAgreement={agInfo.isInherited}
+                                                        branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
+                                                    />
+                                                );
+                                            });
                                         })()}
                                     </div>
                                 ) : (
@@ -2922,19 +2941,24 @@ export default function ClientsModule() {
                                                             </tr>
                                                         );
                                                     }
-                                                    return filtered.map(client => (
-                                                        <ClientListRow 
-                                                            key={client.id} 
-                                                            client={client} 
-                                                            pricingModels={pricingModels}
-                                                            onUpdateDevVerified={handleUpdateDevVerified}
-                                                            onViewDetails={() => handleViewDetails(client)}
-                                                            onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                            agreementStatus={getAgreementStatus(client.id, client.parent_id)}
-                                                            isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
-                                                            branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
-                                                        />
-                                                    ));
+                                                    return filtered.map(client => {
+                                                        const agInfo = getAgreementInfo(client.id, client.parent_id);
+                                                        return (
+                                                            <ClientListRow 
+                                                                key={client.id} 
+                                                                client={client} 
+                                                                pricingModels={pricingModels}
+                                                                onUpdateDevVerified={handleUpdateDevVerified}
+                                                                onViewDetails={() => handleViewDetails(client)}
+                                                                onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
+                                                                agreementStatus={agInfo.status}
+                                                                agreementDaysRemaining={agInfo.daysRemaining}
+                                                                agreementValidUntil={agInfo.validUntil}
+                                                                isInheritedAgreement={agInfo.isInherited}
+                                                                branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
+                                                            />
+                                                        );
+                                                    });
                                                 })()}
                                             </tbody>
                                         </table>
@@ -4139,7 +4163,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onUpdateDevVerified, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement, branchCount }: { 
+function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onUpdateDevVerified, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, agreementDaysRemaining, agreementValidUntil, isInheritedAgreement, branchCount }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
@@ -4151,6 +4175,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     onRegisterContact?: () => void,
     onScheduleTask?: (date: string) => void,
     agreementStatus?: 'active' | 'warning' | 'expired' | 'none',
+    agreementDaysRemaining?: number | null,
+    agreementValidUntil?: string | null,
     isInheritedAgreement?: boolean,
     branchCount?: number
 }) {
@@ -4294,11 +4320,16 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             text = 'Acuerdo Activo';
                         }
                     } else if (agreementStatus === 'warning') {
-                        bg = '#FFFBEB';
-                        border = '#FDE68A';
-                        color = '#B45309';
+                        bg = '#FEF3C7';
+                        border = '#F59E0B';
+                        color = '#92400E';
                         dotColor = '#F59E0B';
-                        text = isInheritedAgreement ? 'Heredado Por Vencer' : 'Por Vencer';
+                        const daysText = agreementDaysRemaining !== null && agreementDaysRemaining !== undefined
+                            ? (agreementDaysRemaining <= 0 ? 'Vence hoy' : agreementDaysRemaining === 1 ? '1 día' : `${agreementDaysRemaining} días`)
+                            : '';
+                        text = isInheritedAgreement 
+                            ? (daysText ? `Heredado (${daysText})` : 'Heredado Por Vencer')
+                            : (daysText ? `Por Vencer (${daysText})` : 'Por Vencer');
                     } else if (agreementStatus === 'expired') {
                         bg = '#FEF2F2';
                         border = '#FCA5A5';
@@ -4777,13 +4808,15 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     );
 }
 
-function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateDevVerified, agreementStatus, isInheritedAgreement, onRegisterContact, branchCount }: { 
+function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateDevVerified, agreementStatus, agreementDaysRemaining, agreementValidUntil, isInheritedAgreement, onRegisterContact, branchCount }: { 
     client: Profile, 
     pricingModels?: PricingModel[], 
     onViewDetails: () => void, 
     onEdit?: () => void, 
     onUpdateDevVerified?: (id: string, verified: boolean) => void,
     agreementStatus?: 'active' | 'warning' | 'expired' | 'none',
+    agreementDaysRemaining?: number | null,
+    agreementValidUntil?: string | null,
     isInheritedAgreement?: boolean,
     onRegisterContact?: () => void,
     branchCount?: number
@@ -5036,11 +5069,20 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                     text = '⚡ AL DÍA';
                                 }
                             } else if (agreementStatus === 'warning') {
-                                bg = '#FFFBEB';
-                                border = '#FDE68A';
-                                color = '#B45309';
-                                dotColor = '#F59E0B';
-                                text = isInheritedAgreement ? '⚠️ HEREDADO POR VENCER' : '⚠️ POR VENCER';
+                                bg = '#FEF3C7';
+                                border = '#F59E0B';
+                                color = '#92400E';
+                                dotColor = '#D97706';
+                                const daysText = agreementDaysRemaining !== null && agreementDaysRemaining !== undefined
+                                    ? (agreementDaysRemaining <= 0 ? 'VENCE HOY' : agreementDaysRemaining === 1 ? '1 DÍA' : `${agreementDaysRemaining} DÍAS`)
+                                    : '';
+                                text = isInheritedAgreement 
+                                    ? (daysText ? `⚠️ HEREDADO (${daysText})` : '⚠️ HEREDADO POR VENCER')
+                                    : (agreementDaysRemaining === 0 
+                                        ? '🚨 VENCE HOY' 
+                                        : daysText 
+                                            ? `⚠️ POR VENCER (${daysText})` 
+                                            : '⚠️ POR VENCER');
                             } else if (agreementStatus === 'expired') {
                                 bg = '#FEF2F2';
                                 border = '#FCA5A5';
@@ -5050,20 +5092,23 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                             }
 
                             return (
-                                <span style={{
-                                    fontSize: '0.68rem',
-                                    padding: '3px 8px',
-                                    borderRadius: '6px',
-                                    fontWeight: '900',
-                                    backgroundColor: bg,
-                                    color: color,
-                                    border: `1px solid ${border}`,
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                }}>
+                                <span 
+                                    title={agreementValidUntil ? `Acuerdo vence el ${new Date(agreementValidUntil).toLocaleDateString('es-CO')}${agreementDaysRemaining !== null ? ` (quedan ${agreementDaysRemaining} días)` : ''}` : undefined}
+                                    style={{
+                                        fontSize: '0.68rem',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        fontWeight: '900',
+                                        backgroundColor: bg,
+                                        color: color,
+                                        border: agreementStatus === 'warning' ? `1.5px solid ${border}` : `1px solid ${border}`,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: agreementStatus === 'warning' ? '0 2px 6px rgba(245, 158, 11, 0.25)' : '0 1px 2px rgba(0,0,0,0.03)'
+                                    }}
+                                >
                                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotColor, boxShadow: `0 0 4px ${dotColor}aa` }} />
                                     {text}
                                 </span>
@@ -7498,8 +7543,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                          const today = new Date();
                                                          today.setHours(0,0,0,0);
                                                          const diff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                                                         if (diff < 0) return { label: 'Vencido', color: '#EF4444', bgColor: '#FEF2F2', type: 'expired' };
-                                                         if (diff <= 15) return { label: `Vence en ${diff}d`, color: '#D97706', bgColor: '#FFFBEB', type: 'warning' };
+                                                         if (diff < 0) return { label: 'Vencido', color: '#DC2626', bgColor: '#FEF2F2', type: 'expired' };
+                                                         if (diff <= 5) {
+                                                             const label = diff === 0 ? 'Vence hoy' : diff === 1 ? 'Por vencer (1 día)' : `Por vencer (${diff} días)`;
+                                                             return { label, color: '#92400E', bgColor: '#FEF3C7', type: 'warning' };
+                                                         }
                                                          return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
                                                      })();
                                                      
