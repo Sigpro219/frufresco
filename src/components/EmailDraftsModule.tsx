@@ -5994,9 +5994,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               onChange={(e) => setSelectedDate(e.target.value)}
               style={{
                 position: 'absolute',
-                opacity: 0,
-                width: 0,
+                top: '100%',
+                left: 0,
+                width: '100%',
                 height: 0,
+                opacity: 0,
                 pointerEvents: 'none'
               }}
             />
@@ -6974,9 +6976,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}
                     style={{
                       position: 'absolute',
-                      opacity: 0,
-                      width: 0,
+                      top: '100%',
+                      left: 0,
+                      width: '100%',
                       height: 0,
+                      opacity: 0,
                       pointerEvents: 'none'
                     }}
                   />
