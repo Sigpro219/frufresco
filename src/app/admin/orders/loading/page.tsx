@@ -2409,7 +2409,7 @@ function OrderLoadingContent() {
                                     borderRadius: '12px', 
                                     fontSize: '0.72rem',
                                     fontWeight: '800',
-                                    border: activeTab === 'emails' ? 'none' : '1px solid #CBD5E1'
+                                    border: activeTab === 'emails' ? '1px solid transparent' : '1px solid #CBD5E1'
                                 }}>
                                     {pendingEmailCount}
                                 </span>
@@ -2444,7 +2444,7 @@ function OrderLoadingContent() {
                                     borderRadius: '12px', 
                                     fontSize: '0.72rem',
                                     fontWeight: '800',
-                                    border: activeTab === 'outbox' ? 'none' : '1px solid #CBD5E1'
+                                    border: activeTab === 'outbox' ? '1px solid transparent' : '1px solid #CBD5E1'
                                 }}>
                                     {sentEmailCount}
                                 </span>
