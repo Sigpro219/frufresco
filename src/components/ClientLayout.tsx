@@ -18,19 +18,22 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return (
         <Providers>
-            <Suspense fallback={null}>
-                {!isOpsOrAdmin && !isPrintPage && <GlobalBanner />}
-                {!pathname?.startsWith('/ops') && !isPrintPage && <Navbar />}
-                {children}
-                {!isOpsOrAdmin && !isPrintPage && <FloatingCartBar />}
-                {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && <Footer />}
-            </Suspense>
-            {isOpsOrAdmin && !isPrintPage && (
-                <>
-                    {/* <HelpDeskWidget /> */}
-                    <PQRFloatingWidget />
-                </>
+            {!isOpsOrAdmin && !isPrintPage && <GlobalBanner />}
+            {!pathname?.startsWith('/ops') && !isPrintPage && (
+                <Suspense fallback={<div style={{ height: '85px', backgroundColor: 'white' }} />}>
+                    <Navbar />
+                </Suspense>
             )}
+            <Suspense fallback={
+                <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+                    <div style={{ border: '3px solid #0D7A5720', borderTop: '3px solid #0D7A57', borderRadius: '50%', width: '36px', height: '36px', animation: 'spin 1s linear infinite' }} />
+                </main>
+            }>
+                {children}
+            </Suspense>
+            {!isOpsOrAdmin && !isPrintPage && <FloatingCartBar />}
+            {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && <Footer />}
+            {isOpsOrAdmin && !isPrintPage && <PQRFloatingWidget />}
         </Providers>
     );
 }

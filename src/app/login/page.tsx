@@ -44,12 +44,19 @@ export default function LoginPage() {
             }
 
             console.log('🚪 Redirigiendo usuario con rol:', profile.role);
-            const isStaff = profile.profile_type === 'employee' || 
+            const isStaff = (profile as any).profile_type === 'employee' || 
                             (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
                             (profile.custom_permissions && profile.custom_permissions.length > 0);
             
+            const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+            const redirectUrl = searchParams.get('redirect');
+
             if (isStaff) {
-                router.push('/admin/dashboard');
+                if (redirectUrl && redirectUrl.startsWith('/admin')) {
+                    router.push(redirectUrl);
+                } else {
+                    router.push('/admin/dashboard');
+                }
             } else if (profile.role === 'b2b_client') {
                 router.push('/b2b/dashboard');
             } else {
