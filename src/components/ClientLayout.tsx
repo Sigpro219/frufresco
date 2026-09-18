@@ -18,7 +18,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return (
         <Providers>
-            {!isOpsOrAdmin && !isPrintPage && <GlobalBanner />}
+            {!isOpsOrAdmin && !isPrintPage && (
+                <Suspense fallback={null}>
+                    <GlobalBanner />
+                </Suspense>
+            )}
             {!pathname?.startsWith('/ops') && !isPrintPage && (
                 <Suspense fallback={<div style={{ height: '85px', backgroundColor: 'white' }} />}>
                     <Navbar />
@@ -31,9 +35,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             }>
                 {children}
             </Suspense>
-            {!isOpsOrAdmin && !isPrintPage && <FloatingCartBar />}
-            {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && <Footer />}
-            {isOpsOrAdmin && !isPrintPage && <PQRFloatingWidget />}
+            {!isOpsOrAdmin && !isPrintPage && (
+                <Suspense fallback={null}>
+                    <FloatingCartBar />
+                </Suspense>
+            )}
+            {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && (
+                <Suspense fallback={null}>
+                    <Footer />
+                </Suspense>
+            )}
+            {isOpsOrAdmin && !isPrintPage && (
+                <Suspense fallback={null}>
+                    <PQRFloatingWidget />
+                </Suspense>
+            )}
         </Providers>
     );
 }
