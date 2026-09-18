@@ -27,7 +27,10 @@ import {
     Package, 
     Copy, 
     Check, 
-    FileSpreadsheet 
+    FileSpreadsheet,
+    X,
+    Filter,
+    Info
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { supabase } from '@/lib/supabase';
@@ -814,66 +817,130 @@ export default function AuditLogPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <div style={{ width: '98%', maxWidth: '100%', margin: '0 auto', padding: '2rem 2.5rem' }}>
-                {/* Header Técnico */}
-                <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                {/* Header Principal de Auditoría */}
+                <header style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '0.5rem' }}>
-                            <Link href="/admin/dashboard" style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
-                                <ArrowLeft size={20} strokeWidth={1.5} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                            <Link 
+                                href="/admin/dashboard" 
+                                style={{ 
+                                    color: THEME.colors.textSecondary, 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    backgroundColor: THEME.colors.surface,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    transition: 'all 0.2s ease'
+                                }}
+                                title="Volver al Panel"
+                            >
+                                <ArrowLeft size={18} strokeWidth={2} />
                             </Link>
-                            <h1 style={{ fontSize: '2rem', fontFamily: THEME.typography.fontFamilyMain, fontWeight: '800', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0 }}>
+                            <h1 style={{ fontSize: '1.85rem', fontFamily: THEME.typography.fontFamilyMain, fontWeight: '800', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 Trazabilidad de <span style={{ color: THEME.colors.primary }}>Movimientos</span>
                             </h1>
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '3px 10px',
+                                borderRadius: '9999px',
+                                backgroundColor: '#ECFDF5',
+                                border: '1px solid #A7F3D0',
+                                color: '#065F46',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                letterSpacing: '0.02em'
+                            }}>
+                                <span style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#10B981',
+                                    display: 'inline-block'
+                                }} />
+                                Inalterable
+                            </div>
                         </div>
-                        <p style={{ color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary, fontSize: '0.95rem', fontWeight: '500' }}>Registro inalterable de movimientos y gobernanza del sistema.</p>
+                        <p style={{ color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary, fontSize: '0.9rem', fontWeight: '500', margin: 0 }}>
+                            Registro cronológico inalterable de auditoría y gobernanza operativa del sistema.
+                        </p>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <button
                             onClick={() => setRefreshKey(prev => prev + 1)}
                             style={{
-                                display: 'flex', alignItems: 'center', gap: '8px', padding: '0.65rem',
+                                display: 'flex', alignItems: 'center', gap: '6px', padding: '0.55rem 0.9rem',
                                 backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md,
-                                color: THEME.colors.textSecondary, cursor: 'pointer', transition: 'all 0.2s'
+                                color: THEME.colors.textSecondary, cursor: 'pointer', transition: 'all 0.2s',
+                                fontWeight: '600', fontSize: '0.82rem'
                             }}
-                            title="Recargar logs"
+                            title="Recargar registros"
                         >
-                            <RefreshCw size={18} strokeWidth={1.5} className={loading ? 'animate-spin' : ''} />
+                            <RefreshCw size={15} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
+                            <span>Actualizar</span>
                         </button>
                         <button 
                             onClick={handleExportXLSX}
                             disabled={exporting || logs.length === 0}
                             style={{ 
-                                display: 'flex', alignItems: 'center', gap: '8px', padding: '0.65rem 1.25rem', 
+                                display: 'flex', alignItems: 'center', gap: '8px', padding: '0.55rem 1.15rem', 
                                 backgroundColor: exporting ? THEME.colors.background : THEME.colors.primary, 
-                                border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md,
+                                border: `1px solid ${exporting ? THEME.colors.border : THEME.colors.primary}`, borderRadius: THEME.radius.md,
                                 color: exporting ? THEME.colors.textSecondary : 'white', 
-                                fontWeight: '700', fontSize: '0.85rem', cursor: exporting || logs.length === 0 ? 'not-allowed' : 'pointer',
-                                opacity: logs.length === 0 ? 0.6 : 1, transition: 'all 0.2s'
+                                fontWeight: '700', fontSize: '0.82rem', cursor: exporting || logs.length === 0 ? 'not-allowed' : 'pointer',
+                                opacity: logs.length === 0 ? 0.6 : 1, transition: 'all 0.2s',
+                                boxShadow: exporting || logs.length === 0 ? 'none' : '0 2px 8px rgba(13, 122, 87, 0.2)'
                             }}
                         >
                             {exporting ? (
-                                <Loader2 size={18} className="animate-spin" />
+                                <Loader2 size={15} className="animate-spin" />
                             ) : (
-                                <Download size={18} strokeWidth={1.5} />
+                                <FileSpreadsheet size={16} strokeWidth={1.75} />
                             )}
                             Descargar Reporte (XLSX)
                         </button>
                     </div>
                 </header>
 
-                {/* Banner Informativo sobre Políticas de Retención */}
+                {/* Banner Informativo sobre Políticas de Retención - Formato Compacto & Elegante */}
                 <div style={{ 
-                    backgroundColor: '#FDF8F2', border: '1px solid #F59E0B33', borderRadius: THEME.radius.lg, 
-                    padding: '0.6rem 1rem', display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '1rem'
+                    backgroundColor: '#FFFBEB', 
+                    border: '1px solid #FDE68A', 
+                    borderRadius: '12px', 
+                    padding: '0.45rem 0.9rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    gap: '12px', 
+                    marginBottom: '0.85rem',
+                    flexWrap: 'wrap'
                 }}>
-                    <AlertTriangle size={18} color="#B45309" style={{ flexShrink: 0 }} />
-                    <div>
-                        <h4 style={{ margin: 0, fontWeight: '800', color: '#B45309', fontSize: '0.72rem', fontFamily: THEME.typography.fontFamilyMain }}>POLÍTICA DE OPTIMIZACIÓN (BÚSQUEDA LIMITADA A 3 MESES)</h4>
-                        <p style={{ margin: '2px 0 0 0', fontSize: '0.68rem', color: '#B45309', fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
-                            Para garantizar la velocidad y el óptimo rendimiento de la plataforma, las consultas en tiempo real de este panel muestran los últimos 3 meses de trazabilidad. Para acceder a registros anteriores a este período, por favor solicite la exportación del consolidado histórico.
-                        </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertTriangle size={15} color="#D97706" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.78rem', color: '#92400E', fontWeight: '800', fontFamily: THEME.typography.fontFamilyMain }}>
+                            Optimización de Rendimiento (Últimos 3 meses):
+                        </span>
+                        <span style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
+                            Las consultas en tiempo real muestran los últimos 3 meses para máxima velocidad de respuesta.
+                        </span>
                     </div>
+                    <span style={{ 
+                        fontSize: '0.7rem', 
+                        fontWeight: '700', 
+                        color: '#92400E', 
+                        backgroundColor: '#FEF3C7', 
+                        padding: '2px 8px', 
+                        borderRadius: '6px',
+                        border: '1px solid #FDE68A',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        Consolidado completo vía XLSX
+                    </span>
                 </div>
 
                 {/* Filtros de Auditoría - Barra Flotante Sticky Frosted Glass (Estándar Diseñador-Web) */}
@@ -883,14 +950,15 @@ export default function AuditLogPage() {
                         backgroundColor: 'rgba(255, 255, 255, 0.95)',
                         backdropFilter: 'blur(12px)',
                         WebkitBackdropFilter: 'blur(12px)',
-                        padding: '0.65rem 1.25rem', 
+                        padding: '0.65rem 1.15rem', 
                         borderRadius: '16px', 
                         border: '1px solid #E2E8F0', 
                         display: 'flex', 
-                        gap: '0.85rem', 
+                        gap: '0.75rem', 
                         marginBottom: '1rem', 
                         flexWrap: 'wrap', 
                         alignItems: 'center',
+                        justifyContent: 'space-between',
                         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
                         position: 'sticky',
                         top: '85px',
@@ -898,49 +966,87 @@ export default function AuditLogPage() {
                         transition: 'all 0.2s ease-in-out'
                     }}
                 >
-                    <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
-                        <Search size={18} strokeWidth={1.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                    <div style={{ flex: '1 1 320px', minWidth: '260px', position: 'relative' }}>
+                        <Search size={16} strokeWidth={1.75} style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                         <input 
                             placeholder="Buscar por usuario, acción o referencia..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{ 
-                                width: '100%', padding: '0.65rem 1rem 0.65rem 2.8rem', borderRadius: THEME.radius.md, 
-                                border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontWeight: '600', fontSize: '0.9rem',
+                                width: '100%', padding: '0.6rem 2.2rem 0.6rem 2.5rem', borderRadius: THEME.radius.md, 
+                                border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontWeight: '600', fontSize: '0.85rem',
                                 fontFamily: THEME.typography.fontFamilySecondary, color: THEME.colors.textMain
                             }}
                         />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                style={{
+                                    position: 'absolute',
+                                    right: '0.75rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: THEME.colors.textSecondary,
+                                    cursor: 'pointer',
+                                    padding: '2px',
+                                    display: 'flex'
+                                }}
+                                title="Limpiar búsqueda"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: THEME.colors.background, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                        <Calendar size={16} strokeWidth={1.5} color={THEME.colors.primary} />
-                        <select 
-                            value={dateRange}
-                            onChange={(e) => setDateRange(e.target.value)}
-                            style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
-                        >
-                            <option value="all">Últimos 3 meses</option>
-                            <option value="today">Hoy</option>
-                            <option value="week">Esta Semana</option>
-                            <option value="month">Este Mes</option>
-                        </select>
-                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                            <Calendar size={15} strokeWidth={1.75} color={THEME.colors.primary} />
+                            <select 
+                                value={dateRange}
+                                onChange={(e) => setDateRange(e.target.value)}
+                                style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
+                            >
+                                <option value="all">Últimos 3 meses</option>
+                                <option value="today">Hoy</option>
+                                <option value="week">Esta Semana</option>
+                                <option value="month">Este Mes</option>
+                            </select>
+                        </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: THEME.colors.background, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                        <User size={16} strokeWidth={1.5} color={THEME.colors.primary} />
-                        <select 
-                            value={actionType}
-                            onChange={(e) => setActionType(e.target.value)}
-                            style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
-                        >
-                            <option value="all">Todas las Acciones</option>
-                            <option value="create">Creación (INSERT)</option>
-                            <option value="update">Modificación (UPDATE)</option>
-                            <option value="delete">Eliminación (DELETE)</option>
-                            <option value="login">Ingresos (LOGIN)</option>
-                            <option value="logout">Salidas (LOGOUT)</option>
-                            <option value="security">Seguridad / Autenticación</option>
-                        </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                            <Filter size={15} strokeWidth={1.75} color={THEME.colors.primary} />
+                            <select 
+                                value={actionType}
+                                onChange={(e) => setActionType(e.target.value)}
+                                style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
+                            >
+                                <option value="all">Todas las Acciones</option>
+                                <option value="create">Creación (INSERT)</option>
+                                <option value="update">Modificación (UPDATE)</option>
+                                <option value="delete">Eliminación (DELETE)</option>
+                                <option value="login">Ingresos (LOGIN)</option>
+                                <option value="logout">Salidas (LOGOUT)</option>
+                                <option value="security">Seguridad / Autenticación</option>
+                            </select>
+                        </div>
+
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            padding: '0.42rem 0.75rem', 
+                            backgroundColor: '#F1F5F9', 
+                            borderRadius: THEME.radius.md, 
+                            border: '1px solid #E2E8F0',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            color: '#475569',
+                            fontFamily: THEME.typography.fontFamilySecondary,
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {logs.length} {logs.length === 1 ? 'registro' : 'registros'}
+                        </div>
                     </div>
                 </div>
 
@@ -1011,12 +1117,12 @@ export default function AuditLogPage() {
                                     textTransform: THEME.typography.tableHeader.textTransform, 
                                     minWidth: '320px'
                                 }}>
-                                    Detalles
+                                    Cambios y Actividad
                                 </th>
                                 <th style={{ 
-                                    padding: '0.85rem 1rem', 
-                                    width: '90px', 
-                                    minWidth: '90px', 
+                                    padding: '0.85rem 0.75rem', 
+                                    width: '80px', 
+                                    minWidth: '80px', 
                                     textAlign: 'center', 
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
@@ -1024,7 +1130,7 @@ export default function AuditLogPage() {
                                     color: THEME.typography.tableHeader.color, 
                                     textTransform: THEME.typography.tableHeader.textTransform
                                 }}>
-                                    Detalle
+                                    Ver
                                 </th>
                             </tr>
                         </thead>
