@@ -3333,6 +3333,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const matchedProfile = profiles.find(p => p.id === clientId);
       const isB2C = matchedProfile?.role === 'b2c_client' || editableClientType === 'b2c_client';
 
+      const draftMeta = getDraftMetadata(selectedDraft);
+      const draftAttachmentUrl =
+        (draftMeta?.attachments && draftMeta.attachments[selectedAttachmentIndex]?.url) ||
+        draftMeta?.attachmentUrl ||
+        (draftMeta?.attachments && draftMeta.attachments[0]?.url) ||
+        null;
+
       const payload = {
         draftId: selectedDraft.id,
         clientId: clientId,
@@ -3345,7 +3352,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         notes: (selectedDraft as any)?.admin_notes || '',
         items: validItems,
         channel: 'email',
-        originSource: 'email'
+        originSource: 'email',
+        documentUrl: draftAttachmentUrl
       };
 
       const res = await fetch('/api/orders/email-drafts/approve', {
@@ -4918,6 +4926,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           });
 
           // C. Registrar pedido en base de datos
+          const draftAttachmentUrl =
+            (metadataForValidations?.attachments && metadataForValidations.attachments[selectedAttachmentIndex]?.url) ||
+            metadataForValidations?.attachmentUrl ||
+            (metadataForValidations?.attachments && metadataForValidations.attachments[0]?.url) ||
+            null;
+
           const { data: order, error: orderError } = await supabase
             .from('orders')
             .insert({
@@ -4934,7 +4948,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               admin_notes: finalAdminNotes,
               shipping_address: editableAddress || metadataForValidations?.address || 'Dirección por definir',
               latitude: draftCoordinates?.lat || metadataForValidations?.latitude || null,
-              longitude: draftCoordinates?.lng || metadataForValidations?.longitude || null
+              longitude: draftCoordinates?.lng || metadataForValidations?.longitude || null,
+              document_url: draftAttachmentUrl
             })
             .select()
             .single();
@@ -5360,6 +5375,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       // 2. Create the order
+      const draftAttachmentUrl =
+        (metadata?.attachments && metadata.attachments[selectedAttachmentIndex]?.url) ||
+        metadata?.attachmentUrl ||
+        (metadata?.attachments && metadata.attachments[0]?.url) ||
+        null;
+
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -5376,7 +5397,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           admin_notes: finalAdminNotes,
           shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
           latitude: draftCoordinates?.lat || metadata?.latitude || null,
-          longitude: draftCoordinates?.lng || metadata?.longitude || null
+          longitude: draftCoordinates?.lng || metadata?.longitude || null,
+          document_url: draftAttachmentUrl
         })
         .select()
         .single();

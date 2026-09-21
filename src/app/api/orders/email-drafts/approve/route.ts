@@ -12,7 +12,27 @@ function getSupabaseAdmin() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { draftId, clientId, clientType, deliveryDate, deliverySlot, address, notes, items, channel, originSource } = body;
+    const { draftId, clientId, clientType, deliveryDate, deliverySlot, address, notes, items, channel, originSource, documentUrl } = body;
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    let finalDocumentUrl = documentUrl || body.attachmentUrl || null;
+    if (!finalDocumentUrl && draftId) {
+      try {
+        const { data: draftData } = await supabaseAdmin
+          .from('order_drafts')
+          .select('extracted_items')
+          .eq('id', draftId)
+          .single();
+
+        if (draftData?.extracted_items && Array.isArray(draftData.extracted_items)) {
+          const meta = draftData.extracted_items.find((i: any) => i.isMetadata);
+          finalDocumentUrl = meta?.attachmentUrl || meta?.attachments?.[0]?.url || null;
+        }
+      } catch (docErr) {
+        console.warn('[Approve Email Draft] Notice extracting attachment url from draft:', docErr);
+      }
+    }
 
     if (!clientId) {
       return NextResponse.json({ error: 'Cliente es requerido para aprobar la orden' }, { status: 400 });
@@ -20,8 +40,6 @@ export async function POST(req: Request) {
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'La orden debe contener al menos un producto' }, { status: 400 });
     }
-
-    const supabaseAdmin = getSupabaseAdmin();
 
     // 1. Fetch client details to ensure profile exists
     const { data: profile, error: profileErr } = await supabaseAdmin
@@ -105,7 +123,8 @@ export async function POST(req: Request) {
       delivery_slot: deliverySlot || 'AM',
       shipping_address: address || profile.address || 'Bogotá',
       admin_notes: notes || `Pedido ingresado desde Borrador de Correo ID: ${draftId || 'N/A'}`,
-      origin_source: originSource || 'email'
+      origin_source: originSource || 'email',
+      document_url: finalDocumentUrl
     };
 
     const { data: newOrder, error: orderErr } = await supabaseAdmin
