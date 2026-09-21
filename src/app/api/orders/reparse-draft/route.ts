@@ -56,7 +56,15 @@ export async function POST(req: Request) {
       nit?: string;
       address?: string;
       deliveryDate?: string;
-      items: Array<{ name: string; quantity: number; unit?: string; observations?: string }>;
+      items: Array<{ 
+        name: string; 
+        quantity: number; 
+        unit?: string; 
+        observations?: string; 
+        source_attachment_name?: string; 
+        purchase_order?: string; 
+        attachment_index?: number;
+      }>;
     } = { items: [] };
 
     let parsedSuccessfully = false;

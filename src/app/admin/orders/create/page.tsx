@@ -266,6 +266,7 @@ function CreateOrderContent() {
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
     const [isConfirmingImport, setIsConfirmingImport] = useState(false);
+    const [isDirectConfirming, setIsDirectConfirming] = useState(false);
     const [showFormulaTooltip, setShowFormulaTooltip] = useState(false);
 
     // Safe math expression evaluator for Excel-style formulas (+900/24, =900/24, 15*12, etc.)
@@ -3007,6 +3008,35 @@ function CreateOrderContent() {
                 }
             }
 
+            // Auto-asignación de Fecha de Entrega detectada en el Documento (Hallazgo 1 SDD)
+            if (data.deliveryDateInDocument) {
+                try {
+                    let parsedDelivery: string | null = null;
+                    const rawDate = String(data.deliveryDateInDocument).trim();
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+                        parsedDelivery = rawDate;
+                    } else if (/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.test(rawDate)) {
+                        const parts = rawDate.split(/[\/\-]/);
+                        const d = parts[0].padStart(2, '0');
+                        const m = parts[1].padStart(2, '0');
+                        const y = parts[2];
+                        parsedDelivery = `${y}-${m}-${d}`;
+                    } else {
+                        const parsedTs = Date.parse(rawDate);
+                        if (!isNaN(parsedTs)) {
+                            parsedDelivery = new Date(parsedTs).toISOString().split('T')[0];
+                        }
+                    }
+
+                    if (parsedDelivery && parsedDelivery >= minDeliveryDate) {
+                        setDeliveryDate(parsedDelivery);
+                        showToast(`📅 Fecha de entrega detectada en el documento: ${parsedDelivery}`, 'success');
+                    }
+                } catch (dateErr) {
+                    console.warn('[AI Extract] Advertencia normalizando fecha de entrega:', dateErr);
+                }
+            }
+
             // 1. Cargar Memoria Histórica de Aprendizaje del cliente
             let learnedMemory: any[] = [];
             const targetClientId = autoMatchedProfile?.id || selectedClient;
@@ -3183,6 +3213,288 @@ function CreateOrderContent() {
             }
         } finally {
             setParsingFile(false);
+        }
+    };
+
+    const handleAddStagedRow = () => {
+        const newId = `manual-staged-${Date.now()}`;
+        const newRow = {
+            id: newId,
+            originalName: 'Nuevo Ítem Manual',
+            quantity: 1,
+            originalQtyInFile: 1,
+            originalUnitInFile: 'Kg',
+            originalQty: 1,
+            originalUnit: 'Kg',
+            conversion_factor: 1,
+            suggestedProduct: null,
+            confidence: 'MANUAL',
+            confidenceScore: 100,
+            matchSource: 'MANUAL',
+            matchReason: 'Agregado manualmente por el usuario',
+            status: 'PENDING' as const,
+            observations: '',
+            deliverySchedule: null,
+            selected_options: {},
+            price: 0,
+            searchQuery: ''
+        };
+        setStagedItems(prev => [...prev, newRow]);
+        setTimeout(() => {
+            const nextIdx = stagedItems.length;
+            setActiveDropdownRowIndex(nextIdx);
+            const input = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement;
+            input?.focus();
+        }, 100);
+    };
+
+    const handleDirectConfirmOrder = async () => {
+        if (!selectedClient) {
+            showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar el pedido.', 'error');
+            return;
+        }
+
+        const clientDetails = clients.find(c => c.id === selectedClient);
+
+        if (!importValidation?.isMatch && importValidation?.clientInDocument) {
+            const confirmed = window.confirm(
+                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionada la empresa:\n"${clientDetails?.company_name || 'Cliente'}"\n\n¿Deseas continuar y crear este pedido directamente para ${clientDetails?.company_name || 'Cliente'}?`
+            );
+            if (!confirmed) return;
+        }
+
+        if (stagedItems.length === 0) {
+            showToast('⚠️ No hay productos en la mesa de trabajo para crear el pedido.', 'error');
+            return;
+        }
+
+        const unassigned = stagedItems.filter(i => !i.suggestedProduct);
+        if (unassigned.length > 0) {
+            showToast(`⚠️ Hay ${unassigned.length} producto(s) sin homologar en el catálogo. Asígnalos o elimínalos antes de crear el pedido directamente.`, 'error');
+            return;
+        }
+
+        const targetDeliveryDate = deliveryDate || minDeliveryDate;
+        if (!targetDeliveryDate) {
+            showToast('⚠️ Debes seleccionar la fecha de entrega.', 'error');
+            return;
+        }
+
+        setIsDirectConfirming(true);
+        try {
+            // 1. Subida silenciosa del archivo original al bucket order-attachments
+            let finalDocUrl = permanentDocumentUrl;
+            if (!finalDocUrl && uploadedFile) {
+                try {
+                    const cleanFileName = `${Date.now()}_${uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                    const { error: uploadError } = await supabase
+                        .storage
+                        .from('order-attachments')
+                        .upload(cleanFileName, uploadedFile, { upsert: true });
+
+                    if (!uploadError) {
+                        const { data: publicUrlData } = supabase
+                            .storage
+                            .from('order-attachments')
+                            .getPublicUrl(cleanFileName);
+                        if (publicUrlData?.publicUrl) {
+                            finalDocUrl = publicUrlData.publicUrl;
+                            setPermanentDocumentUrl(finalDocUrl);
+                        }
+                    }
+                } catch (upErr) {
+                    console.warn('Error subiendo adjunto a storage en creación directa:', upErr);
+                }
+            }
+
+            // 2. Persistir memoria de aprendizaje histórica
+            const activeClientId = selectedClient;
+            if (activeClientId && stagedItems.length > 0) {
+                const learningPromises = stagedItems
+                    .filter(item => item.suggestedProduct && item.originalName)
+                    .map(item => recordLearningMemory(
+                        supabase,
+                        activeClientId,
+                        item.originalName,
+                        item.suggestedProduct.id,
+                        item.originalUnit || item.suggestedProduct.unit_of_measure
+                    ));
+                await Promise.allSettled(learningPromises);
+            }
+
+            // 3. Calcular totales financieros, IVA y cubicaje logístico
+            let subtotal = 0;
+            let tax = 0;
+            let total = 0;
+            let totalWeightKg = 0;
+
+            const itemsDataForInsert = stagedItems.map(item => {
+                const prod = item.suggestedProduct!;
+                const prodId = prod.id;
+                const unitPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                    ? contractPrices[prodId]
+                    : (item.price || prod.base_price || 0);
+
+                const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
+                const itemTotal = unitPrice * qtyNum;
+                const ivaRate = prod.iva_rate !== null && prod.iva_rate !== undefined ? Number(prod.iva_rate) : 19;
+                const itemTax = itemTotal * (ivaRate / (100 + ivaRate));
+                const itemSubtotal = itemTotal - itemTax;
+
+                const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
+                const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+                const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+                let weightFactor = 1.0;
+                if (isKgUnit) weightFactor = 1.0;
+                else if (isLibraUnit) weightFactor = 0.5;
+                else if (prod.weight_kg && Number(prod.weight_kg) > 0) weightFactor = Number(prod.weight_kg);
+                else weightFactor = 1.0;
+
+                totalWeightKg += qtyNum * weightFactor;
+                subtotal += itemSubtotal;
+                tax += itemTax;
+                total += itemTotal;
+
+                const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
+                const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+
+                return {
+                    product_id: prod.id,
+                    quantity: qtyNum,
+                    unit_price: unitPrice,
+                    nickname: item.originalName || prod.name,
+                    variant_label: variantLabel || null,
+                    unit: item.originalUnit || prod.unit_of_measure || 'Kg',
+                    selected_options: item.selected_options || {}
+                };
+            });
+
+            // 4. Armar notas de orden y entrega logística
+            const poTokens: string[] = [];
+            if (importValidation?.poNumber) poTokens.push(`OC: ${importValidation.poNumber}`);
+            if (importValidation?.solpedNumber) poTokens.push(`SOLPED: ${importValidation.solpedNumber}`);
+            if (adminNotes) poTokens.push(adminNotes);
+            const finalAdminNotes = poTokens.join(' | ');
+
+            let finalDeliverySlot = deliverySlot || 'AM';
+            let logisticsOverride = null;
+            if (isManualDelivery && manualDeliveryTime) {
+                const [h, m] = manualDeliveryTime.split(':').map(Number);
+                const totalMinutes = h * 60 + m;
+                const startTotal = totalMinutes - manualDeliveryMargin;
+                const endTotal = totalMinutes + manualDeliveryMargin;
+                const startH = Math.floor(startTotal / 60);
+                const startM = startTotal % 60;
+                const endH = Math.floor(endTotal / 60);
+                const endM = endTotal % 60;
+                const formatT = (hh: number, mm: number) => `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+                
+                finalDeliverySlot = `${formatT(startH, startM)} - ${formatT(endH, endM)}`;
+                logisticsOverride = {
+                    is_manual: true,
+                    manual_time: manualDeliveryTime,
+                    manual_margin: manualDeliveryMargin,
+                    manual_note: manualDeliveryNote,
+                    windows: [{
+                        startTime: formatT(startH, startM),
+                        endTime: formatT(endH, endM)
+                    }],
+                    parsing_date: new Date().toISOString()
+                };
+            }
+
+            // 5. Inserción atómica en base de datos
+            const { data: newOrder, error: orderErr } = await supabase
+                .from('orders')
+                .insert({
+                    profile_id: selectedClient,
+                    total: Math.round(total),
+                    total_weight_kg: parseFloat(totalWeightKg.toFixed(2)),
+                    subtotal: Math.round(subtotal),
+                    tax: Math.round(tax),
+                    status: 'pending_approval',
+                    payment_status: 'Pendiente',
+                    payment_method: paymentMethod || 'Crédito B2B',
+                    origin: 'Admin Panel',
+                    origin_source: 'document_upload',
+                    delivery_date: targetDeliveryDate,
+                    delivery_slot: finalDeliverySlot,
+                    admin_notes: finalAdminNotes,
+                    shipping_address: clientDetails?.address || 'Dirección Registrada',
+                    latitude: clientDetails?.latitude || latitude || null,
+                    longitude: clientDetails?.longitude || longitude || null,
+                    is_manual_delivery: isManualDelivery,
+                    manual_delivery_time: manualDeliveryTime || null,
+                    manual_delivery_margin: manualDeliveryMargin,
+                    manual_delivery_note: manualDeliveryNote || null,
+                    logistics_data: logisticsOverride,
+                    document_url: finalDocUrl || permanentDocumentUrl || null
+                })
+                .select()
+                .single();
+
+            if (orderErr) {
+                console.error('Direct Order Insert Error:', orderErr);
+                throw new Error(orderErr.message);
+            }
+
+            const itemsWithOrderId = itemsDataForInsert.map(it => ({
+                ...it,
+                order_id: newOrder.id
+            }));
+
+            const { error: itemsErr } = await supabase
+                .from('order_items')
+                .insert(itemsWithOrderId);
+
+            if (itemsErr) {
+                console.error('Direct Order Items Insert Error:', itemsErr);
+                // Rollback atómico de orden huérfana
+                await supabase.from('orders').delete().eq('id', newOrder.id);
+                throw new Error(itemsErr.message);
+            }
+
+            // 6. Encolar notificación por correo de confirmación
+            const customerEmail = clientDetails?.email || '';
+            const customerName = clientDetails?.company_name || clientDetails?.contact_name || 'Cliente';
+            if (customerEmail) {
+                const formattedItems = stagedItems.map(item => ({
+                    name: item.suggestedProduct?.name || item.originalName,
+                    quantity: item.quantity,
+                    unit_price: item.price || item.suggestedProduct?.base_price || 0,
+                    total: (item.quantity || 1) * (item.price || item.suggestedProduct?.base_price || 0)
+                }));
+                fetch('/api/orders/send-confirmation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderId: newOrder.id,
+                        orderSequenceId: newOrder.sequence_id,
+                        customerName,
+                        customerEmail,
+                        deliveryDate: targetDeliveryDate,
+                        deliverySlot: finalDeliverySlot,
+                        items: formattedItems,
+                        totalAmount: Math.round(total)
+                    })
+                }).catch(err => console.warn('[Outbound Mail] Error encolando correo:', err));
+            }
+
+            // 7. Limpiar estados de staging y redirigir
+            setIsStaging(false);
+            setStagedItems([]);
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+                setUploadedFileUrl(null);
+            }
+            setUploadedFile(null);
+            showToast(`⚡ ¡Pedido #${newOrder.sequence_id || newOrder.id.slice(0, 8)} creado exitosamente con el documento!`, 'success');
+            router.push('/admin/orders/loading');
+        } catch (err: any) {
+            console.error('Error al confirmar y crear pedido directamente:', err);
+            showToast(`❌ Error al crear el pedido: ${err.message || err}`, 'error');
+        } finally {
+            setIsDirectConfirming(false);
         }
     };
 
@@ -3818,7 +4130,7 @@ function CreateOrderContent() {
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
                     logistics_data: logisticsOverride,
-                    document_url: permanentDocumentUrl || documentUrl
+                    document_url: permanentDocumentUrl || null
                 })
                 .select()
                 .single();
@@ -3849,6 +4161,8 @@ function CreateOrderContent() {
 
             if (itemsError) {
                 console.error('Order Items Insert Error Detail:', itemsError);
+                // Rollback atómico: eliminar la orden huérfana de inmediato si falla la inserción de items (Hallazgo 7 SDD)
+                await supabase.from('orders').delete().eq('id', order.id);
                 throw new Error(itemsError.message);
             }
 
@@ -5300,6 +5614,32 @@ function CreateOrderContent() {
                                                     <span>Digestión: <strong>{digestionDuration}s</strong></span>
                                                 </span>
                                             )}
+                                            {uploadedFile && (
+                                                <button 
+                                                    type="button"
+                                                    disabled={parsingFile}
+                                                    onClick={() => parseOrderWithAI(uploadedFile)}
+                                                    title="Volver a ejecutar la extracción del documento con Inteligencia Artificial"
+                                                    style={{ 
+                                                        padding: '6px 14px', 
+                                                        backgroundColor: '#F8FAFC', 
+                                                        borderRadius: '100px', 
+                                                        fontSize: '0.78rem', 
+                                                        fontWeight: '800', 
+                                                        color: '#334155',
+                                                        border: '1.5px solid #CBD5E1',
+                                                        cursor: parsingFile ? 'not-allowed' : 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    <RefreshCw size={13} className={parsingFile ? 'animate-spin' : ''} />
+                                                    <span>{parsingFile ? 'Re-analizando...' : 'Re-analizar con IA'}</span>
+                                                </button>
+                                            )}
                                             {uploadedFileUrl && (
                                                 <button 
                                                     onClick={() => setShowSideDocPreview(prev => !prev)}
@@ -6120,6 +6460,41 @@ function CreateOrderContent() {
                                                     })}
                                                 </tbody>
                                             </table>
+
+                                            {/* Hallazgo 6: Botón para Agregar Ítem Manual en la Mesa de Trabajo */}
+                                            <div style={{ padding: '0.85rem 1rem', display: 'flex', justifyContent: 'center', backgroundColor: '#F8FAFC', borderTop: '1.5px dashed #CBD5E1' }}>
+                                                <button
+                                                    id="add-staged-manual-item-button"
+                                                    type="button"
+                                                    onClick={handleAddStagedRow}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        padding: '9px 18px',
+                                                        borderRadius: '10px',
+                                                        border: '1.5px dashed #0D9488',
+                                                        backgroundColor: '#F0FDFA',
+                                                        color: '#0F766E',
+                                                        fontSize: '0.88rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.backgroundColor = '#CCFBF1';
+                                                        e.currentTarget.style.borderColor = '#0F766E';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.backgroundColor = '#F0FDFA';
+                                                        e.currentTarget.style.borderColor = '#0D9488';
+                                                    }}
+                                                >
+                                                    <Plus size={16} strokeWidth={2.5} />
+                                                    <span>+ Agregar Ítem Manual a la Mesa de Trabajo</span>
+                                                </button>
+                                            </div>
+
                                             {/* Bottom Spacer: Gives the scroll container guaranteed room to anchor any row to the top */}
                                             <div style={{ height: '380px', pointerEvents: 'none' }} />
                                         </div>
@@ -6188,10 +6563,47 @@ function CreateOrderContent() {
                                                     <span>⚡ Generar 2 Pedidos Relacionados</span>
                                                 </button>
                                             )}
+                                            {/* Hallazgo 2: Botón de Creación Inmediata Directa (1 Clic) */}
+                                            <button
+                                                id="direct-confirm-order-button"
+                                                type="button"
+                                                onClick={handleDirectConfirmOrder}
+                                                disabled={isDirectConfirming || isConfirmingImport}
+                                                style={{
+                                                    padding: '12px 24px',
+                                                    borderRadius: '14px',
+                                                    border: 'none',
+                                                    backgroundColor: isDirectConfirming ? '#0D9488' : '#0F766E',
+                                                    color: 'white',
+                                                    fontWeight: '900',
+                                                    fontSize: '0.95rem',
+                                                    cursor: (isDirectConfirming || isConfirmingImport) ? 'not-allowed' : 'pointer',
+                                                    opacity: (isDirectConfirming || isConfirmingImport) ? 0.85 : 1,
+                                                    boxShadow: '0 8px 15px -3px rgba(15, 118, 110, 0.35)',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={e => { if (!isDirectConfirming && !isConfirmingImport) e.currentTarget.style.transform = 'scale(1.02)'; }}
+                                                onMouseLeave={e => { if (!isDirectConfirming && !isConfirmingImport) e.currentTarget.style.transform = 'scale(1)'; }}
+                                            >
+                                                {isDirectConfirming ? (
+                                                    <>
+                                                        <Loader2 size={16} className="animate-spin" />
+                                                        <span>Creando Pedido Inmediato...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle2 size={16} strokeWidth={2.5} />
+                                                        <span>⚡ Confirmar y Crear Pedido Inmediato</span>
+                                                    </>
+                                                )}
+                                            </button>
                                             <button 
                                                 id="confirm-inject-button"
                                                 onClick={handleConfirmImport}
-                                                disabled={isConfirmingImport}
+                                                disabled={isConfirmingImport || isDirectConfirming}
                                                 style={{ 
                                                     padding: '12px 28px', 
                                                     borderRadius: '14px', 
@@ -6199,17 +6611,17 @@ function CreateOrderContent() {
                                                     backgroundColor: isConfirmingImport ? '#047857' : '#059669', 
                                                     color: 'white', 
                                                     fontWeight: '800', 
-                                                    fontSize: '1rem',
-                                                    cursor: isConfirmingImport ? 'not-allowed' : 'pointer',
-                                                    opacity: isConfirmingImport ? 0.85 : 1,
+                                                    fontSize: '1rem', 
+                                                    cursor: (isConfirmingImport || isDirectConfirming) ? 'not-allowed' : 'pointer',
+                                                    opacity: (isConfirmingImport || isDirectConfirming) ? 0.85 : 1,
                                                     boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.3)',
                                                     transition: 'all 0.2s',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: '8px'
                                                 }}
-                                                onMouseEnter={e => { if (!isConfirmingImport) e.currentTarget.style.transform = 'scale(1.02)'; }}
-                                                onMouseLeave={e => { if (!isConfirmingImport) e.currentTarget.style.transform = 'scale(1)'; }}
+                                                onMouseEnter={e => { if (!isConfirmingImport && !isDirectConfirming) e.currentTarget.style.transform = 'scale(1.02)'; }}
+                                                onMouseLeave={e => { if (!isConfirmingImport && !isDirectConfirming) e.currentTarget.style.transform = 'scale(1)'; }}
                                             >
                                                 {isConfirmingImport ? (
                                                     <>

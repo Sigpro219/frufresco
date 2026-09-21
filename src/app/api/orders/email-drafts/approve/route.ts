@@ -34,26 +34,63 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Cliente con ID ${clientId} no encontrado` }, { status: 404 });
     }
 
-    // Calculate subtotal and totals
-    let subtotal = 0;
+    // Consultar metadatos de los productos para paridad fiscal (IVA) y logística (Peso Kilos)
+    const productIds = items.map((i: any) => i.productId || i.product_id || i.id).filter(Boolean);
+    const { data: dbProducts } = await supabaseAdmin
+      .from('products')
+      .select('id, name, base_price, unit_of_measure, weight_kg, iva_rate')
+      .in('id', productIds);
+    const productsMap = new Map((dbProducts || []).map((p: any) => [p.id, p]));
+
+    // Calcular subtotales, IVA y Peso acumulado idéntico a create/page.tsx
+    let totalTax = 0;
+    let totalWeightKg = 0;
+    let totalGross = 0;
+
     const formattedItems = items.map((item: any) => {
-      const unitPrice = Number(item.unitPrice || item.price || item.base_price || 0);
+      const pId = item.productId || item.product_id || item.id;
+      const dbProd = productsMap.get(pId);
+      const unitPrice = Number(item.unitPrice || item.price || dbProd?.base_price || 0);
       const qty = Number(item.quantity || item.qty || 1);
-      const totalItemPrice = unitPrice * qty;
-      subtotal += totalItemPrice;
+      const itemTotal = unitPrice * qty;
+      totalGross += itemTotal;
+
+      // Paridad Fiscal: IVA según tarifa del producto (19%, 5% o exento 0%)
+      const rate = dbProd?.iva_rate !== null && dbProd?.iva_rate !== undefined ? Number(dbProd.iva_rate) : 0;
+      if (rate > 0) {
+        totalTax += itemTotal * (rate / (100 + rate));
+      }
+
+      // Paridad Logística: Cubicación de peso en Kilos para transporte
+      const unit = (item.unit || item.unit_of_measure || dbProd?.unit_of_measure || 'Kg').toLowerCase().trim();
+      const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+      const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+      let weightFactor = 1.0;
+      if (isKgUnit) {
+        weightFactor = 1.0;
+      } else if (isLibraUnit) {
+        weightFactor = 0.5;
+      } else if (dbProd?.weight_kg && Number(dbProd.weight_kg) > 0) {
+        weightFactor = Number(dbProd.weight_kg);
+      } else {
+        weightFactor = 1.0;
+      }
+      totalWeightKg += qty * weightFactor;
 
       return {
-        product_id: item.productId || item.product_id || item.id,
+        product_id: pId,
         quantity: qty,
-        unit: item.unit || item.unit_of_measure || 'Kg',
+        unit: item.unit || item.unit_of_measure || dbProd?.unit_of_measure || 'Kg',
         unit_price: unitPrice,
         variant_label: item.observations || item.notes || item.variant_label || null
       };
     });
 
-    const taxes = 0;
+    const taxes = Math.round(totalTax * 100) / 100;
+    const subtotal = Math.round((totalGross - taxes) * 100) / 100;
     const shippingFee = 0;
-    const totalAmount = subtotal + taxes + shippingFee;
+    const totalAmount = totalGross + shippingFee;
+    const roundedWeight = Math.round(totalWeightKg * 100) / 100;
 
     // 2. Insert order header into 'orders' table
     const orderData: any = {
@@ -63,6 +100,7 @@ export async function POST(req: Request) {
       subtotal: subtotal,
       tax: taxes,
       total: totalAmount,
+      total_weight_kg: roundedWeight,
       delivery_date: deliveryDate || new Date().toISOString().split('T')[0],
       delivery_slot: deliverySlot || 'AM',
       shipping_address: address || profile.address || 'Bogotá',
