@@ -456,7 +456,6 @@ export default function FinancialAdjustmentModal({
                         onClick={onClose}
                         type="button"
                         style={{
-                            border: 'none',
                             background: '#FFFFFF',
                             cursor: 'pointer',
                             color: '#64748B',
@@ -755,7 +754,7 @@ export default function FinancialAdjustmentModal({
                                                     <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                                                         <select
                                                             value={item.novelty_type}
-                                                            onChange={e => handleItemNoveltyTypeChange(idx, e.target.value)}
+                                                            onChange={e => handleItemNoveltyTypeChange(idx, e.target.value as any)}
                                                             style={{
                                                                 padding: '4px 6px',
                                                                 borderRadius: '6px',

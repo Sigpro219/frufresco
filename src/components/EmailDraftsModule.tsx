@@ -780,7 +780,7 @@ const GmailMessageViewer = ({
                       <span style={{ color: '#64748B', display: 'flex', alignItems: 'center' }}><Paperclip size={18} /></span>
                     )}
 
-                    <div style={{ overflow: 'hidden' }}>
+                    <div style={{ overflow: 'hidden', flex: 1 }}>
                       <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {name}
                       </div>
@@ -788,6 +788,40 @@ const GmailMessageViewer = ({
                         Click para ver en Visor
                       </div>
                     </div>
+
+                    {att.url && (
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          marginLeft: '4px',
+                          padding: '4px 6px',
+                          color: '#64748B',
+                          backgroundColor: '#FFFFFF',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          textDecoration: 'none',
+                          transition: 'all 0.15s'
+                        }}
+                        title="Abrir archivo original en pestaña nueva"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#1D4ED8';
+                          e.currentTarget.style.borderColor = '#93C5FD';
+                          e.currentTarget.style.backgroundColor = '#EFF6FF';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = '#64748B';
+                          e.currentTarget.style.borderColor = '#E2E8F0';
+                          e.currentTarget.style.backgroundColor = '#FFFFFF';
+                        }}
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    )}
                   </div>
                 );
               })}

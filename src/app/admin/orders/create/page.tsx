@@ -3234,7 +3234,8 @@ function CreateOrderContent() {
             matchReason: 'Agregado manualmente por el usuario',
             status: 'PENDING' as const,
             observations: '',
-            deliverySchedule: null,
+            deliverySchedule: deliveryDate || minDeliveryDate || null,
+            deliveryDate: deliveryDate || minDeliveryDate || null,
             selected_options: {},
             price: 0,
             searchQuery: ''
