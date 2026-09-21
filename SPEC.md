@@ -121,3 +121,18 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 ## 5. Verificación & Conclusiones
 - **Compilación:** Verificada con TypeScript (`tsc --noEmit`), garantizando cero errores en los componentes y rutas del módulo de pedidos.
 - **Arquitectura:** Mantiene compatibilidad total hacia atrás (Non-destructive addition). Ambos métodos de entrada (Email y Carga Manual) operan ahora bajo los mismos estándares contables, operativos y de interfaz.
+
+---
+
+## 6. Gobernanza de Despliegue, Infraestructura Git & Resguardo de Producción
+
+### Principio de Invarianza Operativa y Cero Riesgo
+- **Ambiente de Producción Activo:** `https://frufresco-liard.vercel.app/` alimentado por la rama `liard` y sincronizado canónicamente con `main`.
+- **Estrategia de Ramificación:** Se determinó mantener activas y sincronizadas al 100% las 7 ramas remotas (`main`, `liard`, `CORE`, `core`, `tenant-frufresco`, `tenant1`, `white-label`), garantizando que:
+  1. No exista riesgo de desconexión o desconfiguración de dominios, variables de entorno o webhooks en Vercel.
+  2. Todas las ramas apunten al mismo commit de referencia en cada entrega.
+  3. No se elimine ninguna rama histórica, asegurando continuidad operativa absoluta.
+- **Snapshot Inmutable de Seguridad (Git Tag):**
+  - **Tag:** `backup-seguridad-arquitectura-20260921`
+  - **Función:** Registro congelado en GitHub con paridad total y cero diferencias (`0 0`), protegiendo la base de código ante cualquier contingencia.
+
