@@ -87,6 +87,174 @@ interface AgreementItem {
     };
 }
 
+export interface ExtractedExcelItem {
+    accounting_id: string;
+    product_name: string;
+    unit_price: number;
+}
+
+export function normalizeExcelText(str: any): string {
+    return String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+export function parsePriceValue(raw: any): number {
+    if (typeof raw === 'number') return isNaN(raw) || !isFinite(raw) ? 0 : raw;
+    if (!raw) return 0;
+    
+    let str = String(raw).trim();
+    // Limpiar símbolos de moneda, caracteres no numéricos excepto puntos, comas y guiones
+    str = str.replace(/[$€COPcop\s]/g, '');
+    
+    const hasComma = str.includes(',');
+    const hasDot = str.includes('.');
+    
+    if (hasComma && hasDot) {
+        const lastComma = str.lastIndexOf(',');
+        const lastDot = str.lastIndexOf('.');
+        if (lastComma > lastDot) {
+            // Formato 12.500,50 -> miles con punto, decimal con coma
+            str = str.replace(/\./g, '').replace(',', '.');
+        } else {
+            // Formato 12,500.50 -> miles con coma, decimal con punto
+            str = str.replace(/,/g, '');
+        }
+    } else if (hasComma) {
+        const parts = str.split(',');
+        if (parts.length === 2 && parts[1].length === 3 && Number(parts[0]) > 0) {
+            str = parts[0] + parts[1];
+        } else {
+            str = str.replace(',', '.');
+        }
+    } else if (hasDot) {
+        const parts = str.split('.');
+        if (parts.length === 2 && parts[1].length === 3 && Number(parts[0]) > 0) {
+            str = parts[0] + parts[1];
+        } else if (parts.length > 2) {
+            str = str.replace(/\./g, '');
+        }
+    }
+    
+    const num = parseFloat(str.replace(/[^0-9.-]/g, ''));
+    return isNaN(num) || !isFinite(num) ? 0 : num;
+}
+
+export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelItem[] {
+    const rawMatrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (!rawMatrix || rawMatrix.length === 0) {
+        throw new Error('El archivo Excel está vacío');
+    }
+
+    let headerRowIndex = -1;
+    let idColIdx = -1;
+    let nameColIdx = -1;
+    let priceColIdx = -1;
+    let bestScore = 0;
+
+    const maxHeaderScan = Math.min(25, rawMatrix.length);
+
+    for (let r = 0; r < maxHeaderScan; r++) {
+        const row = rawMatrix[r];
+        if (!Array.isArray(row) || row.length === 0) continue;
+
+        let curIdIdx = -1;
+        let curNameIdx = -1;
+        let curPriceIdx = -1;
+        let score = 0;
+
+        row.forEach((cell, colIdx) => {
+            const val = normalizeExcelText(cell);
+            if (!val) return;
+
+            // Detección de Precio
+            if (/(?:precio|valor|price|acordado|tarifa|costo|neto|unitario)/i.test(val)) {
+                curPriceIdx = colIdx;
+                score += 10;
+            }
+            // Detección de Código / ID
+            else if (/(?:id\s*prod|prod\s*id|accounting|cod|sku|ref|item|\bid\b)/i.test(val)) {
+                curIdIdx = colIdx;
+                score += 10;
+            }
+            // Detección de Nombre / Producto
+            else if (/(?:nombre|descripci|producto|detalle|articulo)/i.test(val)) {
+                curNameIdx = colIdx;
+                score += 5;
+            }
+        });
+
+        if (curPriceIdx !== -1 && (curIdIdx !== -1 || curNameIdx !== -1)) {
+            if (score > bestScore) {
+                bestScore = score;
+                headerRowIndex = r;
+                idColIdx = curIdIdx;
+                nameColIdx = curNameIdx;
+                priceColIdx = curPriceIdx;
+            }
+        }
+    }
+
+    // Fallback: detectar fila de datos sin encabezado si las columnas contienen números de precio
+    if (headerRowIndex === -1) {
+        for (let r = 0; r < Math.min(10, rawMatrix.length); r++) {
+            const row = rawMatrix[r];
+            if (!Array.isArray(row) || row.length < 2) continue;
+            for (let c = 1; c < row.length; c++) {
+                const parsed = parsePriceValue(row[c]);
+                if (parsed > 0) {
+                    headerRowIndex = r - 1;
+                    idColIdx = 0;
+                    priceColIdx = c;
+                    nameColIdx = row.length > 2 && c !== 1 ? 1 : -1;
+                    break;
+                }
+            }
+            if (priceColIdx !== -1) break;
+        }
+    }
+
+    if (priceColIdx === -1 || (idColIdx === -1 && nameColIdx === -1)) {
+        throw new Error(
+            'No se identificaron las columnas requeridas en el archivo Excel. ' +
+            'Asegúrate de incluir una columna de Precio (ej. "Precio Acordado" o "Precio") ' +
+            'y una columna de Código (ej. "ID Producto", "Código") o de Nombre ("Nombre del Producto").'
+        );
+    }
+
+    const startRow = Math.max(0, headerRowIndex + 1);
+    const parsedItems: ExtractedExcelItem[] = [];
+
+    for (let r = startRow; r < rawMatrix.length; r++) {
+        const row = rawMatrix[r];
+        if (!Array.isArray(row) || row.length === 0) continue;
+
+        const rawId = idColIdx !== -1 ? String(row[idColIdx] ?? '').trim() : '';
+        const rawName = nameColIdx !== -1 ? String(row[nameColIdx] ?? '').trim() : '';
+        const rawPrice = priceColIdx !== -1 ? row[priceColIdx] : '';
+
+        const unitPrice = parsePriceValue(rawPrice);
+
+        if (unitPrice > 0 && (rawId || rawName)) {
+            parsedItems.push({
+                accounting_id: rawId || rawName,
+                product_name: rawName || rawId,
+                unit_price: unitPrice
+            });
+        }
+    }
+
+    if (parsedItems.length === 0) {
+        throw new Error('No se encontraron filas con datos válidos de Código/Producto y Precio mayor a cero en el archivo Excel.');
+    }
+
+    return parsedItems;
+}
+
 export default function CommercialAgreementsModule() {
     const { user, profile } = useAuth();
     const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -345,7 +513,20 @@ export default function CommercialAgreementsModule() {
                     p.base_price = officialCost;
                     productMap[p.id] = p;
                     if (p.accounting_id) {
-                        productMap[String(p.accounting_id)] = p;
+                        const accId = String(p.accounting_id).trim();
+                        productMap[accId] = p;
+                        productMap[accId.toLowerCase()] = p;
+                    }
+                    if (p.sku) {
+                        const sku = String(p.sku).trim();
+                        productMap[sku] = p;
+                        productMap[sku.toLowerCase()] = p;
+                    }
+                    if (p.name) {
+                        const normName = normalizeExcelText(p.name);
+                        if (normName) {
+                            productMap[normName] = p;
+                        }
                     }
                 });
                 if (data.length < pageSize) {
@@ -358,6 +539,21 @@ export default function CommercialAgreementsModule() {
             }
         }
         return productMap;
+    };
+
+    const findProductInMap = (productMap: Record<string, any>, rawId?: string, rawName?: string): any => {
+        const idKey = String(rawId || '').trim();
+        if (idKey) {
+            if (productMap[idKey]) return productMap[idKey];
+            if (productMap[idKey.toLowerCase()]) return productMap[idKey.toLowerCase()];
+            const normId = normalizeExcelText(idKey);
+            if (normId && productMap[normId]) return productMap[normId];
+        }
+        if (rawName) {
+            const normName = normalizeExcelText(rawName);
+            if (normName && productMap[normName]) return productMap[normName];
+        }
+        return null;
     };
 
     // Date / Time formatting matching the ERP photograph:
@@ -673,73 +869,46 @@ export default function CommercialAgreementsModule() {
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
 
-                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
-                if (rawRows.length === 0) {
-                    throw new Error('El archivo Excel está vacío');
-                }
-
-                const headers = Object.keys(rawRows[0]);
-                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
-                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
-                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
-
-                if (!idCol || !priceCol) {
-                    throw new Error('No se encontraron las columnas requeridas (Código Contable y Precio)');
-                }
-
+                const parsedItems = extractRowsFromExcelSheet(ws, XLSX);
                 const productMap = await fetchAllProductsMap();
 
-                const parsedItems: any[] = [];
                 const previewItems: any[] = [];
                 let matchedCount = 0;
                 let unmatchedCount = 0;
                 let totalMargin = 0;
                 let subtotal = 0;
 
-                rawRows.forEach(row => {
-                    const accountingId = String(row[idCol]).trim();
-                    const rawPrice = String(row[priceCol]).replace(/[^0-9.]/g, '');
-                    const unitPrice = parseFloat(rawPrice);
-                    const prodName = nameCol && row[nameCol] ? String(row[nameCol]).trim() : '';
+                parsedItems.forEach(item => {
+                    const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name);
+                    if (dbProduct) {
+                        matchedCount++;
+                        const costBasis = dbProduct.base_price || 0;
+                        const margin = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
+                        const ivaRate = dbProduct.iva_rate || 0;
+                        totalMargin += margin;
+                        subtotal += item.unit_price;
 
-                    if (accountingId && !isNaN(unitPrice) && unitPrice > 0) {
-                        parsedItems.push({
-                            accounting_id: accountingId,
-                            unit_price: unitPrice,
-                            product_name: prodName
+                        previewItems.push({
+                            accounting_id: dbProduct.accounting_id || item.accounting_id,
+                            product_name: dbProduct.name || item.product_name,
+                            unit_price: item.unit_price,
+                            matched_product: dbProduct,
+                            cost_basis: costBasis,
+                            margin_percent: margin,
+                            iva_rate: ivaRate,
+                            product_id: dbProduct.id
                         });
-
-                        const dbProduct = productMap[accountingId];
-                        if (dbProduct) {
-                            matchedCount++;
-                            const costBasis = dbProduct.base_price || 0;
-                            const margin = unitPrice > 0 ? Math.round(((unitPrice - costBasis) / unitPrice) * 10000) / 100 : 0;
-                            const ivaRate = dbProduct.iva_rate || 0;
-                            totalMargin += margin;
-                            subtotal += unitPrice;
-
-                            previewItems.push({
-                                accounting_id: accountingId,
-                                product_name: dbProduct.name,
-                                unit_price: unitPrice,
-                                matched_product: dbProduct,
-                                cost_basis: costBasis,
-                                margin_percent: margin,
-                                iva_rate: ivaRate,
-                                product_id: dbProduct.id
-                            });
-                        } else {
-                            unmatchedCount++;
-                            previewItems.push({
-                                accounting_id: accountingId,
-                                product_name: prodName || 'Producto no encontrado en catálogo',
-                                unit_price: unitPrice,
-                                matched_product: null,
-                                cost_basis: 0,
-                                margin_percent: 0,
-                                iva_rate: 0
-                            });
-                        }
+                    } else {
+                        unmatchedCount++;
+                        previewItems.push({
+                            accounting_id: item.accounting_id,
+                            product_name: item.product_name || 'Producto no encontrado en catálogo',
+                            unit_price: item.unit_price,
+                            matched_product: null,
+                            cost_basis: 0,
+                            margin_percent: 0,
+                            iva_rate: 0
+                        });
                     }
                 });
 
@@ -756,7 +925,7 @@ export default function CommercialAgreementsModule() {
                 showToast(`Excel procesado: ${matchedCount} productos cruzados con el catálogo`, 'success');
             } catch (err: any) {
                 console.error('Error parsing master excel:', err);
-                showToast('Error al leer Excel: ' + err.message, 'error');
+                showToast(err.message || 'Error al leer Excel', 'error');
             } finally {
                 setMasterParsing(false);
             }
@@ -993,39 +1162,8 @@ export default function CommercialAgreementsModule() {
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
                 
-                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
-                if (rawRows.length === 0) {
-                    throw new Error('El archivo está vacío');
-                }
+                const parsedItems = extractRowsFromExcelSheet(ws, XLSX);
                 
-                const headers = Object.keys(rawRows[0]);
-                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
-                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
-                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
-                
-                if (!idCol || !priceCol) {
-                    throw new Error('No se encontraron las columnas Código de producto y Precio acordado');
-                }
-                
-                const parsedItems: any[] = [];
-                rawRows.forEach((row) => {
-                    const idVal = String(row[idCol] || '').trim();
-                    const priceVal = parseFloat(String(row[priceCol] || '').replace(/[^0-9.-]/g, ''));
-                    const nameVal = nameCol ? String(row[nameCol] || '') : '';
-                    
-                    if (idVal && !isNaN(priceVal)) {
-                        parsedItems.push({
-                            accounting_id: idVal,
-                            unit_price: priceVal,
-                            product_name: nameVal
-                        });
-                    }
-                });
-                
-                if (parsedItems.length === 0) {
-                    throw new Error('No se encontraron filas válidas con Código y Precio');
-                }
-
                 // Query full database catalogue with pagination to pre-validate matches and margins in real time
                 const productMap = await fetchAllProductsMap();
 
@@ -1035,7 +1173,7 @@ export default function CommercialAgreementsModule() {
                 let totalSubtotal = 0;
 
                 const enrichedItems = parsedItems.map(item => {
-                    const matched = productMap[String(item.accounting_id).trim()];
+                    const matched = findProductInMap(productMap, item.accounting_id, item.product_name);
                     if (matched) {
                         matchCount++;
                         const costBasis = matched.base_price || 0;
@@ -1046,8 +1184,8 @@ export default function CommercialAgreementsModule() {
                         totalSubtotal += item.unit_price;
 
                         return {
-                            accounting_id: item.accounting_id,
-                            product_name: item.product_name || matched.name,
+                            accounting_id: matched.accounting_id || item.accounting_id,
+                            product_name: matched.name || item.product_name,
                             unit_price: item.unit_price,
                             matched_product: matched,
                             cost_basis: costBasis,
@@ -1082,7 +1220,7 @@ export default function CommercialAgreementsModule() {
                 showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
             } catch (err: any) {
                 console.error(err);
-                showToast('Error al leer Excel: ' + err.message, 'error');
+                showToast(err.message || 'Error al procesar archivo Excel', 'error');
                 setParsedFile(null);
                 setUploadedItems([]);
                 setExcelPreviewData(null);
@@ -1320,41 +1458,7 @@ export default function CommercialAgreementsModule() {
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
                 
-                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
-                if (rawRows.length === 0) {
-                    throw new Error('El archivo está vacío');
-                }
-                
-                const headers = Object.keys(rawRows[0]);
-                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
-                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
-                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
-                
-                if (!idCol || !priceCol) {
-                    throw new Error('No se encontraron las columnas Código de producto y Precio acordado');
-                }
-                
-                const parsedItems: any[] = [];
-                let rowCount = 0;
-                
-                rawRows.forEach((row) => {
-                    const idVal = String(row[idCol] || '').trim();
-                    const priceVal = parseFloat(String(row[priceCol] || '').replace(/[^0-9.-]/g, ''));
-                    const nameVal = nameCol ? String(row[nameCol] || '') : '';
-                    
-                    if (idVal && !isNaN(priceVal)) {
-                        parsedItems.push({
-                            accounting_id: idVal,
-                            unit_price: priceVal,
-                            product_name: nameVal
-                        });
-                        rowCount++;
-                    }
-                });
-                
-                if (parsedItems.length === 0) {
-                    throw new Error('No se encontraron filas válidas con Código y Precio');
-                }
+                const parsedItems = extractRowsFromExcelSheet(ws, XLSX);
 
                 // Real-time matching against full paginated products catalogue
                 const productMap = await fetchAllProductsMap();
@@ -1365,7 +1469,7 @@ export default function CommercialAgreementsModule() {
                 let totalSubtotal = 0;
 
                 const enrichedItems = parsedItems.map(item => {
-                    const matched = productMap[String(item.accounting_id).trim()];
+                    const matched = findProductInMap(productMap, item.accounting_id, item.product_name);
                     if (matched) {
                         matchCount++;
                         const costBasis = matched.base_price || 0;
@@ -1374,8 +1478,8 @@ export default function CommercialAgreementsModule() {
                         totalSubtotal += item.unit_price;
 
                         return {
-                            accounting_id: item.accounting_id,
-                            product_name: item.product_name || matched.name,
+                            accounting_id: matched.accounting_id || item.accounting_id,
+                            product_name: matched.name || item.product_name,
                             unit_price: item.unit_price,
                             matched_product: matched,
                             cost_basis: costBasis,
@@ -1410,7 +1514,7 @@ export default function CommercialAgreementsModule() {
                 showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
             } catch (err: any) {
                 console.error(err);
-                showToast('Error al leer Excel: ' + err.message, 'error');
+                showToast(err.message || 'Error al leer Excel', 'error');
                 setEditParsedFile(null);
                 setEditUploadedItems([]);
                 setEditExcelPreviewData(null);
@@ -1579,17 +1683,23 @@ export default function CommercialAgreementsModule() {
     const getAgreementStatus = (validUntil: string) => {
         if (!validUntil) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const };
         
-        const expiry = new Date(validUntil);
+        // Normalizar fecha de expiración para evitar desfases de huso horario
+        const cleanDateStr = String(validUntil).split('T')[0];
+        const parts = cleanDateStr.split('-').map(Number);
+        const expiry = parts.length === 3 && !parts.some(isNaN)
+            ? new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999)
+            : new Date(validUntil);
+
         const today = new Date();
-        today.setHours(0,0,0,0);
+        today.setHours(0, 0, 0, 0);
         
         const diffTime = expiry.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) {
             return { label: 'Vencido', color: '#DC2626', bgColor: '#FEF2F2', type: 'expired' as const, diffDays };
         } else if (diffDays <= 5) {
-            const label = diffDays === 0 ? 'Vence hoy' : diffDays === 1 ? 'Por vencer (1 día)' : `Por vencer (${diffDays} días)`;
+            const label = diffDays === 0 ? 'Por vencer (hoy)' : diffDays === 1 ? 'Por vencer (1 día)' : `Por vencer (${diffDays} días)`;
             return { label, color: '#92400E', bgColor: '#FEF3C7', type: 'warning' as const, diffDays };
         } else {
             return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const, diffDays };
@@ -1759,7 +1869,7 @@ export default function CommercialAgreementsModule() {
                             icon={<Clock size={18} strokeWidth={1.5} />} 
                             color="#FFF9E6" 
                             textColor="#D97706" 
-                            subtitle="Expira en menos de 15 días" 
+                            subtitle="Expira en 5 días o menos" 
                         />
                         <LocalKPICard 
                             title="Acuerdos Vencidos" 

@@ -1114,14 +1114,14 @@ export default function CommercialUnifiedDashboard({
                             linkText: 'Re-negociar',
                             amount: Number(q.total_amount || 0)
                         });
-                    } else if (diffDays <= 30) {
+                    } else if (diffDays <= 5) {
                         generatedAlerts.push({
                             id: `agree-expiring-${q.id}`,
                             type: 'agreement_expiring',
-                            severity: diffDays <= 7 ? 'critical' : 'warning',
-                            title: `Acuerdo #${q.quote_number} por Expirar`,
+                            severity: diffDays <= 2 ? 'critical' : 'warning',
+                            title: `Acuerdo #${q.quote_number} por Vencer (${diffDays === 1 ? '1 día' : `${diffDays} días`})`,
                             subtitle: q.client_name || 'Cliente sin nombre',
-                            dateInfo: `Vence en ${diffDays} días (${q.valid_until})`,
+                            dateInfo: `Vence en ${diffDays === 1 ? '1 día' : `${diffDays} días`} (${q.valid_until})`,
                             linkUrl: `/admin/commercial/quotes/${q.id}`,
                             linkText: 'Re-negociar',
                             amount: Number(q.total_amount || 0)

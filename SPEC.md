@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.0 (Módulo de Autenticación & Acceso: Recuperación Autónoma de Clave, Selector de Identidad Multi-Rol Colaborador/Cliente & Gobernanza de Idioma Español Canónico)  
+> **Versión:** 1.8.1 (Gobernanza de Acuerdos Comerciales: Alertas Predictivas de Vencimiento a 5 Días en Core de Clientes, Acuerdos y Dashboard Comercial)  
 > **Fecha:** 22 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Seguridad, Autenticación, Acceso Institucional B2B & Gobernanza ERP
+> **Área:** Comercial, CRM de Clientes, Acuerdos Comerciales & Gobernanza ERP
 
 ---
 
@@ -735,4 +735,50 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
   1. El sistema no lo redirige de golpe; despliega la tarjeta interactiva de selección de rol.
   2. Si elige *FruFresco Operaciones*, ingresa al ERP con acceso restringido a su módulo de inventarios.
   3. Si elige *Portal Institucional (Yina Cortes Amaya)*, ingresa al `/b2b/dashboard` viendo únicamente la cartera, pedidos y acuerdos de dicha sucursal.
+
+---
+
+## 11. Módulo Comercial: Gobernanza de Acuerdos Comerciales & Alertas de Vencimiento (SDD v1.8.1)
+
+### 11.1 Principios Rectores y Regla de Negocio de Alertas Preventivas
+
+1. **Umbral Preventivo Canónico de 5 Días:**
+   - Todo acuerdo comercial formalizado (`quotes.status = 'agreement'`) cuya fecha de vigencia (`quotes.valid_until`) reste **5 días o menos** para expirar entra automáticamente en estado de advertencia (`warning`).
+   - El objetivo operativo es conceder a la mesa comercial un margen proactivo de negociación para renovar o actualizar precios de contrato antes de que el acuerdo expire y bloquee o altere la rentabilidad de los pedidos D+1.
+
+2. **Formato Dinámico de la Alerta:**
+   - La alerta debe comunicar con precisión cuántos días exactos restan de vigencia, empleando un formato estándar y legible:
+     - Si $\text{diffDays} = 0$: `POR VENCER (HOY)` o `Vence hoy`.
+     - Si $\text{diffDays} = 1$: `POR VENCER (1 DÍA)` o `Por vencer (1 día)`.
+     - Si $2 \le \text{diffDays} \le 5$: `POR VENCER (n DÍAS)` o `Por vencer (n días)`.
+     - Si $\text{diffDays} < 0$: `ACUERDO VENCIDO` / `Vencido` (Badge crítico rojo).
+     - Si $\text{diffDays} > 5$: `ACUERDO ACTIVO` / `Vigente` (Badge verde institucional).
+
+3. **Normalización Cronológica Multi-Zona Horaria:**
+   - Para prevenir falsos vencimientos prematuros o desfasajes ocasionados por la interpretación UTC en servidores/navegadores locales (Colombia UTC-5), la fecha límite de vigencia se normaliza siempre a las **23:59:59 del día de expiración**.
+   - Ningún acuerdo se clasifica como vencido mientras transcurra el día calendario de su fecha de vencimiento.
+
+4. **Omnipresencia y Consistencia Transversal:**
+   - La regla de los 5 días aplica con idéntica lógica visual y de datos en:
+     - **Core de Clientes (`ClientsModule.tsx`):** Vista de tabla (`ACUERDO / GPS`) y vista de tarjetas de clientes (acuerdos propios y heredados).
+     - **Módulo de Acuerdos Institucionales (`CommercialAgreementsModule.tsx`):** Tarjetas KPI consolidadas (*Próximos a Vencer: Expira en 5 días o menos*) y badges de estado por contrato.
+     - **Dashboard Unificado Comercial (`CommercialUnifiedDashboard.tsx`):** Feed de alertas operativas automáticas para el equipo de ventas y dirección de cuentas.
+
+### 11.2 Criterios de Aceptación Gherkin
+
+#### Escenario 1: Acuerdo Comercial Faltando 5 Días para Expirar
+- **Given** un cliente corporativo que tiene un acuerdo comercial activo con `valid_until` fijado exactamente a 5 días del calendario actual.
+- **When** el equipo comercial consulta el Core de Clientes en `/admin/commercial?tab=clients`.
+- **Then**:
+  1. La columna `ACUERDO / GPS` muestra un badge ámbar preventivo con el texto exacto `POR VENCER (5 DÍAS)`.
+  2. En el panel de Acuerdos Comerciales, el KPI de *Próximos a Vencer* contabiliza dicho contrato.
+  3. En el Dashboard Comercial, se genera una alerta con título `Acuerdo #... por Vencer (5 días)`.
+
+#### Escenario 2: Acuerdo en su Último Día de Vigencia
+- **Given** un acuerdo cuya fecha `valid_until` coincide con la fecha de hoy.
+- **When** se evalúa el estado del acuerdo en cualquier vista comercial.
+- **Then**:
+  1. El estado no es `Vencido` sino `warning` con etiqueta `POR VENCER (HOY)` o `Vence hoy`.
+  2. El acuerdo transiciona a `ACUERDO VENCIDO` recién a las 00:00:00 del día siguiente.
+
 

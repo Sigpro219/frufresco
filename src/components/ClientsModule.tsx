@@ -639,10 +639,12 @@ export default function ClientsModule() {
             return { status: 'active', daysRemaining: null, validUntil: null, isInherited };
         }
 
-        const expiry = new Date(latest.valid_until);
-        expiry.setHours(23, 59, 59, 999);
+        // Normalización exacta YYYY-MM-DD sin desfasaje horario
+        const cleanDateStr = String(latest.valid_until).split('T')[0];
+        const [y, m, d] = cleanDateStr.split('-').map(Number);
+        const expiry = new Date(y, m - 1, d, 23, 59, 59, 999);
         const diffMs = expiry.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) {
             return { status: 'expired', daysRemaining: diffDays, validUntil: latest.valid_until, isInherited };
@@ -1872,8 +1874,8 @@ export default function ClientsModule() {
                         gap: '0.8rem', 
                         alignItems: 'center', 
                         marginBottom: '1.2rem',
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        backdropFilter: 'blur(12px)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        backdropFilter: 'blur(16px)',
                         padding: '0.65rem 1.2rem',
                         borderRadius: '20px',
                         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
@@ -2696,12 +2698,12 @@ export default function ClientsModule() {
                                         })()}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                            <thead style={{ position: 'sticky', top: '148px', zIndex: 40 }}>
+                                                <tr style={{ backgroundColor: '#F9FAFB' }}>
                                                     {/* IDENTIFICACIÓN / CLIENTE */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopLeftRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                             <span>IDENTIFICACIÓN / CLIENTE</span>
                                                             <button 
@@ -2743,10 +2745,10 @@ export default function ClientsModule() {
                                                             </div>
                                                         )}
                                                     </th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     
                                                     {/* UBICACIÓN */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>UBICACIÓN</span>
                                                             <button 
@@ -2784,10 +2786,10 @@ export default function ClientsModule() {
                                                         )}
                                                     </th>
 
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
 
                                                     {/* ESTADO CUENTA */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>ESTADO CUENTA</span>
                                                             <button 
@@ -2824,7 +2826,7 @@ export default function ClientsModule() {
                                                     </th>
 
                                                     {/* ACUERDO / GPS */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>ACUERDO / GPS</span>
                                                             <button 
@@ -2860,7 +2862,7 @@ export default function ClientsModule() {
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_expired'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_expired' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_expired' ? '#F1F5F9' : 'transparent' }}>
                                                                     🚫 Vencido
                                                                 </div>
-                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_inherited'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_inherited' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_inherited' ? '#F1F5F9' : 'transparent' }}>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_inherited'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_inherited' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_inherited' ? '#F1F5F9' : 'transparent', color: '#0369A1' }}>
                                                                     🏢 Heredado Matriz
                                                                 </div>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('agreement_none'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_none' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_none' ? '#F1F5F9' : 'transparent' }}>
@@ -2878,7 +2880,7 @@ export default function ClientsModule() {
                                                     </th>
 
                                                     {/* DEV (REVISADO) */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                             <span>DEV (REVISADO)</span>
                                                             <button 
@@ -2914,7 +2916,7 @@ export default function ClientsModule() {
                                                         )}
                                                     </th>
 
-                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopRightRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -3013,15 +3015,15 @@ export default function ClientsModule() {
                                         })()}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                            <thead style={{ position: 'sticky', top: '148px', zIndex: 40 }}>
+                                                <tr style={{ backgroundColor: '#F9FAFB' }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopLeftRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     
                                                     {/* DIRECCIÓN / UBICACIÓN */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>DIRECCIÓN</span>
                                                             <button 
@@ -3056,10 +3058,10 @@ export default function ClientsModule() {
                                                         )}
                                                     </th>
 
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
 
                                                     {/* ESTADO */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>ESTADO</span>
                                                             <button 
@@ -3096,7 +3098,7 @@ export default function ClientsModule() {
                                                     </th>
 
                                                     {/* DEV (REVISADO) */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                             <span>DEV (REVISADO)</span>
                                                             <button 
@@ -3132,7 +3134,7 @@ export default function ClientsModule() {
                                                         )}
                                                     </th>
 
-                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopRightRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -3220,15 +3222,15 @@ export default function ClientsModule() {
                                         })()}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                            <thead style={{ position: 'sticky', top: '148px', zIndex: 40 }}>
+                                                <tr style={{ backgroundColor: '#F9FAFB' }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopLeftRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     
                                                     {/* UBICACIÓN */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>UBICACIÓN</span>
                                                             <button 
@@ -3263,10 +3265,10 @@ export default function ClientsModule() {
                                                         )}
                                                     </th>
 
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
 
                                                     {/* ESTADO */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             <span>ESTADO</span>
                                                             <button 
@@ -3308,8 +3310,8 @@ export default function ClientsModule() {
                                                         )}
                                                     </th>
 
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
-                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
+                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopRightRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -5084,15 +5086,11 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                 dotColor = '#D97706';
                                 icon = <AlertTriangle size={11} color="#D97706" />;
                                 const daysText = agreementDaysRemaining !== null && agreementDaysRemaining !== undefined
-                                    ? (agreementDaysRemaining <= 0 ? 'VENCE HOY' : agreementDaysRemaining === 1 ? '1 DÍA' : `${agreementDaysRemaining} DÍAS`)
+                                    ? (agreementDaysRemaining <= 0 ? 'HOY' : agreementDaysRemaining === 1 ? '1 DÍA' : `${agreementDaysRemaining} DÍAS`)
                                     : '';
                                 text = isInheritedAgreement 
                                     ? (daysText ? `HEREDADO (${daysText})` : 'HEREDADO POR VENCER')
-                                    : (agreementDaysRemaining === 0 
-                                        ? 'VENCE HOY' 
-                                        : daysText 
-                                            ? `POR VENCER (${daysText})` 
-                                            : 'POR VENCER');
+                                    : `POR VENCER (${daysText})`;
                             } else if (agreementStatus === 'expired') {
                                 bg = '#FEF2F2';
                                 border = '#FCA5A5';
