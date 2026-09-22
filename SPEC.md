@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.4.0 (Módulo de Inventario: Balance de Masa 24 Col, Kardex & Células)  
-> **Fecha:** 21 de Septiembre, 2026  
-> **Estado:** ✅ Resuelto & Verificado en Código  
-> **Área:** Logística, Ventas & Operaciones (B2B / B2C)
+> **Versión:** 1.5.0 (Módulo de Inventario: Gobernanza de Cierre Diario, Tolerancia Cero, Células & Pipeline Ops)  
+> **Fecha:** 22 de Septiembre, 2026  
+> **Estado:** ✅ Resuelto & Verificado en Consenso Grill-Me  
+> **Área:** Logística, Ventas, Compras & Operaciones (B2B / B2C)
 
 ---
 
@@ -167,13 +167,17 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 ### 7.1 Misión & Principio Rector Comercial
 El Módulo Comercial de FruFresco gobierna la fijación estratégica de precios, la protección estricta del margen bruto operativo ante la volatilidad de Corabastos, la emisión de cotizaciones formales para prospectos/clientes y la congelación vinculante de tarifas mediante Acuerdos Comerciales auditables.
 
-### 7.2 Jerarquía Canónica de Precios (5 Niveles de Prevalencia)
+### 7.2 Jerarquía Canónica de Precios (6 Niveles de Prevalencia)
 Cuando el sistema consulta el precio de un producto para un cliente o sucursal, debe evaluar en estricto orden descendente:
 1. **Nivel 1 (Prevalencia Máxima - Acuerdo Sucursal):** Acuerdo Comercial Vigente (`quotes.status = 'agreement'`) asignado directamente a la sucursal (`client_id = sucursal.id`).
 2. **Nivel 2 (Acuerdo Matriz):** Acuerdo Comercial Vigente asignado a la empresa matriz (`client_id = sucursal.parent_id`).
-3. **Nivel 3 (Modelo Directo de Cliente):** Modelo de Precios asignado al perfil (`profiles.pricing_model_id`).
-4. **Nivel 4 (Modelo Heredado Matriz):** Modelo asignado a la matriz (`profiles.parent.pricing_model_id`), o en su defecto `General Institucional` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) si es cliente B2B.
-5. **Nivel 5 (Base Catálogo / B2C):** Lista `Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) reflejada en `products.base_price`.
+3. **Nivel 3 (Campañas Promocionales B2B):** Si el SKU no tiene precio congelado por acuerdo, aplican las campañas activas de precio fijo o ajuste porcentual (`commercial_campaigns`).
+4. **Nivel 4 (Modelo Directo de Cliente):** Modelo de Precios asignado al perfil (`profiles.pricing_model_id`).
+5. **Nivel 5 (Modelo Heredado Matriz):** Modelo asignado a la matriz (`profiles.parent.pricing_model_id`), o en su defecto `General Institucional` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) si es cliente B2B.
+6. **Nivel 6 (Base Catálogo / B2C):** Lista `Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) reflejada en `products.base_price`.
+
+> **Regla de Inmunidad Contractual de Acuerdos:**  
+> Los precios pactados bajo un Acuerdo Comercial formal representan un contrato vinculante. Por seguridad jurídica y protección del margen, **las Campañas Comerciales NUNCA alteran ni perforan los precios de productos que formen parte de un Acuerdo Comercial activo**. Las campañas solo modulan productos de catálogo o modelos no cobijados por dicho acuerdo.
 
 ### 7.3 Contratos Matemáticos Canónicos (Reglas Inmutables)
 
@@ -227,6 +231,34 @@ $$\text{Precio Redondeado} = \left\lceil \frac{\text{Precio Unitario Antes de IV
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de \$50 COP en el precio unitario antes de IVA y en variantes.
 - [x] **Tarea COM-3:** Asegurar que la acción de aceptación en `quotes/[id]/page.tsx` priorice la formalización canónica hacia Acuerdo Comercial (`status = 'agreement'`) y registre el log de auditoría correspondiente en `audit_logs`.
 - [x] **Tarea COM-4:** Verificar y blindar en `orders/create/page.tsx` y `EmailDraftsModule.tsx` la prevalencia estricta de Nivel 1 (Acuerdo Sucursal) sobre Nivel 2 (Acuerdo Matriz).
+- [x] **Tarea COM-5 (Brecha 1):** Sustituir IVA hardcodeado en `activate-agreement/route.ts` por cálculo dinámico por producto (`item.matched_product?.iva_rate`), desglose por ítem y trazabilidad en `audit_logs`.
+- [x] **Tarea COM-6 (Brecha 2):** Eliminar referencia a columna inexistente `target_price` en `commercial-parser-engine.ts` y aplicar la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - 0.20}$ con redondeo a \$50 COP.
+- [x] **Tarea COM-7 (Brecha 3):** Blindar la Inmunidad Contractual de Acuerdos: Las campañas comerciales modulan productos de catálogo libre, pero nunca perforan ítems pactados bajo acuerdo comercial activo.
+- [x] **Tarea COM-8 (Brecha 4):** Diferenciar visualmente los acuerdos de Sucursal (`🏢 Sucursal`) vs Matriz (`🏛️ Matriz`) en el panel de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`).
+- [x] **Tarea COM-9 (Brecha 5):** Formalizar el contrato operativo del módulo de Facturación Comercial, Cortes AM/PM/ADJ y Cartera en la Sección 7.7.
+- [x] **Tarea COM-10 (Brecha 6):** Conectar la acción por lotes en `cost-matrix/page.tsx` para autorizar costos del Motor Adaptativo (`calculateSmartCost` $\to$ `adaptivePricingEngine.ts`) con auditoría en `audit_logs`.
+
+### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
+
+#### A. Cortes Operativos de Despacho (`billing_cuts`)
+Para sincronizar la facturación con los despachos físicos de bodega, las remisiones y facturas se agrupan en **Cortes Operativos**:
+1. **Corte AM (04:00 - 08:00 AM):** Despachos principales matutinos para apertura de restaurantes, clínicas y casinos.
+2. **Corte PM (11:00 - 03:00 PM):** Segundo turno de entregas vespertinas y abastecimiento para turnos de cena.
+3. **Corte ADJ (Ajustes & Notas):** Corte especial para registrar devoluciones en ruta, diferencias de báscula post-despacho o refacturaciones.
+4. **Ciclo de Estados del Corte:**
+   $$\text{open} \longrightarrow \text{processing} \longrightarrow \text{closed} \longrightarrow \text{exported (ERP/DIAN)}$$
+
+#### B. Facturas y Remisiones (`invoices`)
+1. **Desglose Contable:** Cada factura se genera a partir de las cantidades reales despachadas (`picked_quantity`), desglosando base imponible (`total_base`), impuestos discriminados (`total_tax`) y total a cobrar (`total_final`).
+2. **Estados del Documento:** `pending` (generada) $\to$ `printed` (impresa con remisión de despacho) $\to$ `exported` (radicada en software contable) $\to$ `cancelled`.
+3. **Estados de Cartera:**
+   - `pending`: Documento vigente dentro de los días de crédito pactados (`payment_days`).
+   - `paid`: Pago total registrado y conciliado con extracto bancario o caja.
+   - `overdue`: Documento cuyo vencimiento (`due_date = created_at + payment_days`) ha caducado sin pago registrado.
+
+#### C. Control de Cupo de Crédito & Bloqueo Comercial
+1. Todo cliente institucional B2B posee un cupo máximo de crédito (`credit_limit`) y plazo en días (`payment_days`).
+2. Si la sumatoria de facturas pendientes supera el cupo de crédito asignado o existen documentos vencidos en mora (`status = 'overdue'`), el sistema bloquea automáticamente la aprobación de nuevos pedidos o exige autorización excepcional con registro estricto en `audit_logs`.
 
 ---
 
@@ -317,4 +349,53 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 | `cell_hortalizas` | Hortalizas | `sprout` | INVENTARIO DE HORTALIZAS | HORTALIZAS | **LEAL** |
 | `cell_papas` | Papas, Plátano, Tomate y Aguacates | `layers` | INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES | TUBERCULOS | **BAUTISTA** |
 
+---
 
+### 8.6 Contratos Operativos Gemba & Cierre Diario (Resolución Grill-Me)
+
+#### 1. Usabilidad & Navegación por Célula
+- **Colapso y Filtro de Células:** Para mitigar la sobrecarga visual de las 24 columnas, la Sábana Diaria debe permitir al auditor/supervisor expandir, colapsar o filtrar de manera exclusiva una Célula de Trabajo a la vez (ej. ver únicamente "cell_fresas" o "cell_hortalizas").
+
+#### 2. Protocolo de Cierre Diario y Congelación Contable
+- **Botón Manual de "Cierre Diario Oficial":** La jornada contable no se congela por cron ciego; requiere la ejecución explícita del botón de Cierre Diario por parte del Administrador o Supervisor de Operaciones.
+- **Congelación Estricta:** Al ejecutar el cierre, los registros de la fecha quedan en estado `locked` (congelados), bloqueando modificaciones retroactivas no auditadas salvo autorización de superadmin.
+- **Traslado Automático de Saldos:** El **Saldo Físico Final (Col T / Col U)** de la fecha cerrada se traslada automáticamente como **Saldo Inicial (Col E)** de la jornada siguiente ($D+1$).
+- **Trazabilidad:** Se registra en auditoría: `closed_at`, `closed_by_user_id`, `closed_by_name` y hash de verificación del balance de masa.
+
+#### 3. Política de Desvío en Auditoría Cíclica: Tolerancia Cero (0%)
+- Todo desvío entre el saldo teórico ($S$) y el conteo físico ciego ($T$) se computa y visibiliza de inmediato:
+  - Sin márgenes ocultos de tolerancia que disfracen pérdidas o mermas.
+  - Si $T < S \implies$ Registro transparente en **Faltante (Col V)**.
+  - Si $T > S \implies$ Registro transparente en **Sobrante (Col W)**.
+
+#### 4. Exportación a Excel (XLSX) de Grado Fiscal y Contable
+- La exportación debe respetar estrictamente la estructura de las 24 columnas canónicas (A a X), agrupadas por Célula de Trabajo.
+- Las columnas de balance y descuadre deben exportarse con **fórmulas nativas de Excel** (`=SUMA(...)`, `=E+F...`, etc.), acompañadas de una fila de totales matemáticos al pie para permitir la auditoría de revisoría fiscal y contabilidad.
+
+---
+
+### 8.7 Integración Inter-Módulos: Compras (`/ops`) ➔ Picking ➔ Inventario (Sábana Diaria)
+
+```
+       [SUBMÓDULO DE COMPRAS /ops/purchases]
+                         │
+      Comprador detecta que producto no existe en mercado
+      Declara: "NO LO HAY" (Status: 'shortage')
+                         │
+        ┌────────────────┴────────────────┐
+        ▼                                 ▼
+ [MÓDULO OPS / PICKING]         [PLANILLA SÁBANA INVENTARIO]
+ Flag visual de escasez         Se consigna en COLUMNA K
+ Despachador ajusta remisión    (Producto Escaso)
+ con picked_quantity real       Equilibra el balance de masa:
+ Cliente solo paga lo pesado    S = E + F + G - H - J - K...
+```
+
+1. **Génesis de la Escasez en Compras:**
+   - La escasez física no se inventa en bodega ni en la sábana; se origina en el **Submódulo de Compras de `/ops`**.
+   - Cuando el comprador en central de abastos o proveedor reporta que el SKU está agotado (*"No lo hay"*), marca el estado oficial de escasez.
+2. **Propagación a Operaciones (`/ops`):**
+   - El estado de escasez se refleja inmediatamente en las listas de picking y alistamiento de pedidos, alertando a los operarios de báscula.
+   - El operario liquida el pedido con la cantidad real empacada (`picked_quantity`), ajustando la remisión para que el cliente no pague faltantes.
+3. **Imputación Directa en la Sábana:**
+   - La cantidad no suministrada por falta de producto se consolida automáticamente en la **Columna K (Producto Escaso)** de la Sábana Diaria de Inventario, garantizando que el inventario teórico ($S$) no descuente ventas ficticias ni genere faltantes falsos en bodega.
