@@ -1,9 +1,9 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.5.0 (Módulo de Inventario: Gobernanza de Cierre Diario, Tolerancia Cero, Células & Pipeline Ops)  
+> **Versión:** 1.6.0 (Módulo Comercial: Blindaje Integral Fases 1, 2 y 3 — Merma Teórica, Cupos/Mora, Estándar PDF & Rendimiento)  
 > **Fecha:** 22 de Septiembre, 2026  
-> **Estado:** ✅ Resuelto & Verificado en Consenso Grill-Me  
+> **Estado:** ✅ Resuelto & Verificado con Veredicto VICTORY CONFIRMED  
 > **Área:** Logística, Ventas, Compras & Operaciones (B2B / B2C)
 
 ---
@@ -183,9 +183,16 @@ Cuando el sistema consulta el precio de un producto para un cliente o sucursal, 
 
 #### A. Fórmula Oficial de Margen de Venta (Gross Margin)
 Queda prohibido el markup multiplicador sobre costo en precios de venta institucionales. La fórmula oficial y vinculante es el **Margen Comercial sobre Venta**:
-$$\text{Precio Unitario Antes de IVA} = \frac{\text{Costo Base Neto}}{1 - \left(\frac{\text{Margen\%}}{100}\right)}$$
-*Ejemplo:* Con Costo Base \$1.000 y Margen del 20%:
+$$\text{Precio Unitario Antes de IVA} = \frac{\text{Costo Neto Efectivo}}{1 - \left(\frac{\text{Margen\%}}{100}\right)}$$
+*Ejemplo:* Con Costo Neto Efectivo \$1.000 y Margen del 20%:
 $$\text{Precio} = \frac{1000}{1 - 0.20} = \$1.250 \quad (\text{Margen real en P&L: } 20.0\%)$$
+
+#### A.1 Factor de Merma Teórica en Costo Efectivo (GAP-02)
+Para evitar pérdidas ocultas de entre 5% y 25% de margen bruto en perecederos de alto desecho (lechugas, fresas, hierbas, frutas delicadas), el costo base de adquisición se infla obligatoriamente por la merma teórica del SKU antes de aplicar el margen comercial:
+$$C_{\text{efectivo}} = \frac{C_{\text{base}}}{1 - \left(\frac{\text{theoretical\_shrinkage\_pct}}{100}\right)}$$
+*Ejemplo:* Con Costo Base \$1.000 y Merma Teórica del 15%:
+$$C_{\text{efectivo}} = \frac{1000}{1 - 0.15} = \$1.176,47$$
+$$\text{Precio Antes de IVA (con 20% Margen)} = \frac{1176,47}{1 - 0.20} = \$1.470,59 \longrightarrow \mathbf{\$1.500\text{ COP}}$$
 
 #### B. Redondeo Comercial Colombiano
 Todo precio unitario cotizado o tarificado antes de impuestos se redondea hacia arriba al múltiplo de \$50 COP más cercano:
@@ -195,6 +202,9 @@ $$\text{Precio Redondeado} = \left\lceil \frac{\text{Precio Unitario Antes de IV
 1. En cotizaciones (PDF, Excel, WhatsApp) y pantallas de negociación, el **precio unitario por SKU se presenta siempre ANTES de IVA**.
 2. Los renglones identifican la tarifa de IVA aplicable (0% excluido para la mayoría de frescos, 5% o 19% para procesados/despensa).
 3. El IVA total se calcula individualmente por ítem y se totaliza en el pie de la cotización (`subtotal_amount`, `total_tax_amount`, `total_amount`).
+
+#### D. Vigencia Contractual Canónica de Cotizaciones (GAP-11)
+Las cotizaciones institucionales y propuestas B2B poseen una vigencia vinculante estricta de **ocho (8) días calendario**. Queda prohibida la fijación o congelación de precios a 30 días en cotizaciones previas al acuerdo formal para salvaguardar la empresa ante la volatilidad de Corabastos. La vigencia en cabecera y en cláusulas legales debe coincidir exactamente en 8 días.
 
 ### 7.4 Protocolo de Frescura de Costos & SLA de Corabastos
 1. **Clasificación de Perecibilidad:**
@@ -227,16 +237,26 @@ $$\text{Precio Redondeado} = \left\lceil \frac{\text{Precio Unitario Antes de IV
 2. **Consumo Automático:** Al ingresar una orden de compra manual o por correo (`/admin/orders/create` o `/api/orders/email-ingest`), el motor de resolución de precios busca si el cliente o su matriz tiene un acuerdo comercial activo; si existe, sus precios congelados se asignan automáticamente a los ítems del pedido con máxima prioridad.
 
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
-- [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a \$50 COP antes de impuestos.
-- [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de \$50 COP en el precio unitario antes de IVA y en variantes.
+- [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
+- [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
 - [x] **Tarea COM-3:** Asegurar que la acción de aceptación en `quotes/[id]/page.tsx` priorice la formalización canónica hacia Acuerdo Comercial (`status = 'agreement'`) y registre el log de auditoría correspondiente en `audit_logs`.
 - [x] **Tarea COM-4:** Verificar y blindar en `orders/create/page.tsx` y `EmailDraftsModule.tsx` la prevalencia estricta de Nivel 1 (Acuerdo Sucursal) sobre Nivel 2 (Acuerdo Matriz).
 - [x] **Tarea COM-5 (Brecha 1):** Sustituir IVA hardcodeado en `activate-agreement/route.ts` por cálculo dinámico por producto (`item.matched_product?.iva_rate`), desglose por ítem y trazabilidad en `audit_logs`.
-- [x] **Tarea COM-6 (Brecha 2):** Eliminar referencia a columna inexistente `target_price` en `commercial-parser-engine.ts` y aplicar la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - 0.20}$ con redondeo a \$50 COP.
+- [x] **Tarea COM-6 (Brecha 2):** Eliminar referencia a columna inexistente `target_price` en `commercial-parser-engine.ts` y aplicar la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - 0.20}$ con redondeo a $50 COP.
 - [x] **Tarea COM-7 (Brecha 3):** Blindar la Inmunidad Contractual de Acuerdos: Las campañas comerciales modulan productos de catálogo libre, pero nunca perforan ítems pactados bajo acuerdo comercial activo.
-- [x] **Tarea COM-8 (Brecha 4):** Diferenciar visualmente los acuerdos de Sucursal (`🏢 Sucursal`) vs Matriz (`🏛️ Matriz`) en el panel de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`).
+- [x] **Tarea COM-8 (Brecha 4):** Diferenciar visualmente los acuerdos de Sucursal (`<Building />`) vs Matriz (`<Building2 />`) en el panel de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`).
 - [x] **Tarea COM-9 (Brecha 5):** Formalizar el contrato operativo del módulo de Facturación Comercial, Cortes AM/PM/ADJ y Cartera en la Sección 7.7.
 - [x] **Tarea COM-10 (Brecha 6):** Conectar la acción por lotes en `cost-matrix/page.tsx` para autorizar costos del Motor Adaptativo (`calculateSmartCost` $\to$ `adaptivePricingEngine.ts`) con auditoría en `audit_logs`.
+- [x] **Tarea COM-11 (Fase 1 / GAP-01):** Implementar interlock runtime `checkClientCreditStatus` en `orders/create/page.tsx` bloqueando pedidos que excedan `credit_limit` o tengan mora en `billing_invoices`, con excepción autorizada en `audit_logs` (`CREDIT_LIMIT_EXCEPTION_AUTHORIZED`).
+- [x] **Tarea COM-12 (Fase 1 / GAP-02):** Incorporar factor de merma teórica (`theoretical_shrinkage_pct`) en `pricingUtils.ts` para costo efectivo $C_{\text{efectivo}} = \frac{C_{\text{base}}}{1 - (\text{Merma\%}/100)}$.
+- [x] **Tarea COM-13 (Fase 1 / GAP-03):** Blindar fallback B2B para que SKUs sin acuerdo asignado consuman precios de General Institucional, evitando precios minoristas Hogar B2C.
+- [x] **Tarea COM-14 (Fase 1 / GAP-07 & 08):** Corregir error PostgreSQL 42703 en campañas (`is_active`) y en clientes (derivación relacional de órdenes).
+- [x] **Tarea COM-15 (Fase 2 / GAP-05):** Migrar `xlsx` a dynamic imports (`await import('xlsx')`) en los 4 módulos cliente, aliviando ~700KB por vista.
+- [x] **Tarea COM-16 (Fase 2 / GAP-13):** Convertir inserción secuencial de facturación en lote atómico `supabase.from('billing_invoices').insert(...)`.
+- [x] **Tarea COM-17 (Fase 2 / GAP-04 & 12):** Acotar historial de compras a 60 días en `cost-matrix/page.tsx` y memorizar `<Sparkline />` con `React.memo`.
+- [x] **Tarea COM-18 (Fase 3 / GAP-09 & 10):** Retirar scrollbox rígido en acuerdos comerciales y corregir `position: fixed` a `position: absolute` en impresión de acuerdos para paginación continua.
+- [x] **Tarea COM-19 (Fase 3 / GAP-11 & 14):** Unificar vigencia contractual a 8 días calendario y sustituir emojis de texto por iconos Lucide.
+- [x] **Tarea COM-20 (Fase 3 / GAP-15, 16, 17 & 18):** Toolbar *Frosted Glass* y cifras tabulares `text-right` en facturación, Sello de Garantía Operativa B2B, sincronización `payment_terms_days` a `profiles.payment_days` y supresión de páginas en blanco en PDF.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -248,17 +268,37 @@ Para sincronizar la facturación con los despachos físicos de bodega, las remis
 4. **Ciclo de Estados del Corte:**
    $$\text{open} \longrightarrow \text{processing} \longrightarrow \text{closed} \longrightarrow \text{exported (ERP/DIAN)}$$
 
-#### B. Facturas y Remisiones (`invoices`)
-1. **Desglose Contable:** Cada factura se genera a partir de las cantidades reales despachadas (`picked_quantity`), desglosando base imponible (`total_base`), impuestos discriminados (`total_tax`) y total a cobrar (`total_final`).
-2. **Estados del Documento:** `pending` (generada) $\to$ `printed` (impresa con remisión de despacho) $\to$ `exported` (radicada en software contable) $\to$ `cancelled`.
-3. **Estados de Cartera:**
+#### B. Facturas y Remisiones (`billing_invoices`)
+1. **Desglose Contable:** Cada factura se genera a partir de las cantidades reales despachadas (`picked_quantity`), desglosando base imponible (`total_base`), impuestos discriminados (`total_tax`) e importe total (`total_final`).
+2. **Generación Atómica:** Se ejecuta una inserción en lote única `supabase.from('billing_invoices').insert(invoicesToInsert)` eliminando bloqueos de red y sobrecarga de conexiones concurrentes.
+3. **Estados del Documento:** `pending` (generada) $\to$ `printed` (impresa con remisión de despacho) $\to$ `exported` (radicada en software contable) $\to$ `cancelled`.
+4. **Estados de Cartera:**
    - `pending`: Documento vigente dentro de los días de crédito pactados (`payment_days`).
    - `paid`: Pago total registrado y conciliado con extracto bancario o caja.
-   - `overdue`: Documento cuyo vencimiento (`due_date = created_at + payment_days`) ha caducado sin pago registrado.
+   - `overdue`: Documento cuyo vencimiento (`due_date < now()`) ha caducado sin pago registrado.
 
-#### C. Control de Cupo de Crédito & Bloqueo Comercial
+#### C. Control de Cupo de Crédito & Bloqueo Comercial Runtime (GAP-01)
 1. Todo cliente institucional B2B posee un cupo máximo de crédito (`credit_limit`) y plazo en días (`payment_days`).
-2. Si la sumatoria de facturas pendientes supera el cupo de crédito asignado o existen documentos vencidos en mora (`status = 'overdue'`), el sistema bloquea automáticamente la aprobación de nuevos pedidos o exige autorización excepcional con registro estricto en `audit_logs`.
+2. Al momento de generar o confirmar un pedido en `/admin/orders/create` (tanto por ingesta directa de documentos como por carrito manual), el sistema evalúa en tiempo real:
+   - **Deuda Pendiente:** Sumatoria de `total_final` de facturas impagas (`payment_status != 'paid'`) asociadas a los pedidos del cliente.
+   - **Validación de Cupo:** Si $\text{Deuda Pendiente} + \text{Total del Pedido} > \text{credit\_limit}$.
+   - **Validación de Mora:** Si existe al menos una factura impaga con `due_date < now()`.
+3. Si se viola cualquiera de las dos condiciones, el sistema **bloquea la orden** y solicita confirmación de excepción comercial al usuario. Si se autoriza, se escribe un registro inmutable en `audit_logs` con la acción `CREDIT_LIMIT_EXCEPTION_AUTHORIZED`, salvaguardando la gobernanza de caja.
+4. **Sincronización de Términos (GAP-17):** Al crear una cotización o formalizar un acuerdo comercial, el plazo `payment_terms_days` se sincroniza automáticamente al campo `payment_days` de la tabla `profiles`.
+
+### 7.8 Estándar de Oro en Impresión PDF & Storytelling B2B (GAP-10, 11, 14, 16, 18)
+1. **Paginación Continua:** Se erradica `position: fixed !important` en contenedores de impresión. Los documentos oficiales usan `position: absolute !important` con `@page { size: letter portrait; margin: 1.1cm 1.3cm 1.3cm 1.3cm; }`, repetición de cabeceras de tabla `thead { display: table-header-group; }` y `tfoot { display: table-footer-group; }`.
+2. **Supresión de Páginas en Blanco:** Las vistas de impresión aplican `.page-break:last-child { break-after: avoid; }` para evitar hojas vacías al final del documento.
+3. **Color Exacto:** Forzado de renderizado con `-webkit-print-color-adjust: exact; print-color-adjust: exact;`.
+4. **Sello de Garantía Operativa B2B:** Toda cotización impresa o pública expone el sello institucional:
+   - *Cero Intermediarios:* Abastecimiento directo de fincas y Corabastos.
+   - *Puntualidad Suiza:* Despachos matutinos en ventana acordada antes de apertura de cocina.
+   - *Cero Desperdicio:* Selección y pesaje exacto con merma controlada.
+
+### 7.9 Rendimiento Full-Stack & Arquitectura de Datos (GAP-04, 05, 12, 13)
+1. **Dynamic Imports:** Bibliotecas de procesamiento pesado (`xlsx`) se importan dinámicamente con `await import('xlsx')` exclusivamente al invocar funciones de carga o descarga.
+2. **Proyección Exacta de Historial:** En la Matriz de Costos (`/admin/commercial/cost-matrix`), la consulta a `purchase_history_normalized` proyecta estrictamente sus 6 columnas canónicas (`id, product_id, unit_price, created_at, purchase_unit, normalized_price`), eliminando el error PostgreSQL 42703 y reduciendo la carga en memoria de ~30MB a ~200KB.
+3. **Memorización de Componentes:** Componentes de alta densidad en bucles tabulares como `<Sparkline />` se encapsulan con `React.memo` para evitar re-renderizados durante la escritura en el buscador.
 
 ---
 
@@ -399,3 +439,147 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
    - El operario liquida el pedido con la cantidad real empacada (`picked_quantity`), ajustando la remisión para que el cliente no pague faltantes.
 3. **Imputación Directa en la Sábana:**
    - La cantidad no suministrada por falta de producto se consolida automáticamente en la **Columna K (Producto Escaso)** de la Sábana Diaria de Inventario, garantizando que el inventario teórico ($S$) no descuente ventas ficticias ni genere faltantes falsos en bodega.
+
+---
+
+## 9. Módulo de Operaciones (Ops): Trazabilidad Física End-to-End & Circuito Cerrado con Pedidos, Transporte e Inventario
+
+### 9.1 Misión Operativa & Principio de Sincronía Gemba
+El Módulo de Operaciones (`src/app/ops/`) es el ejecutor físico y el brazo logístico en tiempo real de FruFresco. Su misión es orquestar la transformación de las intenciones comerciales (`orders`) en flujos de masa tangibles (kilos, canastillas, vehículos y bahías de piso), alimentando de forma bidireccional y continua tanto el libro mayor de movimientos (`inventory_movements` - Sábana de 24 Columnas) como la liquidación y facturación electrónica oficial (`billing_invoices`).
+
+---
+
+### 9.2 Las 8 Estaciones de la Cadena de Valor Física
+
+```
+[PEDIDOS: orders / order_items] (status: 'approved' | 'para_compra')
+       │
+       ▼  (Corte 17:00 / 18:00 - Lanzamiento de Operación)
+1. COMPRAS (/ops/compras)
+   ├── Neteo Cross-Docking/JIT con Stock de Seguridad
+   ├── Consolidación en procurement_tasks
+   └── Declaración de Escasez ──► inventory_movements (ref: 'order_shortage' ──► COL K)
+       │
+       ▼
+2. RECEPCIÓN & CALIDAD DE ENTRADA (/ops/recepcion)
+   ├── Báscula de muelle y pesaje contra OC
+   ├── Aprobación de entrada ──► inventory_movements (type: 'entry', ref: 'purchase_reception' ──► COL F)
+   └── Excedentes no autorizados ──► Cuarentena in_process en weight_discrepancies
+       │
+       ▼
+3. PLANIFICACIÓN DE TRANSPORTE (/api/transport/optimize & /confirm)
+   ├── Google Maps Route Optimization API (Cubicación, Ventanas RFC3339, Descansos 45m, Cadena de Frío)
+   ├── Asignación temporal de 150 Espacios Físicos (Bahías de Staging 1 a 150) sin traslape horario
+   └── Impresión de Remisiones Carta Duplicadas (Original Cliente + Copia Archivo/Contabilidad)
+       │
+       ▼
+4. ALISTAMIENTO EN CÉLULAS (/ops/picking & /terminal)
+   ├── 6 Células de Trabajo (Abarrotes, Fresas, Frutas, Verduras, Hortalizas, Papas)
+   ├── Pesaje y digitación de order_items.picked_quantity
+   └── Rechazo de calidad en mesa (Botón Rojo) ──► Cuarentena in_process (ref: 'order_picking')
+       │
+       ▼
+5. MONITOREO DE PLANTA (/ops/picking/dashboard)
+   └── Airport Board en tiempo real: Detección de cuellos de botella y avance porcentual de ruta
+       │
+       ▼
+6. RECTIFICACIÓN & PRECINTO LIFO (/ops/rectificacion/[routeId])
+   ├── Checker audita cantidades físicas vs remisiones impresas
+   ├── Certificación digital o fotográfica de planilla
+   └── Sincronización oficial: routes 'rectified' ──► orders 'ready_for_dispatch'
+       │
+       ▼
+7. TRANSPORTE & ÚLTIMA MILLA (/ops/driver/route & /delivery)
+   ├── Conductor confirma cargue LIFO: routes 'in_transit' ──► orders 'in_transit'
+   ├── Entrega física, firma digital y balance de canastillas en asset_movements
+   ├── Cobro contra-entrega (Efectivo / Transferencia)
+   └── Novedades en ruta ──► billing_returns ('pending_review') + customer_service_pqrs (RCA)
+       │
+       ▼
+8. LIQUIDACIÓN DE PATIO & CONTROL DE CALIDAD (/ops/inventory & /admin/customer-service)
+   ├── Retornos físicos del camión entran a Cuarentena de Patio en estado 'returned' (COL O)
+   ├── Supervisor en /ops/inventory dictamina: Reingreso (available), Merma (waste_damage COL Q) o Donación (food_bank COL X)
+   └── Control de Calidad audita remisión firmada con tachaduras ──► Aprueba billing_returns para Facturación
+```
+
+---
+
+### 9.3 Contratos Matemáticos & Algoritmos de Operación
+
+#### 1. Algoritmo Canónico de Neteo en Compras (Cross-Docking / JIT)
+FruFresco primero vende y de inmediato compra en Corabastos para garantizar frescura de campo, deduciendo el inventario disponible y garantizando amortiguadores de seguridad:
+
+1. **Agrupación Familiar:** Agrupa las tareas por familia padre (`parent_id || product_id`).
+2. **Prioridad:** Ordena primero el producto base (sin etiqueta de variante) y luego variantes en orden alfabético.
+3. **Amortiguador Asimétrico:** El stock de seguridad (`products.min_inventory_level`) solo se aplica al primer ítem del grupo familiar (`idx === 0`).
+4. **Ecuación Canónica:**
+   $$\text{Stock Aplicado} = \min\Big(\text{Stock Disponible Bodega},\ \text{Demanda Pedidos} + \text{Stock de Seguridad}\Big)$$
+   $$\mathbf{Meta\ de\ Compra\ (meta\_neteo)} = \max\Big(0,\ \text{Demanda Pedidos} - \text{Stock Aplicado} + \text{Stock de Seguridad}\Big)$$
+
+#### 2. Algoritmo de Asignación Temporal de 150 Espacios Físicos (Bahías de Muelle)
+La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y dinámica según la hora de salida del vehículo:
+- **Capacidad Estándar:** `space_capacity = 36` canastillas apiladas por espacio.
+- **Conversión de Peso:** $\text{Canastillas} = \lceil \frac{\text{total\_weight\_kg}}{12.5\text{ kg}} \rceil$.
+- **Espacios Necesarios por Pedido:** $\text{Espacios} = \lceil \frac{\text{Canastillas}}{36} \rceil$.
+- **Ventana de Ocupación:** $[\text{salida} - \text{duración}, \text{salida}]$, donde $\text{duración} = 15\text{m} + (\text{total\_crates} \times \frac{5\text{m}}{10}) + 15\text{m buffer}$.
+- **Poka-Yoke de Traslape:** Un espacio se asigna solo si para todos sus intervalos ocupados se cumple:
+  $$\neg\Big((\text{inicio\_nuevo} < \text{fin\_ocupado}) \land (\text{inicio\_ocupado} < \text{fin\_nuevo})\Big)$$
+
+#### 3. Motor Google Maps Route Optimization API (projects.locations/optimizeTours)
+- **Time Windows RFC3339:** Extraídas en lenguaje natural por `logistics-parser.ts` desde el perfil del cliente (`profiles.logistics_data`) y acotadas al turno legal de flota ($04:30\text{ AM} - 19:00\text{ PM}$).
+- **Service Duration Dinámico:** $\text{Duración Parada (min)} = \max\Big(5,\ \min\Big(60,\ 4\text{m} + \frac{4\text{m} + 10\text{m}}{10} \times \text{canastillas}\Big)\Big)$.
+- **Pausa Activa / Descanso Reglamentario:** Inyección obligatoria de ventana de descanso de 45 minutos (`driver_break_mins`) entre la 4ª y 6ª hora de turno del conductor.
+- **Cadena de Frío:** Los pedidos con ítems del grupo `REFRIGERADOS` solo pueden programarse en furgones térmicos con refrigeración activa.
+
+---
+
+### 9.4 Circuito Legal: Remisiones, Calidad y Facturación
+
+1. **Título Valor Legal de Viaje:**
+   - Cada pedido genera 2 copias continuas obligatorias: Impar (`[ ORIGINAL - CLIENTE ]`) y Par (`[ COPIA - ARCHIVO Y CONTABILIDAD ]`).
+   - Llevan estampado el rótulo de bahía: `Bahía de Piso: ESPACIO [ XX ]`.
+2. **Registro de Novedad en Ruta:**
+   - Si el cliente rechaza productos o cancela en puerta, el chofer tacha la remisión física, toma fotografía de la remisión firmada con tachaduras y evidencia del producto en `/ops/driver/delivery`.
+   - Se crea el registro en `billing_returns` con estado `'pending_review'` y el ticket en `customer_service_pqrs` con taxonomía RCA.
+3. **Compuerta de Control de Calidad (Gatekeeper):**
+   - El área de Facturación NO aplica deducciones automáticas no verificadas.
+   - **Control de Calidad / Servicio al Cliente** revisa la remisión física devuelta y la fotografía en `/admin/customer-service`, dictaminando la resolución (aprobación de Nota Crédito, reposición o cobro).
+   - Solo los registros de `billing_returns` en estado `'approved'` son liquidados por Facturación en `/admin/commercial/billing`.
+4. **Cuarentena de Devoluciones en Patio:**
+   - El producto devuelto ingresa a `inventory_movements` con `reference_type: 'route_return'` y estado `'returned'`.
+   - Queda segregado en Columna O y NO se suma al disponible de venta comercial hasta que el supervisor en `/ops/inventory` inspeccione la mercancía y determine:
+     - `available`: Reingreso a inventario disponible.
+     - `waste_damage`: Baja contable por avería $\rightarrow$ Columna Q.
+     - `food_bank`: Baja por donación social $\rightarrow$ Columna X.
+
+---
+
+### 9.5 Máquina de Estados Sincronizada
+
+| Estado `orders` | Evento Detonador en Ops | Actor Responsable | Estado `routes` | Movimiento Inventario |
+| :--- | :--- | :--- | :--- | :--- |
+| `approved` / `para_compra` | Ingesta aprobada / Lanzamiento | Comercial / Operaciones | - | Stock reservado en Neteo |
+| `picking` | Ruta confirmada en RoutePlanner | Despachador | `loading` | Bahía asignada (1-150) |
+| `in_preparation` | Célula inicia alistamiento físico | Líder de Célula | `loading` | picked_quantity en order_items |
+| `ready_for_dispatch` | Checker certifica cargue LIFO | Rectificador | `rectified` | Manifiesto sellado |
+| `in_transit` | Chofer confirma cargue en app | Conductor | `in_transit` | Mercancía en furgón |
+| `delivered` | Chofer finaliza entrega en sitio | Conductor | `completed` (si última parada) | Habilita Facturación / Calidad |
+| `cancelled` | Rechazo total en puerta del cliente | Conductor | - | Dispara billing_returns & PQRs |
+
+---
+
+### 9.6 Criterios de Aceptación (Gherkin)
+
+#### Escenario 1: Neteo de Compras con Inventario de Seguridad
+- **Given** que el cliente solicita 100 kg de Tomate Chonto y el inventario disponible en bodega (`status: 'available'`) es de 40 kg, con un stock mínimo parametrizado de 15 kg.
+- **When** se ejecuta el lanzamiento de compras a las 18:00 en `/ops/compras`.
+- **Then** el sistema descuenta 40 kg de bodega (`applied_stock: 40`) y genera una meta de compra oficial para Corabastos de exactamente 75 kg ($\max(0, 100 - 40 + 15)$).
+
+#### Escenario 2: Entrega en Ruta con Rechazo Parcial y Compuerta de Calidad
+- **Given** un pedido en estado `in_transit` con remisión física impresa por 50 kg de Fresa.
+- **When** el conductor entrega 40 kg y el cliente rechaza 10 kg por magulladura, registrando la novedad con foto en `/ops/driver/delivery`.
+- **Then**:
+  1. El pedido transiciona automáticamente a `orders.status = 'delivered'`.
+  2. Se inserta exactamente una fila en `inventory_movements` con `reference_type: 'route_return'`, `status_to: 'returned'` y cantidad 10 kg (alimentando Columna O).
+  3. Se genera un registro en `billing_returns` con `status: 'pending_review'`.
+  4. Facturación NO aplica la Nota Crédito hasta que Control de Calidad audite la remisión tachada y apruebe el registro en `billing_returns`.

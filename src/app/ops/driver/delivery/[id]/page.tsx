@@ -248,7 +248,7 @@ export default function DeliveryConfirmationPage() {
             setEvidenceUrl(publicUrl);
         } catch (err) {
             console.error('Error uploading photo:', err);
-            alert('Error al subir foto: ' + (err instanceof Error ? err.message : 'Verifica conexión o permisos del bucket.'));
+            (window as any).showToast?.('Error al subir foto: ' + (err instanceof Error ? err.message : 'Verifica conexión o permisos del bucket.'), 'error');
         } finally {
             setSaving(false);
         }
@@ -281,12 +281,24 @@ export default function DeliveryConfirmationPage() {
                 ? collectedMethod 
                 : 'none';
 
+            const targetOrderStatus = isTotalCancellation ? 'cancelled' : 'delivered';
+
             await supabase.from('route_stops').update({
                 status: isTotalCancellation ? 'failed' : 'delivered',
                 completion_time: new Date().toISOString(),
                 collected_amount: finalCollectedAmount,
                 collected_method: finalCollectedMethod
             }).eq('id', id);
+
+            if (stop?.orders?.id) {
+                const { error: orderStatusErr } = await supabase
+                    .from('orders')
+                    .update({ status: targetOrderStatus })
+                    .eq('id', stop.orders.id);
+                if (orderStatusErr) {
+                    console.error('Error updating order status on delivery:', orderStatusErr);
+                }
+            }
 
             // Check if this was the last pending stop on this route to complete the route
             const { data: remainingStops } = await supabase
@@ -475,55 +487,24 @@ export default function DeliveryConfirmationPage() {
                 }
             }
 
-            // 3. Inventory Integration (Returns)
-            const returns = items.filter(i => i.returned_qty > 0 || isTotalCancellation);
-            if (returns.length > 0) {
-                const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
-                if (warehouseData) {
-                    const movementPromises = returns.map(async (item) => {
-                        const qtyToReturn = isTotalCancellation ? item.picked_quantity : item.returned_qty;
-                        const movementPayload: any = {
-                            product_id: item.product_id,
-                            warehouse_id: warehouseData.id,
-                            quantity: qtyToReturn,
-                            type: 'adjustment',
-                            status_to: 'returned',
-                            notes: `Devolución en entrega: ${novedadReason || 'Novedad parcial'}`,
-                            reference_type: 'delivery_return',
-                            reference_id: id as string,
-                        };
-                        const photo = item.return_evidence_url || evidenceUrl;
-                        if (photo) {
-                            movementPayload.evidence_url = photo;
-                        }
-                        const { error: movErr } = await supabase.from('inventory_movements').insert([movementPayload]);
-                        if (movErr && (movErr.message?.includes('evidence_url') || movErr.code === '42703')) {
-                            // Si la columna evidence_url no existe en la BD, respaldar URL en notes e insertar limpiamente
-                            delete movementPayload.evidence_url;
-                            if (photo) movementPayload.notes += ` | Foto: ${photo}`;
-                            await supabase.from('inventory_movements').insert([movementPayload]);
-                        }
-                    });
-                    await Promise.all(movementPromises);
-                }
-            }
-
+            // 3. Inventory Integration (Returns ya registrados canónicamente arriba como 'route_return' hacia Columna O)
+            
             // 4. Record Canastillas movement
             if (canastillasDelivered > 0 || canastillasReceived > 0) {
                 await supabase.from('asset_movements').insert({
                     route_id: stop.route_id,
                     type: 'adjustment',
                     quantity: canastillasDelivered - canastillasReceived,
-                    notes: `Entrega a ${stop.orders.customer_name}`
+                    notes: `Entrega a ${stop.orders?.customer_name || 'Cliente'}`
                 });
             }
 
-            window.showToast?.('Entrega finalizada e inventario sincronizado', 'success');
+            (window as any).showToast?.('Entrega finalizada e inventario sincronizado', 'success');
             router.push(`/ops/driver/route-map/${stop.route_id}`);
         } catch (err: unknown) {
             console.error('Error finalizing delivery:', err);
             const message = err instanceof Error ? err.message : 'Error desconocido';
-            alert('Error al guardar reporte: ' + message);
+            (window as any).showToast?.('Error al guardar reporte: ' + message, 'error');
         } finally {
             setSaving(false);
         }

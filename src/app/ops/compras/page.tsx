@@ -741,11 +741,11 @@ export default function ProcurementPage() {
     setLoading(true);
     try {
       await runConsolidation();
-      alert(`✅ Sincronización Exitosa`);
+      (window as any).showToast?.("Sincronización Exitosa", 'success');
       fetchTasks(undefined, filterCategory, selectedDate);
     } catch (e: unknown) {
       console.error(e);
-      alert("Error al consolidar pedidos: " + (e instanceof Error ? e.message : String(e)));
+      (window as any).showToast?.("Error al consolidar pedidos: " + (e instanceof Error ? e.message : String(e)), 'error');
     } finally {
       setIsConsolidating(false);
       setLoading(false);
@@ -880,23 +880,23 @@ export default function ProcurementPage() {
     if (!selectedTask) return;
     const qtyToDeclare = parseFloat(shortageQty);
     if (isNaN(qtyToDeclare) || qtyToDeclare <= 0) {
-      alert("Por favor ingresa una cantidad válida a declarar como escasa.");
+      (window as any).showToast?.("Por favor ingresa una cantidad válida a declarar como escasa.", 'error');
       return;
     }
 
     try {
       setIsSubmittingShortage(true);
-
-      // 1. Obtener la bodega principal por defecto
+      // 1. Obtener almacén por defecto
       let warehouseId: string | null = null;
       try {
         const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
-        warehouseId = whData?.id || null;
+        if (whData) warehouseId = whData.id;
       } catch (e) {
-        console.warn("No se pudo obtener warehouseId", e);
+        console.warn("No se pudo obtener warehouse_id para shortage:", e);
       }
 
-      // 2. Insertar movimiento de escasez en inventory_movements (Alimenta Col K de la Sábana)
+      // 2. Registrar en inventory_movements con type 'exit' y reference_type 'order_shortage'
+      // Esto alimenta automáticamente la COLUMNA K (Escasez) en la Sábana de Inventario
       const targetDate = selectedTask.delivery_date || selectedDate || new Date().toISOString().split("T")[0];
       const movementPayload: any = {
         product_id: selectedTask.product_id,
@@ -935,7 +935,7 @@ export default function ProcurementPage() {
         status: isTotallyCovered ? 'completed' : 'partial'
       }).eq('id', selectedTask.id);
 
-      alert(`⚠️ Producto declarado escaso (${qtyToDeclare} ${selectedTask.unit}). Registrado en Columna K de la Sábana de Inventario.`);
+      (window as any).showToast?.(`Producto declarado escaso (${qtyToDeclare} ${selectedTask.unit}). Registrado en Columna K de Inventario.`, 'info');
 
       setIsShortageModalOpen(false);
       setSelectedTask(null);
@@ -943,7 +943,7 @@ export default function ProcurementPage() {
       fetchTasks(undefined, filterCategory, selectedDate);
     } catch (err: any) {
       console.error("Error al declarar producto escaso:", err);
-      alert("Error al declarar producto escaso: " + (err.message || err));
+      (window as any).showToast?.("Error al declarar producto escaso: " + (err.message || err), 'error');
     } finally {
       setIsSubmittingShortage(false);
     }

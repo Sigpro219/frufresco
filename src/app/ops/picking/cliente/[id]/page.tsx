@@ -134,10 +134,19 @@ function PickingClientContent() {
                 }
             }
 
+            if (orderId) {
+                // Transición oficial a in_preparation si el pedido estaba en approved
+                await supabase
+                    .from('orders')
+                    .update({ status: 'in_preparation' })
+                    .eq('id', orderId)
+                    .eq('status', 'approved');
+            }
+
             setSelectedItem(null);
             fetchData();
         } catch (err) {
-            alert('Error al guardar: ' + (err as any).message);
+            (window as any).showToast?.('Error al guardar: ' + (err as any).message, 'error');
         } finally {
             setProcessing(false);
         }

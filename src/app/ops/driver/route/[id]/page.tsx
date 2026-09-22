@@ -182,10 +182,22 @@ export default function LoadVerificationPage() {
             
             if (routeErr) throw routeErr;
 
+            // Sincronización oficial de Pedidos a 'in_transit'
+            const orderIds = stops.map(s => s.orders?.id).filter(Boolean);
+            if (orderIds.length > 0) {
+                const { error: ordersErr } = await supabase
+                    .from('orders')
+                    .update({ status: 'in_transit' })
+                    .in('id', orderIds);
+                if (ordersErr) {
+                    console.error('Error updating orders to in_transit:', ordersErr);
+                }
+            }
+
             router.push(`/ops/driver/route-map/${id}`);
         } catch (err) {
             console.error('Error confirming load:', err);
-            alert('Error al confirmar cargue');
+            (window as any).showToast?.('Error al confirmar cargue', 'error');
         } finally {
             setSaving(false);
         }

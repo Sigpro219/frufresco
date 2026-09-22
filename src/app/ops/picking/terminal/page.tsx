@@ -151,7 +151,7 @@ export default function PickingTerminal() {
             .eq('id', item.id);
 
         if (error) {
-            alert('Error al guardar. Recarga.');
+            (window as any).showToast?.('Error al guardar. Recarga.', 'error');
             loadTasks(selectedCell!);
             return;
         }

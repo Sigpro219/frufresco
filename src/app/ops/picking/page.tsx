@@ -537,7 +537,7 @@ export default function PickingExecutionPage() {
         } catch (err: unknown) {
             console.error('Error in handleExceptionSave:', err);
             const message = err instanceof Error ? err.message : 'Error desconocido';
-            alert('Error al guardar: ' + message);
+            (window as any).showToast?.('Error al guardar: ' + message, 'error');
         } finally {
             setIsSaving(false);
         }
