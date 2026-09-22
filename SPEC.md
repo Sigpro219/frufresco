@@ -817,6 +817,36 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
    - El código técnico correlativo (`ACI DDMM ####`) se muestra de forma complementaria como badge monospace distintivo.
    - En el modal de consulta de precios congelados (`AgreementDetailsModal`), la cabecera principal adopta el nombre comercial del acuerdo con subtítulo del código ACI y estado activo.
 
+#### Escenario 5: Identificación Inequívoca del Acuerdo Comercial en Estructura de Cliente
+- **Given** un cliente B2B ("MILSEN SAS" / "Restaurante Yanuba") con acuerdo cargado vía Excel el 22-09-2026 bajo el código técnico `ACI 2209 0103`.
+- **When** el ejecutivo comercial o administrador consulta la pestaña "Estructura Comercial" en la ficha del cliente.
+- **Then**:
+  1. La tarjeta de "Modelo de Precios" exhibe en texto principal destacado: `MILSEN SAS - 23-09-26` (nombre canónico).
+  2. Exhibe en badge secundario estilizado: `ACI 2209 0103` (identificador técnico).
+  3. Al dar clic en "Ver Precios →", el modal titula con el nombre comercial `MILSEN SAS - 23-09-26` y lista los productos congelados sin reemplazar el nombre por el correlativo numérico.
+
+
+### 11.5 Aislamiento de Trazabilidad Granular por Ítem & Supresión de Identificadores Técnicos
+
+1. **Aislamiento Estricto de Auditoría por Producto:**
+   - La modificación del precio de un ítem en particular (ej. Ahuyama) genera un registro individual en `audit_logs` con `action: 'UPDATE_quote_item_price'`.
+   - **Regla de Inmunidad:** Dicha modificación actualiza la fecha global de la cabecera del acuerdo, pero **NO altera** la trazabilidad de los demás 105+ productos de la lista. Los ítems no modificados preservan su autor original de carga y su marca temporal inicial sin ser contaminados por `latestAgreementLog`.
+   - Únicamente el ítem modificado despliega el badge azul `Modificado` con la fecha/hora reciente y el nombre del colaborador que ejecutó la edición.
+
+2. **Supresión de UUIDs y Legibilidad Humana de Identidad:**
+   - Queda formalmente prohibida la exposición de identificadores técnicos o UUIDs (`ID: 77ef7895-cc19-4d3d...`) en la interfaz de usuario y en los reportes imprimibles.
+   - La columna de usuario muestra exclusivamente el nombre corporativo o correo del colaborador (ej. `admin@frufresco.com` o `Julissa Arévalo Ramirez`).
+
+#### Escenario 4: Modificación Unitaria de Precio sin Contaminación de Autor
+- **Given** una lista de precios de 106 productos creada por `Julissa Arévalo Ramirez`.
+- **When** el usuario `admin@frufresco.com` edita únicamente el precio del producto "Ahuyama".
+- **Then**:
+  1. En la cabecera de la lista, se actualiza: `Actualizada por admin@frufresco.com (Fecha - Hora)`.
+  2. En la tabla de productos, "Ahuyama" muestra: fecha reciente, badge `Modificado` y usuario `admin@frufresco.com`.
+  3. Todos los demás 105 productos continúan mostrando su fecha de carga original y su autor `Julissa Arévalo Ramirez`.
+  4. Ningún producto expone el UUID interno del usuario.
+
+
 
 
 
