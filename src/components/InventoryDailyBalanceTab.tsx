@@ -2236,7 +2236,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     minWidth: '95px',
                     maxWidth: '95px',
                     color: isParent ? '#064E3B' : '#0F172A', 
-                    backgroundColor: isParent ? 'rgba(13, 148, 136, 0.18)' : (isChild ? 'rgba(13, 148, 136, 0.05)' : 'rgba(13, 148, 136, 0.08)'),
+                    backgroundColor: isParent ? '#FEF08A' : (isChild ? 'rgba(13, 148, 136, 0.05)' : 'rgba(13, 148, 136, 0.08)'),
                     borderLeft: '2px solid #0D9488',
                     borderRight: '2px solid #0D9488',
                     borderBottom: cellBorderBottom,
@@ -2247,10 +2247,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 </td>
 
                 {/* T: Conteo Físico Real */}
-                {renderEditableCell(row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? (isCollapsed ? '#F1F5F9' : '#E0E7FF') : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
+                {renderEditableCell(row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
 
                 {/* U: Bodega Post-10 AM */}
-                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? (isCollapsed ? '#F1F5F9' : '#E0E7FF') : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
+                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
                     {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
                 </td>
 
