@@ -8,7 +8,6 @@ import {
     Sparkles, RefreshCw, X, FileSpreadsheet, FileText, 
     Download, ShieldCheck, ZoomIn, ZoomOut
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 export default function CommercialInboxModule() {
     const [emails, setEmails] = useState<any[]>([]);
@@ -156,6 +155,7 @@ export default function CommercialInboxModule() {
         try {
             const res = await fetch(url);
             const arrayBuf = await res.arrayBuffer();
+            const XLSX = await import('xlsx');
             const workbook = XLSX.read(new Uint8Array(arrayBuf), { type: 'array' });
             
             const sheetsData = workbook.SheetNames.map(name => {

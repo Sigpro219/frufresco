@@ -1064,7 +1064,7 @@ function CreateOrderContent() {
                 if (!currentProfile) {
                     const { data } = await supabase
                         .from('profiles')
-                        .select('id, company_name, pricing_model_id, parent_id, role')
+                        .select('id, company_name, pricing_model_id, parent_id, role, credit_limit, payment_days')
                         .eq('id', selectedClient)
                         .maybeSingle();
                     if (data) currentProfile = data;
@@ -1235,6 +1235,20 @@ function CreateOrderContent() {
                     });
                 }
 
+                // Fallback institucional: precargar precios de General Institucional para productos sin tarifa específica
+                if (isB2B && resolvedModel && resolvedModel.id !== GENERAL_INSTITUCIONAL_ID) {
+                    const { data: genPrices } = await supabase
+                        .from('pricing_model_prices')
+                        .select('product_id, price')
+                        .eq('model_id', GENERAL_INSTITUCIONAL_ID);
+                    
+                    genPrices?.forEach((p: any) => {
+                        if (!map[p.product_id] && p.price > 0) {
+                            map[p.product_id] = p.price;
+                        }
+                    });
+                }
+
                 // Fetch active campaigns targeting this B2B client
                 const campMap: Record<string, { value: number; type: string; name: string }> = {};
                 const effectiveClientId = selectedClient;
@@ -1327,7 +1341,7 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, credit_limit, payment_days')
                 .eq('role', 'b2b_client')
                 .eq('is_active', true)
                 .order('company_name', { ascending: true });
@@ -1762,7 +1776,9 @@ function CreateOrderContent() {
 
         const resolvedPrice = (contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
             ? contractPrices[product.id]
-            : (product.base_price || 0);
+            : (clientType === 'B2B' && product.base_price
+                ? Math.ceil((product.base_price / 1.19) / 50) * 50
+                : (product.base_price || 0));
         setCart(prev => [{ 
             product, 
             qty: baseQty, 
@@ -3276,6 +3292,95 @@ function CreateOrderContent() {
         }, 100);
     };
 
+    // GAP-01: Interbloqueo de Control de Cupo de Crédito y Cartera Vencida B2B
+    const checkClientCreditStatus = async (profileId: string, orderTotal: number): Promise<{ allowed: boolean; reason?: string }> => {
+        try {
+            const client = clients.find((c: any) => c.id === profileId);
+            if (!client) return { allowed: true };
+
+            const creditLimit = Number(client.credit_limit) || 0;
+            
+            // Consultar órdenes del cliente para evaluar facturas pendientes y en mora
+            const { data: clientOrders } = await supabase
+                .from('orders')
+                .select('id')
+                .eq('profile_id', profileId);
+
+            let pendingDebt = 0;
+            let hasOverdue = false;
+            let overdueCount = 0;
+
+            if (clientOrders && clientOrders.length > 0) {
+                const orderIds = clientOrders.map((o: any) => o.id);
+                const { data: unpaidInvoices } = await supabase
+                    .from('billing_invoices')
+                    .select('id, total_final, payment_status, due_date')
+                    .in('order_id', orderIds)
+                    .neq('payment_status', 'paid')
+                    .neq('status', 'cancelled');
+
+                if (unpaidInvoices && unpaidInvoices.length > 0) {
+                    const now = new Date();
+                    unpaidInvoices.forEach((inv: any) => {
+                        pendingDebt += Number(inv.total_final) || 0;
+                        if (inv.due_date && new Date(inv.due_date) < now) {
+                            hasOverdue = true;
+                            overdueCount++;
+                        }
+                    });
+                }
+            }
+
+            const projectedDebt = pendingDebt + orderTotal;
+            const exceedsLimit = creditLimit > 0 && projectedDebt > creditLimit;
+
+            if (exceedsLimit || hasOverdue) {
+                let msg = `⚠️ CONTROL DE CARTERA Y CRÉDITO - ${client.company_name || client.contact_name}:\n\n`;
+                if (hasOverdue) {
+                    msg += `• Facturas vencidas en mora: ${overdueCount} documento(s).\n`;
+                }
+                if (exceedsLimit) {
+                    msg += `• Cupo de crédito autorizado: $${formatNumber(creditLimit)} COP.\n`;
+                    msg += `• Cartera pendiente actual: $${formatNumber(pendingDebt)} COP.\n`;
+                    msg += `• Total de este pedido: $${formatNumber(orderTotal)} COP.\n`;
+                    msg += `• Saldo proyectado: $${formatNumber(projectedDebt)} COP (Excede por $${formatNumber(projectedDebt - creditLimit)} COP).\n`;
+                }
+                msg += `\n¿Deseas autorizar la captura de este pedido como EXCEPCIÓN COMERCIAL auditada?`;
+
+                const proceed = window.confirm(msg);
+                if (!proceed) {
+                    return { allowed: false, reason: 'Operación cancelada: El pedido excede el cupo de crédito o registra cartera vencida.' };
+                }
+
+                // Registrar trazabilidad inmutable en auditoría
+                fetch('/api/audit/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'CREDIT_LIMIT_EXCEPTION_AUTHORIZED',
+                        module: 'COMMERCIAL',
+                        collaborator_name: 'Administrador Comercial',
+                        details: {
+                            client_id: profileId,
+                            client_name: client.company_name || client.contact_name,
+                            credit_limit: creditLimit,
+                            pending_debt: pendingDebt,
+                            order_total: orderTotal,
+                            projected_debt: projectedDebt,
+                            has_overdue: hasOverdue,
+                            overdue_count: overdueCount
+                        }
+                    })
+                }).catch(e => console.warn('Audit error in credit check:', e));
+            }
+
+            return { allowed: true };
+        } catch (err) {
+            console.warn('Error in credit check:', err);
+            return { allowed: true };
+        }
+    };
+
     const handleDirectConfirmOrder = async () => {
         if (!selectedClient) {
             showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar el pedido.', 'error');
@@ -3429,6 +3534,13 @@ function CreateOrderContent() {
                     }],
                     parsing_date: new Date().toISOString()
                 };
+            }
+
+            // GAP-01: Interbloqueo de Crédito y Cartera
+            const creditCheck = await checkClientCreditStatus(selectedClient, Math.round(total));
+            if (!creditCheck.allowed) {
+                showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
+                return;
             }
 
             // 5. Inserción atómica en base de datos
@@ -4130,6 +4242,15 @@ function CreateOrderContent() {
                         finalDocumentType = (b2cDetails as any).document_type || 'invoice';
                         finalRemissionWithPrices = (b2cDetails as any).remission_with_prices !== undefined ? (b2cDetails as any).remission_with_prices : true;
                     }
+                }
+            }
+
+            // GAP-01: Interbloqueo de Crédito y Cartera para clientes B2B
+            if (clientType === 'B2B' && finalProfileId) {
+                const creditCheck = await checkClientCreditStatus(finalProfileId, calculateTotal());
+                if (!creditCheck.allowed) {
+                    showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
+                    return;
                 }
             }
 

@@ -1,9 +1,9 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.6.0 (Módulo Comercial: Blindaje Integral Fases 1, 2 y 3 — Merma Teórica, Cupos/Mora, Estándar PDF & Rendimiento)  
+> **Versión:** 1.7.0 (Módulo Comercial: Reingeniería Matriz de Costos — Dos Caminos, Último Precio Real, Circuit Breaker >20% & Pareto de SLAs por Frecuencia)  
 > **Fecha:** 22 de Septiembre, 2026  
-> **Estado:** ✅ Resuelto & Verificado con Veredicto VICTORY CONFIRMED  
+> **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Logística, Ventas, Compras & Operaciones (B2B / B2C)
 
 ---
@@ -206,14 +206,53 @@ $$\text{Precio Redondeado} = \left\lceil \frac{\text{Precio Unitario Antes de IV
 #### D. Vigencia Contractual Canónica de Cotizaciones (GAP-11)
 Las cotizaciones institucionales y propuestas B2B poseen una vigencia vinculante estricta de **ocho (8) días calendario**. Queda prohibida la fijación o congelación de precios a 30 días en cotizaciones previas al acuerdo formal para salvaguardar la empresa ante la volatilidad de Corabastos. La vigencia en cabecera y en cláusulas legales debe coincidir exactamente en 8 días.
 
-### 7.4 Protocolo de Frescura de Costos & SLA de Corabastos
-1. **Clasificación de Perecibilidad:**
-   - **Clase A (Hiperperecederos: Hortalizas, Hojas, Hierbas):** Vigente $\le$ 4 días | Por Vencer 5-7 días | Vencido > 7 días.
-   - **Clase B (Semiperecederos: Frutas, Tubérculos, Lácteos):** Vigente $\le$ 8 días | Por Vencer 9-14 días | Vencido > 14 días.
-   - **Clase C (No perecederos: Despensa, Secos, Abarrotes):** Vigente $\le$ 30 días | Por Vencer 31-45 días | Vencido > 45 días.
-2. **Comportamiento ante Costo Vencido:**
-   - El sistema muestra un indicador visual prominente de alerta (Semáforo Ámbar/Rojo).
-   - Se autoriza al comercial emitir la cotización asumiendo el riesgo de volatilidad, pero el sistema **registra obligatoriamente un evento de auditoría en `audit_logs`** con el snapshot de costos obsoletos.
+### 7.4 Reingeniería de la Matriz de Costos: Dos Caminos, Último Precio Real, Circuit Breaker & Pareto de Frescura
+
+#### A. Filosofía de Transparencia y Abandono de Algoritmos Complejos
+Queda estrictamente erradicado el uso de fórmulas de alisamiento predictivo o modelos de regresión temporal (Holt-Winters, medias móviles de 8 compras) para fijar el costo base de productos agrícolas. En alimentos perecederos y Corabastos, **el costo base es el último precio real pagado en báscula o cotizado en plaza**.
+
+#### B. Los Dos Caminos Canónicos de Entrada
+1. **Camino A (Compras / Operaciones):**
+   - Precios registrados en el módulo de compras (`purchases` / `purchase_history_normalized`).
+   - Se extrae siempre el **ÚLTIMO PRECIO registrado** de compra como referencia activa.
+2. **Camino B (Carga Manual / Directa en Matriz):**
+   - Modificación directa por el área comercial o importación masiva de Excel.
+   - Genera la versión más reciente del costo y se convierte de inmediato en la **nueva realidad comercial**.
+
+#### C. Poka-Yoke: Circuit Breaker de Volatilidad (+/- > 20%)
+1. **Cálculo de Desvío:** Ante cualquier nuevo registro de costo (Camino A o Camino B), el sistema evalúa:
+   $$\text{Variación\%} = \frac{|\text{Precio Nuevo} - \text{Costo Vigente Anterior}|}{\text{Costo Vigente Anterior}} \times 100$$
+2. **Comportamiento si Variación $\le$ 20%:** El nuevo precio se adopta automáticamente como Costo Base Oficial.
+3. **Comportamiento si Variación > 20% (Discrepancia Crítica):**
+   - **Congelamiento de Seguridad:** El sistema **mantiene congelado el costo anterior** para proteger las cotizaciones y ventas en curso.
+   - **Alerta Andon en Matriz Comercial:** Se levanta una alarma visual prominente de *«Alerta de Volatilidad (+/- X%) - Requiere Validación»*.
+   - **Resolución Humana Obligatoria:** Exclusivamente el **Jefe / Dueño del Módulo Comercial** puede pulsar `[Aprobar Precio]` o `[Ingresar Costo Manual]`. La decisión humana queda asentada en `audit_logs` y define la nueva verdad del sistema.
+
+#### D. Pareto de SLAs de Frescura por Frecuencia de Compra/Movimiento (Arazá vs Papa)
+Para evitar la distorsión por densidad de masa (donde 70 toneladas de papa opacan 40 kilos de arazá o hierbas de alta rotación), el catálogo activo de 552 SKUs se clasifica dinámicamente en **Terciles de Frecuencia Transaccional** ($\sum$ de órdenes de compra y movimientos de inventario):
+
+1. **Tercil 1 (T1 - Pulso Diario / Críticos):**
+   - **Criterio:** Top 33% de productos con mayor frecuencia de compras registradas.
+   - **SLA de Frescura:** **4 días calendario**.
+   - **Vencimiento:** Pasa a estado `VENCIDO` si no hay compra ni cotización en > 4 días. Constituye una **Tarea Urgente Roja** en la bandeja comercial.
+2. **Tercil 2 (T2 - Rotación Media):**
+   - **Criterio:** 33% intermedio de recurrencia transaccional.
+   - **SLA de Frescura:** **8 días calendario**.
+   - **Vencimiento:** Pasa a estado `VENCIDO` en > 8 días. Revisión en la ronda semanal de abastecimiento.
+3. **Tercil 3 (T3 - Baja Frecuencia / Catálogo Extendido):**
+   - **Criterio:** 34% de menor frecuencia (o productos sin compras recientes).
+   - **SLA de Frescura:** **15 días calendario**.
+   - **Vencimiento:** Pasa a estado `VENCIDO` en > 15 días. Revisión quincenal de lista.
+
+#### E. Gobernanza de Cotizaciones ante Costos Vencidos
+1. El recálculo de precios no se ejecuta en línea de forma descontrolada; se administra de manera periódica.
+2. Si un producto con costo vencido es incluido en una cotización comercial:
+   - El sistema **utiliza el último costo autorizado vigente** para no paralizar la emisión de propuestas.
+   - Genera una alerta interna para que el comercial coordine el cuadre de precio con el **Jefe Comercial**, quien tiene la potestad de autorizar el precio antes del cierre formal del acuerdo.
+
+#### F. Costo Efectivo Inmutable (Factor de Merma Teórica)
+Sobre el Costo Base adoptado (sea de Camino A o Camino B), se aplica siempre la fórmula canónica de protección contra merma:
+$$C_{\text{efectivo}} = \frac{C_{\text{base}}}{1 - \left(\frac{\text{theoretical\_shrinkage\_pct}}{100}\right)}$$
 
 ### 7.5 Ciclo de Vida Canónico de Cotizaciones & Acuerdos
 
@@ -255,8 +294,12 @@ Las cotizaciones institucionales y propuestas B2B poseen una vigencia vinculante
 - [x] **Tarea COM-16 (Fase 2 / GAP-13):** Convertir inserción secuencial de facturación en lote atómico `supabase.from('billing_invoices').insert(...)`.
 - [x] **Tarea COM-17 (Fase 2 / GAP-04 & 12):** Acotar historial de compras a 60 días en `cost-matrix/page.tsx` y memorizar `<Sparkline />` con `React.memo`.
 - [x] **Tarea COM-18 (Fase 3 / GAP-09 & 10):** Retirar scrollbox rígido en acuerdos comerciales y corregir `position: fixed` a `position: absolute` en impresión de acuerdos para paginación continua.
-- [x] **Tarea COM-19 (Fase 3 / GAP-11 & 14):** Unificar vigencia contractual a 8 días calendario y sustituir emojis de texto por iconos Lucide.
+- [x] **Tarea COM-19 (Fase 3 / GAP-11 & 14):** Unificar vigencia contractual a 8 días calendario y substituir emojis de texto por iconos Lucide.
 - [x] **Tarea COM-20 (Fase 3 / GAP-15, 16, 17 & 18):** Toolbar *Frosted Glass* y cifras tabulares `text-right` en facturación, Sello de Garantía Operativa B2B, sincronización `payment_terms_days` a `profiles.payment_days` y supresión de páginas en blanco en PDF.
+- [x] **Tarea COM-21 (Reingeniería Matriz / Dos Caminos):** Erradicar algoritmos de regresión/alisamiento e implementar regla del Último Precio Real (Camino A: Compras vs Camino B: Manual).
+- [x] **Tarea COM-22 (Reingeniería Matriz / Circuit Breaker):** Implementar Poka-Yoke de Volatilidad (+/- > 20%) con congelamiento preventivo del costo previo y alerta visual para aprobación del Jefe Comercial.
+- [x] **Tarea COM-23 (Reingeniería Matriz / Pareto de Frescura):** Implementar clasificación dinámica en 3 Terciles por frecuencia transaccional (T1: 4d, T2: 8d, T3: 15d).
+- [x] **Tarea COM-24 (Reingeniería Matriz / UI & Filtros de Tercil):** Incorporar badges de tercil, chips de filtrado rápido (`[T1: Críticos]`, `[T2: Moderados]`, `[T3: Quincenales]`, `[Alertas >20%]`) y panel Andon priorizado.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 

@@ -359,7 +359,7 @@ export default function PrintQuotePage() {
                         </div>
                         <div style={{ fontSize: '7.8pt', color: '#475569', lineHeight: '1.35' }}>
                             <div><strong>Fecha:</strong> {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
-                            <div><strong>Vigencia:</strong> 30 días calendario</div>
+                            <div><strong>Vigencia:</strong> 8 días calendario</div>
                         </div>
                     </div>
                 </div>
@@ -483,6 +483,36 @@ export default function PrintQuotePage() {
                         </div>
                     </div>
                 )}
+
+                {/* Sello de Valor B2B FruFresco (Storytelling & Garantía Operativa) */}
+                <div className="page-break-avoid" style={{
+                    marginTop: '0.85rem',
+                    marginBottom: '0.65rem',
+                    padding: '0.65rem 0.85rem',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderLeft: `4px solid ${appSettings.primary_color || '#15803D'}`,
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '7.6pt', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ color: appSettings.primary_color || '#15803D', fontWeight: '900' }}>★</span> Sello de Garantía Operativa FruFresco B2B
+                        </div>
+                        <div style={{ fontSize: '6.9pt', color: '#475569', marginTop: '2px', lineHeight: '1.3' }}>
+                            <strong>Cero Intermediarios:</strong> Abastecimiento directo de fincas aliadas y Corabastos. 
+                            <strong> Puntualidad Suiza:</strong> Despachos matutinos en ventana acordada antes de apertura de cocina. 
+                            <strong> Cero Desperdicio:</strong> Selección y pesaje exacto con merma controlada.
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: '8px', borderLeft: '1px solid #E2E8F0' }}>
+                        <div style={{ fontSize: '6.8pt', fontWeight: '800', color: appSettings.primary_color || '#15803D' }}>CALIDAD CERTIFICADA</div>
+                        <div style={{ fontSize: '6.2pt', color: '#64748B' }}>Inocuidad & Trazabilidad</div>
+                    </div>
+                </div>
 
                 <div className="page-break-avoid" style={{
                     marginTop: '0.65rem',

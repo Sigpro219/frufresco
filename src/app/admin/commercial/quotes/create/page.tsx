@@ -716,12 +716,25 @@ function CreateQuotePageContent() {
                     start_date: new Date().toISOString().split('T')[0],
                     valid_until: null,
                     parent_quote_id: parentQuoteId,
-                    version: parentQuoteId ? originalQuoteVersion + 1 : 1
+                    version: parentQuoteId ? originalQuoteVersion + 1 : 1,
+                    payment_terms_days: paymentTermsDays || 30
                 })
                 .select()
                 .single();
 
             if (qError) throw qError;
+
+            // Sincronizar días de crédito acordados hacia el perfil del cliente
+            if (selectedClientId && paymentTermsDays) {
+                try {
+                    await supabase
+                        .from('profiles')
+                        .update({ payment_days: paymentTermsDays })
+                        .eq('id', selectedClientId);
+                } catch (profErr) {
+                    console.warn('Notice: Could not sync payment_days to profile:', profErr);
+                }
+            }
 
             const quoteItemsArr = sanitizedItems.map(item => ({
                 quote_id: quote.id,

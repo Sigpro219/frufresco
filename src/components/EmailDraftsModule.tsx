@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
-import * as XLSX from 'xlsx';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
@@ -1316,7 +1315,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (!res.ok) throw new Error("No se pudo descargar el archivo Excel.");
           return res.arrayBuffer();
         })
-        .then(buffer => {
+        .then(async buffer => {
+          const XLSX = await import('xlsx');
           const workbook = XLSX.read(buffer, { type: 'array' });
           const parsedSheets: any[] = [];
           

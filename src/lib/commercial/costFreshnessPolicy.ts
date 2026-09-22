@@ -1,16 +1,23 @@
 /**
  * costFreshnessPolicy.ts
- * Políticas de Frescura y Acuerdos de Nivel de Servicio (SLA) de Costos por Categoría
- * FruFresco - Módulo Comercial & Abastecimiento
+ * Políticas de Frescura y Acuerdos de Nivel de Servicio (SLA) de Costos por Pareto de Frecuencia
+ * FruFresco - Módulo Comercial & Abastecimiento (SPEC v1.7.0)
+ * 
+ * Regla de Pareto:
+ * - Tercil 1 (T1): Top 33% mayor frecuencia transaccional (compras/movimientos). SLA: 4 días.
+ * - Tercil 2 (T2): 33% intermedio de frecuencia transaccional. SLA: 8 días.
+ * - Tercil 3 (T3): 34% menor frecuencia / catálogo extendido. SLA: 15 días.
  */
 
-export type FreshnessClass = 'A' | 'B' | 'C';
+export type ParetoTercil = 'T1' | 'T2' | 'T3';
+export type FreshnessClass = ParetoTercil | 'A' | 'B' | 'C';
 
 export interface FreshnessSLA {
     perishabilityClass: FreshnessClass;
+    tercil?: ParetoTercil;
     classLabel: string;
     validDaysMax: number;    // Días hasta los cuales se considera costo 100% fresco / vigente
-    dueSoonDaysMax: number;  // Días hasta los cuales se alerta por vencer antes de considerarse obsoleto
+    dueSoonDaysMax: number;  // Días a partir de los cuales se alerta por vencer
     description: string;
 }
 
@@ -27,51 +34,85 @@ export interface ProductCostLifecycle {
     isExpired: boolean;
     isDueSoon: boolean;
     currentCost: number;
+    tercil: ParetoTercil;
     sla: FreshnessSLA;
 }
 
 /**
- * Mapeo de categorías a clases de perecibilidad:
- * - Clase A (Hiperperecederos: Hortalizas, Verduras de hoja, Hierbas, Flores comestibles):
- *   Alta volatilidad en Corabastos. SLA: Vigente <= 4d, Por vencer 5-7d, Vencido > 7d.
- * - Clase B (Semi-perecederos: Frutas, Tubérculos, Lácteos, Plátanos):
- *   Volatilidad semanal. SLA: Vigente <= 8d, Por vencer 9-14d, Vencido > 14d.
- * - Clase C (No perecederos / Secos: Despensa, Abarrotes, Congelados, Procesados):
- *   Estabilidad mensual. SLA: Vigente <= 30d, Por vencer 31-45d, Vencido > 45d.
+ * Retorna el SLA canónico basado en el Tercil de Pareto (T1: 4d, T2: 8d, T3: 15d).
+ * Mantiene compatibilidad hacia atrás si se recibe una categoría histórica ('HO', 'FR', 'DE').
  */
-export function getFreshnessSLA(category?: string | null): FreshnessSLA {
-    const cat = (category || '').trim().toUpperCase();
+export function getFreshnessSLA(tercilOrCategory?: string | null): FreshnessSLA {
+    const key = (tercilOrCategory || '').trim().toUpperCase();
 
-    // Hiperperecederos (Clase A)
-    if (['HO', 'VE', 'HI', 'HORTALIZA', 'VERDURA', 'HIERBA'].includes(cat)) {
+    // Terciles Canónicos (SPEC v1.7.0)
+    if (key === 'T1' || ['HO', 'VE', 'HI', 'HORTALIZA', 'VERDURA', 'HIERBA'].includes(key)) {
         return {
-            perishabilityClass: 'A',
-            classLabel: 'Hiperperecedero (Clase A)',
+            perishabilityClass: 'T1',
+            tercil: 'T1',
+            classLabel: 'T1: Crítico / Pulso Diario (4d)',
             validDaysMax: 4,
-            dueSoonDaysMax: 7,
-            description: 'Volatilidad alta diaria/interdiaria en Corabastos. SLA máximo de 4 días.'
+            dueSoonDaysMax: 3,
+            description: 'Alta frecuencia transaccional. SLA estricto de 4 días calendario.'
         };
     }
 
-    // No perecederos / Abarrotes (Clase C)
-    if (['DE', 'CO', 'PR', 'AB', 'DESPENSA', 'CONGELADO', 'PROCESADO', 'ABARROTES', 'SECOS'].includes(cat)) {
+    if (key === 'T3' || ['DE', 'CO', 'PR', 'AB', 'DESPENSA', 'CONGELADO', 'PROCESADO', 'ABARROTES', 'SECOS'].includes(key)) {
         return {
-            perishabilityClass: 'C',
-            classLabel: 'No Perecedero / Despensa (Clase C)',
-            validDaysMax: 30,
-            dueSoonDaysMax: 45,
-            description: 'Precios estables por lista mensual. SLA de revisión hasta 30 días.'
+            perishabilityClass: 'T3',
+            tercil: 'T3',
+            classLabel: 'T3: Baja Frecuencia / Quincenal (15d)',
+            validDaysMax: 15,
+            dueSoonDaysMax: 12,
+            description: 'Baja frecuencia transaccional o catálogo extendido. SLA de 15 días calendario.'
         };
     }
 
-    // Semi-perecederos (Clase B) - Default para Frutas, Tubérculos y otros
+    // Default: Tercil 2 (T2)
     return {
-        perishabilityClass: 'B',
-        classLabel: 'Semi-perecedero (Clase B)',
+        perishabilityClass: 'T2',
+        tercil: 'T2',
+        classLabel: 'T2: Moderado / Semanal (8d)',
         validDaysMax: 8,
-        dueSoonDaysMax: 14,
-        description: 'Fluctuación semanal estándar de cosecha. SLA máximo de 8 a 14 días.'
+        dueSoonDaysMax: 6,
+        description: 'Frecuencia transaccional moderada. SLA semanal de 8 días calendario.'
     };
+}
+
+/**
+ * Calcula dinámicamente el Tercil de Pareto ('T1' | 'T2' | 'T3') para cada producto
+ * en función de su frecuencia de compras/movimientos registrados.
+ */
+export function computeProductTerciles(
+    productIds: string[],
+    purchaseCounts: Record<string, number>
+): Record<string, ParetoTercil> {
+    if (!productIds || productIds.length === 0) return {};
+
+    // Ordenar de mayor a menor frecuencia de compra
+    const sorted = [...productIds].sort((a, b) => {
+        const countA = purchaseCounts[a] || 0;
+        const countB = purchaseCounts[b] || 0;
+        return countB - countA;
+    });
+
+    const total = sorted.length;
+    const t1Cutoff = Math.floor(total / 3);
+    const t2Cutoff = Math.floor((total * 2) / 3);
+
+    const tercilMap: Record<string, ParetoTercil> = {};
+
+    sorted.forEach((id, idx) => {
+        if (idx < t1Cutoff) {
+            tercilMap[id] = 'T1';
+        } else if (idx < t2Cutoff) {
+            tercilMap[id] = 'T2';
+        } else {
+            tercilMap[id] = 'T3';
+        }
+    });
+
+    return tercilMap;
 }
 
 /**
@@ -79,11 +120,12 @@ export function getFreshnessSLA(category?: string | null): FreshnessSLA {
  */
 export function evaluateCostFreshness(
     latestSignalDate: Date | string | null | undefined,
-    category?: string | null,
+    tercilOrCategory?: string | null,
     currentCost: number = 0,
     signalSource: 'COMPRAS' | 'MANUAL' | 'SIN_SEÑAL' = 'SIN_SEÑAL'
 ): ProductCostLifecycle {
-    const sla = getFreshnessSLA(category);
+    const sla = getFreshnessSLA(tercilOrCategory);
+    const tercil = sla.tercil || 'T2';
 
     let dateObj: Date | null = null;
     if (latestSignalDate instanceof Date) {
@@ -105,6 +147,7 @@ export function evaluateCostFreshness(
             isExpired: true,
             isDueSoon: false,
             currentCost: currentCost || 0,
+            tercil,
             sla
         };
     }
@@ -116,10 +159,27 @@ export function evaluateCostFreshness(
     const sourceText = signalSource === 'COMPRAS' ? 'Orden Compra' : signalSource === 'MANUAL' ? 'Carga Masiva / Manual' : 'Registro BD';
 
     if (daysOld <= sla.validDaysMax) {
+        const isDueSoon = daysOld >= sla.dueSoonDaysMax;
+        if (isDueSoon) {
+            return {
+                daysOld,
+                status: 'POR_VENCER',
+                statusLabel: `Por Vencer (${daysOld}d / máx ${sla.validDaysMax}d)`,
+                statusColor: '#D97706',
+                statusBg: '#FFFBEB',
+                sourceLabel: sourceText,
+                signalDateFormatted: formattedDate,
+                isExpired: false,
+                isDueSoon: true,
+                currentCost,
+                tercil,
+                sla
+            };
+        }
         return {
             daysOld,
             status: 'VIGENTE',
-            statusLabel: `Vigente (${daysOld}d)`,
+            statusLabel: `Vigente (${daysOld}d / máx ${sla.validDaysMax}d)`,
             statusColor: '#059669',
             statusBg: '#ECFDF5',
             sourceLabel: sourceText,
@@ -127,27 +187,14 @@ export function evaluateCostFreshness(
             isExpired: false,
             isDueSoon: false,
             currentCost,
-            sla
-        };
-    } else if (daysOld <= sla.dueSoonDaysMax) {
-        return {
-            daysOld,
-            status: 'POR_VENCER',
-            statusLabel: `Por Vencer (${daysOld}d)`,
-            statusColor: '#D97706',
-            statusBg: '#FFFBEB',
-            sourceLabel: sourceText,
-            signalDateFormatted: formattedDate,
-            isExpired: false,
-            isDueSoon: true,
-            currentCost,
+            tercil,
             sla
         };
     } else {
         return {
             daysOld,
             status: 'VENCIDO',
-            statusLabel: `Vencido (${daysOld}d)`,
+            statusLabel: `Vencido (${daysOld}d / máx ${sla.validDaysMax}d)`,
             statusColor: '#DC2626',
             statusBg: '#FEF2F2',
             sourceLabel: sourceText,
@@ -155,7 +202,9 @@ export function evaluateCostFreshness(
             isExpired: true,
             isDueSoon: false,
             currentCost,
+            tercil,
             sla
         };
     }
 }
+

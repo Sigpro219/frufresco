@@ -103,7 +103,7 @@ export default function CampaignsPage({ embedded = false }: { embedded?: boolean
             const { data: prods } = await supabase
                 .from('products')
                 .select('id, name, sku, base_price, category')
-                .eq('active', true)
+                .eq('is_active', true)
                 .order('name');
 
             setAvailableClients(clients || []);

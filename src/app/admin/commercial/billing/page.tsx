@@ -569,34 +569,41 @@ export default function BillingDashboard() {
 
             if (linkError) throw linkError;
 
-            // 3. Generate sequential invoices for each order in the cut
-            for (let i = 0; i < orders.length; i++) {
-                const order = orders[i];
-                const cleanSeq = order.sequence_id.toString().padStart(4, '0');
-                const invoiceNumber = `FE-${cleanSeq}-${Date.now().toString().slice(-4)}`;
+            // 3. Generate sequential invoices for each order in the cut (Atomic Batch Insert)
+            const nowTime = Date.now().toString().slice(-4);
+            const invoicesToInsert = orders.map((order, i) => {
+                const cleanSeq = (order.sequence_id || i + 1).toString().padStart(4, '0');
+                const invoiceNumber = `FE-${cleanSeq}-${nowTime}-${i + 1}`;
                 
                 // Calculate tax base & IVA
                 const total = order.total || 0;
                 const isIva = order.profiles?.iva_responsible || false;
-                const totalBase = isIva ? total / 1.19 : total;
-                const totalTax = isIva ? total - totalBase : 0;
+                const totalBase = isIva ? Math.round((total / 1.19) * 100) / 100 : total;
+                const totalTax = isIva ? Math.round((total - totalBase) * 100) / 100 : 0;
 
                 // Calculate due date based on profile payment_days
                 const creditDays = order.profiles?.payment_days || 0;
                 const dueDate = new Date();
                 dueDate.setDate(dueDate.getDate() + creditDays);
 
-                await supabase.from('billing_invoices').insert([{
+                return {
                     order_id: order.id,
                     cut_id: newCut.id,
                     invoice_number: invoiceNumber,
                     total_base: totalBase,
                     total_tax: totalTax,
                     total_final: total,
-                    status: 'pending',
-                    payment_status: 'pending',
+                    status: 'pending' as const,
+                    payment_status: 'pending' as const,
                     due_date: dueDate.toISOString().split('T')[0]
-                }]);
+                };
+            });
+
+            if (invoicesToInsert.length > 0) {
+                const { error: batchErr } = await supabase
+                    .from('billing_invoices')
+                    .insert(invoicesToInsert);
+                if (batchErr) throw batchErr;
             }
 
             alert(`¡Corte ${slot} generado con éxito! ${orders.length} facturas emitidas.`);
@@ -911,7 +918,21 @@ export default function BillingDashboard() {
                 </header>
 
                 {/* Submodule Main Tabs Bar with Integrated Right Sub-Menu */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div style={{ 
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 25,
+                    backdropFilter: 'blur(12px)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    borderBottom: '1px solid #E2E8F0', 
+                    marginBottom: '1.75rem', 
+                    padding: '0.25rem 0',
+                    flexWrap: 'wrap', 
+                    gap: '0.75rem' 
+                }}>
                     {/* Left: Main Submodule Tabs */}
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                         {hasInvoicingAccess && (
@@ -1084,7 +1105,7 @@ export default function BillingDashboard() {
                                                 <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}># Corte</th>
                                                 <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha y Franja</th>
                                                 <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pedidos</th>
-                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Bruto</th>
+                                                <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Bruto</th>
                                                 <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estado</th>
                                                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
                                             </tr>
@@ -1113,7 +1134,7 @@ export default function BillingDashboard() {
                                                             <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>Franja: {cut.cut_slot}</div>
                                                         </td>
                                                         <td style={{ padding: '1rem 1.25rem', fontWeight: '600', color: '#334155' }}>{cut.total_orders} pedidos</td>
-                                                        <td style={{ padding: '1rem 1.25rem', fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(cut.total_amount)}</td>
+                                                        <td style={{ padding: '1rem 1.25rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(cut.total_amount)}</td>
                                                         <td style={{ padding: '1rem 1.25rem' }}>
                                                             <span style={{ backgroundColor: cut.status === 'exported' ? '#ECFDF5' : '#FEF3C7', color: cut.status === 'exported' ? '#065F46' : '#92400E', border: `1px solid ${cut.status === 'exported' ? '#A7F3D0' : '#FDE68A'}`, padding: '0.25rem 0.6rem', borderRadius: '99px', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase' }}>
                                                                 {cut.status}
@@ -1278,9 +1299,9 @@ export default function BillingDashboard() {
                                                     <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prefijo FE</th>
                                                     <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cliente</th>
                                                     <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vencimiento</th>
-                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Base Imponible</th>
-                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>IVA</th>
-                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Neto</th>
+                                                    <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Base Imponible</th>
+                                                    <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>IVA</th>
+                                                    <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Neto</th>
                                                     <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estado Cartera</th>
                                                     <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
                                                 </tr>
@@ -1331,9 +1352,9 @@ export default function BillingDashboard() {
                                                                 <div style={{ fontWeight: '700', color: '#0F172A', fontSize: '0.85rem' }}>{new Date(inv.due_date).toLocaleDateString()}</div>
                                                                 <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Plazo: {inv.orders?.profiles?.payment_days || 0} días</div>
                                                             </td>
-                                                            <td style={{ padding: '1rem 1.25rem', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>{formatMoney(inv.total_base)}</td>
-                                                            <td style={{ padding: '1rem 1.25rem', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>{formatMoney(inv.total_tax)}</td>
-                                                            <td style={{ padding: '1rem 1.25rem', fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.92rem' }}>{formatMoney(inv.total_final)}</td>
+                                                            <td style={{ padding: '1rem 1.25rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>{formatMoney(inv.total_base)}</td>
+                                                            <td style={{ padding: '1rem 1.25rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>{formatMoney(inv.total_tax)}</td>
+                                                            <td style={{ padding: '1rem 1.25rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.92rem' }}>{formatMoney(inv.total_final)}</td>
                                                             <td style={{ padding: '1rem 1.25rem' }}>
                                                                 <span style={{ 
                                                                     backgroundColor: inv.payment_status === 'paid' ? '#ECFDF5' : isOverdue ? '#FEE2E2' : '#FEF3C7', 

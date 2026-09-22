@@ -46,13 +46,29 @@ export default function BillingPrintPage() {
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Generando documentos oficiales...</div>;
 
     return (
-        <div style={{ backgroundColor: '#F1F5F9', minHeight: '100vh', padding: '1.5rem 1rem' }}>
+        <div className="billing-print-wrapper" style={{ backgroundColor: '#F1F5F9', minHeight: '100vh', padding: '1.5rem 1rem' }}>
             <style>
                 {`
                 @media print {
+                    @page {
+                        size: letter portrait;
+                        margin: 1.0cm 1.2cm;
+                    }
                     .no-print { display: none !important; }
                     .page-break { page-break-after: always; break-after: page; }
-                    body { background: white !important; padding: 0 !important; }
+                    .page-break:last-child { page-break-after: avoid; break-after: avoid; }
+                    body { 
+                        background: white !important; 
+                        padding: 0 !important; 
+                        margin: 0 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    .billing-print-wrapper {
+                        background: white !important;
+                        min-height: auto !important;
+                        padding: 0 !important;
+                    }
                 }
                 `}
             </style>

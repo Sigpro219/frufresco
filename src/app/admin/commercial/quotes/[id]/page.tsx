@@ -345,6 +345,18 @@ export default function QuoteDetailPage() {
                     .eq('id', quote.id);
                 
                 if (agreementErr) throw agreementErr;
+
+                // GAP-17: Sincronizar días de crédito contractuales hacia el perfil del cliente
+                if (quote.payment_terms_days && selectedClient.id) {
+                    try {
+                        await supabase
+                            .from('profiles')
+                            .update({ payment_days: quote.payment_terms_days })
+                            .eq('id', selectedClient.id);
+                    } catch (profErr) {
+                        console.warn('Notice: Could not sync payment_days to profile:', profErr);
+                    }
+                }
                 
                 // SPEC.md Secc. 7.4 & 7.5: Traza obligatoria en audit_logs al formalizar acuerdo
                 try {

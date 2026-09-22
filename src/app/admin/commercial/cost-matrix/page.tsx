@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment, memo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
 import { 
@@ -56,13 +56,12 @@ import {
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
-import * as XLSX from 'xlsx';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 import { useAuth } from '@/lib/authContext';
-import { calculateAdaptiveCost, runAdaptivePricingModel, filterPriceOutliers, PriceObservation } from '@/lib/commercial/adaptivePricingEngine';
-import { evaluateCostFreshness, getFreshnessSLA, ProductCostLifecycle } from '@/lib/commercial/costFreshnessPolicy';
+import { calculateAdaptiveCost, runAdaptivePricingModel, filterPriceOutliers, PriceObservation, checkVolatilityCircuitBreaker, CircuitBreakerResult } from '@/lib/commercial/adaptivePricingEngine';
+import { evaluateCostFreshness, getFreshnessSLA, ProductCostLifecycle, computeProductTerciles, ParetoTercil } from '@/lib/commercial/costFreshnessPolicy';
 
 interface Purchase {
     id?: string;
@@ -180,7 +179,7 @@ function StatCard({ label, value, subValue, trend, color, bg = THEME.colors.surf
     );
 }
 
-function Sparkline({ data, productId }: { data: Purchase[], productId?: string }) {
+const Sparkline = memo(function Sparkline({ data, productId }: { data: Purchase[], productId?: string }) {
     if (!data || data.length === 0) {
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -399,7 +398,7 @@ function Sparkline({ data, productId }: { data: Purchase[], productId?: string }
             </div>
         </div>
     );
-}
+});
 
 function ActionTooltip({ 
     children, 
@@ -601,7 +600,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [modalSearchTerm, setModalSearchTerm] = useState('');
     const [isModalSearchOpen, setIsModalSearchOpen] = useState(false);
-    const [trainingTab, setTrainingTab] = useState<'all' | 'dual' | 'perishability' | 'outliers' | 'adaptive' | 'playbook'>('all');
+    const [trainingTab, setTrainingTab] = useState<'all' | 'two_paths' | 'circuit_breaker' | 'pareto' | 'shrinkage' | 'playbook' | 'dual' | 'perishability' | 'outliers' | 'adaptive'>('all');
+    const [simulatedPrevPrice, setSimulatedPrevPrice] = useState<string>('');
     const [simulatedPrice, setSimulatedPrice] = useState<string>('');
     const [simulatedVolume, setSimulatedVolume] = useState<number>(50);
     const [simulatedShrinkage, setSimulatedShrinkage] = useState<number>(5);
@@ -628,6 +628,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [lifecycleFilter, setLifecycleFilter] = useState<'all' | 'vigente' | 'por_vencer' | 'vencido'>('all');
+    const [productTerciles, setProductTerciles] = useState<Record<string, ParetoTercil>>({});
+    const [tercilFilter, setTercilFilter] = useState<'all' | 'T1' | 'T2' | 'T3' | 'alerts'>('all');
     
     // Quick Market Quote Modal state (Columna ÚLTIMA)
     const [quotingProduct, setQuotingProduct] = useState<Product | null>(null);
@@ -678,23 +680,47 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
             setProducts(allProds);
 
-            const { data: hist, error: histErr } = await supabase
-                .from('purchase_history_normalized')
-                .select('*')
-                .setHeader('Cache-Control', 'no-store')
-                .order('created_at', { ascending: false })
-                .limit(20000);
+            let allHist: any[] = [];
+            let histPage = 0;
+            let histFinished = false;
 
-            if (histErr) throw histErr;
+            while (!histFinished) {
+                const { data: chunk, error: histErr } = await supabase
+                    .from('purchase_history_normalized')
+                    .select('id, product_id, unit_price, created_at, purchase_unit, normalized_price')
+                    .setHeader('Cache-Control', 'no-store')
+                    .order('created_at', { ascending: false })
+                    .range(histPage * PAGE_SIZE, (histPage + 1) * PAGE_SIZE - 1);
+
+                if (histErr) throw histErr;
+
+                if (chunk && chunk.length > 0) {
+                    allHist = [...allHist, ...chunk];
+                    if (chunk.length < PAGE_SIZE) {
+                        histFinished = true;
+                    } else {
+                        histPage++;
+                    }
+                } else {
+                    histFinished = true;
+                }
+            }
             
             const groupedHist: Record<string, Purchase[]> = {};
-            hist?.forEach(p => {
+            const purchaseCounts: Record<string, number> = {};
+            allHist.forEach((p: any) => {
+                purchaseCounts[p.product_id] = (purchaseCounts[p.product_id] || 0) + 1;
                 if (!groupedHist[p.product_id]) groupedHist[p.product_id] = [];
                 if (groupedHist[p.product_id].length < 8) {
                     groupedHist[p.product_id].push(p);
                 }
             });
             setPurchaseHistory(groupedHist);
+
+            // Clasificación Pareto por Frecuencia Transaccional (SPEC v1.7.0)
+            const activeIds = allProds.map(p => p.id);
+            const computedTercils = computeProductTerciles(activeIds, purchaseCounts);
+            setProductTerciles(computedTercils);
 
             const { data: manual, error: manualErr } = await supabase
                 .from('commercial_cost_matrix')
@@ -1031,11 +1057,27 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         }
     };
 
+    const getProductCircuitBreaker = (productId: string): CircuitBreakerResult => {
+        const hist = purchaseHistory[productId] || [];
+        const manual = manualOverrides[productId]?.manual_cost;
+        const latestPurchase = hist[0]?.normalized_price;
+        if (latestPurchase && manual && manual > 0) {
+            return checkVolatilityCircuitBreaker(latestPurchase, manual, 20);
+        }
+        return { isTriggered: false, deltaPct: 0, previousPrice: manual || 0, newPrice: latestPurchase || 0, message: '' };
+    };
+
     const calculateSmartCost = (productId: string) => {
         const history = purchaseHistory[productId] || [];
         const manual = manualOverrides[productId];
         const refCost = manual?.manual_cost;
         const product = products.find(p => p.id === productId);
+
+        // Si la variación excede el 20%, se congela preventivamente el costo anterior (Opción A - SPEC v1.7.0)
+        const cb = getProductCircuitBreaker(productId);
+        if (cb.isTriggered && refCost && refCost > 0) {
+            return Math.round(refCost);
+        }
 
         if (history.length === 0) {
             return refCost && refCost > 0 ? Math.round(refCost) : 0;
@@ -1074,7 +1116,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     const getProductCostLifecycle = (productId: string) => {
         const hist = purchaseHistory[productId] || [];
         const manual = manualOverrides[productId];
-        const product = products.find(p => p.id === productId);
+        const tercil = productTerciles[productId] || 'T2';
         
         let latestSignalDate: Date | string | null = null;
         let signalSource: 'COMPRAS' | 'MANUAL' | 'SIN_SEÑAL' = 'SIN_SEÑAL';
@@ -1095,8 +1137,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             }
         } else if (histDate) {
             latestSignalDate = hist[0].created_at;
-            signalSource = 'COMPRAS';
-            currentCost = hist[0].normalized_price;
+                signalSource = 'COMPRAS';
+                currentCost = hist[0].normalized_price;
         } else if (manualDate) {
             latestSignalDate = manual.updated_at;
             signalSource = 'MANUAL';
@@ -1105,10 +1147,25 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             currentCost = manual.manual_cost;
         }
 
-        return evaluateCostFreshness(latestSignalDate, product?.category, currentCost, signalSource);
+        return evaluateCostFreshness(latestSignalDate, tercil, currentCost, signalSource);
     };
 
     const getCostCellState = (productId: string) => {
+        const cb = getProductCircuitBreaker(productId);
+        if (cb.isTriggered) {
+            return {
+                bg: '#FEF2F2',
+                textColor: '#991B1B',
+                badgeBorder: '#FCA5A5',
+                badgeBg: '#FEF2F2',
+                badge: `Alerta Volatilidad (${cb.deltaPct > 0 ? '+' : ''}${cb.deltaPct}%)`,
+                labelColor: '#DC2626',
+                icon: <ShieldAlert size={10} color="#DC2626" />,
+                isCircuitBreaker: true,
+                cb
+            };
+        }
+
         const smart = calculateSmartCost(productId);
         const manual = manualOverrides[productId];
         const lifecycle = getProductCostLifecycle(productId);
@@ -1139,13 +1196,13 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         
         if (lifecycle.isExpired) {
             return {
-                bg: '#FEF3C7',
-                textColor: '#92400E',
-                badgeBorder: '#FDE68A',
-                badgeBg: '#FEF3C7',
-                badge: `Desactualizado (+${lifecycle.daysOld}d)`,
-                labelColor: '#D97706',
-                icon: <AlertTriangle size={10} color="#D97706" />
+                bg: '#FEF2F2',
+                textColor: '#991B1B',
+                badgeBorder: '#FCA5A5',
+                badgeBg: '#FEF2F2',
+                badge: `Vencido (${lifecycle.daysOld}d / ${lifecycle.tercil})`,
+                labelColor: '#DC2626',
+                icon: <AlertTriangle size={10} color="#DC2626" />
             };
         }
         
@@ -1156,7 +1213,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 textColor: '#065F46',
                 badgeBorder: '#A7F3D0',
                 badgeBg: '#ECFDF5',
-                badge: 'Autorizado (IA)',
+                badge: `Último Precio (${lifecycle.daysOld}d)`,
                 labelColor: THEME.colors.primary,
                 icon: <CheckCircle2 size={10} color={THEME.colors.primary} />
             };
@@ -1187,7 +1244,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
         }
     };
 
-    const handleExport = () => {
+    const handleExport = async () => {
         const data = sortedProducts.map(p => {
             const hist = purchaseHistory[p.id] || [];
             const smart = calculateSmartCost(p.id);
@@ -1210,13 +1267,14 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             };
         });
 
+        const XLSX = await import('xlsx');
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Matriz de Costos");
         XLSX.writeFile(wb, `Frufresco_CostMatrix_${safeFormatDate(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
-    const handleExportTemplateAll = () => {
+    const handleExportTemplateAll = async () => {
         const data = products.map(p => {
             const currentManual = manualOverrides[p.id]?.manual_cost || 0;
             const lifecycle = getProductCostLifecycle(p.id);
@@ -1229,13 +1287,14 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 'NUEVO_COSTO': ''
             };
         });
+        const XLSX = await import('xlsx');
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Plantilla Costos FruFresco");
         XLSX.writeFile(wb, `Plantilla_Costos_Completa_${safeFormatDate(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
-    const handleExportTemplateExpired = () => {
+    const handleExportTemplateExpired = async () => {
         const expiredProducts = products.filter(p => {
             const lifecycle = getProductCostLifecycle(p.id);
             return lifecycle.isExpired || lifecycle.isDueSoon;
@@ -1261,6 +1320,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             };
         });
 
+        const XLSX = await import('xlsx');
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Costos Desactualizados");
@@ -1285,6 +1345,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
         try {
             const dataBuffer = await file.arrayBuffer();
+            const XLSX = await import('xlsx');
             const workbook = XLSX.read(dataBuffer);
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
@@ -1545,6 +1606,15 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
         if (!matchesCategory || !matchesSearch) return false;
 
+        // Filtro por Tercil o Alertas de Volatilidad (+/- > 20%)
+        if (tercilFilter === 'T1' && (productTerciles[p.id] || 'T2') !== 'T1') return false;
+        if (tercilFilter === 'T2' && (productTerciles[p.id] || 'T2') !== 'T2') return false;
+        if (tercilFilter === 'T3' && (productTerciles[p.id] || 'T2') !== 'T3') return false;
+        if (tercilFilter === 'alerts') {
+            const cb = getProductCircuitBreaker(p.id);
+            if (!cb.isTriggered) return false;
+        }
+
         if (lifecycleFilter === 'all') return true;
         const lifecycle = getProductCostLifecycle(p.id);
 
@@ -1591,6 +1661,10 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
     const stats = {
         totalSKU: products.length,
+        t1Count: 0,
+        t2Count: 0,
+        t3Count: 0,
+        circuitBreakerCount: 0,
         rising: 0,
         falling: 0,
         expiringSoon: 0,
@@ -1603,6 +1677,14 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
     let trendCount = 0;
 
     products.forEach(p => {
+        const tercil = productTerciles[p.id] || 'T2';
+        if (tercil === 'T1') stats.t1Count++;
+        else if (tercil === 'T2') stats.t2Count++;
+        else if (tercil === 'T3') stats.t3Count++;
+
+        const cb = getProductCircuitBreaker(p.id);
+        if (cb.isTriggered) stats.circuitBreakerCount++;
+
         const lifecycle = getProductCostLifecycle(p.id);
         if (lifecycle.status === 'VIGENTE') stats.vigentes++;
         if (lifecycle.isDueSoon) stats.expiringSoon++;
@@ -1837,7 +1919,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 {!loading && (
                     <div style={{ 
                         display: 'grid', 
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
                         gap: '0.85rem', 
                         marginBottom: '1.25rem' 
                     }}>
@@ -1846,39 +1928,58 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             value={stats.totalSKU} 
                             color={THEME.colors.textMain} 
                             icon={<Cpu size={22} />} 
-                            onClick={() => setLifecycleFilter('all')}
-                            active={lifecycleFilter === 'all'}
+                            onClick={() => { setTercilFilter('all'); setLifecycleFilter('all'); }}
+                            active={tercilFilter === 'all' && lifecycleFilter === 'all'}
                         />
                         <StatCard 
-                            label="Tendencia Global" 
-                            value={`${Math.abs(stats.avgTrend).toFixed(1)}%`} 
-                            trend={stats.avgTrend > 0 ? 'up' : 'down'}
-                            color={stats.avgTrend > 0 ? '#DC2626' : THEME.colors.primary} 
-                            icon={<TrendingUp size={22} />}
+                            label="🔥 T1: Pulso Diario (4d)" 
+                            value={stats.t1Count} 
+                            subValue="Alta Frecuencia"
+                            color="#7C3AED" 
+                            bg="#F5F3FF"
+                            icon={<Zap size={22} color="#7C3AED" />}
+                            onClick={() => { setTercilFilter(tercilFilter === 'T1' ? 'all' : 'T1'); setLifecycleFilter('all'); }}
+                            active={tercilFilter === 'T1'}
                         />
                         <StatCard 
-                            label="Costos en Alza" 
-                            value={stats.rising} 
+                            label="📦 T2: Moderado (8d)" 
+                            value={stats.t2Count} 
+                            subValue="Rotación Media"
+                            color="#0284C7" 
+                            bg="#F0F9FF"
+                            icon={<Clock size={22} color="#0284C7" />}
+                            onClick={() => { setTercilFilter(tercilFilter === 'T2' ? 'all' : 'T2'); setLifecycleFilter('all'); }}
+                            active={tercilFilter === 'T2'}
+                        />
+                        <StatCard 
+                            label="⏳ T3: Quincenal (15d)" 
+                            value={stats.t3Count} 
+                            subValue="Secos / Catálogo"
+                            color="#059669" 
+                            bg="#ECFDF5"
+                            icon={<Package size={22} color="#059669" />}
+                            onClick={() => { setTercilFilter(tercilFilter === 'T3' ? 'all' : 'T3'); setLifecycleFilter('all'); }}
+                            active={tercilFilter === 'T3'}
+                        />
+                        <StatCard 
+                            label="Costos Vencidos" 
+                            value={stats.pendingCost} 
+                            subValue="Tarea Urgente"
                             color="#DC2626" 
                             bg="#FEF2F2"
-                            icon={<TrendingUp size={22} />}
-                        />
-                        <StatCard 
-                            label="Costos en Baja" 
-                            value={stats.falling} 
-                            color={THEME.colors.primary} 
-                            bg="#ECFDF5"
-                            icon={<TrendingDown size={22} />}
-                        />
-                        <StatCard 
-                            label="Desactualizados" 
-                            value={stats.expiringSoon + stats.pendingCost} 
-                            subValue={stats.pendingCost > 0 ? `${stats.pendingCost} sin costo` : 'Recotizar'}
-                            color="#D97706" 
-                            bg="#FFFBEB"
-                            icon={<ShieldAlert size={22} />} 
-                            onClick={() => setLifecycleFilter(lifecycleFilter === 'vencido' ? 'all' : 'vencido')}
+                            icon={<AlertTriangle size={22} color="#DC2626" />} 
+                            onClick={() => { setLifecycleFilter(lifecycleFilter === 'vencido' ? 'all' : 'vencido'); setTercilFilter('all'); }}
                             active={lifecycleFilter === 'vencido'}
+                        />
+                        <StatCard 
+                            label="Alertas Volatilidad" 
+                            value={stats.circuitBreakerCount} 
+                            subValue="Variación >20%"
+                            color="#E11D48" 
+                            bg="#FFF1F2"
+                            icon={<ShieldAlert size={22} color="#E11D48" />} 
+                            onClick={() => { setTercilFilter(tercilFilter === 'alerts' ? 'all' : 'alerts'); setLifecycleFilter('all'); }}
+                            active={tercilFilter === 'alerts'}
                         />
                     </div>
                 )}
@@ -1899,162 +2000,77 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                     </div>
                 ) : (
                     <>
-                        {/* BARRA FLOTANTE STICKY DE ACCIONES Y BÚSQUEDA (ESTÁNDAR CLIENTSMODULE) */}
+                        {/* BARRA DE ACCIONES Y BÚSQUEDA COMPACTA STICKY */}
                         <div style={{ 
                             display: 'flex', 
                             justifyContent: 'space-between', 
                             alignItems: 'center', 
                             gap: '0.8rem', 
-                            marginBottom: '1.2rem',
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            marginBottom: '0.5rem',
+                            backgroundColor: 'rgba(255, 255, 255, 0.98)',
                             backdropFilter: 'blur(12px)',
-                            padding: '0.65rem 1.2rem',
-                            borderRadius: '20px',
-                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                            padding: '0.45rem 1rem',
+                            borderRadius: '14px',
+                            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05)',
                             border: '1px solid #E2E8F0',
                             position: 'sticky',
                             top: embedded ? '142px' : '85px',
-                            zIndex: 70,
-                            transition: 'all 0.2s ease-in-out',
+                            zIndex: 75,
                             flexWrap: 'wrap'
                         }}>
-                            {/* Search & Quick Lifecycle Chips */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: '1 1 500px', flexWrap: 'wrap' }}>
-                                {/* Search Input Container */}
-                                <div style={{ 
-                                    flex: '1 1 240px',
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    backgroundColor: '#F8FAFC', 
-                                    borderRadius: '10px', 
-                                    border: `1px solid ${THEME.colors.border}`, 
-                                    padding: '0 0.8rem', 
-                                    gap: '0.5rem',
-                                    height: '38px'
-                                }}>
-                                    <Search size={16} color={THEME.colors.textSecondary} />
-                                    <input 
-                                        type="text"
-                                        placeholder="Buscar producto, ID contable o SKU..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        style={{ 
-                                            width: '100%', 
-                                            border: 'none', 
-                                            outline: 'none', 
-                                            fontSize: '0.85rem', 
-                                            fontWeight: '600',
-                                            color: THEME.colors.textMain,
-                                            background: 'transparent',
-                                            fontFamily: THEME.typography.fontFamilySecondary
-                                        }}
-                                    />
-                                    {searchTerm && (
-                                        <button 
-                                            onClick={() => setSearchTerm('')}
-                                            style={{ border: 'none', background: 'none', color: THEME.colors.textSecondary, cursor: 'pointer', display: 'flex', padding: 0 }}
-                                        >
-                                            <X size={15} />
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Quick Lifecycle Filter Chips */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setLifecycleFilter('all')}
-                                        style={{
-                                            padding: '0.4rem 0.75rem',
-                                            borderRadius: '8px',
-                                            border: lifecycleFilter === 'all' ? `1.5px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
-                                            backgroundColor: lifecycleFilter === 'all' ? '#ECFDF5' : 'white',
-                                            color: lifecycleFilter === 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                            fontSize: '0.75rem',
-                                            fontWeight: '800',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.15s'
-                                        }}
+                            {/* Search Input Container */}
+                            <div style={{ 
+                                flex: '1 1 280px',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                backgroundColor: '#F8FAFC', 
+                                borderRadius: '10px', 
+                                border: `1px solid ${THEME.colors.border}`, 
+                                padding: '0 0.8rem', 
+                                gap: '0.5rem',
+                                height: '36px'
+                            }}>
+                                <Search size={15} color={THEME.colors.textSecondary} />
+                                <input 
+                                    type="text"
+                                    placeholder="Buscar producto, ID contable o SKU..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        border: 'none', 
+                                        outline: 'none', 
+                                        fontSize: '0.85rem', 
+                                        fontWeight: '600',
+                                        color: THEME.colors.textMain,
+                                        background: 'transparent',
+                                        fontFamily: THEME.typography.fontFamilySecondary
+                                    }}
+                                />
+                                {searchTerm && (
+                                    <button 
+                                        onClick={() => setSearchTerm('')}
+                                        style={{ border: 'none', background: 'none', color: THEME.colors.textSecondary, cursor: 'pointer', display: 'flex', padding: 0 }}
                                     >
-                                        Todos ({stats.totalSKU})
+                                        <X size={14} />
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setLifecycleFilter('vigente')}
-                                        style={{
-                                            padding: '0.4rem 0.75rem',
-                                            borderRadius: '8px',
-                                            border: lifecycleFilter === 'vigente' ? `1.5px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
-                                            backgroundColor: lifecycleFilter === 'vigente' ? '#ECFDF5' : 'white',
-                                            color: lifecycleFilter === 'vigente' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                            fontSize: '0.75rem',
-                                            fontWeight: '800',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            transition: 'all 0.15s'
-                                        }}
-                                    >
-                                        <CheckCircle2 size={12} color={THEME.colors.primary} /> Vigentes ({stats.vigentes})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setLifecycleFilter('por_vencer')}
-                                        style={{
-                                            padding: '0.4rem 0.75rem',
-                                            borderRadius: '8px',
-                                            border: lifecycleFilter === 'por_vencer' ? '1.5px solid #D97706' : `1px solid ${THEME.colors.border}`,
-                                            backgroundColor: lifecycleFilter === 'por_vencer' ? '#FFFBEB' : 'white',
-                                            color: lifecycleFilter === 'por_vencer' ? '#92400E' : THEME.colors.textSecondary,
-                                            fontSize: '0.75rem',
-                                            fontWeight: '800',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            transition: 'all 0.15s'
-                                        }}
-                                    >
-                                        <Clock size={12} color="#D97706" /> Por Vencer
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setLifecycleFilter('vencido')}
-                                        style={{
-                                            padding: '0.4rem 0.75rem',
-                                            borderRadius: '8px',
-                                            border: lifecycleFilter === 'vencido' ? '1.5px solid #DC2626' : `1px solid ${THEME.colors.border}`,
-                                            backgroundColor: lifecycleFilter === 'vencido' ? '#FEF2F2' : 'white',
-                                            color: lifecycleFilter === 'vencido' ? '#991B1B' : THEME.colors.textSecondary,
-                                            fontSize: '0.75rem',
-                                            fontWeight: '800',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            transition: 'all 0.15s'
-                                        }}
-                                    >
-                                        <AlertTriangle size={12} color="#DC2626" /> Vencidos ({stats.expiringSoon + stats.pendingCost})
-                                    </button>
-                                </div>
+                                )}
                             </div>
 
                             {/* Category, Strategy & Refresh Controls */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                 {/* Category Filter Select */}
                                 <div style={{ 
                                     display: 'flex', 
                                     alignItems: 'center', 
                                     gap: '0.4rem', 
                                     backgroundColor: '#F8FAFC', 
-                                    padding: '0 0.75rem', 
+                                    padding: '0 0.7rem', 
                                     borderRadius: '10px', 
                                     border: `1px solid ${THEME.colors.border}`, 
-                                    height: '38px' 
+                                    height: '36px' 
                                 }}>
-                                    <Layers size={14} color={THEME.colors.textSecondary} />
+                                    <Layers size={13} color={THEME.colors.textSecondary} />
                                     <span style={{ fontWeight: '800', fontSize: '0.68rem', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Cat:</span>
                                     <select 
                                         value={selectedCategory}
@@ -2078,17 +2094,17 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
                                 {/* Strategy Selector Button */}
                                 <ActionTooltip
-                                    title="Protocolo CI-Delta"
-                                    badge="Instructivo"
+                                    title="Protocolo Canónico de Costos"
+                                    badge="SPEC v1.7.0"
                                     badgeColor="#38BDF8"
-                                    icon={<Brain size={14} color="#38BDF8" />}
-                                    description="Abre el instructivo completo del Motor Adaptativo FruFresco, amortiguación de Corabastos y políticas de auditoría."
+                                    icon={<BookOpen size={14} color="#38BDF8" />}
+                                    description="Abre el manual operativo canónico: Dos Caminos de Costeo, Circuit Breaker (+/- >20%), Pareto por Frecuencia (T1, T2, T3) y Merma Teórica."
                                 >
                                     <button 
                                         onClick={() => setIsSmartModalOpen(true)}
                                         style={{ 
-                                            height: '38px',
-                                            padding: '0 0.8rem', 
+                                            height: '36px',
+                                            padding: '0 0.75rem', 
                                             borderRadius: '10px', 
                                             border: `1px solid ${THEME.colors.border}`, 
                                             backgroundColor: THEME.colors.primaryLight, 
@@ -2098,10 +2114,10 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             alignItems: 'center', 
                                             gap: '0.4rem',
                                             cursor: 'pointer',
-                                            fontSize: '0.78rem'
+                                            fontSize: '0.76rem'
                                         }}
                                     >
-                                        <Brain size={14} /> Algoritmo FruFresco
+                                        <BookOpen size={14} /> Metodología & Manual
                                     </button>
                                 </ActionTooltip>
 
@@ -2110,8 +2126,8 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                     onClick={fetchData} 
                                     title="Sincronizar Datos"
                                     style={{ 
-                                        width: '38px',
-                                        height: '38px',
+                                        width: '36px',
+                                        height: '36px',
                                         borderRadius: '10px', 
                                         border: `1px solid ${THEME.colors.border}`, 
                                         backgroundColor: '#F8FAFC', 
@@ -2123,7 +2139,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         transition: 'all 0.2s'
                                     }}
                                 >
-                                    <RefreshCw size={15} />
+                                    <RefreshCw size={14} />
                                 </button>
                             </div>
                         </div>
@@ -2153,14 +2169,14 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 padding: '0.85rem 1.25rem', 
                                                 width: '280px', 
                                                 position: 'sticky', 
-                                                top: embedded ? '203px' : '146px',
+                                                top: embedded ? '194px' : '137px',
                                                 left: 0, 
                                                 backgroundColor: '#F8FAFC', 
-                                                zIndex: 65,
+                                                zIndex: 70,
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
-                                                borderBottom: `1.5px solid ${THEME.colors.border}`,
-                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.04)',
+                                                borderBottom: `2px solid ${THEME.colors.border}`,
+                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.06)',
                                                 borderTopLeftRadius: THEME.radius.xl
                                             }}
                                         >
@@ -2182,12 +2198,13 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 textAlign: 'center', 
                                                 width: '100px', 
                                                 position: 'sticky',
-                                                top: embedded ? '203px' : '146px',
-                                                zIndex: 60,
+                                                top: embedded ? '194px' : '137px',
+                                                zIndex: 65,
                                                 cursor: 'pointer', 
                                                 userSelect: 'none',
                                                 backgroundColor: '#F8FAFC',
-                                                borderBottom: `1.5px solid ${THEME.colors.border}`
+                                                borderBottom: `2px solid ${THEME.colors.border}`,
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
                                             }}
                                         >
                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color: sortField === 'last_price' ? THEME.colors.primary : THEME.colors.textSecondary }}>
@@ -2200,13 +2217,13 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             </div>
                                         </th>
 
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 2</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 3</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 4</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 5</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 6</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 7</th>
-                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '203px' : '146px', zIndex: 60, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 8</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 2</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 3</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 4</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 5</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 6</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 7</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', position: 'sticky', top: embedded ? '194px' : '137px', zIndex: 65, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>Compra 8</th>
 
                                         {/* Sortable: Costo Base FruFresco */}
                                         <th 
@@ -2216,12 +2233,13 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 textAlign: 'center', 
                                                 width: '160px', 
                                                 position: 'sticky',
-                                                top: embedded ? '203px' : '146px',
-                                                zIndex: 60,
+                                                top: embedded ? '194px' : '137px',
+                                                zIndex: 65,
                                                 backgroundColor: '#F1F5F9',
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
-                                                borderBottom: `1.5px solid ${THEME.colors.border}`
+                                                borderBottom: `2px solid ${THEME.colors.border}`,
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
                                             }}
                                         >
                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color: sortField === 'cost' ? THEME.colors.primary : THEME.colors.textSecondary }}>
@@ -2242,12 +2260,13 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 textAlign: 'center', 
                                                 width: '150px', 
                                                 position: 'sticky',
-                                                top: embedded ? '203px' : '146px',
-                                                zIndex: 60,
+                                                top: embedded ? '194px' : '137px',
+                                                zIndex: 65,
                                                 cursor: 'pointer', 
                                                 userSelect: 'none',
                                                 backgroundColor: '#F8FAFC',
-                                                borderBottom: `1.5px solid ${THEME.colors.border}`,
+                                                borderBottom: `2px solid ${THEME.colors.border}`,
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
                                                 borderTopRightRadius: THEME.radius.xl
                                             }}
                                         >
@@ -2352,20 +2371,25 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                             <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
                                                                 {p.unit_of_measure}
                                                             </span>
-                                                            {/* Perecibilidad Badge with Lucide Icon */}
-                                                            {lifecycle.sla.perishabilityClass === 'A' && (
+                                                            {/* Pareto Tercil Badge with SLA (SPEC v1.7.0) */}
+                                                            {lifecycle.tercil === 'T1' && (
                                                                 <span title={lifecycle.sla.description} style={{ fontSize: '0.65rem', fontWeight: '800', color: '#7C3AED', backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                    <Zap size={10} color="#7C3AED" strokeWidth={2.5} /> Clase A (4d)
+                                                                    <Zap size={10} color="#7C3AED" strokeWidth={2.5} /> T1 (4d)
                                                                 </span>
                                                             )}
-                                                            {lifecycle.sla.perishabilityClass === 'B' && (
+                                                            {lifecycle.tercil === 'T2' && (
                                                                 <span title={lifecycle.sla.description} style={{ fontSize: '0.65rem', fontWeight: '800', color: '#0284C7', backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                    <Clock size={10} color="#0284C7" strokeWidth={2.5} /> Clase B (8d)
+                                                                    <Clock size={10} color="#0284C7" strokeWidth={2.5} /> T2 (8d)
                                                                 </span>
                                                             )}
-                                                            {lifecycle.sla.perishabilityClass === 'C' && (
+                                                            {lifecycle.tercil === 'T3' && (
                                                                 <span title={lifecycle.sla.description} style={{ fontSize: '0.65rem', fontWeight: '800', color: '#059669', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                    <Package size={10} color="#059669" strokeWidth={2.5} /> Clase C (30d)
+                                                                    <Package size={10} color="#059669" strokeWidth={2.5} /> T3 (15d)
+                                                                </span>
+                                                            )}
+                                                            {cellState.isCircuitBreaker && (
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9F1239', backgroundColor: '#FFE4E6', border: '1px solid #FECDD3', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <ShieldAlert size={10} color="#E11D48" /> Volatilidad &gt;20%
                                                                 </span>
                                                             )}
                                                             <span style={{ 
@@ -2415,36 +2439,82 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                             );
 
                                                             return (
-                                                                <td key={colIdx} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                                <td 
+                                                                    key={colIdx} 
+                                                                    onClick={() => {
+                                                                        if (colIdx === 0) {
+                                                                            setQuotingProduct(p);
+                                                                            setQuoteInputCost(isOutlier ? '' : (price ? String(price) : ''));
+                                                                            setQuoteInputNotes('');
+                                                                        }
+                                                                    }}
+                                                                    style={{ 
+                                                                        padding: '0.6rem 0.5rem', 
+                                                                        textAlign: 'center', 
+                                                                        verticalAlign: 'middle', 
+                                                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                                                        cursor: colIdx === 0 ? 'pointer' : 'default'
+                                                                    }}
+                                                                >
                                                                     {price ? (
                                                                         isOutlier ? (
-                                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: 0.45 }}
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                                                                                  title={`Registro contable conservado ($${formatNumber(price)}), pero excluido del cálculo adaptativo por inconsistencia de escala dimensional (empaque mayorista no unitario).`}>
-                                                                                <span 
-                                                                                    style={{ 
-                                                                                        fontSize: '0.78rem', 
-                                                                                        fontWeight: '600', 
-                                                                                        fontFamily: 'monospace', 
-                                                                                        color: '#94A3B8',
-                                                                                        backgroundColor: '#F1F5F9',
-                                                                                        border: '1px dashed #CBD5E1',
-                                                                                        padding: '1px 5px',
-                                                                                        borderRadius: '5px',
-                                                                                        display: 'inline-flex',
-                                                                                        alignItems: 'center',
-                                                                                        gap: '2px',
-                                                                                        textDecoration: 'line-through'
-                                                                                    }}
-                                                                                >
-                                                                                    ${formatNumber(price)}
-                                                                                </span>
-                                                                                <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontStyle: 'italic', marginTop: '2px' }}>
-                                                                                    Atípico
-                                                                                </span>
-                                                                                {dateStr && (
-                                                                                    <span style={{ fontSize: '0.62rem', color: '#94A3B8', marginTop: '1px' }}>
-                                                                                        {dateStr}
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: 0.45 }}>
+                                                                                    <span 
+                                                                                        style={{ 
+                                                                                            fontSize: '0.78rem', 
+                                                                                            fontWeight: '600', 
+                                                                                            fontFamily: 'monospace', 
+                                                                                            color: '#94A3B8',
+                                                                                            backgroundColor: '#F1F5F9',
+                                                                                            border: '1px dashed #CBD5E1',
+                                                                                            padding: '1px 5px',
+                                                                                            borderRadius: '5px',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '2px',
+                                                                                            textDecoration: 'line-through'
+                                                                                        }}
+                                                                                    >
+                                                                                        ${formatNumber(price)}
                                                                                     </span>
+                                                                                    <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontStyle: 'italic', marginTop: '2px' }}>
+                                                                                        Atípico
+                                                                                    </span>
+                                                                                    {dateStr && (
+                                                                                        <span style={{ fontSize: '0.62rem', color: '#94A3B8', marginTop: '1px' }}>
+                                                                                            {dateStr}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                {colIdx === 0 && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setQuotingProduct(p);
+                                                                                            setQuoteInputCost('');
+                                                                                            setQuoteInputNotes('');
+                                                                                        }}
+                                                                                        title="Precio atípico en compras. Clic para registrar cotización válida hoy"
+                                                                                        style={{
+                                                                                            marginTop: '4px',
+                                                                                            background: '#FEF2F2',
+                                                                                            border: '1px solid #FECDD3',
+                                                                                            borderRadius: '4px',
+                                                                                            padding: '1px 6px',
+                                                                                            fontSize: '0.65rem',
+                                                                                            fontWeight: '800',
+                                                                                            color: '#B91C1C',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '3px'
+                                                                                        }}
+                                                                                    >
+                                                                                        <Pencil size={9} /> Cotizar
+                                                                                    </button>
                                                                                 )}
                                                                             </div>
                                                                         ) : (
@@ -2573,13 +2643,22 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                             return (
                                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', minWidth: '130px' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                                                                        <span style={{
-                                                                            fontSize: '1.02rem',
-                                                                            fontWeight: '900',
-                                                                            fontFamily: 'monospace',
-                                                                            color: isManualOverridden ? '#B45309' : (smartCost > 0 ? '#111827' : '#94A3B8'),
-                                                                            letterSpacing: '-0.02em'
-                                                                        }}>
+                                                                        <span 
+                                                                            onClick={() => {
+                                                                                setOverrideProduct(p);
+                                                                                setOverrideInputCost(String(Math.round(displayCost)));
+                                                                            }}
+                                                                            title="Clic para gestionar costo base manual"
+                                                                            style={{
+                                                                                fontSize: '1.02rem',
+                                                                                fontWeight: '900',
+                                                                                fontFamily: 'monospace',
+                                                                                color: isManualOverridden ? '#B45309' : (smartCost > 0 ? '#111827' : '#94A3B8'),
+                                                                                letterSpacing: '-0.02em',
+                                                                                cursor: 'pointer',
+                                                                                borderBottom: '1px dotted #CBD5E1'
+                                                                            }}
+                                                                        >
                                                                             ${formatNumber(Math.round(displayCost))}
                                                                         </span>
                                                                         <button
@@ -2605,7 +2684,73 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                                         </button>
                                                                     </div>
                                                                     <div>
-                                                                        {isManualOverridden ? (
+                                                                        {cellState.isCircuitBreaker && cellState.cb ? (
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                                                                <span style={{
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '800',
+                                                                                    color: '#9F1239',
+                                                                                    backgroundColor: '#FFE4E6',
+                                                                                    border: '1px solid #FECDD3',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '3px'
+                                                                                }}>
+                                                                                    <ShieldAlert size={9} color="#E11D48" /> Variación {cellState.cb.deltaPct > 0 ? '+' : ''}{cellState.cb.deltaPct}%
+                                                                                </span>
+                                                                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleSaveManualCost(p.id, String(cellState.cb!.newPrice));
+                                                                                        }}
+                                                                                        title={`Aprobar nueva realidad de compra: $${formatNumber(cellState.cb.newPrice)}`}
+                                                                                        style={{
+                                                                                            fontSize: '0.62rem',
+                                                                                            fontWeight: '800',
+                                                                                            color: '#065F46',
+                                                                                            backgroundColor: '#ECFDF5',
+                                                                                            border: '1px solid #A7F3D0',
+                                                                                            padding: '1px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '2px'
+                                                                                        }}
+                                                                                    >
+                                                                                        <Check size={9} /> Aprobar ${formatNumber(cellState.cb.newPrice)}
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setOverrideProduct(p);
+                                                                                            setOverrideInputCost(displayCost > 0 ? String(Math.round(displayCost)) : '');
+                                                                                        }}
+                                                                                        title="Ingresar o ajustar manualmente el costo base real"
+                                                                                        style={{
+                                                                                            fontSize: '0.62rem',
+                                                                                            fontWeight: '800',
+                                                                                            color: '#1E40AF',
+                                                                                            backgroundColor: '#EFF6FF',
+                                                                                            border: '1px solid #BFDBFE',
+                                                                                            padding: '1px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            cursor: 'pointer',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '2px'
+                                                                                        }}
+                                                                                    >
+                                                                                        <Pencil size={9} /> Corregir
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : isManualOverridden ? (
                                                                             <span style={{
                                                                                 fontSize: '0.62rem',
                                                                                 fontWeight: '800',
@@ -2644,7 +2789,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                                                     transition: 'all 0.15s ease'
                                                                                 }}
                                                                             >
-                                                                                <Brain size={9} color={smartCost > 0 ? '#059669' : '#94A3B8'} /> Adaptativo Abastos
+                                                                                <CheckCircle2 size={9} color={smartCost > 0 ? '#059669' : '#94A3B8'} /> Último Precio Real
                                                                             </button>
                                                                         )}
                                                                     </div>
@@ -3683,7 +3828,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                                     <h2 style={{ margin: 0, fontSize: '1.55rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
-                                        Manual de Capacitación: Matriz de Costos FruFresco
+                                        Manual Operativo: Protocolo Canónico de Costos FruFresco
                                     </h2>
                                     <span style={{ 
                                         backgroundColor: '#EFF6FF', 
@@ -3694,7 +3839,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         borderRadius: '6px',
                                         border: '1px solid #BFDBFE'
                                     }}>
-                                        v2.0 IA-Delta
+                                        v1.7.0 SDD Canónico
                                     </span>
                                     <span style={{ 
                                         backgroundColor: '#ECFDF5', 
@@ -3705,11 +3850,11 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         borderRadius: '6px',
                                         border: '1px solid #A7F3D0'
                                     }}>
-                                        Protocolo Comercial FruFresco
+                                        Dos Caminos & Poka-Yoke
                                     </span>
                                 </div>
                                 <p style={{ margin: '6px 0 0 0', color: '#64748B', fontWeight: '500', fontSize: '0.9rem', lineHeight: '1.4' }}>
-                                    Guía formativa para operadores comerciales: calibración dinámica de precios, arquitectura dual, gestión de perecibilidad y motor de alisamiento adaptativo de Corabastos.
+                                    Guía formativa para el equipo comercial y operativo: dos caminos de abastecimiento (Báscula vs Manual), regla del Último Precio Real, Circuit Breaker Poka-Yoke (+/- &gt;20%), Pareto de Frescura por Frecuencia de Compra (T1, T2, T3) y protección de merma teórica.
                                 </p>
                             </div>
                         </div>
@@ -3729,7 +3874,9 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             }));
                             const shrinkagePct = activeProduct.theoretical_shrinkage_pct || 0;
                             const liveModel = runAdaptivePricingModel(observations, refCost, { shrinkagePct });
-                            const sla = getFreshnessSLA(activeProduct.category);
+                            const tercil = productTerciles[activeProduct.id] || 'T2';
+                            const sla = getFreshnessSLA(tercil);
+                            const cb = getProductCircuitBreaker(activeProduct.id);
 
                             // Sorted chronological observations
                             const sortedObs = [...observations].filter(o => o.price && o.price > 0).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -3741,23 +3888,20 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             const shockPct = Number((priceShock * 100).toFixed(1));
 
                             const lastDate = latestObs ? latestObs.date : null;
-                            const lifecycle = evaluateCostFreshness(lastDate, activeProduct.category, liveModel.cost);
+                            const effectiveCost = calculateSmartCost(activeProduct.id);
+                            const lifecycle = evaluateCostFreshness(lastDate, tercil, effectiveCost, sortedObs.length > 0 ? 'COMPRAS' : 'SIN_SEÑAL');
                             const daysSince = lifecycle.daysOld;
 
-                            // Intermediate Tone Pedagogical Narrative
+                            // Canonical Pedagogical Narrative under SPEC v1.7.0
                             let narrative = '';
                             if (sortedObs.length === 0) {
-                                narrative = `El producto no cuenta con compras ni sondeos registrados en la base de datos. Se mantiene el costo de referencia base de $${formatNumber(refCost || 0)} COP/Kg como piso operativo provisional hasta que se registre una cotización táctica o una compra física en bodega.`;
+                                narrative = `El producto no cuenta con compras físicas ni cotizaciones registradas. Se mantiene el costo de referencia base de $${formatNumber(refCost || 0)} COP/${activeProduct.unit_of_measure || 'Kg'} como piso provisional hasta que se registre una compra de báscula (Camino A) o una cotización comercial (Camino B).`;
+                            } else if (cb.isTriggered) {
+                                narrative = `🚨 ALERTA POKA-YOKE: CIRCUIT BREAKER ACTIVADO (+/- >20%). El último precio registrado ($${formatNumber(latestPrice)} COP) tuvo una variación del ${shockPct > 0 ? '+' : ''}${shockPct}% frente al precio anterior ($${formatNumber(prevPrice)} COP). Para proteger los márgenes y prevenir errores de digitación en bodega o plaza, el costo comercial se mantiene CONGELADO en $${formatNumber(prevPrice)} COP hasta que el Jefe Comercial presione 'Aprobar' o digite el costo manual definitivo.`;
                             } else if (sortedObs.length === 1) {
-                                narrative = `Solo existe una señal de mercado reciente ($${formatNumber(latestPrice)} COP/Kg). El sistema toma este valor como costo base y le suma el rendimiento por merma de bodega (${shrinkagePct}%), generando un costo neto vendible de $${formatNumber(liveModel.cost)} COP/Kg.`;
-                            } else if (priceShock > 0.18) {
-                                narrative = `Se identificó un incremento reciente en plaza del +${shockPct}%. Para proteger la estabilidad comercial de las listas de precios y no sobrerreaccionar a un evento aislado de un solo día (lluvia o transporte), el algoritmo aplicó amortiguación de choque, situando el costo base en $${formatNumber(liveModel.grossCost)} COP/Kg en lugar de trasladar el pico directo de $${formatNumber(latestPrice)} COP/Kg.`;
-                            } else if (liveModel.trendDirection === 'up' && sortedObs.length >= 3) {
-                                narrative = `El producto acumula aumentos continuos en sus últimas compras y sondeos. Al confirmarse una escasez estacional sostenida, el algoritmo aceleró la captación del costo ($${formatNumber(liveModel.grossCost)} COP/Kg) para evitar vender por debajo del costo de reposición y salvaguardar el margen comercial.`;
-                            } else if (priceShock < -0.15) {
-                                narrative = `La plaza registró una caída abrupta del ${shockPct}%. El algoritmo aplicó un descenso gradual ($${formatNumber(liveModel.grossCost)} COP/Kg) para permitir la rotación rentable del inventario remanente en bodega antes de equiparar la nueva tarifa baja del mercado.`;
+                                narrative = `Regla Canónica del Último Precio Real: Existe una única señal registrada en el sistema ($${formatNumber(latestPrice)} COP/${activeProduct.unit_of_measure || 'Kg'}). El sistema adopta este valor como costo base directo y le suma el rendimiento por merma (${shrinkagePct}%), fijando un costo neto vendible de $${formatNumber(liveModel.cost)} COP.`;
                             } else {
-                                narrative = `Las cotizaciones y compras se mantienen estables dentro de los rangos habituales de mercado. El costo base de $${formatNumber(liveModel.grossCost)} COP/Kg refleja el equilibrio ponderado por volumen, asegurando tarifas firmes y consistentes.`;
+                                narrative = `Regla Canónica del Último Precio Real (Variación normal ${shockPct > 0 ? '+' : ''}${shockPct}%): Sin distorsiones de alisamiento ni amortiguaciones matemáticas, el sistema adopta directamente la última compra o cotización ($${formatNumber(latestPrice)} COP/${activeProduct.unit_of_measure || 'Kg'}) más la merma teórica (${shrinkagePct}%), entregando un costo neto vendible de $${formatNumber(liveModel.cost)} COP.`;
                             }
 
                             return (
@@ -3779,7 +3923,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                    Diagnóstico Operativo en Vivo
+                                                    Diagnóstico Operativo en Vivo • SPEC v1.7.0
                                                 </div>
                                                 <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
                                                     {activeProduct.name}
@@ -3790,7 +3934,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             </div>
                                         </div>
 
-                                        {/* Product Selector Searcher */}
+                                        {/* Product Selector Searcher & Badges */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
                                                 <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', whiteSpace: 'nowrap' }}>
@@ -3853,7 +3997,6 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 {/* Autocomplete Dropdown List */}
                                                 {isModalSearchOpen && (
                                                     <>
-                                                        {/* Backdrop for click outside */}
                                                         <div 
                                                             onClick={() => setIsModalSearchOpen(false)}
                                                             style={{ position: 'fixed', inset: 0, zIndex: 999 }}
@@ -3944,20 +4087,40 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 )}
                                             </div>
 
-                                            {/* SLA Tag */}
-                                            {sla.perishabilityClass === 'A' && (
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#7C3AED', backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE', padding: '4px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Zap size={13} color="#7C3AED" strokeWidth={2.5} /> Clase A: Hiperperecedero ({sla.validDaysMax}d)
-                                                </span>
-                                            )}
-                                            {sla.perishabilityClass === 'B' && (
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0284C7', backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD', padding: '4px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Clock size={13} color="#0284C7" strokeWidth={2.5} /> Clase B: Semi-perecedero ({sla.validDaysMax}d)
-                                                </span>
-                                            )}
-                                            {sla.perishabilityClass === 'C' && (
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '4px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Package size={13} color="#059669" strokeWidth={2.5} /> Clase C: Despensa ({sla.validDaysMax}d)
+                                            {/* Pareto Tercil Tag */}
+                                            <span style={{ 
+                                                fontSize: '0.75rem', 
+                                                fontWeight: '800', 
+                                                color: tercil === 'T1' ? '#7C3AED' : tercil === 'T2' ? '#0284C7' : '#059669', 
+                                                backgroundColor: tercil === 'T1' ? '#F5F3FF' : tercil === 'T2' ? '#F0F9FF' : '#ECFDF5', 
+                                                border: `1px solid ${tercil === 'T1' ? '#DDD6FE' : tercil === 'T2' ? '#BAE6FD' : '#A7F3D0'}`, 
+                                                padding: '4px 10px', 
+                                                borderRadius: '8px', 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '4px' 
+                                            }}>
+                                                {tercil === 'T1' && <Zap size={13} color="#7C3AED" strokeWidth={2.5} />}
+                                                {tercil === 'T2' && <Clock size={13} color="#0284C7" strokeWidth={2.5} />}
+                                                {tercil === 'T3' && <Package size={13} color="#059669" strokeWidth={2.5} />}
+                                                {sla.classLabel}
+                                            </span>
+
+                                            {/* Circuit Breaker Badge if triggered */}
+                                            {cb.isTriggered && (
+                                                <span style={{ 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '900', 
+                                                    color: '#9F1239', 
+                                                    backgroundColor: '#FFE4E6', 
+                                                    border: '1px solid #FECDD3', 
+                                                    padding: '4px 10px', 
+                                                    borderRadius: '8px', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px' 
+                                                }}>
+                                                    <ShieldAlert size={13} color="#E11D48" /> Alerta Volatilidad (+/- &gt;20%)
                                                 </span>
                                             )}
                                         </div>
@@ -3972,30 +4135,28 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                             <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginTop: '3px' }}>
                                                 ${formatNumber(latestPrice)} / {activeProduct.unit_of_measure || 'Kg'}
                                             </div>
-                                            <div style={{ fontSize: '0.72rem', color: shockPct > 0 ? '#B45309' : shockPct < 0 ? '#047857' : '#64748B', fontWeight: '700', marginTop: '2px' }}>
-                                                {shockPct > 0 ? `▲ +${shockPct}% vs anterior` : shockPct < 0 ? `▼ ${shockPct}% vs anterior` : 'Sin variación'}
+                                            <div style={{ fontSize: '0.72rem', color: Math.abs(shockPct) > 20 ? '#DC2626' : shockPct > 0 ? '#B45309' : shockPct < 0 ? '#047857' : '#64748B', fontWeight: '800', marginTop: '2px' }}>
+                                                {shockPct > 0 ? `▲ +${shockPct}% vs anterior` : shockPct < 0 ? `▼ ${shockPct}% vs anterior` : 'Sin variación previa'}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ backgroundColor: 'white', padding: '0.85rem', borderRadius: '10px', border: cb.isTriggered ? '1.5px solid #FECDD3' : '1px solid #E2E8F0' }}>
+                                            <div style={{ fontSize: '0.7rem', color: cb.isTriggered ? '#9F1239' : '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                Costo Base Vigente
+                                            </div>
+                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: cb.isTriggered ? '#E11D48' : '#059669', marginTop: '3px' }}>
+                                                ${formatNumber(cb.isTriggered ? prevPrice : latestPrice)} / {activeProduct.unit_of_measure || 'Kg'}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: cb.isTriggered ? '#B91C1C' : '#059669', fontWeight: '700', marginTop: '2px' }}>
+                                                {cb.isTriggered 
+                                                    ? '⚠️ Congelado por Alerta >20%' 
+                                                    : '✅ Último Precio Real'}
                                             </div>
                                         </div>
 
                                         <div style={{ backgroundColor: 'white', padding: '0.85rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                Costo Base Sugerido
-                                            </div>
-                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#059669', marginTop: '3px' }}>
-                                                ${formatNumber(liveModel.grossCost)} / {activeProduct.unit_of_measure || 'Kg'}
-                                            </div>
-                                            <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: '700', marginTop: '2px' }}>
-                                                {liveModel.grossCost === latestPrice 
-                                                    ? 'Alineado a última señal' 
-                                                    : liveModel.grossCost < latestPrice 
-                                                    ? `Amortiguado en -$${formatNumber(latestPrice - liveModel.grossCost)}`
-                                                    : 'Ajustado a rango'}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ backgroundColor: 'white', padding: '0.85rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                Merma de Bodega
+                                                Merma Teórica de Bodega
                                             </div>
                                             <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginTop: '3px' }}>
                                                 {shrinkagePct}% <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B' }}>({liveModel.shrinkageCostDelta > 0 ? `+$${formatNumber(liveModel.shrinkageCostDelta)}` : 'Sin merma'})</span>
@@ -4007,7 +4168,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
                                         <div style={{ backgroundColor: 'white', padding: '0.85rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                Vigencia Comercial (SLA)
+                                                Vigencia Comercial (SLA Pareto)
                                             </div>
                                             <div style={{ fontSize: '0.9rem', fontWeight: '900', color: lifecycle.statusColor, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                 {lifecycle.status === 'VIGENTE' && <CheckCircle2 size={14} color={lifecycle.statusColor} />}
@@ -4017,12 +4178,12 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                                 <span>{lifecycle.statusLabel}</span>
                                             </div>
                                             <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
-                                                {daysSince >= 999 ? 'Sin registros de compra' : `Última señal: hace ${daysSince} día${daysSince === 1 ? '' : 's'}`}
+                                                {daysSince >= 999 ? 'Sin registros de compra' : `Última señal: hace ${daysSince} día${daysSince === 1 ? '' : 's'} (SLA: ${sla.validDaysMax}d)`}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Intermediate Tone Operational Narrative */}
+                                    {/* Operational Narrative */}
                                     <div style={{ backgroundColor: 'white', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.82rem', color: '#334155', lineHeight: '1.5' }}>
                                         <div style={{ fontWeight: '800', color: '#0F172A', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                             <Sparkles size={14} color="#059669" />
@@ -4046,10 +4207,10 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                         }}>
                             {[
                                 { id: 'all', label: 'Manual Completo', icon: <BookOpen size={14} /> },
-                                { id: 'dual', label: '1. Dinámica Dual', icon: <Sliders size={14} /> },
-                                { id: 'perishability', label: '2. Perecibilidad & SLAs', icon: <Clock size={14} /> },
-                                { id: 'outliers', label: '3. Filtro de Dispersión', icon: <Filter size={14} /> },
-                                { id: 'adaptive', label: '4. Motor Adaptativo FruFresco', icon: <Brain size={14} /> },
+                                { id: 'two_paths', label: '1. Dos Caminos & Último Precio', icon: <Sliders size={14} /> },
+                                { id: 'circuit_breaker', label: '2. Circuit Breaker (+/- >20%)', icon: <ShieldAlert size={14} /> },
+                                { id: 'pareto', label: '3. Pareto por Frecuencia (T1/T2/T3)', icon: <Clock size={14} /> },
+                                { id: 'shrinkage', label: '4. Merma & Margen B2B', icon: <TrendingUp size={14} /> },
                                 { id: 'playbook', label: '5. Playbook Operativo', icon: <CheckCheck size={14} /> }
                             ].map(tab => (
                                 <button
@@ -4063,9 +4224,9 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                         padding: '7px 15px',
                                         borderRadius: '10px',
                                         fontSize: '0.8rem',
-                                        fontWeight: trainingTab === tab.id ? '800' : '600',
-                                        color: trainingTab === tab.id ? 'white' : '#475569',
-                                        backgroundColor: trainingTab === tab.id ? THEME.colors.primary : '#F1F5F9',
+                                        fontWeight: (trainingTab === tab.id || (tab.id === 'two_paths' && trainingTab === 'dual') || (tab.id === 'pareto' && trainingTab === 'perishability')) ? '800' : '600',
+                                        color: (trainingTab === tab.id || (tab.id === 'two_paths' && trainingTab === 'dual') || (tab.id === 'pareto' && trainingTab === 'perishability')) ? 'white' : '#475569',
+                                        backgroundColor: (trainingTab === tab.id || (tab.id === 'two_paths' && trainingTab === 'dual') || (tab.id === 'pareto' && trainingTab === 'perishability')) ? THEME.colors.primary : '#F1F5F9',
                                         border: 'none',
                                         cursor: 'pointer',
                                         whiteSpace: 'nowrap',
@@ -4081,145 +4242,350 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                         {/* MODULE CONTENT CONTAINER */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
-                            {/* MODULE 1: DINÁMICA DUAL (ÚLTIMA vs COSTO BASE) */}
-                            {(trainingTab === 'all' || trainingTab === 'dual') && (
+                            {/* MODULE 1: ARQUITECTURA DE DOS CAMINOS & ÚLTIMO PRECIO REAL */}
+                            {(trainingTab === 'all' || trainingTab === 'two_paths' || trainingTab === 'dual') && (
                                 <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
                                         <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
                                             MÓDULO 1
                                         </span>
                                         <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
-                                            Dinámica Dual Operativa: Insumo de Entrada vs. Salida Algorítmica
+                                            Arquitectura de Dos Caminos: Entrada Directa vs. Último Precio Real
                                         </h3>
                                     </div>
                                     <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
-                                        La matriz de costos separa estrictamente el <strong>sensor de mercado</strong> del <strong>costo de referencia comercial</strong>. La columna <strong>ÚLTIMA</strong> alimenta la señal y la columna <strong>COSTO BASE FRUFRESCO</strong> entrega el valor óptimo calculado por la inteligencia algorítmica.
+                                        El costo base de FruFresco se rige por la regla del <strong>ÚLTIMO PRECIO REAL</strong>: se captura la señal viva de mercado más reciente sin estimaciones artificiales. Existen únicamente <strong>dos caminos</strong> para alimentar el costo del catálogo comercial:
                                     </p>
 
                                     {/* Flow Diagram */}
-                                    <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '12px', border: '1px dashed #CBD5E1', marginBottom: '1.25rem' }}>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                                            Flujo de Propagación de Precios
+                                    <div style={{ backgroundColor: 'white', padding: '1.15rem 1.25rem', borderRadius: '12px', border: '1px dashed #CBD5E1', marginBottom: '1.25rem' }}>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                                            Flujo Directo de Fijación de Precios
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.78rem', fontWeight: '700' }}>
-                                            <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <Store size={12} /> Bodega / Sondeo de Mercado
+                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '5px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid #DBEAFE' }}>
+                                                <Store size={13} /> <strong>Camino A:</strong> Compras / Ops de Báscula
                                             </span>
-                                            <ArrowRight size={14} color="#94A3B8" />
-                                            <span style={{ backgroundColor: '#DCFCE7', color: '#166534', padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <Pencil size={11} /> Columna ÚLTIMA (Insumo)
+                                            <span style={{ color: '#94A3B8', fontWeight: '900' }}>O</span>
+                                            <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '5px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid #DCFCE7' }}>
+                                                <Pencil size={13} /> <strong>Camino B:</strong> Carga Manual Comercial
                                             </span>
-                                            <ArrowRight size={14} color="#94A3B8" />
-                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <Brain size={12} /> Motor Adaptativo FruFresco
+                                            <ArrowRight size={15} color="#94A3B8" />
+                                            <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '5px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid #FDE68A' }}>
+                                                <ShieldAlert size={13} /> Freno Volatilidad (+/- &gt;20%)
                                             </span>
-                                            <ArrowRight size={14} color="#94A3B8" />
-                                            <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <Sliders size={12} /> COSTO BASE FRUFRESCO (Salida)
+                                            <ArrowRight size={15} color="#94A3B8" />
+                                            <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', padding: '5px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid #A7F3D0' }}>
+                                                <Tag size={13} /> Costo Neto Vendible (+ Merma)
                                             </span>
-                                            <ArrowRight size={14} color="#94A3B8" />
-                                            <span style={{ backgroundColor: '#F5F3FF', color: '#6D28D9', padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <Tag size={12} /> Catálogos & Listas B2B
+                                            <ArrowRight size={15} color="#94A3B8" />
+                                            <span style={{ backgroundColor: '#FAF5FF', color: '#6B21A8', padding: '5px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid #E9D5FF' }}>
+                                                <CheckCircle2 size={13} /> Cotizaciones B2B
                                             </span>
                                         </div>
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-                                        {/* Left Card: Columna ÚLTIMA */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', borderLeft: '4px solid #10B981' }}>
+                                        {/* Left Card: Camino A */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', borderLeft: '4px solid #2563EB' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.4rem' }}>
-                                                <Pencil size={16} color="#059669" />
-                                                <span style={{ fontWeight: '900', color: '#059669', fontSize: '0.95rem' }}>
-                                                    Columna "ÚLTIMA" (Sensor de Mercado)
+                                                <Store size={16} color="#2563EB" />
+                                                <span style={{ fontWeight: '900', color: '#2563EB', fontSize: '0.95rem' }}>
+                                                    Camino A: Compras / Ops de Báscula
                                                 </span>
                                             </div>
                                             <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.82rem', color: '#475569', lineHeight: '1.6' }}>
-                                                <li><strong>Fuente Dual:</strong> Se nutre automáticamente de las compras físicas diarias en bodega (módulo <code>ops/compras</code>) y de recotizaciones comerciales directas.</li>
-                                                <li><strong>Botón <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#166534' }}><Pencil size={10} /> Cotizar</span>:</strong> Si un producto no tiene compras recientes o su costo está vencido, el negociador comercial hace clic en dicho botón dentro de la misma celda para ingresar el sondeo del día.</li>
-                                                <li><strong>Trazabilidad:</strong> Se guarda como un registro fechado en la base de datos (<code>payment_method: 'market_quote'</code>), convirtiéndose de inmediato en la señal más reciente.</li>
+                                                <li><strong>Ingreso Físico:</strong> Registrado en bodega desde <code>/ops/compras</code> al recibir la remisión de los camiones proveedores.</li>
+                                                <li><strong>Fijación Inmediata:</strong> El sistema adopta el precio unitario ingresado como nuevo costo base de inmediato (si no supera el umbral de volatilidad).</li>
+                                                <li><strong>Trazabilidad:</strong> Documenta kilos netos, proveedor y número de remisión física sin intermediación de supuestos.</li>
                                             </ul>
                                         </div>
 
-                                        {/* Right Card: Columna COSTO BASE */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', borderLeft: '4px solid #2563EB' }}>
+                                        {/* Right Card: Camino B */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', borderLeft: '4px solid #059669' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.4rem' }}>
-                                                <Brain size={16} color="#2563EB" />
-                                                <span style={{ fontWeight: '900', color: '#2563EB', fontSize: '0.95rem' }}>
-                                                    Columna "COSTO BASE" (Salida de IA)
+                                                <Pencil size={16} color="#059669" />
+                                                <span style={{ fontWeight: '900', color: '#059669', fontSize: '0.95rem' }}>
+                                                    Camino B: Cotización Comercial en Plaza
                                                 </span>
                                             </div>
                                             <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.82rem', color: '#475569', lineHeight: '1.6' }}>
-                                                <li><strong>Cálculo Automático:</strong> Ya no es una celda editable a mano alzada. Muestra el costo por kilogramo derivado de la corrida del Motor Adaptativo FruFresco.</li>
-                                                <li><strong>Propagación Comercial:</strong> Alimenta directamente las listas de precios activas sumando los márgenes de ganancia configurados para cada cliente o segmento.</li>
-                                                <li><strong>Override de Emergencia:</strong> Mediante el botón de ajuste <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#1D4ED8' }}><Sliders size={10} /> Ajustar</span>, el usuario puede fijar temporalmente un costo forzado (<code>FORZADO MANUAL</code>) o restablecerlo al modelo algorítmico con un clic.</li>
+                                                <li><strong>Sondeo en Corabastos:</strong> Realizado por el negociador comercial mediante el botón <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#166534' }}><Pencil size={10} /> Cotizar</span>.</li>
+                                                <li><strong>Nueva Versión Oficial:</strong> Crea un registro formal con fecha y hora que se convierte de inmediato en la referencia activa.</li>
+                                                <li><strong>Costos Vencidos:</strong> Si un precio supera su SLA de frescura, el comercial cotiza de inmediato. En cotizaciones vivas se mantendrá el último costo vigente para dar tiempo al comercial de cuadrar con el Jefe Comercial.</li>
                                             </ul>
                                         </div>
                                     </div>
                                 </section>
                             )}
 
-                            {/* MODULE 2: SEMÁFORO DE PERECIBILIDAD & SLAS */}
-                            {(trainingTab === 'all' || trainingTab === 'perishability') && (
+                            {/* MODULE 2: FRENO DE VOLATILIDAD (+/- >20%) */}
+                            {(trainingTab === 'all' || trainingTab === 'circuit_breaker') && (
                                 <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                                        <span style={{ backgroundColor: '#E0E7FF', color: '#4338CA', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
-                                            MÓDULO 2
+                                        <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
+                                            MÓDULO 2 • PROTECCIÓN ANTI-ERRORES
                                         </span>
                                         <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
-                                            Semáforo de Perecibilidad: Clasificación Biológica y Acuerdos de Frescura (SLAs)
+                                            Freno de Volatilidad (+/- &gt;20%): Blindaje contra Errores y Saltos Bruscos
                                         </h3>
                                     </div>
                                     <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
-                                        No todos los alimentos comparten la misma dinámica de mercado. Los costos expiran a ritmos diferentes según su tasa respiratoria y susceptibilidad postcosecha. Cada fila de la matriz muestra un distintivo con su clase y SLA de vigencia:
+                                        En la plaza mayorista o en el cargue masivo pueden ocurrir errores humanos (ej. digitar $120.000 en vez de $12.000) o distorsiones transitorias. El sistema frena la actualización automática si la variación supera el 20%.
+                                    </p>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #FECDD3', borderLeft: '4px solid #E11D48' }}>
+                                            <div style={{ fontWeight: '800', color: '#9F1239', fontSize: '0.9rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <ShieldAlert size={16} color="#E11D48" /> 1. Congelamiento Automático Preventivo
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.55' }}>
+                                                Si el nuevo precio varía más de un <strong>+20%</strong> o menos de un <strong>-20%</strong> frente al precio anterior: el costo base comercial <strong>SE CONGELA en el valor anterior</strong>. No se traslada el salto a las ventas institucionales hasta que haya validación humana.
+                                            </p>
+                                        </div>
+
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #BAE6FD', borderLeft: '4px solid #0284C7' }}>
+                                            <div style={{ fontWeight: '800', color: '#0369A1', fontSize: '0.9rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <CheckCircle2 size={16} color="#0284C7" /> 2. Autoridad del Jefe Comercial
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.55' }}>
+                                                El sistema despliega una alerta visible y los botones <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#166534' }}><Check size={10} /> Aprobar $X</span> o <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#1E40AF' }}><Pencil size={10} /> Corregir</span>. El <strong>Jefe Comercial</strong> es el único con atribución para validar la señal o ingresar el costo corregido definitivo.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Interactive Simulator for Circuit Breaker */}
+                                    <div style={{ backgroundColor: 'white', padding: '1.25rem', borderRadius: '14px', border: '1px solid #CBD5E1' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                                            <Sliders size={16} color={THEME.colors.primary} />
+                                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '900', color: '#0F172A' }}>
+                                                Simulador Interactivo de Volatilidad: "¿Se activa el Circuit Breaker?"
+                                            </h4>
+                                            <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', fontSize: '0.68rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px' }}>
+                                                Poka-Yoke &plusmn;20%
+                                            </span>
+                                        </div>
+                                        <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 1rem 0', lineHeight: '1.4' }}>
+                                            Ingresa un precio previo y una nueva compra simulada para verificar cómo responde el sistema en tiempo real protegiendo las listas de venta.
+                                        </p>
+
+                                        {/* Simulator Input Controls */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
+                                                    Precio Anterior de Referencia (COP/Kg):
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <span style={{ position: 'absolute', left: '10px', fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={simulatedPrevPrice}
+                                                        placeholder="Ej. 10000"
+                                                        onChange={e => setSimulatedPrevPrice(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '6px 8px 6px 24px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #CBD5E1',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '700',
+                                                            color: '#0F172A',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
+                                                    Nuevo Precio Registrado en Plaza / Báscula:
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <span style={{ position: 'absolute', left: '10px', fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={simulatedPrice}
+                                                        placeholder="Ej. 12500"
+                                                        onChange={e => setSimulatedPrice(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '6px 8px 6px 24px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #CBD5E1',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '700',
+                                                            color: '#0F172A',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
+                                                    Merma Estimada de Bodega: <strong>{simulatedShrinkage}%</strong>
+                                                </label>
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="30"
+                                                    step="1"
+                                                    value={simulatedShrinkage}
+                                                    onChange={e => setSimulatedShrinkage(Number(e.target.value))}
+                                                    style={{ width: '100%', accentColor: THEME.colors.primary }}
+                                                />
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94A3B8' }}>
+                                                    <span>0% (Sin descarte)</span>
+                                                    <span>30% (Alta merma)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Simulator Calculation */}
+                                        {(() => {
+                                            const activeProduct = selectedProductForModal || (products.length > 0 ? products[0] : null);
+                                            const history = activeProduct ? (purchaseHistory[activeProduct.id] || []) : [];
+                                            const defaultPrev = history.length > 1 ? history[1].normalized_price : (history[0]?.normalized_price || 10000);
+                                            const defaultNext = history.length > 0 ? history[0].normalized_price : 12500;
+
+                                            const prevVal = Number(simulatedPrevPrice) > 0 ? Number(simulatedPrevPrice) : defaultPrev;
+                                            const nextVal = Number(simulatedPrice) > 0 ? Number(simulatedPrice) : defaultNext;
+                                            const delta = nextVal - prevVal;
+                                            const pct = prevVal > 0 ? Number(((delta / prevVal) * 100).toFixed(1)) : 0;
+                                            const isTriggered = Math.abs(pct) > 20;
+                                            const effectiveBase = isTriggered ? prevVal : nextVal;
+                                            const shrinkageMultiplier = simulatedShrinkage > 0 && simulatedShrinkage < 100 ? (1 - simulatedShrinkage / 100) : 1;
+                                            const netCost = Math.round(effectiveBase / shrinkageMultiplier);
+                                            const suggestedB2B = Math.round((netCost / 0.75) / 50) * 50;
+
+                                            return (
+                                                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                                        <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
+                                                                Variación Detectada
+                                                            </div>
+                                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: isTriggered ? '#DC2626' : '#059669', marginTop: '2px' }}>
+                                                                {pct > 0 ? `+${pct}%` : `${pct}%`}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: isTriggered ? '#B91C1C' : '#059669', fontWeight: '700' }}>
+                                                                {isTriggered ? '🚨 Supera umbral del 20%' : '✅ Dentro del rango de tolerancia'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: isTriggered ? '1.5px solid #FECDD3' : '1px solid #DCFCE7' }}>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: isTriggered ? '#9F1239' : '#166534', textTransform: 'uppercase' }}>
+                                                                Costo Base Fijado
+                                                            </div>
+                                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: isTriggered ? '#E11D48' : '#166534', marginTop: '2px' }}>
+                                                                ${formatNumber(effectiveBase)} / Kg
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: isTriggered ? '#9F1239' : '#059669', fontWeight: '800' }}>
+                                                                {isTriggered ? 'CONGELADO EN PREVIO' : 'APROBADO DIRECTO'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
+                                                                Costo Neto con Merma ({simulatedShrinkage}%)
+                                                            </div>
+                                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>
+                                                                ${formatNumber(netCost)} / Kg
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                                                Costo real por kilo vendible
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
+                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>
+                                                                Tarifa B2B (Margen 25%)
+                                                            </div>
+                                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#1D4ED8', marginTop: '2px' }}>
+                                                                ${formatNumber(suggestedB2B)} / Kg
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#2563EB', fontWeight: '600' }}>
+                                                                Redondeo múltiplo $50 COP
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div style={{ fontSize: '0.78rem', color: '#334155', lineHeight: '1.5', backgroundColor: 'white', padding: '0.75rem 0.95rem', borderRadius: '8px', border: isTriggered ? '1px solid #FECDD3' : '1px solid #E2E8F0' }}>
+                                                        <strong>Dictamen Pedagógico:</strong> {isTriggered ? (
+                                                            `🚨 El salto del ${pct > 0 ? '+' : ''}${pct}% activó el Circuit Breaker. Para proteger a los clientes institucionales y la cartera de FruFresco, el precio comercial NO salta a $${formatNumber(nextVal)}, sino que se CONGELA preventivamente en $${formatNumber(prevVal)}. El Jefe Comercial debe pulsar '[Aprobar]' en la fila o ingresar el costo corregido antes de que impacte pedidos.`
+                                                        ) : (
+                                                            `✅ La variación del ${pct > 0 ? '+' : ''}${pct}% se encuentra dentro del rango operativo normal (≤ 20%). El sistema adopta automáticamente $${formatNumber(nextVal)} COP como el Último Precio Real, actualizando el costo neto y la lista de precios B2B de inmediato.`
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* MODULE 3: SEMÁFORO DE FRESCURA: PARETO POR FRECUENCIA (T1, T2, T3) */}
+                            {(trainingTab === 'all' || trainingTab === 'pareto' || trainingTab === 'perishability') && (
+                                <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
+                                        <span style={{ backgroundColor: '#E0E7FF', color: '#4338CA', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
+                                            MÓDULO 3
+                                        </span>
+                                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
+                                            Semáforo de Frescura: Pareto por Frecuencia de Compra (Arazá vs. Papa)
+                                        </h3>
+                                    </div>
+                                    <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
+                                        No todos los productos tienen la misma velocidad transaccional. En FruFresco se pueden vender <strong>70 toneladas de papa</strong> en el mismo período que <strong>40 kilos de arazá</strong>, y no por ello el arazá deja de ser estratégico en la canasta de clientes. Por eso, los 552 SKUs activos se segmentan en <strong>3 Terciles por frecuencia de compras y movimientos</strong>:
                                     </p>
 
                                     {/* 3 Classes Cards */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-                                        {/* Clase A */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.1rem', borderRadius: '12px', border: '1px solid #DDD6FE' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                                        {/* Tercil 1 */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.1rem', borderRadius: '12px', border: '1px solid #DDD6FE', borderLeft: '4px solid #7C3AED' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.4rem' }}>
                                                 <span style={{ backgroundColor: '#F5F3FF', color: '#7C3AED', padding: '3px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #DDD6FE' }}>
-                                                    <Zap size={13} color="#7C3AED" strokeWidth={2.5} /> Clase A: Hiperperecederos
+                                                    <Zap size={13} color="#7C3AED" strokeWidth={2.5} /> Tercil 1: Críticos (Top 33%)
                                                 </span>
                                             </div>
-                                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#7C3AED', marginBottom: '0.3rem' }}>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#7C3AED', marginBottom: '0.3rem' }}>
                                                 SLA de Frescura: Máximo 4 días
                                             </div>
                                             <p style={{ fontSize: '0.78rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
-                                                <strong>Familias:</strong> Hortalizas de hoja, hierbas aromáticas, verduras delicadas (cilantro, lechuga, espinaca).<br />
-                                                <strong>Dinámica:</strong> Muy alta volatilidad por clima en la sabana. Requiere recotización obligatoria si supera 4 días sin compra.
+                                                <strong>Dinámica:</strong> Pulso diario de Abastos. Productos de máxima rotación (Papa, Tomate Chonto, Cebolla, Limón).<br />
+                                                <strong>Exigencia:</strong> Si supera los 4 días sin compra o cotización, se declara <strong>VENCIDO</strong> y requiere actualización comercial inmediata.
                                             </p>
                                         </div>
 
-                                        {/* Clase B */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.1rem', borderRadius: '12px', border: '1px solid #BAE6FD' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem' }}>
+                                        {/* Tercil 2 */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.1rem', borderRadius: '12px', border: '1px solid #BAE6FD', borderLeft: '4px solid #0284C7' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.4rem' }}>
                                                 <span style={{ backgroundColor: '#F0F9FF', color: '#0284C7', padding: '3px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #BAE6FD' }}>
-                                                    <Clock size={13} color="#0284C7" strokeWidth={2.5} /> Clase B: Semi-perecederos
+                                                    <Clock size={13} color="#0284C7" strokeWidth={2.5} /> Tercil 2: Moderados (Medio 33%)
                                                 </span>
                                             </div>
-                                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0284C7', marginBottom: '0.3rem' }}>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0284C7', marginBottom: '0.3rem' }}>
                                                 SLA de Frescura: Máximo 8 días
                                             </div>
                                             <p style={{ fontSize: '0.78rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
-                                                <strong>Familias:</strong> Frutas frescas, tubérculos, plátanos, lácteos (tomate chonto, papa, plátano verde).<br />
-                                                <strong>Dinámica:</strong> Rotación intermedia; permite suavizar tendencias semanales de abastecimiento sin desfasarse del mercado mayorista.
+                                                <strong>Dinámica:</strong> Rotación semanal o bisemanal. Frutas exóticas e intermedias (Arazá, Gulupa, Feijoa, Verduras selectas).<br />
+                                                <strong>Exigencia:</strong> Su ciclo de abastecimiento permite estabilidad semanal sin desalinearse de los proveedores de origen.
                                             </p>
                                         </div>
 
-                                        {/* Clase C */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.1rem', borderRadius: '12px', border: '1px solid #A7F3D0' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem' }}>
+                                        {/* Tercil 3 */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.1rem', borderRadius: '12px', border: '1px solid #A7F3D0', borderLeft: '4px solid #059669' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.4rem' }}>
                                                 <span style={{ backgroundColor: '#ECFDF5', color: '#059669', padding: '3px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #A7F3D0' }}>
-                                                    <Package size={13} color="#059669" strokeWidth={2.5} /> Clase C: Despensa y Secos
+                                                    <Package size={13} color="#059669" strokeWidth={2.5} /> Tercil 3: Quincenales / Secos (Cola 34%)
                                                 </span>
                                             </div>
-                                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#059669', marginBottom: '0.3rem' }}>
-                                                SLA de Frescura: 30 a 45 días
+                                            <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#059669', marginBottom: '0.3rem' }}>
+                                                SLA de Frescura: Máximo 15 días
                                             </div>
                                             <p style={{ fontSize: '0.78rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
-                                                <strong>Familias:</strong> Abarrotes, granos secos, aceites por litro, procesados y pulpas congeladas.<br />
-                                                <strong>Dinámica:</strong> Precios contractuales o de lista industrial. Las señales históricas mantienen validez durante semanas.
+                                                <strong>Dinámica:</strong> Baja frecuencia o productos procesados/secos (Granos, aceites, enlatados, pulpas congeladas).<br />
+                                                <strong>Exigencia:</strong> Tarifas estables por contrato o bulto cerrado que preservan vigencia durante 15 días calendario.
                                             </p>
                                         </div>
                                     </div>
@@ -4227,376 +4593,117 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                                     {/* Status Legend Bar */}
                                     <div style={{ backgroundColor: 'white', padding: '0.9rem 1.25rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
                                         <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#334155' }}>
-                                            Estados del Ciclo de Vida:
+                                            Regla en Cotizaciones B2B:
                                         </div>
-                                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.75rem' }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#15803D', fontWeight: '700' }}>
-                                                <CheckCircle2 size={13} color="#15803D" /> VIGENTE: Costo seguro y amparado por el SLA
-                                            </span>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#B45309', fontWeight: '700' }}>
-                                                <Clock size={13} color="#B45309" /> POR VENCER: Últimas 24-48 horas de vigencia
-                                            </span>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#B91C1C', fontWeight: '700' }}>
-                                                <AlertTriangle size={13} color="#B91C1C" /> VENCIDO: Requiere cotización comercial urgente
-                                            </span>
+                                        <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: '1.4' }}>
+                                            Si un producto tiene su costo <strong>VENCIDO</strong> al momento de cotizar, <u>el sistema no frena la venta</u>: congela temporalmente el último costo vigente para otorgar margen de cuadre al comercial con el Jefe Comercial.
                                         </div>
                                     </div>
                                 </section>
                             )}
 
-                            {/* MODULE 3: FILTRO DE DISPERSIÓN & NORMALIZACIÓN */}
-                            {(trainingTab === 'all' || trainingTab === 'outliers') && (
-                                <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
-                                            MÓDULO 3
-                                        </span>
-                                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
-                                            Filtro de Normalización de Unidades y Atenuación de Empaques Mayoristas
-                                        </h3>
-                                    </div>
-                                    <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
-                                        Garantiza que todas las observaciones comparadas correspondan estrictamente a la <strong>misma unidad de medida</strong> (precio por kilogramo o litro), neutralizando compras atípicas sin vulnerar los registros contables.
-                                    </p>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-                                        {/* Why they exist & Why they aren't deleted */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <ShieldAlert size={16} color="#EA580C" /> Preservación de Trazabilidad Contable
-                                            </div>
-                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.55' }}>
-                                                En el historial de compras existen entradas correspondientes a <strong>empaques mayoristas completos o presentaciones cerradas</strong> (ej. facturas de $45.000, $80.000 o $95.000) que se ingresaron como monto global en vez de dividirse por los kilos netos.<br /><br />
-                                                <strong>Regla de Oro:</strong> Estos registros <u>NUNCA se borran</u> de la base de datos, ya que son el soporte contable y tributario de los egresos pagados a proveedores en bodega.
-                                            </p>
-                                        </div>
-
-                                        {/* How the algorithm filters and attenuates */}
-                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Filter size={16} color="#2563EB" /> Detección Estadística & Atenuación Visual
-                                            </div>
-                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.55' }}>
-                                                El motor calcula la mediana de precios unitarios del producto. Cualquier compra que supere <strong>3.5 veces la mediana</strong> es aislada automáticamente por discrepancia de escala.<br /><br />
-                                                En la tabla de la matriz, estas compras se muestran <strong>visualmente atenuadas</strong> (opacidad reducida al 45%, número tachado y etiqueta <em>Atípico</em>), confirmando al operador que no intervienen en el cálculo del costo sugerido por kilogramo.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </section>
-                            )}
-
-                            {/* MODULE 4: MOTOR ADAPTATIVO FRUFRESCO */}
-                            {(trainingTab === 'all' || trainingTab === 'adaptive') && (
+                            {/* MODULE 4: MERMA TEÓRICA Y MARGEN COMERCIAL B2B */}
+                            {/* MODULE 4: MERMA DE BODEGA Y MARGEN DE VENTA B2B */}
+                            {(trainingTab === 'all' || trainingTab === 'shrinkage') && (
                                 <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
                                         <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
                                             MÓDULO 4
                                         </span>
                                         <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
-                                            Motor Adaptativo FruFresco: Ponderación por Volumen, Merma Real y Alisamiento de Abastos
+                                            Merma de Bodega y Margen de Venta B2B
                                         </h3>
                                     </div>
+                                    <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
+                                        Los productos agrícolas sufren descarte natural en bodega (limpieza, despalille, humedad o maduración). Para no perder margen vendiendo al costo de báscula, la matriz transforma el <strong>Costo de Entrada</strong> en <strong>Costo Neto Aprovechable</strong>.
+                                    </p>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '1.5rem', alignItems: 'center' }}>
-                                        <div>
-                                            <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1rem 0' }}>
-                                                Diseñado específicamente para la dinámica de <strong>Corabastos</strong> y el abastecimiento perecedero bajo el mandato de <strong>"no perder pesos ni clientes"</strong>:
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Leaf size={16} color="#166534" /> 1. Costo Neto Aprovechable (con Merma)
+                                            </div>
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem 0.8rem', borderRadius: '8px', fontFamily: 'monospace', fontWeight: '800', color: '#166534', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                                                Costo_Neto = Costo_Entrada / (1 - Merma%)
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
+                                                Ejemplo: Si la lechuga entra a $2.000 COP y tiene 10% de merma, el costo neto vendible es $2.000 / 0.90 = <strong>$2.222 COP/Kg</strong>.
                                             </p>
-                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.82rem', color: '#334155' }}>
-                                                 <div style={{ backgroundColor: 'white', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                                                         <Layers size={14} color="#2563EB" />
-                                                         <strong style={{ color: '#0F172A' }}>1. Doble Fuente de Entrada & Volumen (VWAP):</strong>
-                                                     </div>
-                                                     Se alimenta de las compras reales con remisión y kilos físicos de <code>/ops/compras</code> y de sondeos tácticos de plaza. Las compras de gran volumen tienen mayor inercia y evitan que una compra marginal pequeña a precio elevado distorsione el costo de todo el lote.
-                                                 </div>
-                                                 <div style={{ backgroundColor: 'white', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                                                         <Leaf size={14} color="#166534" />
-                                                         <strong style={{ color: '#0F172A' }}>2. Factor Merma Operativa Real:</strong>
-                                                     </div>
-                                                     Integra directamente los registros de pesaje (Col P), fruta averiada (Col Q) y descapote/limpieza (Col R) del Kardex diario de inventario. Convierte el costo bruto de compra en <em>Costo Neto por Kilo Aprovechable</em>, protegiendo el margen comercial para que no se pierda en el descarte físico.
-                                                 </div>
-                                                 <div style={{ backgroundColor: 'white', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                                                         <TrendingUp size={14} color="#D97706" />
-                                                         <strong style={{ color: '#0F172A' }}>3. Amortiguador Asimétrico de Choque:</strong>
-                                                     </div>
-                                                     Ante un bache logístico o lluvia de un solo día, amortigua la subida (35% de absorción) para no trasladar volatilidad errática a los clientes. Ante escasez estacional sostenida, acelera la captación (78% de adaptación) para no rezagarse vendiendo por debajo del costo de reposición.
-                                                 </div>
-                                                 <div style={{ backgroundColor: 'white', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                                                         <ShieldAlert size={14} color="#4F46E5" />
-                                                         <strong style={{ color: '#0F172A' }}>4. Regla Infranqueable de Contención:</strong>
-                                                     </div>
-                                                     El costo base calculado queda formalmente acotado entre el mínimo y el máximo de las cotizaciones y compras reales. <em>Nunca proyecta costos especulativos por encima de lo realmente pagado o cotizado.</em>
-                                                 </div>
-                                             </div>
-                                         </div>
+                                        </div>
 
-                                         {/* SVG Graphical Representation Card */}
-                                         <div style={{ backgroundColor: 'white', padding: '1.25rem', borderRadius: '16px', border: '1px solid #CBD5E1', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                             <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1E293B', marginBottom: '0.75rem', textAlign: 'center' }}>
-                                                 Alisamiento Adaptativo FruFresco vs. Serrucho de Plaza
-                                             </div>
-                                             <div style={{ width: '100%', height: '130px' }}>
-                                                 <svg width="100%" height="100%" viewBox="0 0 100 50">
-                                                     <line x1="0" y1="42" x2="100" y2="42" stroke="#F1F5F9" strokeWidth="0.8" />
-                                                     <line x1="0" y1="25" x2="100" y2="25" stroke="#F1F5F9" strokeWidth="0.8" strokeDasharray="1" />
-                                                     {/* Jagged Raw Market Line */}
-                                                     <path d="M 0 38 L 15 36 L 30 14 L 45 39 L 60 28 L 75 18 L 88 15 L 98 22" fill="none" stroke="#CBD5E1" strokeWidth="1.4" strokeDasharray="2" />
-                                                     {/* Smooth Adaptive Bezier */}
-                                                     <path d="M 0 38 Q 20 36, 30 29 Q 40 34, 50 33 Q 65 24, 75 19 Q 88 17, 98 20" fill="none" stroke="#0D7A57" strokeWidth="3" />
-                                                     <circle cx="98" cy="20" r="3.5" fill="#0D7A57" />
-                                                     <circle cx="98" cy="20" r="1.5" fill="white" />
-                                                 </svg>
-                                             </div>
-                                             <div style={{ display: 'flex', justifyContent: 'center', gap: '1.2rem', marginTop: '0.5rem', fontSize: '0.72rem', fontWeight: '700' }}>
-                                                 <span style={{ color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                     <span style={{ width: '12px', height: '0px', borderBottom: '2px dashed #94A3B8' }}></span> Serrucho Abastos
-                                                 </span>
-                                                 <span style={{ color: '#0D7A57', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                     <span style={{ width: '12px', height: '3px', backgroundColor: '#0D7A57', borderRadius: '2px' }}></span> Costo Alisado Protegido
-                                                 </span>
-                                             </div>
-                                             <p style={{ margin: '0.6rem 0 0 0', fontSize: '0.72rem', color: '#64748B', textAlign: 'center', fontStyle: 'italic' }}>
-                                                 "Absorbe picos de un solo día y acelera ante escasez estacional confirmada."
-                                             </p>
-                                         </div>
-                                     </div>
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Tag size={16} color="#2563EB" /> 2. Precio de Venta B2B (Margen Real)
+                                            </div>
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem 0.8rem', borderRadius: '8px', fontFamily: 'monospace', fontWeight: '800', color: '#2563EB', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                                                Precio_Venta = Costo_Neto / (1 - Margen%)
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
+                                                El margen comercial se calcula siempre sobre la venta final (margen bruto), nunca como sobrecosto (markup). El precio se redondea automáticamente hacia arriba al múltiplo de $50 COP más cercano.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
 
-                                     {/* Interactive Cause-and-Effect Simulator */}
-                                     <div style={{ marginTop: '1.5rem', backgroundColor: 'white', padding: '1.25rem', borderRadius: '14px', border: '1px solid #CBD5E1' }}>
-                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
-                                             <Sliders size={16} color={THEME.colors.primary} />
-                                             <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '900', color: '#0F172A' }}>
-                                                 Simulador de Causa y Efecto: "¿Qué pasa si cotizas o compras a otro precio?"
-                                             </h4>
-                                             <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', fontSize: '0.68rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px' }}>
-                                                 Herramienta Práctica de Capacitación
-                                             </span>
-                                         </div>
-                                         <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 1rem 0', lineHeight: '1.4' }}>
-                                             Prueba en tiempo real cómo respondería el Motor Adaptativo ante una cotización simulada en Corabastos. Observa cómo el algoritmo amortigua los picos y calcula el costo neto con merma.
-                                         </p>
+                            {/* MODULE 5: PLAYBOOK OPERATIVO EN 3 PASOS */}
+                            {(trainingTab === 'all' || trainingTab === 'playbook') && (
+                                <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
+                                        <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
+                                            MÓDULO 5
+                                        </span>
+                                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
+                                            Playbook Operativo: Protocolo Diario en 3 Pasos
+                                        </h3>
+                                    </div>
+                                    <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
+                                        Protocolo diario de apertura y control comercial para mantener el catálogo al día y asegurar la rentabilidad:
+                                    </p>
 
-                                         {/* Simulator Input Controls */}
-                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-                                             <div>
-                                                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
-                                                     Precio Hipotético en Plaza (COP/Kg):
-                                                 </label>
-                                                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                                     <span style={{ position: 'absolute', left: '10px', fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>$</span>
-                                                     <input
-                                                         type="number"
-                                                         value={simulatedPrice}
-                                                         placeholder="Ej. 12500"
-                                                         onChange={e => setSimulatedPrice(e.target.value)}
-                                                         style={{
-                                                             width: '100%',
-                                                             padding: '6px 8px 6px 24px',
-                                                             borderRadius: '8px',
-                                                             border: '1px solid #CBD5E1',
-                                                             fontSize: '0.85rem',
-                                                             fontWeight: '700',
-                                                             color: '#0F172A',
-                                                             outline: 'none'
-                                                         }}
-                                                     />
-                                                 </div>
-                                             </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+                                        {/* Step 1 */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', position: 'relative' }}>
+                                            <div style={{ width: '34px', height: '34px', backgroundColor: '#FEE2E2', color: '#B91C1C', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.6rem' }}>
+                                                <Filter size={18} color="#B91C1C" />
+                                            </div>
+                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem', marginBottom: '0.3rem' }}>
+                                                1. Filtrar: Revisar Alertas y Vencidos
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
+                                                Al iniciar la mañana, activar en la barra superior los filtros <strong>Alertas &gt;20%</strong> y <strong>Vencidos</strong> para identificar de inmediato los productos que requieren gestión prioritaria.
+                                            </p>
+                                        </div>
 
-                                             <div>
-                                                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
-                                                     Volumen de la Operación: <strong>{simulatedVolume} Kg</strong>
-                                                 </label>
-                                                 <input
-                                                     type="range"
-                                                     min="10"
-                                                     max="500"
-                                                     step="10"
-                                                     value={simulatedVolume}
-                                                     onChange={e => setSimulatedVolume(Number(e.target.value))}
-                                                     style={{ width: '100%', accentColor: THEME.colors.primary }}
-                                                 />
-                                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94A3B8' }}>
-                                                     <span>10 Kg (Sondeo)</span>
-                                                     <span>500 Kg (Bultos)</span>
-                                                 </div>
-                                             </div>
+                                        {/* Step 2 */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', position: 'relative' }}>
+                                            <div style={{ width: '34px', height: '34px', backgroundColor: '#DCFCE7', color: '#166534', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.6rem' }}>
+                                                <CheckCircle2 size={18} color="#166534" />
+                                            </div>
+                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem', marginBottom: '0.3rem' }}>
+                                                2. Resolver: Aprobar o Cotizar en Plaza
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
+                                                • <strong>Si varió &gt;20%:</strong> El Jefe Comercial revisa y pulsa <strong>[Aprobar $X]</strong> o <strong>[Corregir]</strong>.<br />
+                                                • <strong>Si está vencido:</strong> El comercial sondea en Corabastos y pulsa <strong>[Cotizar]</strong> en la columna ÚLTIMA.
+                                            </p>
+                                        </div>
 
-                                             <div>
-                                                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
-                                                     Merma Estimada de Bodega: <strong>{simulatedShrinkage}%</strong>
-                                                 </label>
-                                                 <input
-                                                     type="range"
-                                                     min="0"
-                                                     max="30"
-                                                     step="1"
-                                                     value={simulatedShrinkage}
-                                                     onChange={e => setSimulatedShrinkage(Number(e.target.value))}
-                                                     style={{ width: '100%', accentColor: THEME.colors.primary }}
-                                                 />
-                                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94A3B8' }}>
-                                                     <span>0% (Sin descarte)</span>
-                                                     <span>30% (Alta merma)</span>
-                                                 </div>
-                                             </div>
-                                         </div>
-
-                                         {/* Simulation Output Cards */}
-                                         {(() => {
-                                             const activeProduct = selectedProductForModal || (products.length > 0 ? products[0] : null);
-                                             const history = activeProduct ? (purchaseHistory[activeProduct.id] || []) : [];
-                                             const baseObservations: PriceObservation[] = history.map(h => ({
-                                                 price: h.normalized_price,
-                                                 date: h.created_at,
-                                                 quantity: h.quantity || null
-                                             }));
-
-                                             const fallbackPrice = baseObservations.length > 0 ? baseObservations[baseObservations.length - 1].price : 10000;
-                                             const numPrice = Number(simulatedPrice) > 0 ? Number(simulatedPrice) : Math.round(fallbackPrice * 1.15);
-                                             const simObs: PriceObservation[] = [
-                                                 ...baseObservations,
-                                                 { price: numPrice, date: new Date().toISOString(), quantity: simulatedVolume }
-                                             ];
-
-                                             const simResult = runAdaptivePricingModel(simObs, numPrice, { shrinkagePct: simulatedShrinkage });
-                                             const lastRealPrice = baseObservations.length > 0 ? baseObservations[baseObservations.length - 1].price : numPrice;
-                                             const diffPrice = numPrice - lastRealPrice;
-                                             const diffPct = lastRealPrice > 0 ? Number(((diffPrice / lastRealPrice) * 100).toFixed(1)) : 0;
-                                             const b2bSuggestedPrice = Math.round((simResult.cost * 1.25) / 50) * 50;
-
-                                             return (
-                                                 <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                                                         <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                             <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
-                                                                 Precio Simulado
-                                                             </div>
-                                                             <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>
-                                                                 ${formatNumber(numPrice)} / Kg
-                                                             </div>
-                                                             <div style={{ fontSize: '0.7rem', color: diffPct > 0 ? '#B45309' : diffPct < 0 ? '#047857' : '#64748B', fontWeight: '700' }}>
-                                                                 {diffPct > 0 ? `▲ +${diffPct}% frente a base` : diffPct < 0 ? `▼ ${diffPct}% frente a base` : 'Mismo nivel'}
-                                                             </div>
-                                                         </div>
-
-                                                         <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #DCFCE7' }}>
-                                                             <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase' }}>
-                                                                 Costo Base Alisado
-                                                             </div>
-                                                             <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#166534', marginTop: '2px' }}>
-                                                                 ${formatNumber(simResult.grossCost)} / Kg
-                                                             </div>
-                                                             <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700' }}>
-                                                                 {simResult.grossCost < numPrice 
-                                                                     ? `Absorbe -$${formatNumber(numPrice - simResult.grossCost)} del alza` 
-                                                                     : 'Alineado al mercado'}
-                                                             </div>
-                                                         </div>
-
-                                                         <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                             <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
-                                                                 Costo Neto con Merma
-                                                             </div>
-                                                             <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>
-                                                                 ${formatNumber(simResult.cost)} / Kg
-                                                             </div>
-                                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
-                                                                 Incluye {simulatedShrinkage}% de merma
-                                                             </div>
-                                                         </div>
-
-                                                         <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
-                                                             <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>
-                                                                 Tarifa B2B (Margen 25%)
-                                                             </div>
-                                                             <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1D4ED8', marginTop: '2px' }}>
-                                                                 ${formatNumber(b2bSuggestedPrice)} / Kg
-                                                             </div>
-                                                             <div style={{ fontSize: '0.7rem', color: '#2563EB', fontWeight: '600' }}>
-                                                                 Rentabilidad bruta protegida
-                                                             </div>
-                                                         </div>
-                                                     </div>
-
-                                                     {/* Pedagogical Commentary */}
-                                                     <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: '1.45', backgroundColor: 'white', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                         <strong>Lección Operativa:</strong> {diffPct > 15 ? (
-                                                             `Al registrar una cotización con incremento de +${diffPct}%, el algoritmo no traslada los $${formatNumber(numPrice)} directamente al catálogo. En su lugar, sitúa el costo base en $${formatNumber(simResult.grossCost)}, amortiguando el impacto inicial para no desestabilizar a los clientes institucionales mientras confirma si la escasez persiste en las siguientes compras.`
-                                                         ) : diffPct < -15 ? (
-                                                             `Ante una caída abrupta del ${diffPct}%, el motor desciende de forma gradual a $${formatNumber(simResult.grossCost)}, permitiendo agotar el inventario remanente en bodega sin quemar el margen de los lotes adquiridos previamente.`
-                                                         ) : (
-                                                             `Variación moderada dentro del rango de tolerancia habitual. El motor actualiza el costo base a $${formatNumber(simResult.grossCost)} conservando la proporción óptima entre competitividad y rentabilidad.`
-                                                         )}
-                                                     </div>
-                                                 </div>
-                                             );
-                                         })()}
-                                     </div>
-                                 </section>
-                             )}
-
-                             {/* MODULE 5: PLAYBOOK OPERATIVO EN 3 PASOS */}
-                             {(trainingTab === 'all' || trainingTab === 'playbook') && (
-                                 <section style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
-                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                                         <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: '900', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}>
-                                             MÓDULO 5
-                                         </span>
-                                         <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
-                                             Playbook Operativo: Protocolo de Cotización en 3 Pasos
-                                         </h3>
-                                     </div>
-                                     <p style={{ fontSize: '0.86rem', color: '#475569', lineHeight: '1.55', margin: '0 0 1.25rem 0' }}>
-                                         Procedimiento operativo diario que todo negociador comercial debe ejecutar para mantener el catálogo actualizado y proteger la rentabilidad de los pedidos:
-                                     </p>
-
-                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
-                                         {/* Step 1 */}
-                                         <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', position: 'relative' }}>
-                                             <div style={{ width: '34px', height: '34px', backgroundColor: '#FEE2E2', color: '#B91C1C', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.6rem' }}>
-                                                 <AlertTriangle size={18} color="#B91C1C" />
-                                             </div>
-                                             <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem', marginBottom: '0.3rem' }}>
-                                                 1. Monitorear Alertas de Vigencia
-                                             </div>
-                                             <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
-                                                 Al iniciar la jornada o planear una cotización B2B, revisar los productos marcados con badge <strong>VENCIDO</strong> o <strong>POR VENCER</strong> en la matriz.
-                                             </p>
-                                         </div>
-
-                                         {/* Step 2 */}
-                                         <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', position: 'relative' }}>
-                                             <div style={{ width: '34px', height: '34px', backgroundColor: '#DCFCE7', color: '#166534', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.6rem' }}>
-                                                 <Pencil size={18} color="#166534" />
-                                             </div>
-                                             <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem', marginBottom: '0.3rem' }}>
-                                                 2. Capturar en Columna ÚLTIMA
-                                             </div>
-                                             <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
-                                                 Presionar el botón <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', backgroundColor: '#DCFCE7', border: '1px solid #A7F3D0', borderRadius: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#166534' }}><Pencil size={10} /> Cotizar</span> en la columna <strong>ÚLTIMA</strong> del producto. Digitar el precio sondeado por kilogramo verificado en Corabastos o con el proveedor, junto con una breve nota explicativa.
-                                             </p>
-                                         </div>
-
-                                         {/* Step 3 */}
-                                         <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', position: 'relative' }}>
-                                             <div style={{ width: '34px', height: '34px', backgroundColor: '#EFF6FF', color: '#1D4ED8', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.6rem' }}>
-                                                 <RefreshCw size={18} color="#1D4ED8" />
-                                             </div>
-                                             <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem', marginBottom: '0.3rem' }}>
-                                                 3. Propagación Automática
-                                             </div>
-                                             <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
-                                                 El sistema recalcula de forma instantánea el <strong>COSTO BASE FRUFRESCO</strong> con el Motor Adaptativo y sincroniza las listas de precios activas sin necesidad de recalcular tablas en Excel.
-                                             </p>
-                                         </div>
-                                     </div>
-                                 </section>
-                             )}
+                                        {/* Step 3 */}
+                                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', position: 'relative' }}>
+                                            <div style={{ width: '34px', height: '34px', backgroundColor: '#EFF6FF', color: '#1D4ED8', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.6rem' }}>
+                                                <TrendingUp size={18} color="#1D4ED8" />
+                                            </div>
+                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem', marginBottom: '0.3rem' }}>
+                                                3. Vender: Catálogo B2B Protegido
+                                            </div>
+                                            <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.5' }}>
+                                                Las listas de precios institucionales y cotizaciones activas se actualizan al instante con el costo neto aprovechable. Venta ágil y márgenes comerciales asegurados.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
 
                         </div>
 

@@ -176,6 +176,7 @@ interface PricingModel {
 interface Order {
     id: string;
     total: number;
+    profile_id?: string;
     is_b2b: boolean;
 }
 
@@ -543,7 +544,7 @@ export default function ClientsModule() {
             // 5. Órdenes para ventas
             const { data: orderData } = await supabase
                 .from('orders')
-                .select('id, total, is_b2b');
+                .select('id, total, profile_id');
 
             // 6. Acuerdos Activos (Semáforo)
             const { data: agreementData } = await supabase
@@ -590,8 +591,13 @@ export default function ClientsModule() {
             setClientsB2B((b2bData || []).map(normalizeProfile));
             setLeads(leadData || []);
             setPricingModels(pmData || []);
-            setClientsB2C((b2cData || []).map(normalizeProfile));
-            setOrders(orderData || []);
+            const b2bIdSet = new Set((b2bData || []).map((c: any) => c.id));
+            setOrders((orderData || []).map((o: any) => ({
+                id: o.id,
+                total: o.total,
+                profile_id: o.profile_id,
+                is_b2b: o.profile_id ? b2bIdSet.has(o.profile_id) : false
+            })));
             setAllAgreements(agreementData || []);
         } catch (error) {
             console.error('Error fetching client data:', error);

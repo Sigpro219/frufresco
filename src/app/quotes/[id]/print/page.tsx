@@ -519,9 +519,39 @@ export default function PublicPrintQuotePage() {
                     </tfoot>
                 </table>
 
-                {/* 💡 Callout: Oferta Personalizada */}
+                {/* Sello de Valor B2B FruFresco (Storytelling & Garantía Operativa) */}
                 <div className="page-break-avoid" style={{
-                    marginTop: '1rem',
+                    marginTop: '0.85rem',
+                    marginBottom: '0.65rem',
+                    padding: '0.65rem 0.85rem',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderLeft: `4px solid ${appSettings.primary_color || '#15803D'}`,
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '7.6pt', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ color: appSettings.primary_color || '#15803D', fontWeight: '900' }}>★</span> Sello de Garantía Operativa FruFresco B2B
+                        </div>
+                        <div style={{ fontSize: '6.9pt', color: '#475569', marginTop: '2px', lineHeight: '1.3' }}>
+                            <strong>Cero Intermediarios:</strong> Abastecimiento directo de fincas aliadas y Corabastos. 
+                            <strong> Puntualidad Suiza:</strong> Despachos matutinos en ventana acordada antes de apertura de cocina. 
+                            <strong> Cero Desperdicio:</strong> Selección y pesaje exacto con merma controlada.
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: '8px', borderLeft: '1px solid #E2E8F0' }}>
+                        <div style={{ fontSize: '6.8pt', fontWeight: '800', color: appSettings.primary_color || '#15803D' }}>CALIDAD CERTIFICADA</div>
+                        <div style={{ fontSize: '6.2pt', color: '#64748B' }}>Inocuidad & Trazabilidad</div>
+                    </div>
+                </div>
+
+                {/* Callout: Oferta Personalizada */}
+                <div className="page-break-avoid" style={{
+                    marginTop: '0.65rem',
                     padding: '0.75rem 1rem',
                     backgroundColor: '#F0FDF4',
                     borderLeft: `3.5px solid ${appSettings.primary_color || '#15803D'}`,
@@ -529,7 +559,7 @@ export default function PublicPrintQuotePage() {
                     textAlign: 'center'
                 }}>
                     <div style={{ fontWeight: '800', fontSize: '8.2pt', color: '#166534', marginBottom: '0.2rem' }}>
-                        💡 ¿Quieres recibir una oferta personalizada por volumen?
+                        ¿Quieres recibir una oferta personalizada por volumen?
                     </div>
                     <div style={{ fontSize: '7.5pt', color: '#15803D', lineHeight: '1.3' }}>
                         Esta es una pre-cotización estimada con precios estándar de origen. 
@@ -537,7 +567,7 @@ export default function PublicPrintQuotePage() {
                     </div>
                 </div>
 
-                {/* ⚠️ Legal Disclaimer */}
+                {/* Legal Disclaimer */}
                 <div className="page-break-avoid" style={{
                     marginTop: '0.65rem',
                     padding: '0.5rem 0.75rem',

@@ -83,7 +83,7 @@ export async function recalculateAndSyncProductPrices(
     try {
         const { data: prod, error: pErr } = await supabaseClient
             .from('products')
-            .select('id, name, iva_rate, base_price')
+            .select('id, name, iva_rate, base_price, theoretical_shrinkage_pct')
             .eq('id', productId)
             .single();
 
@@ -123,6 +123,12 @@ export async function recalculateAndSyncProductPrices(
         if (!baseCost || baseCost <= 0) {
             return { success: false, error: 'No valid cost available for recalculation' };
         }
+
+        // Factor de Merma Teórica: Costo Neto = Costo Base / (1 - Merma%)
+        const shrinkagePct = Math.min(Math.max(Number(prod.theoretical_shrinkage_pct) || 0, 0), 90);
+        const effectiveCost = shrinkagePct > 0 
+            ? baseCost / (1 - (shrinkagePct / 100))
+            : baseCost;
 
         // Mirror to commercial_overrides so any Postgres triggers also see this authorized cost
         try {
@@ -174,9 +180,9 @@ export async function recalculateAndSyncProductPrices(
                 marginPct = Number(m.base_margin_percent) || 0;
             }
 
-            // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo / (1 - Margen)
+            // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo Efectivo / (1 - Margen)
             const marginFraction = Math.min(Math.max((marginPct || 0) / 100, -0.9), 0.99);
-            const priceBeforeTax = baseCost / (1 - marginFraction);
+            const priceBeforeTax = effectiveCost / (1 - marginFraction);
             // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
             const roundedPriceBeforeTax = Math.ceil(priceBeforeTax / 50) * 50;
 
@@ -253,13 +259,13 @@ export async function batchRecalculateAndSyncPrices(
         if (targetProductIds && targetProductIds.length > 0) {
             const { data, error } = await supabaseClient
                 .from('products')
-                .select('id, name, iva_rate, base_price')
+                .select('id, name, iva_rate, base_price, theoretical_shrinkage_pct')
                 .eq('is_active', true)
                 .in('id', targetProductIds);
             if (error) throw error;
             prods = data || [];
         } else {
-            prods = await fetchAllRows(supabaseClient, 'products', 'id, name, iva_rate, base_price', q => q.eq('is_active', true));
+            prods = await fetchAllRows(supabaseClient, 'products', 'id, name, iva_rate, base_price, theoretical_shrinkage_pct', q => q.eq('is_active', true));
         }
 
         if (!prods || prods.length === 0) {
@@ -322,6 +328,12 @@ export async function batchRecalculateAndSyncPrices(
                 updated_by: 'DELTA-BATCH-SYNC'
             });
 
+            // Factor de Merma Teórica: Costo Neto = Costo Base / (1 - Merma%)
+            const shrinkagePct = Math.min(Math.max(Number(prod.theoretical_shrinkage_pct) || 0, 0), 90);
+            const effectiveCost = shrinkagePct > 0 
+                ? baseCost / (1 - (shrinkagePct / 100))
+                : baseCost;
+
             const ivaRate = (Number(prod.iva_rate) || 0) / 100;
             let hogarPrice: number | undefined;
             const baseRuleMargin = rulesMap.get(`${GENERAL_INSTITUCIONAL_ID}:${prod.id}`);
@@ -339,9 +351,9 @@ export async function batchRecalculateAndSyncPrices(
                     marginPct = Number(m.base_margin_percent) || 0;
                 }
 
-                // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo / (1 - Margen)
+                // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo Efectivo / (1 - Margen)
                 const marginFraction = Math.min(Math.max((marginPct || 0) / 100, -0.9), 0.99);
-                const priceBeforeTax = baseCost / (1 - marginFraction);
+                const priceBeforeTax = effectiveCost / (1 - marginFraction);
                 // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
                 const roundedPriceBeforeTax = Math.ceil(priceBeforeTax / 50) * 50;
 

@@ -22,6 +22,7 @@ import {
     Check, 
     X, 
     ChevronRight, 
+    Building,
     Building2, 
     FileText,
     Plus,
@@ -40,7 +41,6 @@ import {
     Printer,
     User
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { searchIncludes } from '@/lib/locationNorm';
 import { useAuth } from '@/lib/authContext';
 
@@ -668,6 +668,7 @@ export default function CommercialAgreementsModule() {
         reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result;
+                const XLSX = await import('xlsx');
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
@@ -956,6 +957,7 @@ export default function CommercialAgreementsModule() {
                 }
             ];
             
+            const XLSX = await import('xlsx');
             const worksheet = XLSX.utils.json_to_sheet(rows);
             
             // Adjust column widths for readability
@@ -986,6 +988,7 @@ export default function CommercialAgreementsModule() {
         reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result;
+                const XLSX = await import('xlsx');
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
@@ -1312,6 +1315,7 @@ export default function CommercialAgreementsModule() {
         reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result;
+                const XLSX = await import('xlsx');
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
@@ -1943,13 +1947,9 @@ export default function CommercialAgreementsModule() {
                     </div>
                 ) : (
                     <div style={{ 
-                        maxHeight: isMainKpiCollapsed ? 'calc(100vh - 160px)' : 'calc(100vh - 280px)', 
-                        minHeight: '380px',
-                        overflowY: 'auto', 
                         overflowX: 'auto', 
                         width: '100%', 
-                        position: 'relative',
-                        transition: 'max-height 0.25s ease'
+                        position: 'relative'
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                             <thead style={{ position: 'sticky', top: 0, zIndex: 15 }}>
@@ -2117,7 +2117,7 @@ export default function CommercialAgreementsModule() {
                                                                 borderRadius: '4px', 
                                                                 fontWeight: '700' 
                                                             }}>
-                                                                🏢 Sucursal
+                                                                <Building size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Sucursal
                                                             </span>
                                                         ) : (
                                                             <span style={{ 
@@ -2129,7 +2129,7 @@ export default function CommercialAgreementsModule() {
                                                                 borderRadius: '4px', 
                                                                 fontWeight: '700' 
                                                             }}>
-                                                                🏛️ Matriz
+                                                                <Building2 size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Matriz
                                                             </span>
                                                         )}
                                                     </div>
@@ -2713,7 +2713,7 @@ export default function CommercialAgreementsModule() {
                                                                             </span>
                                                                             {itemAudit.isModified && (
                                                                                 <span style={{ fontSize: '0.65rem', color: '#0369A1', fontWeight: '800' }}>
-                                                                                    ✏️ Modificado
+                                                                                    <Edit3 size={10} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Modificado
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -2951,20 +2951,30 @@ export default function CommercialAgreementsModule() {
                         }}>
                             <style dangerouslySetInnerHTML={{ __html: `
                                 @media print {
+                                    @page {
+                                        size: letter portrait;
+                                        margin: 1.1cm 1.3cm 1.3cm 1.3cm;
+                                    }
                                     body * { visibility: hidden !important; }
-                                    #printable-agreement-area, #printable-agreement-area * { visibility: visible !important; }
+                                    #printable-agreement-area, #printable-agreement-area * { 
+                                        visibility: visible !important; 
+                                        -webkit-print-color-adjust: exact !important;
+                                        print-color-adjust: exact !important;
+                                    }
                                     #printable-agreement-area {
-                                        position: fixed !important;
+                                        position: absolute !important;
                                         left: 0 !important;
                                         top: 0 !important;
                                         width: 100% !important;
                                         margin: 0 !important;
-                                        padding: 12mm 8mm !important;
+                                        padding: 0 !important;
                                         background: white !important;
                                         z-index: 999999 !important;
                                     }
                                     .no-print { display: none !important; }
-                                    table { page-break-inside: auto; }
+                                    table { page-break-inside: auto; width: 100%; border-collapse: collapse; }
+                                    thead { display: table-header-group; }
+                                    tfoot { display: table-footer-group; }
                                     tr { page-break-inside: avoid; page-break-after: auto; }
                                 }
                             `}} />

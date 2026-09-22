@@ -19,6 +19,9 @@ const nextConfig = {
       },
     ],
   },
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'date-fns'],
+  },
   env: {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
