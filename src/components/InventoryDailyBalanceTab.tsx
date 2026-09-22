@@ -286,7 +286,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
     const handleSwitchMode = useCallback((newMode: 'view' | 'manual_edit') => {
         if (newMode === 'manual_edit' && !canEditSheet) {
-            notify('Acceso restringido: La Hoja Manual de Edición está reservada exclusivamente para la jefatura de inventarios (Yina Cortés) o administradores.', 'warning');
+            notify('Acceso restringido: La Hoja Manual de Edición está reservada exclusivamente para la jefatura de inventarios o administradores.', 'warning');
             return;
         }
         setSheetMode(newMode);
@@ -1176,7 +1176,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
     const handleReopenClosing = async () => {
         if (!canEditSheet) {
-            notify('Solo la jefatura de inventarios (Yina Cortés) o administradores tienen autorización para reabrir una jornada contable.', 'warning');
+            notify('Solo la jefatura de inventarios o administradores tienen autorización para reabrir una jornada contable.', 'warning');
             return;
         }
 
@@ -1398,7 +1398,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     const handleCommitCellEdit = async () => {
         if (!editingCell || isSavingCell) return;
         if (!canEditSheet) {
-            notify('Solo la jefatura de inventarios (Yina Cortés) o administradores tienen autorización para modificar directamente los valores de esta sábana.', 'warning');
+            notify('Solo la jefatura de inventarios o administradores tienen autorización para modificar directamente los valores de esta sábana.', 'warning');
             setEditingCell(null);
             return;
         }
@@ -1418,7 +1418,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             const warehouseId = whData?.id;
             const timestampIso = `${balanceDate}T12:00:00.000Z`;
 
-            const supervisorSignature = profile?.contact_name || user?.email || 'Jefatura de Inventarios (Yina Cortés)';
+            const supervisorSignature = profile?.contact_name || user?.email || 'Jefatura de Inventarios';
 
             let movType: 'entry' | 'exit' | 'adjustment' = 'adjustment';
             let refType: string = INVENTORY_MOVEMENT_SUBTYPES.CORRECTION;
@@ -1641,7 +1641,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         return;
                     }
                     if (!canEditSheet) {
-                        notify('Acceso restringido: Esta sábana maestra es de solo lectura. Únicamente la supervisión de inventarios (Yina Cortés) o administradores tienen potestad de edición.', 'warning');
+                        notify('Acceso restringido: Esta sábana maestra es de solo lectura. Únicamente la jefatura de inventarios o administradores tienen potestad de edición.', 'warning');
                         return;
                     }
                     if (!effectiveReadonly) {
@@ -2591,22 +2591,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     transition: 'all 0.15s ease',
                                     boxShadow: sheetMode === 'manual_edit' ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
                                 }}
-                                title={canEditSheet ? "Hoja Manual: Taller de ajustes, contingencias y registros de Yina Cortés" : "Acceso restringido a Jefatura de Inventarios"}
+                                title={canEditSheet ? "Hoja Manual: Modo de ajustes, contingencias y registros de inventario" : "Acceso restringido a Jefatura de Inventarios"}
                             >
                                 <PenTool size={13} strokeWidth={2.2} />
                                 <span>Hoja Manual</span>
-                                {canEditSheet && (
-                                    <span style={{
-                                        backgroundColor: sheetMode === 'manual_edit' ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
-                                        color: sheetMode === 'manual_edit' ? '#FFFFFF' : '#0D7A57',
-                                        padding: '1px 4px',
-                                        borderRadius: '4px',
-                                        fontSize: '0.6rem',
-                                        fontWeight: '900'
-                                    }}>
-                                        Yina
-                                    </span>
-                                )}
                             </button>
                         </div>
                     </div>
@@ -2778,7 +2766,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         type="button"
                                         onClick={() => {
                                             if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar mermas.', 'warning');
+                                                notify('Solo la jefatura de inventarios o administradores pueden registrar mermas.', 'warning');
                                                 return;
                                             }
                                             setIsWasteModalOpen(true);
@@ -2808,7 +2796,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         type="button"
                                         onClick={() => {
                                             if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar descuentos de nómina.', 'warning');
+                                                notify('Solo la jefatura de inventarios o administradores pueden registrar descuentos de nómina.', 'warning');
                                                 return;
                                             }
                                             setIsPayrollModalOpen(true);
@@ -2838,7 +2826,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         type="button"
                                         onClick={() => {
                                             if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar ventas extra.', 'warning');
+                                                notify('Solo la jefatura de inventarios o administradores pueden registrar ventas extra.', 'warning');
                                                 return;
                                             }
                                             setIsAdditionalSalesModalOpen(true);
@@ -2932,7 +2920,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         type="button"
                                         onClick={() => {
                                             if (!canEditSheet) {
-                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden congelar el cierre oficial del día.', 'warning');
+                                                notify('Solo la jefatura de inventarios o administradores pueden congelar el cierre oficial del día.', 'warning');
                                                 return;
                                             }
                                             setIsClosingModalOpen(true);
