@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna, Zap } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
 import InventoryDailyBalanceTab from '@/components/InventoryDailyBalanceTab';
@@ -3538,9 +3538,12 @@ export default function InventoryAdminPage() {
                                                                                         borderRadius: '6px',
                                                                                         backgroundColor: '#FEF3C7',
                                                                                         color: '#B45309',
-                                                                                        border: '1px solid #FDE68A'
+                                                                                        border: '1px solid #FDE68A',
+                                                                                        display: 'inline-flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px'
                                                                                     }}>
-                                                                                        ⚡ {family.children.length + 1} pres.
+                                                                                        <Zap size={10} /> {family.children.length + 1} pres.
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
@@ -4424,9 +4427,12 @@ export default function InventoryAdminPage() {
                                                                                         borderRadius: '6px',
                                                                                         backgroundColor: '#FEF3C7',
                                                                                         color: '#B45309',
-                                                                                        border: '1px solid #FDE68A'
+                                                                                        border: '1px solid #FDE68A',
+                                                                                        display: 'inline-flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px'
                                                                                     }}>
-                                                                                        ⚡ {kf.childrenWithSummary.length + 1} pres.
+                                                                                        <Zap size={10} /> {kf.childrenWithSummary.length + 1} pres.
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
@@ -6574,28 +6580,28 @@ export default function InventoryAdminPage() {
                                 >
                                     {adjModalType === 'exit' && (
                                         <>
-                                            <option value="MERMA_MADURACION">🍂 Merma Operativa por Maduración / Vencimiento</option>
-                                            <option value="AVERIA_MANIPULACION">📦 Avería en Transporte / Manipulación</option>
-                                            <option value="MUESTRA_COMERCIAL">🎁 Muestra Comercial / Degustación a Cliente</option>
-                                            <option value="CUADRE_FISICO_FALTANTE">⚖️ Conteo Físico: Faltante de Piso</option>
-                                            <option value="REPROCESO_CORTE">🔪 Salida para Célula de Reproceso / Porcionado</option>
-                                            <option value="OTRO">📝 Otro Motivo Operativo</option>
+                                            <option value="MERMA_MADURACION">Merma Operativa por Maduración / Vencimiento</option>
+                                            <option value="AVERIA_MANIPULACION">Avería en Transporte / Manipulación</option>
+                                            <option value="MUESTRA_COMERCIAL">Muestra Comercial / Degustación a Cliente</option>
+                                            <option value="CUADRE_FISICO_FALTANTE">Conteo Físico: Faltante de Piso</option>
+                                            <option value="REPROCESO_CORTE">Salida para Célula de Reproceso / Porcionado</option>
+                                            <option value="OTRO">Otro Motivo Operativo</option>
                                         </>
                                     )}
                                     {adjModalType === 'entry' && (
                                         <>
-                                            <option value="DEVOLUCION_CLIENTE">🚚 Devolución / Rechazo en Ruta de Entrega</option>
-                                            <option value="COMPRA_EXTRA">🛒 Compra Extraordinaria / Entrada de Emergencia</option>
-                                            <option value="CUADRE_FISICO_SOBRANTE">⚖️ Conteo Físico: Sobrante de Piso</option>
-                                            <option value="REPROCESO_ENTRADA">✨ Entrada desde Célula de Reproceso</option>
-                                            <option value="OTRO">📝 Otro Motivo Operativo</option>
+                                            <option value="DEVOLUCION_CLIENTE">Devolución / Rechazo en Ruta de Entrega</option>
+                                            <option value="COMPRA_EXTRA">Compra Extraordinaria / Entrada de Emergencia</option>
+                                            <option value="CUADRE_FISICO_SOBRANTE">Conteo Físico: Sobrante de Piso</option>
+                                            <option value="REPROCESO_ENTRADA">Entrada desde Célula de Reproceso</option>
+                                            <option value="OTRO">Otro Motivo Operativo</option>
                                         </>
                                     )}
                                     {adjModalType === 'adjustment' && (
                                         <>
-                                            <option value="CUADRE_FISICO_CONTEO">⚖️ Ajuste General por Conteo Físico Célula</option>
-                                            <option value="CORRECCION_DIGITACION">✏️ Corrección de Error de Digitación</option>
-                                            <option value="OTRO">📝 Otro Motivo</option>
+                                            <option value="CUADRE_FISICO_CONTEO">Ajuste General por Conteo Físico Célula</option>
+                                            <option value="CORRECCION_DIGITACION">Corrección de Error de Digitación</option>
+                                            <option value="OTRO">Otro Motivo</option>
                                         </>
                                     )}
                                 </select>
@@ -6649,7 +6655,7 @@ export default function InventoryAdminPage() {
                                         gap: '6px'
                                     }}>
                                         <AlertTriangle size={14} color="#D97706" />
-                                        <span>⚠️ Alerta: La salida ({adjModalQty}) supera el saldo actual ({selectedProduct.currentStock}). El saldo se ajustará a 0.</span>
+                                        <span>Alerta: La salida ({adjModalQty}) supera el saldo actual ({selectedProduct.currentStock}). El saldo se ajustará a 0.</span>
                                     </div>
                                 )}
                             </div>

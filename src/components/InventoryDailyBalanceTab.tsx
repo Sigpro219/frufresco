@@ -54,7 +54,6 @@ import {
     Lock,
     Unlock
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { WorkCell } from '@/types/workCells';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 
@@ -262,7 +261,6 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     const [isSubmittingClosing, setIsSubmittingClosing] = useState(false);
     const [previousClosingMap, setPreviousClosingMap] = useState<Record<string, number>>({});
 
-    // Estado de Edición Directa en Celda (Inline Grid Editing estilo Excel)
     const [editingCell, setEditingCell] = useState<{
         productId: string;
         colKey: string;
@@ -270,6 +268,18 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         currentValue: string;
     } | null>(null);
     const [isSavingCell, setIsSavingCell] = useState(false);
+
+    // Notificaciones corporativas tipo Toast accesibles (sin window.alert bloqueante)
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
+    const notify = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+        setToast({ message, type });
+        if (typeof window !== 'undefined' && (window as any).showToast) {
+            (window as any).showToast(message, type === 'warning' ? 'info' : type);
+        }
+        setTimeout(() => {
+            setToast(prev => (prev?.message === message ? null : prev));
+        }, 4500);
+    }, []);
 
     // Medición reactiva de la Toolbar Dock para sincronización con cabecera de tabla
     const dockRef = useRef<HTMLDivElement>(null);
@@ -426,14 +436,15 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 setClosingRecord(null);
             }
 
-            // 0.1 Cargar cierre del día anterior (D-1) para heredar el saldo inicial oficial inmutable
+            // 0.1 Cargar último cierre oficial previo (D-1 flexible) para heredar el saldo inicial oficial inmutable
             const prevClosingSnapshots: Record<string, number> = {};
             try {
-                const prevDate = new Date(new Date(`${balanceDate}T12:00:00`).getTime() - 86400000).toISOString().split('T')[0];
                 const { data: prevCloseData } = await supabase
                     .from('daily_inventory_closings')
-                    .select('snapshot_items')
-                    .eq('closing_date', prevDate)
+                    .select('snapshot_items, closing_date')
+                    .lt('closing_date', balanceDate)
+                    .order('closing_date', { ascending: false })
+                    .limit(1)
                     .maybeSingle();
 
                 if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
@@ -536,6 +547,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 const list = laterMovementsByProduct.get(m.product_id) || [];
                 list.push(m);
                 laterMovementsByProduct.set(m.product_id, list);
+            }
+        });
+
+        // Pre-calcular Set indexado O(1) de padres con hijos para evitar cuello de botella O(N^2)
+        const parentIdsWithChildren = new Set<string>();
+        products.forEach(p => {
+            if (p.parent_id && p.parent_id !== p.id) {
+                parentIdsWithChildren.add(p.parent_id);
             }
         });
 
@@ -678,7 +697,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
             // Jerarquía dual P/H (Sincronizada con Maestro SKU)
             const isSelfParentChild = p.parent_id === p.id;
-            const hasOtherChildren = products.some(other => other.parent_id === p.id && other.id !== p.id);
+            const hasOtherChildren = parentIdsWithChildren.has(p.id);
             const isP = isSelfParentChild || hasOtherChildren;
             const isH = isSelfParentChild || Boolean(p.parent_id && p.parent_id !== p.id);
 
@@ -741,11 +760,12 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         // 2. Construir familias a partir de productos padres o independientes
         const families: DailyFamily[] = [];
         const processedIds = new Set<string>();
+        const dailyRowProductIds = new Set<string>(dailyRows.map(r => r.productId));
 
         dailyRows.forEach(row => {
             if (childProductIds.has(row.productId)) {
                 // Si el padre existe en dailyRows, este hijo se anidará bajo él
-                const parentExists = dailyRows.some(r => r.productId === row.parent_id);
+                const parentExists = row.parent_id ? dailyRowProductIds.has(row.parent_id) : false;
                 if (parentExists) return;
             }
 
@@ -1070,7 +1090,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     // Realizar Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
     const handleOfficialClosing = async () => {
         if (dailyRows.length === 0) {
-            alert('No hay datos en la sábana para cerrar la jornada.');
+            notify('No hay datos en la sábana para cerrar la jornada.', 'warning');
             return;
         }
 
@@ -1134,10 +1154,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             setClosingRecord(data);
             setIsClosingModalOpen(false);
             setClosingNotes('');
-            alert(`✅ Jornada del ${balanceDate} cerrada oficialmente y congelada para contabilidad.`);
+            notify(`Jornada del ${balanceDate} cerrada oficialmente y congelada para contabilidad.`, 'success');
         } catch (err: any) {
             console.error('Error al realizar cierre oficial:', err);
-            alert('Error al realizar cierre oficial: ' + (err.message || err));
+            notify('Error al realizar cierre oficial: ' + (err.message || err), 'error');
         } finally {
             setIsSubmittingClosing(false);
         }
@@ -1161,16 +1181,17 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             if (error) throw error;
 
             setClosingRecord(prev => prev ? { ...prev, is_locked: false } : null);
-            alert(`🔓 Jornada del ${balanceDate} reabierta exitosamente.`);
+            notify(`Jornada del ${balanceDate} reabierta exitosamente.`, 'success');
         } catch (err: any) {
             console.error('Error al reabrir jornada:', err);
-            alert('Error al reabrir jornada: ' + (err.message || err));
+            notify('Error al reabrir jornada: ' + (err.message || err), 'error');
         }
     };
 
     // Exportador XLSX exacto de las 24 columnas con FÓRMULAS NATIVAS de Excel y Jerarquía (SPEC.md v1.5.0)
-    const handleExportOfficialExcel = () => {
+    const handleExportOfficialExcel = async () => {
         try {
+            const XLSX = await import('xlsx');
             const rowsForExcel: any[] = [];
 
             filteredFamilies.forEach(f => {
@@ -1251,7 +1272,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 ws[`T${rNum}`] = { t: 'n', f: calcFormula, v: rowsForExcel[i]['Inventario calculado'] };
 
                 // Col V: Bodega Post-10 AM (U + P)
-                const post10Formula = `IF(ISBLANK(U${rNum}), "", U${rNum}+P${rNum})`;
+                const post10Formula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), "", U${rNum}+P${rNum})`;
                 ws[`V${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario bodega'] };
 
                 // Col W: Faltantes (Si U < T => T - U)
@@ -1272,7 +1293,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             formulaCols.forEach(c => {
                 ws[`${c}${totalRow}`] = {
                     t: 'n',
-                    f: `SUM(${c}2:${c}${lastDataRow})`
+                    f: `SUMIF(D2:D${lastDataRow}, "<>↳ Presentación", ${c}2:${c}${lastDataRow})`
                 };
             });
 
@@ -1311,9 +1332,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Balance_Diario_24Col');
             XLSX.writeFile(wb, `Balance_Diario_FruFresco_24Col_${balanceDate}.xlsx`);
+            notify('Reporte Excel oficial con fórmulas descargado con éxito', 'success');
         } catch (err: any) {
             console.error('Error exportando Excel con fórmulas:', err);
-            alert('Error al exportar reporte: ' + err.message);
+            notify('Error al exportar reporte: ' + err.message, 'error');
         }
     };
 
@@ -1521,7 +1543,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             }
         } catch (err: any) {
             console.error('Error en edición de celda:', err);
-            alert('Error al guardar cambio: ' + (err.message || 'Error desconocido'));
+            notify('Error al guardar cambio: ' + (err.message || 'Error desconocido'), 'error');
         } finally {
             setIsSavingCell(false);
             setEditingCell(null);
@@ -1547,10 +1569,15 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         type="text"
                         autoFocus
                         value={editingCell.currentValue}
+                        onFocus={e => e.target.select()}
                         onChange={e => setEditingCell(prev => prev ? { ...prev, currentValue: e.target.value } : null)}
                         onKeyDown={e => {
                             if (e.key === 'Enter') handleCommitCellEdit();
                             if (e.key === 'Escape') setEditingCell(null);
+                            if (e.key === 'Tab') {
+                                e.preventDefault();
+                                handleCommitCellEdit();
+                            }
                         }}
                         onBlur={handleCommitCellEdit}
                         style={{
@@ -1578,7 +1605,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             <td
                 onClick={() => {
                     if (closingRecord?.is_locked) {
-                        alert(`⚠️ La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`);
+                        notify(`La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`, 'warning');
                         return;
                     }
                     if (!isReadonly) {
@@ -1598,7 +1625,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 title={isReadonly ? undefined : 'Clic para editar este valor'}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                    {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#CBD5E1' }}>-</span>}
+                    {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#94A3B8', fontWeight: '600' }}>-</span>}
                     {extraChildren}
                 </div>
             </td>
@@ -2063,8 +2090,19 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     </>
                 )}
 
-                {/* E: Inventario Inicial (+) */}
-                {renderEditableCell(row.productId, 'E', row.colE_initialStock, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '4px 6px', textAlign: 'right', fontWeight: isParent ? '800' : '700', color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8', borderBottom: cellBorderBottom }, 2)}
+                {/* E: Inventario Inicial (+) - Estrictamente de Solo Lectura (Heredado de Cierre D-1) */}
+                <td style={{
+                    width: '95px', minWidth: '95px', maxWidth: '95px',
+                    padding: '4px 6px', textAlign: 'right',
+                    fontWeight: isParent ? '800' : '700',
+                    color: row.colE_initialStock > 0 ? (isParent ? '#065F46' : '#0D7A57') : '#94A3B8',
+                    borderBottom: cellBorderBottom,
+                    backgroundColor: 'transparent'
+                }} title="Inventario Inicial oficial heredado (Solo Lectura. Para ajustes use Col F Corrección)">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        {renderNumericCell(row.colE_initialStock, 2)}
+                    </div>
+                </td>
 
                 {/* F: Corrección (±) */}
                 {renderEditableCell(row.productId, 'F', row.colF_corrections, {
@@ -2195,6 +2233,37 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     background-color: #F1F5F9 !important;
                 }
             `}</style>
+
+            {/* Notificación Toast Corporativa Accesible */}
+            {toast && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '24px',
+                    right: '24px',
+                    zIndex: 9999,
+                    backgroundColor: toast.type === 'error' ? '#FEF2F2' : toast.type === 'warning' ? '#FFFBEB' : '#F0FDF4',
+                    border: `1.5px solid ${toast.type === 'error' ? '#EF4444' : toast.type === 'warning' ? '#F59E0B' : '#10B981'}`,
+                    color: toast.type === 'error' ? '#991B1B' : toast.type === 'warning' ? '#92400E' : '#065F46',
+                    padding: '0.75rem 1.25rem',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    fontWeight: '700',
+                    fontSize: '0.85rem'
+                }}>
+                    {toast.type === 'error' ? <AlertTriangle size={18} color="#EF4444" /> : toast.type === 'warning' ? <AlertTriangle size={18} color="#F59E0B" /> : <CheckCircle2 size={18} color="#10B981" />}
+                    <span>{toast.message}</span>
+                    <button
+                        type="button"
+                        onClick={() => setToast(null)}
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'inherit', marginLeft: '6px' }}
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            )}
 
             {/* 1. TARJETAS DE KPIS NANO-BENTO (ALTURA REDUCIDA ~64px) */}
             <div style={{
@@ -3502,9 +3571,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     ref={tableScrollRef}
                     onScroll={handleTableScroll}
                     style={{ 
-                        overflow: 'auto', 
-                        maxHeight: 'calc(100vh - 215px)',
-                        position: 'relative' 
+                        overflowX: 'auto', 
+                        overflowY: 'visible',
+                        position: 'relative',
+                        WebkitOverflowScrolling: 'touch'
                     }}
                 >
                     <table className="daily-balance-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>

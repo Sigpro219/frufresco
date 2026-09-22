@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 
+import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+
 interface Toast {
     id: string;
     message: string;
@@ -36,15 +38,17 @@ export default function Toast() {
         }}>
             {toasts.map(toast => (
                 <div key={toast.id} style={{
-                    padding: '1rem 1.5rem',
+                    padding: '0.85rem 1.35rem',
                     borderRadius: '12px',
-                    backgroundColor: toast.type === 'success' ? '#10B981' : toast.type === 'error' ? '#EF4444' : '#3B82F6',
+                    backgroundColor: toast.type === 'success' ? '#065F46' : toast.type === 'error' ? '#991B1B' : '#1E40AF',
                     color: 'white',
                     fontWeight: '700',
-                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    fontSize: '0.85rem',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.5rem',
+                    gap: '0.65rem',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
                     animation: 'slideIn 0.3s ease-out'
                 }}>
                     <style>{`
@@ -53,10 +57,10 @@ export default function Toast() {
                             to { transform: translateX(0); opacity: 1; }
                         }
                     `}</style>
-                    {toast.type === 'success' && '✅'}
-                    {toast.type === 'error' && '❌'}
-                    {toast.type === 'info' && 'ℹ️'}
-                    {toast.message}
+                    {toast.type === 'success' && <CheckCircle2 size={18} strokeWidth={2.2} />}
+                    {toast.type === 'error' && <AlertTriangle size={18} strokeWidth={2.2} />}
+                    {toast.type === 'info' && <Info size={18} strokeWidth={2.2} />}
+                    <span>{toast.message}</span>
                 </div>
             ))}
         </div>

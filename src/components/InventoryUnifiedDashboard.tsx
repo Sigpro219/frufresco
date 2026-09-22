@@ -403,8 +403,23 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
         currentMovements.forEach(m => {
             const q = Math.abs(Number(m.quantity || 0));
             const cost = costMatrix[m.product_id] || 0;
+            const isWasteRef = m.reference_type?.startsWith('waste_') || m.reference_type === 'food_bank';
 
-            if (m.type === 'entry') {
+            if (isWasteRef) {
+                wasteKg += q;
+                const lossAmount = q * cost;
+                wasteCost += lossAmount;
+
+                const prod = productDict.get(m.product_id);
+                const name = prod?.name || 'Producto Desconocido';
+                const sku = prod?.sku || '---';
+
+                if (!productWasteMap[m.product_id]) {
+                    productWasteMap[m.product_id] = { kg: 0, cost: 0, name, sku };
+                }
+                productWasteMap[m.product_id].kg += q;
+                productWasteMap[m.product_id].cost += lossAmount;
+            } else if (m.type === 'entry') {
                 entryKg += q;
             } else if (m.type === 'exit') {
                 exitKg += q;
@@ -510,8 +525,14 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 if (cellProdIds.has(m.product_id)) {
                     const q = Math.abs(Number(m.quantity || 0));
                     const cost = costMatrix[m.product_id] || 0;
-                    if (m.type === 'exit') cellExitKg += q;
-                    if (m.type === 'adjustment' && Number(m.quantity) < 0) {
+                    const isWaste = m.reference_type?.startsWith('waste_') || m.reference_type === 'food_bank';
+
+                    if (isWaste) {
+                        cellWasteKg += q;
+                        cellWasteCost += q * cost;
+                    } else if (m.type === 'exit') {
+                        cellExitKg += q;
+                    } else if (m.type === 'adjustment' && Number(m.quantity) < 0) {
                         cellWasteKg += q;
                         cellWasteCost += q * cost;
                     }
@@ -642,12 +663,12 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 </div>
             </div>
 
-            {/* 2. HERO KPI CARDS (6 TARJETAS EJECUTIVAS EN 1 SOLA LÍNEA HORIZONTAL) */}
-            <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '4px' }}>
+            {/* 2. HERO KPI CARDS (6 TARJETAS EJECUTIVAS RESPONSIVAS) */}
+            <div style={{ width: '100%', paddingBottom: '4px' }}>
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(6, minmax(140px, 1fr))',
-                    gap: '0.85rem',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                    gap: '1rem',
                     alignItems: 'stretch'
                 }}>
                     
@@ -1118,7 +1139,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 </div>
             </div>
 
-            {/* 4. COMPARATIVA GENERAL ENTRE LAS 5 CÉLULAS DE ALISTAMIENTO */}
+            {/* 4. COMPARATIVA GENERAL ENTRE LAS 6 CÉLULAS AUTÓNOMAS DE ALISTAMIENTO */}
             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                     <div>
@@ -1130,7 +1151,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                         </p>
                     </div>
                     <span style={{ fontSize: '0.72rem', fontWeight: '800', backgroundColor: '#F8FAFC', color: THEME.colors.textSecondary, padding: '4px 10px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, fontFamily: THEME.typography.fontFamilySecondary }}>
-                        5 Células Parametrizadas
+                        6 Células Autónomas Parametrizadas
                     </span>
                 </div>
 

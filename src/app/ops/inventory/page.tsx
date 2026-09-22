@@ -375,8 +375,8 @@ export default function OpsInventoryPage() {
             const { data, error } = await supabase
                 .from('inventory_movements')
                 .select(`
-                    id, created_at, quantity, notes, evidence_url,
-                    products (name, sku, accounting_id, unit_of_measure)
+                    id, product_id, created_at, quantity, notes, evidence_url,
+                    products (id, name, sku, accounting_id, unit_of_measure)
                 `)
                 .eq('status_to', 'returned')
                 .is('admin_decision', null)
@@ -755,8 +755,9 @@ export default function OpsInventoryPage() {
 
             window.showToast?.(`Producto gestionado como ${decision}`, 'success');
             fetchReturns();
-        } catch (error) {
-            alert('Error al procesar decisión');
+        } catch (error: any) {
+            console.error('Error al procesar decisión:', error);
+            window.showToast?.('Error al procesar decisión: ' + (error?.message || error), 'error');
         } finally {
             setSubmitting(false);
         }
@@ -1356,6 +1357,13 @@ export default function OpsInventoryPage() {
                                                                         step="any"
                                                                         placeholder="0.00"
                                                                         value={rawVal}
+                                                                        onFocus={(e) => e.target.select()}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter') {
+                                                                                e.preventDefault();
+                                                                                handleSaveSingleItem(child);
+                                                                            }
+                                                                        }}
                                                                         onChange={(e) => setCounts({ ...counts, [child.id]: e.target.value })}
                                                                         style={{
                                                                             width: '100%',
