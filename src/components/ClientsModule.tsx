@@ -73,7 +73,7 @@ import {
     Upload
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import CommercialAgreementsModule from './CommercialAgreementsModule';
+import CommercialAgreementsModule, { extractRowsFromExcelSheet } from './CommercialAgreementsModule';
 import { normalizeCityName, CANONICAL_CITIES, normalizeSearchText, searchIncludes } from '@/lib/locationNorm';
 
 declare global {
@@ -780,47 +780,13 @@ export default function ClientsModule() {
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
                 
-                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
-                if (rawRows.length === 0) {
-                    throw new Error('El archivo está vacío');
-                }
-                
-                const headers = Object.keys(rawRows[0]);
-                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
-                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
-                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
-                
-                if (!idCol || !priceCol) {
-                    throw new Error('No se encontraron las columnas Código y Precio');
-                }
-                
-                const parsedItems: any[] = [];
-                let rowCount = 0;
-                
-                rawRows.forEach((row) => {
-                    const idVal = String(row[idCol] || '').trim();
-                    const priceVal = parseFloat(String(row[priceCol] || '').replace(/[^0-9.-]/g, ''));
-                    const nameVal = nameCol ? String(row[nameCol] || '') : '';
-                    
-                    if (idVal && !isNaN(priceVal)) {
-                        parsedItems.push({
-                            accounting_id: idVal,
-                            unit_price: priceVal,
-                            product_name: nameVal
-                        });
-                        rowCount++;
-                    }
-                });
-                
-                if (parsedItems.length === 0) {
-                    throw new Error('No se encontraron filas válidas con Código y Precio');
-                }
+                const parsedItems = extractRowsFromExcelSheet(ws, XLSX);
                 
                 setConversionItems(parsedItems);
-                window.showToast?.(`Se cargaron ${rowCount} productos válidos desde el Excel`, 'success');
+                window.showToast?.(`Se cargaron ${parsedItems.length} productos válidos desde el Excel`, 'success');
             } catch (err: any) {
                 console.error(err);
-                window.showToast?.('Error al leer Excel: ' + err.message, 'error');
+                window.showToast?.(err.message || 'Error al procesar el archivo Excel', 'error');
                 setConversionFile(null);
                 setConversionItems([]);
             } finally {
@@ -886,11 +852,16 @@ export default function ClientsModule() {
                     }
                 });
                 
+                const [cy, cm, cd] = (conversionStartDate || '').split('-');
+                const convDateSuffix = `${cd || '01'}-${cm || '01'}-${(cy || '26').slice(-2)}`;
+                const convAgreementName = `${newProfile.company_name || newProfile.contact_name || 'Acuerdo'} - ${convDateSuffix}`;
+
                 const { data: newQuote, error: insertQErr } = await supabase
                     .from('quotes')
                     .insert({
                         client_id: newProfile.id,
                         client_name: newProfile.company_name || newProfile.contact_name,
+                        model_snapshot_name: convAgreementName,
                         status: 'agreement',
                         start_date: conversionStartDate ? new Date(conversionStartDate).toISOString() : new Date().toISOString(),
                         valid_until: calculatedValidUntil,
@@ -5246,7 +5217,7 @@ function EmptyState({ text }: { text: string }) {
 
 
 
-function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose: () => void }) {
+function AgreementDetailsModal({ agreement, onClose, clientName }: { agreement: any, onClose: () => void, clientName?: string }) {
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -5280,6 +5251,17 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
 
     const agreementId = formatAgreementNumber(agreement.quote_number, agreement.created_at);
 
+    const agreementDisplayName = (() => {
+        if (agreement.model_snapshot_name && agreement.model_snapshot_name.trim()) {
+            return agreement.model_snapshot_name.trim();
+        }
+        const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = String(date.getFullYear()).slice(-2);
+        return `${clientName || 'Acuerdo Comercial'} - ${day}-${month}-${year}`;
+    })();
+
     // Filtrar productos por nombre o por código contable
     const filteredItems = useMemo(() => {
         if (!searchQuery.trim()) return items;
@@ -5297,13 +5279,17 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                 {/* Header con Ícono Lucide */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.2rem 2rem', borderBottom: '1px solid #F1F5F9', background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <FileText size={20} color="#0D7A57" strokeWidth={2.2} />
+                        <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <FileText size={22} color="#0D7A57" strokeWidth={2.2} />
                         </div>
                         <div>
-                            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1E293B' }}>Precios Congelados: {agreementId}</h3>
-                            <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <CheckCircle2 size={12} color="#0D7A57" /> Modelo de Precios / Acuerdo Institucional activo
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span>{agreementDisplayName}</span>
+                            </h3>
+                            <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                                <span style={{ fontFamily: 'monospace', fontWeight: '800', backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: '4px', color: '#1E293B' }}>{agreementId}</span>
+                                <span>•</span>
+                                <CheckCircle2 size={13} color="#0D7A57" /> Precios Congelados / Acuerdo Institucional Activo
                             </span>
                         </div>
                     </div>
@@ -5320,12 +5306,10 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                             <Calendar size={15} color="#0D7A57" />
                             <span><strong>Vigencia:</strong> {agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'} al {agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}</span>
                         </div>
-                        {agreement.model_snapshot_name && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Package size={15} color="#0D7A57" />
-                                <span><strong>Modelo Base:</strong> {agreement.model_snapshot_name}</span>
-                            </div>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FileText size={15} color="#0D7A57" />
+                            <span><strong>Nombre del Acuerdo:</strong> {agreementDisplayName}</span>
+                        </div>
                     </div>
 
                     {/* BUSCADOR DE PRODUCTOS (POR NOMBRE O CÓDIGO CONTABLE) */}
@@ -6286,6 +6270,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 {isAgreementModalOpen && agreement && (
                     <AgreementDetailsModal
                         agreement={agreement}
+                        clientName={formData.company_name || formData.razon_social || formData.contact_name}
                         onClose={() => setIsAgreementModalOpen(false)}
                     />
                 )}
@@ -7561,52 +7546,69 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                      })();
                                                      
                                                      const agreementId = (() => {
-                                                         const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
-                                                         const day = String(date.getDate()).padStart(2, '0');
-                                                         const month = String(date.getMonth() + 1).padStart(2, '0');
-                                                         const paddedSeq = String(agreement.quote_number).padStart(4, '0');
-                                                         return `ACI ${day}${month} ${paddedSeq}`;
-                                                     })();
+                                                        const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
+                                                        const day = String(date.getDate()).padStart(2, '0');
+                                                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                        const paddedSeq = String(agreement.quote_number).padStart(4, '0');
+                                                        return `ACI ${day}${month} ${paddedSeq}`;
+                                                    })();
 
-                                                     return (
-                                                         <div 
-                                                             onClick={() => setIsAgreementModalOpen(true)}
-                                                             title="Haga clic para ver los precios congelados del acuerdo"
-                                                             style={{ 
-                                                                 padding: '0.8rem 1rem', 
-                                                                 borderRadius: THEME.radius.md, 
-                                                                 backgroundColor: status.bgColor, 
-                                                                 border: `1.5px solid ${status.type === 'expired' ? '#FCA5A5' : status.type === 'warning' ? '#FDE68A' : '#A7F3D0'}`, 
-                                                                 color: status.color, 
-                                                                 display: 'flex',
-                                                                 flexDirection: 'column',
-                                                                 gap: '0.25rem',
-                                                                 cursor: 'pointer',
-                                                                 transition: 'all 0.2s',
-                                                                 position: 'relative'
-                                                             }}
-                                                             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
-                                                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-                                                         >
-                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                     <FileText size={15} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                                                     <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#1E293B' }}>
-                                                                         {agreementId}
-                                                                     </span>
-                                                                     {inheritedFromParent && (
-                                                                         <span style={{ fontSize: '0.6rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                             Matriz
-                                                                         </span>
-                                                                     )}
-                                                                 </div>
-                                                                 <span style={{ fontSize: '0.55rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', backgroundColor: status.type === 'expired' ? '#FEE2E2' : status.type === 'warning' ? '#FEF3C7' : '#D1FAE5', color: status.color, textTransform: 'uppercase' }}>
-                                                                     {status.label}
-                                                                 </span>
-                                                             </div>
-                                                             <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                                                                 <span>Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
-                                                                 <span style={{ fontSize: '0.6rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline' }}>Ver Precios →</span>
+                                                    const agreementDisplayName = (() => {
+                                                        if (agreement.model_snapshot_name && agreement.model_snapshot_name.trim()) {
+                                                            return agreement.model_snapshot_name.trim();
+                                                        }
+                                                        const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
+                                                        const day = String(date.getDate()).padStart(2, '0');
+                                                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                        const year = String(date.getFullYear()).slice(-2);
+                                                        const clientName = formData.company_name || formData.razon_social || formData.contact_name || 'Acuerdo';
+                                                        return `${clientName} - ${day}-${month}-${year}`;
+                                                    })();
+
+                                                    return (
+                                                        <div 
+                                                            onClick={() => setIsAgreementModalOpen(true)}
+                                                            title="Haga clic para ver los precios congelados del acuerdo"
+                                                            style={{ 
+                                                                padding: '0.75rem 1rem', 
+                                                                borderRadius: THEME.radius.md, 
+                                                                backgroundColor: status.bgColor, 
+                                                                border: `1.5px solid ${status.type === 'expired' ? '#FCA5A5' : status.type === 'warning' ? '#FDE68A' : '#A7F3D0'}`, 
+                                                                color: status.color, 
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.35rem',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                position: 'relative'
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+                                                                    <FileText size={16} strokeWidth={2} style={{ color: THEME.colors.primary, flexShrink: 0 }} />
+                                                                    <span style={{ fontWeight: '800', fontSize: '0.82rem', color: '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={agreementDisplayName}>
+                                                                        {agreementDisplayName}
+                                                                    </span>
+                                                                </div>
+                                                                <span style={{ fontSize: '0.55rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', backgroundColor: status.type === 'expired' ? '#FEE2E2' : status.type === 'warning' ? '#FEF3C7' : '#D1FAE5', color: status.color, textTransform: 'uppercase', flexShrink: 0 }}>
+                                                                    {status.label}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.67rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                    <span style={{ fontFamily: 'monospace', fontWeight: '700', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', color: '#334155' }}>
+                                                                        {agreementId}
+                                                                    </span>
+                                                                    {inheritedFromParent && (
+                                                                        <span style={{ fontSize: '0.6rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                            Matriz
+                                                                        </span>
+                                                                    )}
+                                                                    <span>• Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                                                                </div>
+                                                                <span style={{ fontSize: '0.62rem', color: '#0D7A57', fontWeight: '800', textDecoration: 'underline', flexShrink: 0 }}>Ver Precios →</span>
                                                             </div>
                                                         </div>
                                                     );

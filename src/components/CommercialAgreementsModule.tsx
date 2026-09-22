@@ -609,18 +609,19 @@ export default function CommercialAgreementsModule() {
             return {
                 formatted: formatAuditDateTime(dateStr),
                 author: author,
-                userId: latest.collaborator_id || '52346672',
                 isModified: true,
                 rawDate: dateStr
             };
         }
         
-        const dateStr = item.created_at || selectedAgreement?.updated_at || selectedAgreement?.created_at;
-        const author = latestAgreementLog?.collaborator_name || 'Julissa Arévalo Ramirez';
+        // Ítems no modificados individualmente: conservan la fecha y autor original de la lista
+        const dateStr = item.created_at || selectedAgreement?.created_at || selectedAgreement?.start_date;
+        const initialAuthor = (selectedAgreement as any)?.created_by_name || 
+                              (selectedAgreement as any)?.author || 
+                              'Julissa Arévalo Ramirez';
         return {
             formatted: formatAuditDateTime(dateStr),
-            author: author,
-            userId: latestAgreementLog?.collaborator_id || '52346672',
+            author: initialAuthor,
             isModified: false,
             rawDate: dateStr
         };
@@ -1542,12 +1543,14 @@ export default function CommercialAgreementsModule() {
             }
             const calculatedValidUntil = expiry.toISOString();
             
+            const defaultUpdatedName = editingAgreement.model_snapshot_name || `${editingAgreement.profiles?.company_name || editingAgreement.client_name || 'Acuerdo'} - ${editStartDate.split('-').reverse().join('-')}`;
             // 1. Update the quote record itself
             const { error: updateErr } = await supabase
                 .from('quotes')
                 .update({
                     start_date: editStartDate ? new Date(editStartDate).toISOString() : new Date().toISOString(),
-                    valid_until: calculatedValidUntil
+                    valid_until: calculatedValidUntil,
+                    model_snapshot_name: defaultUpdatedName
                 })
                 .eq('id', editingAgreement.id);
                 
@@ -2204,19 +2207,22 @@ export default function CommercialAgreementsModule() {
                                                         <span style={{ fontWeight: 'bold', color: THEME.colors.textMain }}>
                                                             {agreement.profiles?.company_name || agreement.client_name}
                                                         </span>
-                                                        {agreement.model_snapshot_name && (
-                                                            <span style={{ 
-                                                                fontSize: '0.68rem', 
-                                                                backgroundColor: '#ECFDF5', 
-                                                                color: '#047857', 
-                                                                border: '1px solid #A7F3D0', 
-                                                                padding: '1px 6px', 
-                                                                borderRadius: '4px', 
-                                                                fontWeight: '600' 
-                                                            }}>
-                                                                {agreement.model_snapshot_name}
-                                                            </span>
-                                                        )}
+                                                        {(() => {
+                                                            const badgeName = agreement.model_snapshot_name || `${agreement.profiles?.company_name || agreement.client_name || 'Acuerdo'} - ${agreement.created_at ? new Date(agreement.created_at).toLocaleDateString('es-CO') : ''}`;
+                                                            return (
+                                                                <span style={{ 
+                                                                    fontSize: '0.68rem', 
+                                                                    backgroundColor: '#ECFDF5', 
+                                                                    color: '#047857', 
+                                                                    border: '1px solid #A7F3D0', 
+                                                                    padding: '1px 6px', 
+                                                                    borderRadius: '4px', 
+                                                                    fontWeight: '600' 
+                                                                }}>
+                                                                    {badgeName}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                         {agreement.profiles?.parent_id ? (
                                                             <span style={{ 
                                                                 fontSize: '0.66rem', 
@@ -2450,19 +2456,22 @@ export default function CommercialAgreementsModule() {
                                     <h2 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain }}>
                                         {selectedAgreement.profiles?.company_name || selectedAgreement.client_name}
                                     </h2>
-                                    {selectedAgreement.model_snapshot_name && (
-                                        <span style={{ 
-                                            fontSize: '0.75rem', 
-                                            backgroundColor: '#ECFDF5', 
-                                            color: '#047857', 
-                                            border: '1px solid #A7F3D0', 
-                                            padding: '2px 8px', 
-                                            borderRadius: '6px', 
-                                            fontWeight: '700' 
-                                        }}>
-                                            {selectedAgreement.model_snapshot_name}
-                                        </span>
-                                    )}
+                                    {(() => {
+                                        const badgeName = selectedAgreement.model_snapshot_name || `${selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Acuerdo'} - ${selectedAgreement.created_at ? new Date(selectedAgreement.created_at).toLocaleDateString('es-CO') : ''}`;
+                                        return (
+                                            <span style={{ 
+                                                fontSize: '0.75rem', 
+                                                backgroundColor: '#ECFDF5', 
+                                                color: '#047857', 
+                                                border: '1px solid #A7F3D0', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '6px', 
+                                                fontWeight: '700' 
+                                            }}>
+                                                {badgeName}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 {/* Subtítulo de trazabilidad idéntico a la fotografía de referencia */}
                                 {(() => {
