@@ -189,6 +189,20 @@ interface InventoryDailyBalanceTabProps {
     workCells: WorkCell[];
 }
 
+const getCompactCellLabel = (name: string, shortName?: string | null): string => {
+    if (shortName && shortName.trim().length > 0 && shortName.trim().length <= 12) {
+        return shortName.trim();
+    }
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('abarrote')) return 'Abarrotes';
+    if (lower.includes('hortaliza')) return 'Hortalizas';
+    if (lower.includes('verdura')) return 'Verduras';
+    if (lower.includes('papa')) return 'Papas';
+    if (lower.includes('fresa') || lower.includes('mora')) return 'Fresas';
+    if (lower.includes('fruta')) return 'Frutas';
+    return name.split(/[,&/]/)[0].trim();
+};
+
 export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBalanceTabProps) {
     const { user, profile } = useAuth();
 
@@ -213,16 +227,21 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     }, [profile, user]);
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const [balanceDate, setBalanceDate] = useState<string>(todayStr);
+    const balanceDateDefault = todayStr;
+    const [balanceDate, setBalanceDate] = useState<string>(balanceDateDefault);
     const [sheetMode, setSheetMode] = useState<'view' | 'manual_edit'>('view');
     const [selectedCell, setSelectedCell] = useState<string>('ALL');
 
     const cellOptions = useMemo(() => [
-        { value: 'ALL', label: `Todas (${workCells.length})`, icon: <Boxes size={14} color="#0D7A57" strokeWidth={2} /> },
+        { 
+            value: 'ALL', 
+            label: 'Todas', 
+            fullLabel: `Todas las Células (${workCells.length})`
+        },
         ...workCells.map(c => ({
             value: c.inventory_group || c.name,
-            label: c.short_name || c.name,
-            icon: renderCellLucideIcon(c, 14)
+            label: getCompactCellLabel(c.name, c.short_name),
+            fullLabel: c.name
         }))
     ], [workCells]);
 
@@ -3026,11 +3045,11 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     paddingTop: '3px',
                     borderTop: '1px solid #F1F5F9'
                 }}>
-                    {/* IZQUIERDA: Chips de Células de Trabajo */}
+                    {/* IZQUIERDA: Chips de Células de Trabajo (Compactos con 100% visibilidad) */}
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '5px',
+                        gap: '4px',
                         overflowX: 'auto',
                         scrollbarWidth: 'none',
                         flex: 1
@@ -3046,16 +3065,17 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     key={opt.value}
                                     type="button"
                                     onClick={() => setSelectedCell(opt.value)}
+                                    title={opt.fullLabel ? `${opt.fullLabel} (${count} SKUs)` : `${opt.label} (${count} SKUs)`}
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '5px',
-                                        padding: '2px 8px',
-                                        borderRadius: '20px',
+                                        gap: '4px',
+                                        padding: '2px 7px',
+                                        borderRadius: '16px',
                                         border: isSelected ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
                                         backgroundColor: isSelected ? '#0D7A57' : '#FFFFFF',
                                         color: isSelected ? '#FFFFFF' : '#334155',
-                                        fontSize: '0.72rem',
+                                        fontSize: '0.71rem',
                                         fontWeight: isSelected ? '800' : '600',
                                         cursor: 'pointer',
                                         whiteSpace: 'nowrap',
@@ -3063,12 +3083,11 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         transition: 'all 0.15s ease'
                                     }}
                                 >
-                                    {opt.icon}
-                                    <span>{opt.label.replace(/\(\d+\)/, '')}</span>
+                                    <span>{opt.label}</span>
                                     <span style={{
                                         padding: '1px 5px',
-                                        borderRadius: '10px',
-                                        fontSize: '0.62rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.61rem',
                                         backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#F1F5F9',
                                         color: isSelected ? '#FFFFFF' : '#64748B',
                                         fontWeight: '800'
