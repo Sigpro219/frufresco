@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.3.0 (Matriz-Sucursal, Usabilidad & Paridad Reforzada)  
+> **Versión:** 1.4.0 (Módulo de Inventario: Balance de Masa 24 Col, Kardex & Células)  
 > **Fecha:** 21 de Septiembre, 2026  
 > **Estado:** ✅ Resuelto & Verificado en Código  
 > **Área:** Logística, Ventas & Operaciones (B2B / B2C)
@@ -153,4 +153,168 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 - **Snapshot Inmutable de Seguridad (Git Tag):**
   - **Tag:** `backup-seguridad-arquitectura-20260921`
   - **Función:** Registro congelado en GitHub con paridad total y cero diferencias (`0 0`), protegiendo la base de código ante cualquier contingencia.
+
+---
+
+## 7. Módulo Comercial: Especificación de Arquitectura & Contrato de Negocio
+
+> **Versión del Módulo:** 1.0.0 (Consolidado post Grill-Me Brownfield)  
+> **Fecha de Entrada en Vigor:** 22 de Septiembre, 2026  
+> **Estado:** 🟢 Aprobado & Activo en Contrato  
+> **Ruta Canónica:** `/admin/commercial` | [http://localhost:3001/admin/commercial](http://localhost:3001/admin/commercial)  
+> **Área:** Gestión Comercial, Finanzas, Compras y CRM B2B/B2C
+
+### 7.1 Misión & Principio Rector Comercial
+El Módulo Comercial de FruFresco gobierna la fijación estratégica de precios, la protección estricta del margen bruto operativo ante la volatilidad de Corabastos, la emisión de cotizaciones formales para prospectos/clientes y la congelación vinculante de tarifas mediante Acuerdos Comerciales auditables.
+
+### 7.2 Jerarquía Canónica de Precios (5 Niveles de Prevalencia)
+Cuando el sistema consulta el precio de un producto para un cliente o sucursal, debe evaluar en estricto orden descendente:
+1. **Nivel 1 (Prevalencia Máxima - Acuerdo Sucursal):** Acuerdo Comercial Vigente (`quotes.status = 'agreement'`) asignado directamente a la sucursal (`client_id = sucursal.id`).
+2. **Nivel 2 (Acuerdo Matriz):** Acuerdo Comercial Vigente asignado a la empresa matriz (`client_id = sucursal.parent_id`).
+3. **Nivel 3 (Modelo Directo de Cliente):** Modelo de Precios asignado al perfil (`profiles.pricing_model_id`).
+4. **Nivel 4 (Modelo Heredado Matriz):** Modelo asignado a la matriz (`profiles.parent.pricing_model_id`), o en su defecto `General Institucional` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) si es cliente B2B.
+5. **Nivel 5 (Base Catálogo / B2C):** Lista `Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) reflejada en `products.base_price`.
+
+### 7.3 Contratos Matemáticos Canónicos (Reglas Inmutables)
+
+#### A. Fórmula Oficial de Margen de Venta (Gross Margin)
+Queda prohibido el markup multiplicador sobre costo en precios de venta institucionales. La fórmula oficial y vinculante es el **Margen Comercial sobre Venta**:
+$$\text{Precio Unitario Antes de IVA} = \frac{\text{Costo Base Neto}}{1 - \left(\frac{\text{Margen\%}}{100}\right)}$$
+*Ejemplo:* Con Costo Base \$1.000 y Margen del 20%:
+$$\text{Precio} = \frac{1000}{1 - 0.20} = \$1.250 \quad (\text{Margen real en P&L: } 20.0\%)$$
+
+#### B. Redondeo Comercial Colombiano
+Todo precio unitario cotizado o tarificado antes de impuestos se redondea hacia arriba al múltiplo de \$50 COP más cercano:
+$$\text{Precio Redondeado} = \left\lceil \frac{\text{Precio Unitario Antes de IVA}}{50} \right\rceil \times 50$$
+
+#### C. Presentación Fiscal & Desglose de IVA
+1. En cotizaciones (PDF, Excel, WhatsApp) y pantallas de negociación, el **precio unitario por SKU se presenta siempre ANTES de IVA**.
+2. Los renglones identifican la tarifa de IVA aplicable (0% excluido para la mayoría de frescos, 5% o 19% para procesados/despensa).
+3. El IVA total se calcula individualmente por ítem y se totaliza en el pie de la cotización (`subtotal_amount`, `total_tax_amount`, `total_amount`).
+
+### 7.4 Protocolo de Frescura de Costos & SLA de Corabastos
+1. **Clasificación de Perecibilidad:**
+   - **Clase A (Hiperperecederos: Hortalizas, Hojas, Hierbas):** Vigente $\le$ 4 días | Por Vencer 5-7 días | Vencido > 7 días.
+   - **Clase B (Semiperecederos: Frutas, Tubérculos, Lácteos):** Vigente $\le$ 8 días | Por Vencer 9-14 días | Vencido > 14 días.
+   - **Clase C (No perecederos: Despensa, Secos, Abarrotes):** Vigente $\le$ 30 días | Por Vencer 31-45 días | Vencido > 45 días.
+2. **Comportamiento ante Costo Vencido:**
+   - El sistema muestra un indicador visual prominente de alerta (Semáforo Ámbar/Rojo).
+   - Se autoriza al comercial emitir la cotización asumiendo el riesgo de volatilidad, pero el sistema **registra obligatoriamente un evento de auditoría en `audit_logs`** con el snapshot de costos obsoletos.
+
+### 7.5 Ciclo de Vida Canónico de Cotizaciones & Acuerdos
+
+```
+[PROSPECTO / CLIENTE] ──> [COTIZACIÓN DRAFT] ──> [SENT]
+                                                    │
+                   ┌────────────────────────────────┴────────────────────────────────┐
+                   ▼                                                                 ▼
+              [REJECTED]                                                        [ACCEPTED]
+                                                                                     │
+                                                                                     ▼
+                                                                       [ACUERDO COMERCIAL FORMAL]
+                                                                        status: 'agreement'
+                                                                        start_date | valid_until
+                                                                        ├── Congela precios en CRM
+                                                                        └── Se inyecta en Pipeline
+                                                                            de Pedidos (D+1)
+```
+
+1. **Principio de Acuerdo Obligatorio:** Toda cotización que un cliente aprueba se formaliza como un **Acuerdo Comercial** (`status = 'agreement'`) con fecha de inicio y de vencimiento (`valid_until`).
+2. **Consumo Automático:** Al ingresar una orden de compra manual o por correo (`/admin/orders/create` o `/api/orders/email-ingest`), el motor de resolución de precios busca si el cliente o su matriz tiene un acuerdo comercial activo; si existe, sus precios congelados se asignan automáticamente a los ítems del pedido con máxima prioridad.
+
+### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
+- [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a \$50 COP antes de impuestos.
+- [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de \$50 COP en el precio unitario antes de IVA y en variantes.
+- [x] **Tarea COM-3:** Asegurar que la acción de aceptación en `quotes/[id]/page.tsx` priorice la formalización canónica hacia Acuerdo Comercial (`status = 'agreement'`) y registre el log de auditoría correspondiente en `audit_logs`.
+- [x] **Tarea COM-4:** Verificar y blindar en `orders/create/page.tsx` y `EmailDraftsModule.tsx` la prevalencia estricta de Nivel 1 (Acuerdo Sucursal) sobre Nivel 2 (Acuerdo Matriz).
+
+---
+
+## 8. Módulo de Inventario: Balance Diario de Masa (24 Columnas), Kardex & Células de Trabajo
+
+### 8.1 Misión del Sistema & Principio de Masa Cerrada
+> **«El inventario de alimentos perecederos y abarrotes en FruFresco no es un conteo estático; es un balance dinámico de masa donde cada gramo que ingresa a bodega debe justificarse matemáticamente en una venta, un producto escaso, una merma documentada o un sobrante físico auditado. Ningún kilogramo desaparece del sistema sin un asiento transaccional en el Kardex.»**
+
+### 8.2 Contrato de Reglas de Negocio (Consenso del Grill-Me Táctico)
+
+#### Regla 1: Deducción de Inventario en Doble Fase (Reserva Comercial + Liquidación en Báscula)
+1. **Fase 1 (Reserva al Aprobar):** Cuando una orden de venta pasa a estado `approved` (desde correo, documento o manual), el sistema **bloquea y compromete el stock estimado**. Esto permite a la Torre de Control y a Compras visualizar la demanda consolidada real para la jornada $D+1$.
+2. **Fase 2 (Liquidación Física en Picking):** Cuando el operario pesa físicamente el producto en la báscula de picking (`picked_quantity`), se liquida la salida real contra `inventory_stocks`. Si el ítem es una presentación hija (ej. Bolsa 250g con `parent_id`), el descuento se redirige automáticamente al **Padre** mediante el factor de conversión:
+   $$\text{Salida al Padre} = -(\text{picked\_quantity} \times \text{web\_conversion\_factor})$$
+3. **Excepción de Calidad:** Si en báscula el producto se descarta por calidad (`quality_status = 'red'`), no se descuenta del inventario comercial y se enruta al flujo de merma.
+
+#### Regla 2: Política de Stock Negativo Transitorio
+1. Para evitar que la operación logística matutina (04:00 AM - 07:00 AM) se paralice cuando un camión descarga producto físico antes de que contabilidad radique la factura de compra, **el sistema permite transitoriamente existencias negativas**.
+2. Los ítems con stock negativo se destacan visualmente con un semáforo rojo/ámbar en el panel directivo y en la Sábana, generando una tarea prioritaria para que Compras registre la entrada correspondiente.
+
+#### Regla 3: La Sábana Oficial de 24 Columnas (Ecuación Canónica)
+El balance diario oficial de FruFresco se rige por la **Ecuación Canónica de Balance de Masa**:
+$$\mathbf{S} = \mathbf{E} + \mathbf{F} + \mathbf{G} - \mathbf{H} - \mathbf{J} - \mathbf{K} + \mathbf{L} - \mathbf{M} - \mathbf{N} + \mathbf{O} - \mathbf{P} - \mathbf{Q} - \mathbf{R}$$
+- Si el Conteo Físico Auditado ($T$) es menor que el Inventario Calculado ($S$):  
+  $$\text{Faltante (Col V)} = |T - S| \quad (\text{Pérdida neta de bodega})$$
+- Si el Conteo Físico Auditado ($T$) es mayor que el Inventario Calculado ($S$):  
+  $$\text{Sobrante (Col W)} = T - S \quad (\text{Mercancía física sin soporte contable})$$
+
+#### Regla 4: Almacén Único Central y División Lógica por Células
+Toda la operación converge en la **Bodega Central Única (Bogotá)**. Para efectos de responsabilidad y orden operativo, el catálogo se particiona estrictamente en **6 Células de Trabajo Autónomas**.
+
+#### Regla 5: Gobernanza de Mermas con Evidencia Fotográfica Obligatoria
+Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Col R (Basura/Descapote). El descuento en inventario es **inmediato** para mantener el stock físico sincronizado en tiempo real, pero **exige evidencia fotográfica obligatoria (cámara/galería)** para que el Líder de Célula audite o impugne en la Sábana Diaria.
+
+---
+
+### 8.3 Matriz Canónica de las 24 Columnas (Diccionario de Datos Oficial)
+
+| Col | Código / Campo | Título en Pantalla | Naturaleza | Fuente de Datos / Origen |
+| :---: | :--- | :--- | :---: | :--- |
+| **A** | `colA_date` | **Fecha** | ID | Fecha del corte (`balanceDate`). |
+| **B** | `colB_idProducto` | **ID Producto** | Contable | `products.accounting_id` o `sku`. |
+| **C** | `colC_inventoryGroup` | **Célula / Grupo** | Clasificación | `products.inventory_group`. |
+| **D** | `colD_productName` | **Producto** | Catálogo | `products.name` oficial. |
+| **E** | `colE_initialStock` | **Inventario Inicial** | Base | Reconstrucción retroactiva: $\text{Stock Actual} - \sum(\text{Deltas posteriores})$. |
+| **F** | `colF_corrections` | **Corrección Inv.** | Ajuste (+/-) | `inventory_movements` con `type = 'adjustment'`. |
+| **G** | `colG_purchases` | **Compras del Día** | Entrada (+) | Recepción de proveedores (`ref = 'purchase_reception'`). |
+| **H** | `colH_salesKg` | **Ventas Día KG** | Salida (-) | Salidas comerciales de productos tarificados por Kg. |
+| **I** | `colI_salesUnits` | **Ventas Día UN** | Salida (-) | Salidas comerciales de productos por unidades/bandejas. |
+| **J** | `colJ_weightSalesUnits`| **Peso Ventas UN (KG)**| Salida (-) | Equivalencia o pesaje en báscula de las unidades vendidas. |
+| **K** | `colK_shortage` | **Producto Escaso** | Salida (-) | Pedidos no despachados por falta de producto (`ref = 'shortage'`). |
+| **L** | `colL_unshipped` | **Prod. Sin Enviar** | Entrada (+) | Pedido empacado que no salió y retorna a stock (`ref = 'unshipped'`). |
+| **M** | `colM_additionalSales`| **Venta Adic. Cliente**| Salida (-) | Despachos de última hora no contemplados en corte (`ref = 'additional_sale'`). |
+| **N** | `colN_employeeSales` | **Venta Empleado** | Salida (-) | Venta interna al personal con descuento de nómina (`ref = 'employee_sale'`). |
+| **O** | `colO_returns` | **Devoluciones** | Entrada (+) | Rechazos en punto de cliente devueltos físicamente (`ref = 'route_return'`). |
+| **P** | `colP_weighingWaste` | **Merma por Pesada** | Pérdida (-) | Descuadre acumulado por tolerancia de básculas (`ref = 'waste_weighing'`). |
+| **Q** | `colQ_damageWaste` | **Desperdicio / Avería**| Pérdida (-) | Producto descompuesto con foto obligatoria (`ref = 'waste_damage'`). |
+| **R** | `colR_cleaningWaste` | **Basura / Descapote** | Pérdida (-) | Limpieza de hojas, tallos o cáscaras con foto (`ref = 'waste_cleaning'`). |
+| **S** | `colS_calculated` | **INVENTARIO CALCULADO**| Teórico | **$S = E + F + G - H - J - K + L - M - N + O - P - Q - R$** |
+| **T** | `colT_physicalCount` | **Conteo Agregado** | Físico | Conteo físico ciego realizado en bodega (`ref = 'blind_count'`). |
+| **U** | `colU_bodegaPost10am` | **Inv. Bodega Post-10AM**| Físico Final | $U = T + O$ (Conteo físico adicionando devoluciones de ruta). |
+| **V** | `colV_missing` | **FALTANTE** | Descuadre | Si $T < S \implies \|T - S\|$ |
+| **W** | `colW_surplus` | **SOBRANTE** | Descuadre | Si $T > S \implies (T - S)$ |
+| **X** | `colX_foodBank` | **Banco de Alimentos** | Salida Social | Donaciones y producto entregado al banco de alimentos (`ref = 'food_bank'`). |
+
+---
+
+### 8.4 Métricas Industriales Lean & Tablero Directivo
+
+1. **Valorización Monetaria:** $\sum (\text{Stock Físico (Kg)} \times \text{Costo Manual de Matriz de Costos})$. Si el ítem es hijo, hereda el costo del padre.
+2. **Volumen en Toneladas (`formatVolumeTon`):** Totalización de masa en bodega para cubicación de espacio.
+3. **IRA (Inventory Record Accuracy %):**
+   $$\text{IRA} = \left(\frac{\text{Conteo Físico con Desvío } \le 2.5\%}{\text{Total de Ítems Auditados}}\right) \times 100 \quad (\text{Estándar de Excelencia} \ge 95.0\%)$$
+4. **DOH (Days of Inventory on Hand):** Días de stock disponibles basados en la tasa diaria de consumo de los últimos 7, 15 o 30 días.
+5. **Shrinkage Rate (Tasa de Merma Global):**
+   $$\text{Tasa de Merma\%} = \frac{\text{Mermas Totales (Cols P + Q + R)}}{\text{Salidas Comerciales} + \text{Mermas Totales}} \times 100$$
+
+---
+
+### 8.5 Matriz de Células de Trabajo & Gobernanza Operativa
+
+| ID Célula | Nombre Oficial | Icono | Grupo de Inventario Contable | Categorías | Líder Responsable |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `cell_abarrotes` | Abarrotes, Frutos Secos, Lácteos & Carnes Frías | `boxes` | INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS | ABARROTES, LACTEOS, CARNES | **CORONADO** |
+| `cell_fresas` | Fresas & Moras | `apple` | INVENTARIO DE FRESAS Y MORAS | FRUTAS | **FRESAS** |
+| `cell_frutas` | Frutas & Otros | `apple` | INVENTARIO DE FRUTAS Y OTROS | FRUTAS | **MENDOZA** |
+| `cell_verduras` | Verduras | `carrot` | INVENTARIO DE VERDURAS | VERDURAS | **GALVIS** |
+| `cell_hortalizas` | Hortalizas | `sprout` | INVENTARIO DE HORTALIZAS | HORTALIZAS | **LEAL** |
+| `cell_papas` | Papas, Plátano, Tomate y Aguacates | `layers` | INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES | TUBERCULOS | **BAUTISTA** |
+
 

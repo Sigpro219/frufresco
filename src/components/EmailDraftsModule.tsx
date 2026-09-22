@@ -3534,15 +3534,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const getResolvedPriceForDraft = (draft: any, productId: string) => {
     const profile = profiles.find(p => p.id === draft.profile_id);
-    const effectiveClientId = profile?.parent_id || profile?.id || null;
+    const branchId = profile?.id || null;
+    const parentId = profile?.parent_id || null;
+    const effectiveClientId = branchId || parentId;
 
     let basePrice = 0;
     let foundBase = false;
 
-    // Check if there is an active agreement for this client (or their parent)
-    const activeAgreement = effectiveClientId 
-      ? agreements.find(q => q.client_id === effectiveClientId)
-      : null;
+    // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
+    const activeAgreement = (branchId ? agreements.find(q => q.client_id === branchId) : null)
+      || (parentId ? agreements.find(q => q.client_id === parentId) : null);
 
     if (activeAgreement) {
       let expired = false;

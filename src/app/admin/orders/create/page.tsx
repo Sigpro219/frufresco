@@ -1089,26 +1089,48 @@ function CreateOrderContent() {
             let b2cFallback = false;
             let activeAgreement: any = null;
 
-            // Check if there is an active agreement for the client (or matrix parent)
+            // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
             if (isB2B && (selectedClient || currentProfile)) {
-                const effectiveClientId = currentProfile?.parent_id || currentProfile?.id || selectedClient;
-                const { data } = await supabase
-                    .from('quotes')
-                    .select('id, quote_number, start_date, valid_until')
-                    .eq('client_id', effectiveClientId)
-                    .eq('status', 'agreement')
-                    .maybeSingle();
+                const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
+                const branchId = currentProfile?.id || selectedClient;
+                const parentId = currentProfile?.parent_id || null;
+
+                // Nivel 1: Prevalencia Máxima - Acuerdo asignado directamente a la Sucursal
+                let candidateAgreement: any = null;
+                if (branchId) {
+                    const { data: branchAgreement } = await supabase
+                        .from('quotes')
+                        .select('id, quote_number, start_date, valid_until')
+                        .eq('client_id', branchId)
+                        .eq('status', 'agreement')
+                        .maybeSingle();
+                    if (branchAgreement) {
+                        candidateAgreement = branchAgreement;
+                    }
+                }
+
+                // Nivel 2: Fallback - Acuerdo asignado a la empresa matriz
+                if (!candidateAgreement && parentId) {
+                    const { data: matrixAgreement } = await supabase
+                        .from('quotes')
+                        .select('id, quote_number, start_date, valid_until')
+                        .eq('client_id', parentId)
+                        .eq('status', 'agreement')
+                        .maybeSingle();
+                    if (matrixAgreement) {
+                        candidateAgreement = matrixAgreement;
+                    }
+                }
                 
-                if (data) {
-                    const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
-                    const start = data.start_date?.split('T')[0];
-                    const end = data.valid_until?.split('T')[0];
+                if (candidateAgreement) {
+                    const start = candidateAgreement.start_date?.split('T')[0];
+                    const end = candidateAgreement.valid_until?.split('T')[0];
                     let isValid = true;
                     if (start && start > checkDate) isValid = false;
                     if (end && end < checkDate) isValid = false;
 
                     if (isValid) {
-                        activeAgreement = data;
+                        activeAgreement = candidateAgreement;
                     } else {
                         expired = true;
                     }

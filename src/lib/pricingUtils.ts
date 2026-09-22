@@ -174,10 +174,19 @@ export async function recalculateAndSyncProductPrices(
                 marginPct = Number(m.base_margin_percent) || 0;
             }
 
-            const priceBeforeTax = baseCost * (1 + marginPct / 100);
-            const priceWithTax = priceBeforeTax * (1 + ivaRate);
-            // Colombian commercial rounding: multiples of 50 COP
-            const finalPrice = Math.ceil(priceWithTax / 50) * 50;
+            // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo / (1 - Margen)
+            const marginFraction = Math.min(Math.max((marginPct || 0) / 100, -0.9), 0.99);
+            const priceBeforeTax = baseCost / (1 - marginFraction);
+            // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
+            const roundedPriceBeforeTax = Math.ceil(priceBeforeTax / 50) * 50;
+
+            let finalPrice = roundedPriceBeforeTax;
+            if (m.id === CLIENTES_HOGAR_ID) {
+                // Para consumidor final B2C, la regulación exige precio de góndola con IVA incluido
+                const priceWithTax = roundedPriceBeforeTax * (1 + ivaRate);
+                finalPrice = Math.ceil(priceWithTax / 50) * 50;
+                hogarFinalPrice = finalPrice;
+            }
 
             pmpUpdates.push({
                 model_id: m.id,
@@ -185,10 +194,6 @@ export async function recalculateAndSyncProductPrices(
                 price: finalPrice,
                 updated_at: new Date().toISOString()
             });
-
-            if (m.id === CLIENTES_HOGAR_ID) {
-                hogarFinalPrice = finalPrice;
-            }
         });
 
         if (pmpUpdates.length > 0) {
@@ -334,9 +339,18 @@ export async function batchRecalculateAndSyncPrices(
                     marginPct = Number(m.base_margin_percent) || 0;
                 }
 
-                const priceBeforeTax = baseCost * (1 + marginPct / 100);
-                const priceWithTax = priceBeforeTax * (1 + ivaRate);
-                const finalPrice = Math.ceil(priceWithTax / 50) * 50;
+                // SPEC.md Secc. 7.3.A: Fórmula Canónica Margen Comercial sobre Venta: Costo / (1 - Margen)
+                const marginFraction = Math.min(Math.max((marginPct || 0) / 100, -0.9), 0.99);
+                const priceBeforeTax = baseCost / (1 - marginFraction);
+                // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
+                const roundedPriceBeforeTax = Math.ceil(priceBeforeTax / 50) * 50;
+
+                let finalPrice = roundedPriceBeforeTax;
+                if (m.id === CLIENTES_HOGAR_ID) {
+                    const priceWithTax = roundedPriceBeforeTax * (1 + ivaRate);
+                    finalPrice = Math.ceil(priceWithTax / 50) * 50;
+                    hogarPrice = finalPrice;
+                }
 
                 pmpBatch.push({
                     model_id: m.id,
@@ -344,10 +358,6 @@ export async function batchRecalculateAndSyncPrices(
                     price: finalPrice,
                     updated_at: new Date().toISOString()
                 });
-
-                if (m.id === CLIENTES_HOGAR_ID) {
-                    hogarPrice = finalPrice;
-                }
             }
 
             if (hogarPrice && hogarPrice > 0) {

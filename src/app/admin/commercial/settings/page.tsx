@@ -1656,7 +1656,7 @@ export default function PricingSettingsPage({
                                         flexWrap: 'wrap', 
                                         gap: '0.75rem',
                                         paddingTop: '0.5rem',
-                                        borderTop: `1px solid ${THEME.colors.borderLight || '#F1F5F9'}`
+                                        borderTop: `1px solid ${THEME.colors.border || '#F1F5F9'}`
                                     }}>
                                         {/* Description */}
                                         <p style={{ color: THEME.colors.textSecondary, margin: 0, fontWeight: '500', fontSize: '0.82rem', maxWidth: '650px', lineHeight: 1.3 }}>

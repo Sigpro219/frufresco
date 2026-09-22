@@ -98,9 +98,9 @@ export default function QuoteDetailPage() {
     const [clientResults, setClientResults] = useState<any[]>([]);
     const [selectedClient, setSelectedClient] = useState<any>(null);
 
-    // Conversion Modal
+    // Conversion Modal (SPEC.md Secc. 7.5: Acuerdo Comercial Obligatorio como flujo canónico)
     const [showConversionModal, setShowConversionModal] = useState(false);
-    const [conversionType, setConversionType] = useState<'order' | 'agreement'>('order');
+    const [conversionType, setConversionType] = useState<'order' | 'agreement'>('agreement');
     const [deliveryDate, setDeliveryDate] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() + 1);
@@ -346,6 +346,30 @@ export default function QuoteDetailPage() {
                 
                 if (agreementErr) throw agreementErr;
                 
+                // SPEC.md Secc. 7.4 & 7.5: Traza obligatoria en audit_logs al formalizar acuerdo
+                try {
+                    const { data: authData } = await supabase.auth.getUser();
+                    const authUser = authData?.user;
+                    await supabase.from('audit_logs').insert({
+                        action: 'ACTIVATE_commercial_agreement',
+                        module: 'COMMERCIAL',
+                        collaborator_id: authUser?.id || null,
+                        collaborator_name: authUser?.email || 'Comercial FruFresco',
+                        details: {
+                            quote_id: quote.id,
+                            quote_number: quote.quote_number,
+                            client_id: selectedClient.id,
+                            client_name: selectedClient.company_name || selectedClient.contact_name,
+                            valid_until: validUntilDate,
+                            items_count: items.length,
+                            total_amount: quote.total_amount,
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                } catch (auditErr) {
+                    console.warn('Notice: Could not insert audit_log for agreement activation:', auditErr);
+                }
+
                 alert('¡Acuerdo Comercial Registrado!');
                 setShowConversionModal(false);
                 fetchQuoteDetails();

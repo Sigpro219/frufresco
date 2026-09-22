@@ -462,10 +462,10 @@ function CreateQuotePageContent() {
 
     const calculateFinalPrice = (cost: number, marginPercent: number) => {
         if (cost <= 0) return 0;
-        if (marginPercent >= 100) return cost * 2;
-        const marginFraction = marginPercent / 100;
-        if (marginFraction >= 0.99) return cost * 2;
-        return Math.round(cost / (1 - marginFraction));
+        const marginFraction = Math.min(Math.max((marginPercent || 0) / 100, -0.9), 0.99);
+        const rawPrice = cost / (1 - marginFraction);
+        // SPEC.md Secc. 7.3.B: Redondeo Comercial Colombiano a múltiplos superiores de $50 COP
+        return Math.ceil(rawPrice / 50) * 50;
     };
 
     const calculateSmartAverageCost = async (productId: string, salesUnit: string) => {
@@ -590,7 +590,8 @@ function CreateQuotePageContent() {
         const baseMargin = getMarginForProduct(product.id, selectedModelId, rules);
         const variantAdjustment = variant?.price_adjustment_percent || 0;
         const basePrice = calculateFinalPrice(cost, baseMargin);
-        const finalPrice = basePrice * (1 + (variantAdjustment / 100));
+        const rawFinalPrice = basePrice * (1 + (variantAdjustment / 100));
+        const finalPrice = Math.ceil(rawFinalPrice / 50) * 50;
         const ivaRate = product.iva_rate ?? 0;
 
         const clientNickname = nicknames.find(n => n.product_id === product.id);
