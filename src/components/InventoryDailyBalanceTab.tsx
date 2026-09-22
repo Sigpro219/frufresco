@@ -52,8 +52,10 @@ import {
     Upload,
     Zap,
     Lock,
-    Unlock
+    Unlock,
+    ShieldCheck
 } from 'lucide-react';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { WorkCell } from '@/types/workCells';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 
@@ -187,6 +189,28 @@ interface InventoryDailyBalanceTabProps {
 }
 
 export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBalanceTabProps) {
+    const { user, profile } = useAuth();
+
+    // Gobernanza SoD: Solo Yina Cortés (Jefatura de Inventario) o Superadmins tienen permiso de edición
+    const canEditSheet = useMemo(() => {
+        if (!profile) return false;
+        if (profile.role === 'admin' || profile.role === 'sys_admin') return true;
+        if (profile.role === 'inventory_manager' || profile.role === 'inventario') return true;
+
+        const email = (user?.email || '').toLowerCase();
+        const contactName = (profile.contact_name || '').toLowerCase();
+        const companyName = (profile.company_name || '').toLowerCase();
+        if (email.includes('yina') || contactName.includes('yina') || companyName.includes('yina')) {
+            return true;
+        }
+
+        return (
+            checkUserPermission(profile, 'commercial.inventory.edit') ||
+            checkUserPermission(profile, 'admin.inventory.edit') ||
+            checkUserPermission(profile, 'admin.commercial.inventory')
+        );
+    }, [profile, user]);
+
     const todayStr = new Date().toISOString().split('T')[0];
     const [balanceDate, setBalanceDate] = useState<string>(todayStr);
     const [selectedCell, setSelectedCell] = useState<string>('ALL');
@@ -1164,6 +1188,11 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     };
 
     const handleReopenClosing = async () => {
+        if (!canEditSheet) {
+            notify('Solo la jefatura de inventarios (Yina Cortés) o administradores tienen autorización para reabrir una jornada contable.', 'warning');
+            return;
+        }
+
         if (!confirm(`¿Estás seguro de reabrir la jornada contable del ${balanceDate}? Se desbloqueará la edición de registros para esta fecha.`)) {
             return;
         }
@@ -1381,6 +1410,12 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     // Guardado de edición en celda estilo Excel (Idempotente y a prueba de acumulaciones erróneas)
     const handleCommitCellEdit = async () => {
         if (!editingCell || isSavingCell) return;
+        if (!canEditSheet) {
+            notify('Solo la jefatura de inventarios (Yina Cortés) o administradores tienen autorización para modificar directamente los valores de esta sábana.', 'warning');
+            setEditingCell(null);
+            return;
+        }
+
         const { productId, colKey, initialValue, currentValue } = editingCell;
         const newVal = parseColombianInput(currentValue);
 
@@ -1396,10 +1431,12 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             const warehouseId = whData?.id;
             const timestampIso = `${balanceDate}T12:00:00.000Z`;
 
+            const supervisorSignature = profile?.contact_name || user?.email || 'Jefatura de Inventarios (Yina Cortés)';
+
             let movType: 'entry' | 'exit' | 'adjustment' = 'adjustment';
             let refType: string = INVENTORY_MOVEMENT_SUBTYPES.CORRECTION;
             let qty = newVal;
-            let noteDesc = `[EDICIÓN MANUAL] Columna ${colKey}: ${formatNumber(newVal, 2)}`;
+            let noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna ${colKey}: ${formatNumber(newVal, 2)}`;
 
             if (colKey === 'E' || colKey === 'F') {
                 movType = 'adjustment';
@@ -1417,7 +1454,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 movType = 'exit';
                 refType = 'order_item';
                 qty = -newVal;
-                noteDesc = `[EDICIÓN MANUAL] Venta UN: ${newVal} un`;
+                noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Venta UN: ${newVal} un`;
             } else if (colKey === 'K') {
                 movType = 'exit';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.ORDER_SHORTAGE;
@@ -1458,7 +1495,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 movType = 'adjustment';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
                 qty = 0;
-                noteDesc = `[EDICIÓN MANUAL] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)}`;
+                noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)}`;
             }
 
             // Si el nuevo valor es 0, eliminar movimientos de esta columna para este producto y fecha
@@ -1560,7 +1597,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         isReadonly: boolean = false,
         extraChildren?: React.ReactNode
     ) => {
-        const isEditing = !isReadonly && editingCell?.productId === productId && editingCell?.colKey === colKey;
+        const isEditing = !isReadonly && canEditSheet && editingCell?.productId === productId && editingCell?.colKey === colKey;
 
         if (isEditing) {
             return (
@@ -1601,6 +1638,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             );
         }
 
+        const effectiveReadonly = isReadonly || !canEditSheet;
+
         return (
             <td
                 onClick={() => {
@@ -1608,7 +1647,11 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         notify(`La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`, 'warning');
                         return;
                     }
-                    if (!isReadonly) {
+                    if (!canEditSheet) {
+                        notify('Acceso restringido: Esta sábana maestra es de solo lectura. Únicamente la supervisión de inventarios (Yina Cortés) o administradores tienen potestad de edición.', 'warning');
+                        return;
+                    }
+                    if (!effectiveReadonly) {
                         setEditingCell({
                             productId,
                             colKey,
@@ -1619,10 +1662,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 }}
                 style={{
                     ...style,
-                    cursor: isReadonly ? 'default' : 'pointer',
+                    cursor: effectiveReadonly ? 'default' : 'pointer',
                     userSelect: 'none'
                 }}
-                title={isReadonly ? undefined : 'Clic para editar este valor'}
+                title={effectiveReadonly ? 'Modo Solo Lectura (Gobernanza Yina Cortés)' : 'Clic para editar este valor'}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
                     {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#94A3B8', fontWeight: '600' }}>-</span>}
@@ -2929,6 +2972,44 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
                     {/* DERECHA: Grupos de Acciones Operativas y Excel */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                        {/* Indicador de Gobernanza de Edición SoD (Yina Cortés) */}
+                        {canEditSheet ? (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#ECFDF5',
+                                border: '1px solid #A7F3D0',
+                                color: '#065F46',
+                                padding: '0 0.6rem',
+                                height: '32px',
+                                borderRadius: '8px',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                boxShadow: '0 1px 2px rgba(16, 185, 129, 0.08)'
+                            }} title="Permiso de edición activo: Jefatura de Inventarios (Yina Cortés) / Administrador">
+                                <ShieldCheck size={14} color="#059669" strokeWidth={2.5} />
+                                <span>Edición Autorizada (Yina Cortés)</span>
+                            </div>
+                        ) : (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#F8FAFC',
+                                border: '1px solid #E2E8F0',
+                                color: '#64748B',
+                                padding: '0 0.6rem',
+                                height: '32px',
+                                borderRadius: '8px',
+                                fontSize: '0.72rem',
+                                fontWeight: '800'
+                            }} title="Sábana maestra en modo estricto de solo lectura. Solo modificable bajo supervisión de Yina Cortés.">
+                                <Lock size={13} color="#64748B" strokeWidth={2.2} />
+                                <span>Solo Lectura</span>
+                            </div>
+                        )}
+
                         {/* Grupo 1: Registro de Novedades (Segmented Pill Group) */}
                         <div style={{
                             display: 'inline-flex',
@@ -2943,26 +3024,32 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         }}>
                             <button
                                 type="button"
-                                onClick={() => setIsWasteModalOpen(true)}
+                                onClick={() => {
+                                    if (!canEditSheet) {
+                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar mermas desde la sábana maestra.', 'warning');
+                                        return;
+                                    }
+                                    setIsWasteModalOpen(true);
+                                }}
                                 style={{
                                     padding: '0 0.65rem',
                                     height: '100%',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: '#0D7A57',
+                                    backgroundColor: canEditSheet ? '#0D7A57' : '#94A3B8',
                                     color: '#FFFFFF',
                                     fontSize: '0.74rem',
                                     fontWeight: '800',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '4px',
-                                    cursor: 'pointer',
+                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.15s ease',
-                                    boxShadow: '0 1px 3px rgba(13, 122, 87, 0.3)'
+                                    boxShadow: canEditSheet ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
                                 }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0A5F43')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0D7A57')}
-                                title="Registrar Merma / Novedad"
+                                onMouseEnter={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#0A5F43'; }}
+                                onMouseLeave={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#0D7A57'; }}
+                                title="Registrar Merma / Novedad (Jefatura de Inventario)"
                             >
                                 <Plus size={13} strokeWidth={2.5} />
                                 <span>+ Merma</span>
@@ -2970,7 +3057,13 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
                             <button
                                 type="button"
-                                onClick={() => setIsPayrollModalOpen(true)}
+                                onClick={() => {
+                                    if (!canEditSheet) {
+                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar descuentos de nómina.', 'warning');
+                                        return;
+                                    }
+                                    setIsPayrollModalOpen(true);
+                                }}
                                 style={{
                                     padding: '0 0.55rem',
                                     height: '100%',
@@ -2983,7 +3076,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '4px',
-                                    cursor: 'pointer',
+                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.15s ease'
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
@@ -2996,7 +3089,13 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
                             <button
                                 type="button"
-                                onClick={() => setIsAdditionalSalesModalOpen(true)}
+                                onClick={() => {
+                                    if (!canEditSheet) {
+                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar ventas extra.', 'warning');
+                                        return;
+                                    }
+                                    setIsAdditionalSalesModalOpen(true);
+                                }}
                                 style={{
                                     padding: '0 0.55rem',
                                     height: '100%',
@@ -3009,7 +3108,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '4px',
-                                    cursor: 'pointer',
+                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.15s ease'
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
@@ -3038,47 +3137,55 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
                                 <Lock size={13} strokeWidth={2.5} />
                                 <span>Cerrado</span>
-                                <button
-                                    type="button"
-                                    onClick={handleReopenClosing}
-                                    style={{
-                                        marginLeft: '3px',
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#15803D',
-                                        cursor: 'pointer',
-                                        fontSize: '0.68rem',
-                                        textDecoration: 'underline',
-                                        fontWeight: 'bold',
-                                        padding: '0'
-                                    }}
-                                    title="Reabrir jornada contable para permitir ajustes"
-                                >
-                                    (Reabrir)
-                                </button>
+                                {canEditSheet && (
+                                    <button
+                                        type="button"
+                                        onClick={handleReopenClosing}
+                                        style={{
+                                            marginLeft: '3px',
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#15803D',
+                                            cursor: 'pointer',
+                                            fontSize: '0.68rem',
+                                            textDecoration: 'underline',
+                                            fontWeight: 'bold',
+                                            padding: '0'
+                                        }}
+                                        title="Reabrir jornada contable para permitir ajustes (Jefatura de Inventario)"
+                                    >
+                                        (Reabrir)
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <button
                                 type="button"
-                                onClick={() => setIsClosingModalOpen(true)}
+                                onClick={() => {
+                                    if (!canEditSheet) {
+                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden realizar el cierre oficial.', 'warning');
+                                        return;
+                                    }
+                                    setIsClosingModalOpen(true);
+                                }}
                                 style={{
                                     padding: '0 0.65rem',
                                     height: '32px',
                                     borderRadius: '8px',
                                     border: '1px solid #15803D',
-                                    backgroundColor: '#16A34A',
+                                    backgroundColor: canEditSheet ? '#16A34A' : '#94A3B8',
                                     color: '#FFFFFF',
                                     fontSize: '0.74rem',
                                     fontWeight: '800',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '5px',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
+                                    boxShadow: canEditSheet ? '0 1px 3px rgba(22, 163, 74, 0.3)' : 'none',
                                     transition: 'all 0.15s ease'
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#15803D'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#16A34A'}
+                                onMouseEnter={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#15803D'; }}
+                                onMouseLeave={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#16A34A'; }}
                                 title="Realizar Cierre Diario Oficial y congelar balance contable"
                             >
                                 <Lock size={13} strokeWidth={2.5} />

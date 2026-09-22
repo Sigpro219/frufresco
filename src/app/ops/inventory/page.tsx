@@ -26,6 +26,8 @@ import {
     RefreshCw,
     Globe,
     Lock,
+    Unlock,
+    ShieldCheck,
     PackageCheck,
     ClipboardList,
     MessageSquare,
@@ -42,6 +44,7 @@ import {
     Beef,
     Wheat
 } from 'lucide-react';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 
 interface InventoryTask {
     id: string;
@@ -220,6 +223,28 @@ const DEFAULT_WORK_CELLS: WorkCell[] = [
 ];
 
 export default function OpsInventoryPage() {
+    const { user, profile } = useAuth();
+
+    // Supervisión de Inventario (Yina Cortés o Superadmins)
+    const canSupervise = useMemo(() => {
+        if (!profile) return false;
+        if (profile.role === 'admin' || profile.role === 'sys_admin') return true;
+        if (profile.role === 'inventory_manager' || profile.role === 'inventario') return true;
+
+        const email = (user?.email || '').toLowerCase();
+        const contactName = (profile.contact_name || '').toLowerCase();
+        const companyName = (profile.company_name || '').toLowerCase();
+        if (email.includes('yina') || contactName.includes('yina') || companyName.includes('yina')) {
+            return true;
+        }
+
+        return (
+            checkUserPermission(profile, 'commercial.inventory.edit') ||
+            checkUserPermission(profile, 'admin.inventory.edit') ||
+            checkUserPermission(profile, 'admin.commercial.inventory')
+        );
+    }, [profile, user]);
+
     const [loading, setLoading] = useState(true);
     const [activeView, setActiveView] = useState<'full_count' | 'returns' | 'audits'>('full_count');
     const [submitting, setSubmitting] = useState(false);
@@ -231,10 +256,12 @@ export default function OpsInventoryPage() {
     const [selectedCellId, setSelectedCellId] = useState<string>('ALL');
     const [stockFilterMode, setStockFilterMode] = useState<'with_stock' | 'all'>('with_stock');
 
-    // Conteo Físico State
+    // Conteo Físico State & Single-Write Poka-Yoke (Bloqueo una vez ingresado en piso)
     const [products, setProducts] = useState<ProductWithStock[]>([]);
     const [warehouseId, setWarehouseId] = useState<string>('d606c381-45bd-45f3-a0a9-9b8b3b196ac3');
     const [counts, setCounts] = useState<Record<string, string>>({});
+    const [countedProductsToday, setCountedProductsToday] = useState<Set<string>>(new Set());
+    const [lastCountedValues, setLastCountedValues] = useState<Record<string, number>>({});
     const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [filterOnlyWithCount, setFilterOnlyWithCount] = useState<boolean>(false);
@@ -325,6 +352,29 @@ export default function OpsInventoryPage() {
                 window.showToast?.('Error al cargar productos para conteo', 'error');
             } else if (data) {
                 setProducts(data as ProductWithStock[]);
+
+                // Cargar conteos a ciegas ya ejecutados hoy en bodega (Single-Write Poka-Yoke)
+                const todayStr = new Date().toISOString().split('T')[0];
+                const { data: todayMovs } = await supabase
+                    .from('inventory_movements')
+                    .select('product_id, quantity, notes, created_at')
+                    .eq('reference_type', 'blind_count_shift_close')
+                    .gte('created_at', `${todayStr}T00:00:00.000Z`)
+                    .lte('created_at', `${todayStr}T23:59:59.999Z`);
+
+                if (todayMovs && todayMovs.length > 0) {
+                    const lockedIds = new Set<string>();
+                    const values: Record<string, number> = {};
+                    todayMovs.forEach(m => {
+                        lockedIds.add(m.product_id);
+                        const match = m.notes?.match(/Contado:\s*([\d.,]+)/);
+                        if (match && match[1]) {
+                            values[m.product_id] = parseFloat(match[1].replace(',', '.'));
+                        }
+                    });
+                    setCountedProductsToday(lockedIds);
+                    setLastCountedValues(values);
+                }
             }
         } catch (err) {
             if (!isAbortError(err)) {
@@ -555,8 +605,30 @@ export default function OpsInventoryPage() {
         return Object.keys(counts).filter(id => counts[id] !== undefined && counts[id] !== '').length;
     }, [counts]);
 
-    // 7. Aplicar ajuste individual
+    // 7. Desbloqueo exclusivo por Supervisión (Yina Cortés o Superadmin)
+    const handleUnlockItem = (productId: string, productName: string) => {
+        if (!canSupervise) {
+            window.showToast?.('Solo la supervisora de inventario (Yina Cortés) o administradores pueden autorizar un re-conteo.', 'info');
+            return;
+        }
+        if (confirm(`¿Autorizar re-conteo para "${productName}"? Esto desbloqueará el campo para que el operario de bodega reingrese la cantidad física.`)) {
+            setCountedProductsToday(prev => {
+                const next = new Set(prev);
+                next.delete(productId);
+                return next;
+            });
+            setCounts(prev => ({ ...prev, [productId]: '' }));
+            window.showToast?.(`Re-conteo autorizado para "${productName}".`, 'info');
+        }
+    };
+
+    // 8. Aplicar ajuste individual (Single-Write Poka-Yoke)
     const handleSaveSingleItem = async (product: ProductWithStock) => {
+        if (countedProductsToday.has(product.id) && !canSupervise) {
+            window.showToast?.('Este producto ya fue registrado en el turno actual. Cualquier rectificación requiere autorización de Supervisión de Inventario (Yina Cortés).', 'info');
+            return;
+        }
+
         const rawVal = counts[product.id];
         if (rawVal === undefined || rawVal === '' || isNaN(parseFloat(rawVal))) {
             window.showToast?.('Ingrese una cantidad válida.', 'error');
@@ -574,6 +646,7 @@ export default function OpsInventoryPage() {
         const diff = countedQty - currentQty;
         const cell = getProductCell(product) || activeSelectedCell;
         const cellInfo = cell ? ` | Célula: ${cell.name} (Líder: ${cell.leader_name || 'Sin asignar'})` : '';
+        const operatorName = profile?.contact_name || user?.email || 'Operador de Bodega';
 
         setSavingItem(product.id);
         try {
@@ -584,14 +657,18 @@ export default function OpsInventoryPage() {
                     quantity: diff,
                     type: 'adjustment',
                     status_to: 'available',
-                    notes: `Cruce a ciegas fin de turno${cellInfo} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[product.id] ? ` | Obs: ${itemNotes[product.id]}` : ''),
+                    notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[product.id] ? ` | Obs: ${itemNotes[product.id]}` : ''),
                     reference_type: 'blind_count_shift_close'
                 }]);
 
                 if (error) throw error;
             }
 
-            window.showToast?.(`${product.name} ajustado a ${countedQty} ${product.unit_of_measure}`, 'success');
+            // Bloquear el ítem para evitar manipulaciones posteriores
+            setCountedProductsToday(prev => new Set([...prev, product.id]));
+            setLastCountedValues(prev => ({ ...prev, [product.id]: countedQty }));
+
+            window.showToast?.(`${product.name} registrado y bloqueado en ${countedQty} ${product.unit_of_measure}`, 'success');
             
             // Actualizar localmente el producto
             setProducts(prev => prev.map(p => {
@@ -605,7 +682,7 @@ export default function OpsInventoryPage() {
                 return { ...p, inventory_stocks: updatedStocks };
             }));
 
-            // Limpiar conteo de este ítem
+            // Limpiar conteo temporal de este ítem
             setCounts(prev => {
                 const next = { ...prev };
                 delete next[product.id];
@@ -619,27 +696,30 @@ export default function OpsInventoryPage() {
         }
     };
 
-    // 8. Guardar y Aplicar Conteo Físico en lote (Batch)
+    // 9. Guardar y Aplicar Conteo Físico en lote (Batch)
     const handleSavePhysicalCountBatch = async () => {
         const countedIds = Object.keys(counts).filter(id => {
             const val = counts[id];
             return val !== undefined && val !== '' && !isNaN(parseFloat(val));
         });
 
-        if (countedIds.length === 0) {
-            window.showToast?.('Por favor ingrese al menos una cantidad física antes de guardar.', 'info');
+        const unLockedCountedIds = countedIds.filter(id => !countedProductsToday.has(id) || canSupervise);
+
+        if (unLockedCountedIds.length === 0) {
+            window.showToast?.('No hay productos pendientes por registrar en este lote (los demás ya están bloqueados).', 'info');
             return;
         }
 
-        const confirmMsg = `¿Desea registrar y aplicar el cruce a ciegas para los ${countedIds.length} productos ingresados?`;
+        const confirmMsg = `¿Desea registrar y aplicar el cruce a ciegas para los ${unLockedCountedIds.length} productos ingresados? Una vez registrados, quedarán bloqueados para piso.`;
         if (!confirm(confirmMsg)) return;
 
         setSubmitting(true);
         try {
             const movementRows: any[] = [];
             let adjustedCount = 0;
+            const operatorName = profile?.contact_name || user?.email || 'Operador de Bodega';
 
-            for (const prodId of countedIds) {
+            for (const prodId of unLockedCountedIds) {
                 const product = products.find(p => p.id === prodId);
                 if (!product) continue;
 
@@ -659,7 +739,7 @@ export default function OpsInventoryPage() {
                         quantity: diff,
                         type: 'adjustment',
                         status_to: 'available',
-                        notes: `Cruce a ciegas fin de turno${cellInfo} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : ''),
+                        notes: `Cruce a ciegas fin de turno${cellInfo} | Operador: ${operatorName} | Stock anterior: ${currentQty} -> Contado: ${countedQty} (Dif: ${diff > 0 ? '+' : ''}${diff.toFixed(2)})` + (itemNotes[prodId] ? ` | Obs: ${itemNotes[prodId]}` : ''),
                         reference_type: 'blind_count_shift_close'
                     });
                     adjustedCount++;
@@ -674,9 +754,23 @@ export default function OpsInventoryPage() {
                 if (insertError) throw insertError;
             }
 
-            window.showToast?.(`Conteo físico aplicado exitosamente (${adjustedCount} productos actualizados)`, 'success');
+            // Bloquear en sesión todos los productos registrados
+            setCountedProductsToday(prev => {
+                const next = new Set(prev);
+                unLockedCountedIds.forEach(id => next.add(id));
+                return next;
+            });
+            setLastCountedValues(prev => {
+                const next = { ...prev };
+                unLockedCountedIds.forEach(id => {
+                    next[id] = parseFloat(counts[id]);
+                });
+                return next;
+            });
+
+            window.showToast?.(`Conteo físico aplicado exitosamente (${unLockedCountedIds.length} productos registrados y bloqueados)`, 'success');
             
-            // Limpiar conteos y recargar
+            // Limpiar conteos temporales y recargar
             setCounts({});
             setItemNotes({});
             await fetchCountProducts();
@@ -1288,8 +1382,13 @@ export default function OpsInventoryPage() {
                                         {isExpanded && (
                                             <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                                 {family.children.map((child) => {
+                                                    const isLocked = countedProductsToday.has(child.id);
+                                                    const countedVal = lastCountedValues[child.id];
                                                     const rawVal = counts[child.id] || '';
-                                                    const hasCount = rawVal !== '';
+                                                    const hasCount = isLocked || rawVal !== '';
+                                                    const displayVal = isLocked 
+                                                        ? (countedVal !== undefined ? countedVal.toString() : (counts[child.id] || '')) 
+                                                        : rawVal;
                                                     const isSavingThis = savingItem === child.id;
 
                                                     return (
@@ -1297,9 +1396,13 @@ export default function OpsInventoryPage() {
                                                             key={child.id}
                                                             style={{
                                                                 padding: '1rem',
-                                                                backgroundColor: hasCount ? 'rgba(16, 185, 129, 0.08)' : 'var(--ops-bg)',
+                                                                backgroundColor: isLocked 
+                                                                    ? 'rgba(16, 185, 129, 0.06)' 
+                                                                    : (hasCount ? 'rgba(16, 185, 129, 0.08)' : 'var(--ops-bg)'),
                                                                 borderRadius: '16px',
-                                                                border: hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
+                                                                border: isLocked 
+                                                                    ? '1.5px solid #10B981' 
+                                                                    : (hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)'),
                                                                 display: 'flex',
                                                                 flexDirection: 'column',
                                                                 gap: '0.75rem'
@@ -1320,7 +1423,23 @@ export default function OpsInventoryPage() {
                                                                     </div>
                                                                 </div>
 
-                                                                {hasCount ? (
+                                                                {isLocked ? (
+                                                                    <div style={{
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: '900',
+                                                                        padding: '3px 9px',
+                                                                        borderRadius: '6px',
+                                                                        backgroundColor: '#ECFDF5',
+                                                                        color: '#065F46',
+                                                                        border: '1px solid #A7F3D0',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px'
+                                                                    }}>
+                                                                        <Lock size={12} strokeWidth={2.5} />
+                                                                        <span>Registrado: {countedVal !== undefined ? countedVal.toFixed(2) : parseFloat(displayVal || '0').toFixed(2)} {child.unit_of_measure}</span>
+                                                                    </div>
+                                                                ) : hasCount ? (
                                                                     <div style={{
                                                                         fontSize: '0.75rem',
                                                                         fontWeight: '900',
@@ -1356,38 +1475,77 @@ export default function OpsInventoryPage() {
                                                                         type="number"
                                                                         step="any"
                                                                         placeholder="0.00"
-                                                                        value={rawVal}
-                                                                        onFocus={(e) => e.target.select()}
+                                                                        value={displayVal}
+                                                                        readOnly={isLocked}
+                                                                        disabled={isLocked}
+                                                                        onFocus={(e) => {
+                                                                            if (isLocked) {
+                                                                                window.showToast?.('Este producto ya fue registrado en el turno actual. Cualquier rectificación requiere autorización de Supervisión de Inventario (Yina Cortés).', 'info');
+                                                                            } else {
+                                                                                e.target.select();
+                                                                            }
+                                                                        }}
                                                                         onKeyDown={(e) => {
+                                                                            if (isLocked) return;
                                                                             if (e.key === 'Enter') {
                                                                                 e.preventDefault();
                                                                                 handleSaveSingleItem(child);
                                                                             }
                                                                         }}
-                                                                        onChange={(e) => setCounts({ ...counts, [child.id]: e.target.value })}
+                                                                        onChange={(e) => {
+                                                                            if (isLocked) return;
+                                                                            setCounts({ ...counts, [child.id]: e.target.value });
+                                                                        }}
                                                                         style={{
                                                                             width: '100%',
                                                                             padding: '0.8rem 3.5rem 0.8rem 1rem',
                                                                             borderRadius: '12px',
-                                                                            border: '1.5px solid var(--ops-border)',
-                                                                            backgroundColor: 'var(--ops-surface)',
+                                                                            border: isLocked ? '1.5px solid #10B981' : '1.5px solid var(--ops-border)',
+                                                                            backgroundColor: isLocked ? '#F8FAF9' : 'var(--ops-surface)',
                                                                             fontSize: '1.25rem',
                                                                             fontWeight: '950',
-                                                                            color: 'var(--ops-text)',
+                                                                            color: isLocked ? '#065F46' : 'var(--ops-text)',
+                                                                            cursor: isLocked ? 'not-allowed' : 'text',
                                                                             outline: 'none'
                                                                         }}
                                                                     />
-                                                                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>
+                                                                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.8rem', color: isLocked ? '#065F46' : 'var(--ops-text-muted)' }}>
                                                                         {child.unit_of_measure}
                                                                     </div>
                                                                 </div>
 
-                                                                {/* Botón Guardar Individual */}
-                                                                {hasCount && (
+                                                                {/* Botón de Desbloqueo Exclusivo de Supervisión */}
+                                                                {isLocked && canSupervise && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleUnlockItem(child.id, child.name)}
+                                                                        title="Autorizar re-conteo (Supervisión Yina Cortés / Admin)"
+                                                                        style={{
+                                                                            padding: '0.8rem 0.85rem',
+                                                                            borderRadius: '12px',
+                                                                            border: '1px solid #10B981',
+                                                                            backgroundColor: '#ECFDF5',
+                                                                            color: '#065F46',
+                                                                            fontWeight: '800',
+                                                                            fontSize: '0.74rem',
+                                                                            cursor: 'pointer',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}
+                                                                    >
+                                                                        <Unlock size={14} />
+                                                                        <span>Desbloquear</span>
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Botón Guardar Individual (Solo si no está bloqueado) */}
+                                                                {!isLocked && hasCount && (
                                                                     <button
                                                                         onClick={() => handleSaveSingleItem(child)}
                                                                         disabled={isSavingThis}
-                                                                        title="Aplicar ajuste para este producto"
+                                                                        title="Registrar y bloquear conteo para este producto"
                                                                         style={{
                                                                             padding: '0.8rem 1rem',
                                                                             borderRadius: '12px',
@@ -1417,8 +1575,13 @@ export default function OpsInventoryPage() {
 
                             // RENDER PRODUCTO STANDALONE (Sin variantes)
                             const standaloneProduct = family.parent;
+                            const isLocked = countedProductsToday.has(standaloneProduct.id);
+                            const countedVal = lastCountedValues[standaloneProduct.id];
                             const rawVal = counts[standaloneProduct.id] || '';
-                            const hasCount = rawVal !== '';
+                            const hasCount = isLocked || rawVal !== '';
+                            const displayVal = isLocked 
+                                ? (countedVal !== undefined ? countedVal.toString() : (counts[standaloneProduct.id] || '')) 
+                                : rawVal;
                             const isSavingThis = savingItem === standaloneProduct.id;
                             const productCell = getProductCell(standaloneProduct);
 
@@ -1428,7 +1591,9 @@ export default function OpsInventoryPage() {
                                     style={{
                                         backgroundColor: 'var(--ops-surface)',
                                         borderRadius: '24px',
-                                        border: hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)',
+                                        border: isLocked 
+                                            ? '1.5px solid #10B981' 
+                                            : (hasCount ? '1.5px solid var(--ops-primary)' : '1px solid var(--ops-border)'),
                                         padding: '1.25rem',
                                         display: 'flex',
                                         flexDirection: 'column',
@@ -1470,7 +1635,23 @@ export default function OpsInventoryPage() {
                                             </div>
                                         </div>
 
-                                        {hasCount ? (
+                                        {isLocked ? (
+                                            <div style={{
+                                                fontSize: '0.78rem',
+                                                fontWeight: '900',
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                backgroundColor: '#ECFDF5',
+                                                color: '#065F46',
+                                                border: '1px solid #A7F3D0',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
+                                            }}>
+                                                <Lock size={13} strokeWidth={2.5} />
+                                                <span>Registrado: {countedVal !== undefined ? countedVal.toFixed(2) : parseFloat(displayVal || '0').toFixed(2)} {standaloneProduct.unit_of_measure}</span>
+                                            </div>
+                                        ) : hasCount ? (
                                             <div style={{
                                                 fontSize: '0.8rem',
                                                 fontWeight: '900',
@@ -1506,38 +1687,78 @@ export default function OpsInventoryPage() {
                                                 type="number"
                                                 step="any"
                                                 placeholder="0.00"
-                                                value={rawVal}
-                                                onFocus={(e) => e.target.select()}
+                                                value={displayVal}
+                                                readOnly={isLocked}
+                                                disabled={isLocked}
+                                                onFocus={(e) => {
+                                                    if (isLocked) {
+                                                        window.showToast?.('Este producto ya fue registrado en el turno actual. Cualquier rectificación requiere autorización de Supervisión de Inventario (Yina Cortés).', 'info');
+                                                    } else {
+                                                        e.target.select();
+                                                    }
+                                                }}
                                                 onKeyDown={(e) => {
+                                                    if (isLocked) return;
                                                     if (e.key === 'Enter') {
                                                         e.preventDefault();
                                                         handleSaveSingleItem(standaloneProduct);
                                                     }
                                                 }}
-                                                onChange={(e) => setCounts({ ...counts, [standaloneProduct.id]: e.target.value })}
+                                                onChange={(e) => {
+                                                    if (isLocked) return;
+                                                    setCounts({ ...counts, [standaloneProduct.id]: e.target.value });
+                                                }}
                                                 style={{
                                                     width: '100%',
                                                     padding: '0.85rem 3.5rem 0.85rem 1rem',
                                                     borderRadius: '14px',
-                                                    border: '1.5px solid var(--ops-border)',
-                                                    backgroundColor: 'var(--ops-bg)',
+                                                    border: isLocked ? '1.5px solid #10B981' : '1.5px solid var(--ops-border)',
+                                                    backgroundColor: isLocked ? '#F8FAF9' : 'var(--ops-bg)',
                                                     fontSize: '1.35rem',
                                                     fontWeight: '950',
-                                                    color: 'var(--ops-text)',
+                                                    color: isLocked ? '#065F46' : 'var(--ops-text)',
                                                     fontVariantNumeric: 'tabular-nums',
+                                                    cursor: isLocked ? 'not-allowed' : 'text',
                                                     outline: 'none'
                                                 }}
                                             />
-                                            <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.85rem', color: 'var(--ops-text-muted)' }}>
+                                            <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', fontSize: '0.85rem', color: isLocked ? '#065F46' : 'var(--ops-text-muted)' }}>
                                                 {standaloneProduct.unit_of_measure}
                                             </div>
                                         </div>
 
-                                        {hasCount && (
+                                        {/* Botón de Desbloqueo Exclusivo de Supervisión */}
+                                        {isLocked && canSupervise && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleUnlockItem(standaloneProduct.id, standaloneProduct.name)}
+                                                title="Autorizar re-conteo (Supervisión Yina Cortés / Admin)"
+                                                style={{
+                                                    padding: '0.85rem 1rem',
+                                                    borderRadius: '14px',
+                                                    border: '1px solid #10B981',
+                                                    backgroundColor: '#ECFDF5',
+                                                    color: '#065F46',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.8rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    whiteSpace: 'nowrap'
+                                                }}
+                                            >
+                                                <Unlock size={15} />
+                                                <span>Desbloquear</span>
+                                            </button>
+                                        )}
+
+                                        {/* Botón Guardar Individual (Solo si no está bloqueado) */}
+                                        {!isLocked && hasCount && (
                                             <button
                                                 onClick={() => handleSaveSingleItem(standaloneProduct)}
                                                 disabled={isSavingThis}
-                                                title="Guardar este producto"
+                                                title="Registrar y bloquear conteo para este producto"
                                                 style={{
                                                     padding: '0.85rem 1.2rem',
                                                     borderRadius: '14px',
