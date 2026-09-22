@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.7.0 (Módulo Comercial: Reingeniería Matriz de Costos — Dos Caminos, Último Precio Real, Circuit Breaker >20% & Pareto de SLAs por Frecuencia)  
+> **Versión:** 1.8.0 (Módulo de Autenticación & Acceso: Recuperación Autónoma de Clave, Selector de Identidad Multi-Rol Colaborador/Cliente & Gobernanza de Idioma Español Canónico)  
 > **Fecha:** 22 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Logística, Ventas, Compras & Operaciones (B2B / B2C)
+> **Área:** Seguridad, Autenticación, Acceso Institucional B2B & Gobernanza ERP
 
 ---
 
@@ -275,6 +275,24 @@ $$C_{\text{efectivo}} = \frac{C_{\text{base}}}{1 - \left(\frac{\text{theoretical
 1. **Principio de Acuerdo Obligatorio:** Toda cotización que un cliente aprueba se formaliza como un **Acuerdo Comercial** (`status = 'agreement'`) con fecha de inicio y de vencimiento (`valid_until`).
 2. **Consumo Automático:** Al ingresar una orden de compra manual o por correo (`/admin/orders/create` o `/api/orders/email-ingest`), el motor de resolución de precios busca si el cliente o su matriz tiene un acuerdo comercial activo; si existe, sus precios congelados se asignan automáticamente a los ítems del pedido con máxima prioridad.
 
+#### 7.5.1 Nomenclatura Canónica & Acompañamiento Visual de Acuerdos Comerciales / Listas de Precios
+Para asegurar que todo acuerdo comercial cuente con una identidad explícita e inequívoca tanto para el equipo comercial como para el cliente institucional:
+1. **Regla de Nomenclatura Automática Dinámica (`computeDefaultAgreementName`):**
+   $$\text{Nombre del Acuerdo} = \text{[Razón Social / Nombre Comercial]} - \text{[DD-MM-AA]}$$
+   *Ejemplo:* `Restaurante El Portal - 22-09-26` o `Acuerdo Multicliente - 22-09-26`.
+   - El sistema autocalcula y autocompleta este valor en el formulario de creación en tiempo real al seleccionar el cliente o modificar la fecha de inicio del acuerdo.
+   - Si el comercial desea un nombre personalizado, puede editar el campo de texto libremente; en caso contrario, se preserva el estándar corporativo.
+2. **Persistencia Estructurada:**
+   El nombre acordado se almacena de forma persistente en `quotes.model_snapshot_name` bajo el registro con `status = 'agreement'`.
+3. **Omnipresencia en la Visualización:**
+   El nombre resultante acompaña obligatoriamente todas las interfaces y documentos:
+   - **Tabla Principal de Acuerdos:** Badge verde esmeralda junto a la razón social (`[Restaurante El Portal - 22-09-26]`).
+   - **Drawer de Inspección Rápida:** Cabecera de la lista de tarifas congeladas.
+   - **Documento Formal de Precios:** Encabezado unificado `Lista de precios [Nombre del Acuerdo] (X productos)`.
+   - **Exportación e Impresión PDF (`AgreementDocumentModal`):** Título principal del documento contractual de tarifas.
+   - **Ficha del Cliente (`ClientsModule`):** Indicador de `Modelo Base: [Nombre del Acuerdo]` con vigencia.
+   - **Portal B2B del Cliente (`/b2b/dashboard`):** Título de la tarjeta de convenio vigente en la pestaña de Acuerdos cuando el cliente accede a realizar sus pedidos.
+
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
@@ -300,6 +318,7 @@ $$C_{\text{efectivo}} = \frac{C_{\text{base}}}{1 - \left(\frac{\text{theoretical
 - [x] **Tarea COM-22 (Reingeniería Matriz / Circuit Breaker):** Implementar Poka-Yoke de Volatilidad (+/- > 20%) con congelamiento preventivo del costo previo y alerta visual para aprobación del Jefe Comercial.
 - [x] **Tarea COM-23 (Reingeniería Matriz / Pareto de Frescura):** Implementar clasificación dinámica en 3 Terciles por frecuencia transaccional (T1: 4d, T2: 8d, T3: 15d).
 - [x] **Tarea COM-24 (Reingeniería Matriz / UI & Filtros de Tercil):** Incorporar badges de tercil, chips de filtrado rápido (`[T1: Críticos]`, `[T2: Moderados]`, `[T3: Quincenales]`, `[Alertas >20%]`) y panel Andon priorizado.
+- [x] **Tarea COM-25 (Acuerdos Comerciales / Nomenclatura & Visualización):** Implementar función `computeDefaultAgreementName` con formato `[Empresa] - [DD-MM-AA]`, persistencia en `quotes.model_snapshot_name` y visualización omnipresente en tabla principal, drawer lateral, documento de precios, PDF formal, ficha de cliente y portal B2B.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -670,3 +689,50 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
   2. Se inserta exactamente una fila en `inventory_movements` con `reference_type: 'route_return'`, `status_to: 'returned'` y cantidad 10 kg (alimentando Columna O).
   3. Se genera un registro en `billing_returns` con `status: 'pending_review'`.
   4. Facturación NO aplica la Nota Crédito hasta que Control de Calidad audite la remisión tachada y apruebe el registro en `billing_returns`.
+
+---
+
+## 10. Módulo de Autenticación, Seguridad Multi-Rol & Gobernanza de Idioma (SDD v1.8.0)
+
+### 10.1 Principios Rectores del Ciclo de Vida de Identidad
+
+1. **Gobernanza Incondicional de Idioma (Español Canónico):**
+   - La plataforma FruFresco es un sistema de origen y operación nacional colombiana. **El idioma por defecto en todas las rutas es inalterablemente Español (`es`)**.
+   - Bajo ninguna circunstancia el sistema debe conmutar a inglés por variables de entorno, configuración regional del navegador o fallbacks vacíos.
+   - El idioma Inglés (`en`) se activa **única y exclusivamente** si el usuario presiona de manera explícita el botón `[EN]` en el conmutador de la barra de navegación.
+
+2. **Autoservicio Seguro de Recuperación de Contraseña (Self-Service Password Reset):**
+   - Todo usuario (colaborador o cliente) tiene derecho a restablecer su credencial de acceso de forma 100% autónoma sin recurrir a soporte técnico ni a administradores de base de datos.
+   - El flujo se canaliza vía `supabase.auth.resetPasswordForEmail()` con un token temporal de un solo uso despachado al correo registrado (ej. Gmail).
+   - Al abrir el enlace seguro, el sistema expone el formulario de actualización de clave (`supabase.auth.updateUser({ password })`), restablece la sesión y redirige al usuario según su rol.
+
+3. **Arquitectura Multi-Rol: Selector de Espacio de Trabajo (Identity Switcher):**
+   - Cuando un correo electrónico está asociado a más de un perfil en la tabla `profiles` (ej. colaboradores internos que a su vez son clientes corporativos B2B o administran múltiples razones sociales/sucursales):
+     - El login autentica las credenciales maestras y detecta la multiplicidad de perfiles.
+     - En lugar de forzar una redirección arbitraria, despliega el **Selector de Espacio de Trabajo ("Workspace Switcher")**:
+       - `[ 🏢 FruFresco Operaciones ]` $\rightarrow$ Enruta a `/admin/dashboard` y habilita exclusivamente los módulos del ERP permitidos por su rol de colaborador.
+       - `[ 🛒 Portal Institucional (Razón Social) ]` $\rightarrow$ Enruta a `/b2b/dashboard` y restringe la vista estrictamente a los precios, pedidos y facturas de la empresa seleccionada.
+   - Si el correo posee un único perfil (comportamiento estándar), el enrutamiento es instantáneo sin pasos intermedios.
+
+4. **Aislamiento Categórico de Permisos (RBAC):**
+   - Los clientes (`role IN ('b2b_client', 'b2c_client', 'client')`) **NUNCA** tienen acceso a la barra de herramientas de "Operaciones", rutas administrativas (`/admin/*`) ni operativas (`/ops/*`), independientemente del valor del campo legacy `profile_type`.
+   - Su experiencia está confinada al **Portal Institucional** (`/b2b/dashboard`), donde los datos se filtran estrictamente por su `profile.id` y `parent_id`.
+
+### 10.2 Criterios de Aceptación Gherkin
+
+#### Escenario 1: Olvido de Contraseña con Recuperación Autónoma
+- **Given** que un colaborador o cliente introduce su correo en `/login` pero no recuerda su contraseña.
+- **When** hace clic en *"¿Olvidaste tu contraseña?"*, digita su correo y presiona *"Enviar enlace de recuperación"*.
+- **Then**:
+  1. Supabase Auth despacha un correo con enlace seguro a la bandeja del usuario.
+  2. Al pulsar el enlace, la interfaz muestra el modal de *Nueva Contraseña* en perfecto español.
+  3. El usuario define su clave y el sistema actualiza su perfil sin intervención humana de soporte.
+
+#### Escenario 2: Ingreso de Usuario con Doble Identidad (Yina / Camilo)
+- **Given** un usuario autenticado cuyo correo posee un perfil de colaborador (`LIDER DE INVENTARIO`) y dos perfiles de cliente B2B (`YINA CORTES AMAYA`).
+- **When** completa exitosamente su usuario y contraseña.
+- **Then**:
+  1. El sistema no lo redirige de golpe; despliega la tarjeta interactiva de selección de rol.
+  2. Si elige *FruFresco Operaciones*, ingresa al ERP con acceso restringido a su módulo de inventarios.
+  3. Si elige *Portal Institucional (Yina Cortes Amaya)*, ingresa al `/b2b/dashboard` viendo únicamente la cartera, pedidos y acuerdos de dicha sucursal.
+

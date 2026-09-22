@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/authContext';
 import { supabase } from '../../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key, Eye, EyeOff } from 'lucide-react';
+import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key, Eye, EyeOff, ArrowLeft, Building2, Briefcase, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -13,10 +13,11 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { signIn, profile, user, signOut } = useAuth();
+    const { signIn, profile, user, signOut, switchProfile } = useAuth();
     const router = useRouter();
 
-    // Forced password change states
+    // Forced password change / Recovery states
+    const [isRecoveryMode, setIsRecoveryMode] = useState(false);
     const [showForceChangePassword, setShowForceChangePassword] = useState(false);
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -24,48 +25,84 @@ export default function LoginPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [changeSuccess, setChangeSuccess] = useState(false);
 
-    // Capturar error de desactivación
+    // Forgot password flow states
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotSuccess, setForgotSuccess] = useState(false);
+    const [forgotError, setForgotError] = useState('');
+
+    // Multi-profile workspace selector
+    const [showWorkspaceSelector, setShowWorkspaceSelector] = useState(false);
+    const [discoveredProfiles, setDiscoveredProfiles] = useState<any[]>([]);
+
+    // Capturar parámetros de URL (error de desactivación, modo recuperación)
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             if (params.get('error') === 'deactivated') {
-                setError('⚠️ Tu cuenta de acceso ha sido desactivada. Por favor, contacta a soporte técnico.');
+                setError('⚠️ Tu cuenta de acceso ha sido desactivada. Por favor, contacta al administrador de talento humano.');
+            }
+            if (params.get('mode') === 'recovery' || window.location.hash.includes('type=recovery')) {
+                setIsRecoveryMode(true);
+                setShowForceChangePassword(true);
             }
         }
     }, []);
 
-    // Redirección inteligente
+    // Escuchar evento PASSWORD_RECOVERY de Supabase
     useEffect(() => {
-        if (profile) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                setIsRecoveryMode(true);
+                setShowForceChangePassword(true);
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, []);
+
+    // Helper para determinar redirección según el perfil
+    const routeUserByProfile = (targetProfile: any) => {
+        const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+        const redirectUrl = searchParams.get('redirect');
+
+        const isClientRole = targetProfile.role === 'b2b_client' || 
+                             targetProfile.role === 'b2c_client' || 
+                             targetProfile.role === 'client';
+
+        if (isClientRole) {
+            console.log('🛒 Redirigiendo cliente institucional a /b2b/dashboard');
+            router.push('/b2b/dashboard');
+        } else {
+            console.log('🏢 Redirigiendo colaborador a /admin/dashboard');
+            if (redirectUrl && redirectUrl.startsWith('/admin')) {
+                router.push(redirectUrl);
+            } else {
+                router.push('/admin/dashboard');
+            }
+        }
+    };
+
+    // Redirección inteligente al cargar perfil
+    useEffect(() => {
+        if (profile && !showWorkspaceSelector && !showForceChangePassword) {
             if (profile.needs_password_change) {
                 console.log('🔒 El usuario requiere cambio de contraseña obligatorio antes de ingresar');
                 setShowForceChangePassword(true);
                 return;
             }
 
-            console.log('🚪 Redirigiendo usuario con rol:', profile.role);
-            const isStaff = (profile as any).profile_type === 'employee' || 
-                            (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
-                            (profile.custom_permissions && profile.custom_permissions.length > 0);
-            
-            const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-            const redirectUrl = searchParams.get('redirect');
-
-            if (isStaff) {
-                if (redirectUrl && redirectUrl.startsWith('/admin')) {
-                    router.push(redirectUrl);
-                } else {
-                    router.push('/admin/dashboard');
-                }
-            } else if (profile.role === 'b2b_client') {
-                router.push('/b2b/dashboard');
-            } else {
-                router.push('/');
+            // Si ya hay un perfil activo guardado en localStorage o si no hay multiplicidad, redirigir
+            const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem('frufresco_active_profile_id') : null;
+            if (savedActiveId && savedActiveId === profile.id) {
+                routeUserByProfile(profile);
+            } else if (discoveredProfiles.length <= 1) {
+                routeUserByProfile(profile);
             }
         }
-    }, [profile, router]);
+    }, [profile, showWorkspaceSelector, showForceChangePassword, discoveredProfiles]);
 
-    const handleForceChangePassword = async (e: React.FormEvent) => {
+    const handlePasswordUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
@@ -83,31 +120,75 @@ export default function LoginPage() {
         }
 
         try {
-            // 1. Update password in Supabase Auth
+            // 1. Actualizar contraseña en Supabase Auth
             const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
             if (authError) throw authError;
 
-            // 2. Update profiles table needs_password_change to false
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update({ needs_password_change: false })
-                .eq('id', user?.id);
+            // 2. Si estaba marcado con needs_password_change, desmarcarlo en profiles
+            if (user?.id) {
+                await supabase
+                    .from('profiles')
+                    .update({ needs_password_change: false })
+                    .eq('id', user.id);
+            }
 
-            if (profileError) throw profileError;
-
-            console.log('✅ Cambio de contraseña exitoso!');
+            console.log('✅ Contraseña restablecida con éxito');
             setChangeSuccess(true);
             
-            // Reload page to trigger clean reload & redirect
             setTimeout(() => {
-                window.location.reload();
+                window.location.href = '/login';
             }, 2000);
 
         } catch (err: any) {
-            console.error('❌ Error al cambiar contraseña:', err);
+            console.error('❌ Error al actualizar contraseña:', err);
             setError(err.message || 'Error inesperado al cambiar la contraseña');
             setLoading(false);
         }
+    };
+
+    const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setForgotLoading(true);
+        setForgotError('');
+        setForgotSuccess(false);
+
+        const cleanEmail = forgotEmail.trim().toLowerCase();
+        if (!cleanEmail) {
+            setForgotError('Por favor ingresa tu correo electrónico');
+            setForgotLoading(false);
+            return;
+        }
+
+        try {
+            const redirectUrl = `${window.location.origin}/login?mode=recovery`;
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+                redirectTo: redirectUrl,
+            });
+
+            if (resetError) throw resetError;
+
+            setForgotSuccess(true);
+        } catch (err: any) {
+            console.error('❌ Error en recuperación de contraseña:', err);
+            let msg = err.message || 'Error al enviar el enlace de recuperación';
+            if (msg.includes('rate limit')) {
+                msg = 'Has solicitado varios enlaces recientemente. Por favor espera unos minutos antes de reintentar.';
+            }
+            setForgotError(msg);
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleSelectWorkspace = async (selectedProfile: any) => {
+        if (!selectedProfile) return;
+        setLoading(true);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('frufresco_active_profile_id', selectedProfile.id);
+        }
+        await switchProfile(selectedProfile.id);
+        setShowWorkspaceSelector(false);
+        routeUserByProfile(selectedProfile);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -115,10 +196,8 @@ export default function LoginPage() {
         setLoading(true);
         setError('');
 
-        // Timeout de seguridad: si en 10s no pasa nada, liberamos el botón
         const safetyTimeout = setTimeout(() => {
             if (isMounted.current) {
-                console.warn('⚠️ Login timeout reached. Unblocking UI.');
                 setLoading(false);
                 setError('La validación está tardando más de lo esperado. Por favor reintenta.');
             }
@@ -128,6 +207,8 @@ export default function LoginPage() {
             const cleanEmail = email.trim().toLowerCase();
             const cleanPassword = password.trim();
             console.log('🔑 Intentando ingresar con:', cleanEmail);
+
+            // 1. Autenticar con Supabase Auth
             const { error: signInError } = await signIn(cleanEmail, cleanPassword);
 
             if (signInError) {
@@ -136,20 +217,34 @@ export default function LoginPage() {
                 
                 let errorMsg = signInError.message;
                 if (errorMsg.includes('Invalid login credentials')) {
-                    errorMsg = '⚠️ Correo o contraseña incorrectos. Por favor verifica.';
+                    errorMsg = '⚠️ Correo o contraseña incorrectos. Por favor verifica tus datos o restablece tu clave.';
                 } else if (errorMsg.includes('Email not confirmed')) {
                     errorMsg = '⚠️ Tu correo no ha sido confirmado. Revisa tu bandeja de entrada.';
                 }
                 
                 setError(errorMsg);
                 setLoading(false);
-            } else {
-                clearTimeout(safetyTimeout);
-                console.log('✅ Auth exitoso, esperando validación de perfil...');
-                // Al poner loading en false, el botón pasará a mostrar "Validando perfil..."
-                // si el perfil aún no ha llegado del AuthContext.
-                setLoading(false); 
+                return;
             }
+
+            clearTimeout(safetyTimeout);
+
+            // 2. Comprobar si el usuario tiene múltiples identidades (Colaborador + Cliente B2B)
+            const { data: siblingProfiles } = await supabase
+                .from('profiles')
+                .select('id, company_name, role, profile_type, custom_permissions, email')
+                .ilike('email', cleanEmail);
+
+            if (siblingProfiles && siblingProfiles.length > 1) {
+                console.log('👥 Múltiples identidades detectadas para este correo:', siblingProfiles.length);
+                setDiscoveredProfiles(siblingProfiles);
+                setShowWorkspaceSelector(true);
+                setLoading(false);
+                return;
+            }
+
+            // Flujo normal de 1 solo perfil
+            setLoading(false);
         } catch (err: unknown) {
             clearTimeout(safetyTimeout);
             console.error('❌ Error inesperado en submit:', err);
@@ -178,7 +273,7 @@ export default function LoginPage() {
             <div style={{
                 position: 'fixed',
                 top: 0, left: 0, right: 0, bottom: 0,
-                background: 'radial-gradient(circle at center, rgba(10, 26, 15, 0.7) 0%, rgba(10, 26, 15, 0.95) 100%)',
+                background: 'radial-gradient(circle at center, rgba(10, 26, 15, 0.75) 0%, rgba(10, 26, 15, 0.96) 100%)',
                 zIndex: 0
             }} />
 
@@ -187,86 +282,378 @@ export default function LoginPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '6rem 1rem',
+                    padding: '5rem 1rem',
                     minHeight: 'calc(100vh - 80px)'
                 }}>
                     <div style={{
                         backgroundColor: 'rgba(255, 255, 255, 0.08)',
                         backdropFilter: 'blur(16px)',
                         WebkitBackdropFilter: 'blur(16px)',
-                        padding: '2rem 2.5rem',
+                        padding: '2.2rem 2.5rem',
                         borderRadius: '32px',
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         width: '100%',
-                        maxWidth: '440px',
-                        color: 'white'
+                        maxWidth: '460px',
+                        color: 'white',
+                        position: 'relative',
+                        zIndex: 1
                     }}>
-                        {showForceChangePassword ? (
+                        {/* VISTA 1: SELECTOR DE ESPACIO DE TRABAJO (Doble Identidad Colaborador vs Cliente) */}
+                        {showWorkspaceSelector ? (
+                            <div>
+                                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                                    <div style={{
+                                        width: '52px',
+                                        height: '52px',
+                                        backgroundColor: 'rgba(13, 122, 87, 0.2)',
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 1rem',
+                                        border: '1px solid rgba(13, 122, 87, 0.4)'
+                                    }}>
+                                        <Briefcase size={26} color="#34d399" strokeWidth={2.5} />
+                                    </div>
+                                    <h1 style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '1.75rem', 
+                                        fontWeight: '900', 
+                                        color: 'white', 
+                                        marginTop: '0',
+                                        letterSpacing: '-0.04em'
+                                    }}>
+                                        Espacio de Trabajo<span style={{ color: '#34d399' }}>.</span>
+                                    </h1>
+                                    <p style={{ 
+                                        color: 'rgba(255, 255, 255, 0.7)', 
+                                        marginTop: '0.3rem',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '500'
+                                    }}>
+                                        Tu cuenta tiene múltiples roles registrados. ¿A dónde deseas ingresar hoy?
+                                    </p>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                                    {discoveredProfiles.map((p) => {
+                                        const isClient = p.role === 'b2b_client' || p.role === 'b2c_client' || p.role === 'client';
+                                        return (
+                                            <button
+                                                key={p.id}
+                                                type="button"
+                                                onClick={() => handleSelectWorkspace(p)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '1rem',
+                                                    padding: '1.1rem 1.25rem',
+                                                    borderRadius: '18px',
+                                                    border: '1.5px solid rgba(255, 255, 255, 0.15)',
+                                                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                                                    color: 'white',
+                                                    cursor: 'pointer',
+                                                    textAlign: 'left',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.14)';
+                                                    e.currentTarget.style.borderColor = isClient ? '#fbbf24' : '#34d399';
+                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+                                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                }}
+                                            >
+                                                <div style={{
+                                                    width: '42px',
+                                                    height: '42px',
+                                                    borderRadius: '12px',
+                                                    backgroundColor: isClient ? 'rgba(251, 191, 36, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: isClient ? '#fbbf24' : '#34d399',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {isClient ? <Building2 size={22} /> : <Briefcase size={22} />}
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: isClient ? '#fbbf24' : '#34d399' }}>
+                                                        {isClient ? 'Portal Institucional B2B' : 'FruFresco Operaciones'}
+                                                    </div>
+                                                    <div style={{ fontSize: '1.05rem', fontWeight: '800', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {isClient ? (p.company_name || 'Mi Cuenta Comercial') : p.role}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                                                        {isClient ? 'Consulta de pedidos, catálogo y facturación' : 'Gestión interna del ERP según tus permisos'}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowWorkspaceSelector(false);
+                                        signOut();
+                                    }}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        fontSize: '0.85rem',
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                        textAlign: 'center',
+                                        padding: '0.5rem',
+                                        fontWeight: '600'
+                                    }}
+                                >
+                                    ← Volver e ingresar con otra cuenta
+                                </button>
+                            </div>
+                        ) : showForgotPassword ? (
+                            /* VISTA 2: RECUPERACIÓN AUTÓNOMA DE CONTRASEÑA */
+                            <div>
+                                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                                    <div style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 1rem',
+                                        border: '1px solid rgba(52, 211, 153, 0.3)'
+                                    }}>
+                                        <Mail size={24} color="#34d399" strokeWidth={2.5} />
+                                    </div>
+                                    <h1 style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '1.75rem', 
+                                        fontWeight: '900', 
+                                        color: 'white', 
+                                        marginTop: '0',
+                                        letterSpacing: '-0.04em'
+                                    }}>
+                                        Recuperar Clave<span style={{ color: '#34d399' }}>.</span>
+                                    </h1>
+                                    <p style={{ 
+                                        color: 'rgba(255, 255, 255, 0.7)', 
+                                        marginTop: '0.3rem',
+                                        fontSize: '0.88rem',
+                                        lineHeight: '1.4',
+                                        fontWeight: '500'
+                                    }}>
+                                        Ingresa tu correo registrado. Te enviaremos un enlace seguro para que restablezcas tu contraseña sin intermediarios.
+                                    </p>
+                                </div>
+
+                                {forgotSuccess ? (
+                                    <div style={{
+                                        padding: '1.5rem',
+                                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                        borderRadius: '20px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                                            <CheckCircle2 size={38} color="#34d399" />
+                                        </div>
+                                        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>
+                                            ¡Enlace despachado!
+                                        </h3>
+                                        <p style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.8)', margin: '0 0 1.25rem', lineHeight: '1.5' }}>
+                                            Revisa la bandeja de entrada de <strong>{forgotEmail}</strong> (incluyendo correo no deseado o spam) y abre el enlace para establecer tu nueva clave.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowForgotPassword(false);
+                                                setForgotSuccess(false);
+                                            }}
+                                            className="btn-premium"
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.75rem',
+                                                borderRadius: 'var(--radius-full)',
+                                                fontWeight: '800',
+                                                backgroundColor: '#34d399',
+                                                color: '#0a1a0f',
+                                                border: 'none',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Entendido, volver al ingreso
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <form onSubmit={handleForgotPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        {forgotError && (
+                                            <div style={{ 
+                                                padding: '0.9rem', 
+                                                backgroundColor: 'rgba(220, 38, 38, 0.15)', 
+                                                color: '#fca5a5', 
+                                                borderRadius: '14px', 
+                                                fontSize: '0.88rem',
+                                                border: '1px solid rgba(220, 38, 38, 0.3)',
+                                                fontWeight: '500'
+                                            }}>
+                                                {forgotError}
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                Correo Electrónico
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
+                                                    <Mail size={18} />
+                                                </div>
+                                                <input
+                                                    required
+                                                    type="email"
+                                                    value={forgotEmail}
+                                                    onChange={(e) => setForgotEmail(e.target.value)}
+                                                    placeholder="ejemplo@gmail.com"
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '0.75rem 1rem 0.75rem 2.8rem', 
+                                                        borderRadius: '14px', 
+                                                        border: '1.5px solid #CBD5E1',
+                                                        backgroundColor: '#FFFFFF',
+                                                        color: '#0F172A',
+                                                        fontSize: '1rem',
+                                                        fontWeight: '600',
+                                                        outline: 'none'
+                                                    }}
+                                                    className="login-input"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            disabled={forgotLoading}
+                                            className="btn-premium"
+                                            style={{ 
+                                                width: '100%', 
+                                                fontSize: '1rem',
+                                                padding: '0.8rem',
+                                                borderRadius: 'var(--radius-full)',
+                                                fontWeight: '900',
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                backgroundColor: forgotLoading ? 'rgba(255,255,255,0.15)' : '#34d399',
+                                                color: '#0a1a0f',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '8px'
+                                            }}
+                                        >
+                                            {forgotLoading ? 'Enviando enlace...' : 'Enviar enlace de recuperación'}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowForgotPassword(false)}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: 'rgba(255, 255, 255, 0.7)',
+                                                fontSize: '0.85rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                fontWeight: '600'
+                                            }}
+                                        >
+                                            <ArrowLeft size={16} /> Volver a iniciar sesión
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
+                        ) : showForceChangePassword ? (
+                            /* VISTA 3: RESTABLECER / NUEVA CONTRASEÑA */
                             <>
                                 <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
                                     <div style={{
                                         width: '50px',
                                         height: '50px',
-                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                                        borderRadius: '15px',
+                                        backgroundColor: 'rgba(251, 191, 36, 0.15)',
+                                        borderRadius: '16px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         margin: '0 auto 1rem',
-                                        border: '1px solid rgba(251, 191, 36, 0.2)'
+                                        border: '1px solid rgba(251, 191, 36, 0.3)'
                                     }}>
                                         <Lock size={24} color="#fbbf24" strokeWidth={2.5} />
                                     </div>
                                     <h1 style={{ 
                                         fontFamily: 'var(--font-outfit), sans-serif',
-                                        fontSize: '1.7rem', 
+                                        fontSize: '1.75rem', 
                                         fontWeight: '900', 
                                         color: 'white', 
                                         marginTop: '0',
-                                        letterSpacing: '-0.06em'
+                                        letterSpacing: '-0.04em'
                                     }}>
-                                        Nueva Contraseña<span style={{ color: '#fbbf24' }}>.</span>
+                                        {isRecoveryMode ? 'Restablecer Clave' : 'Nueva Contraseña'}<span style={{ color: '#fbbf24' }}>.</span>
                                     </h1>
                                     <p style={{ 
-                                        color: 'rgba(255, 255, 255, 0.6)', 
+                                        color: 'rgba(255, 255, 255, 0.7)', 
                                         marginTop: '0.2rem',
                                         fontSize: '0.85rem',
                                         fontWeight: '500',
                                         lineHeight: '1.4'
                                     }}>
-                                        Por seguridad, debes establecer una contraseña personal antes de ingresar por primera vez.
+                                        {isRecoveryMode 
+                                            ? 'Establece tu nueva contraseña segura para recuperar tu acceso.' 
+                                            : 'Por seguridad, debes establecer una contraseña personal antes de ingresar por primera vez.'}
                                     </p>
                                 </div>
 
-                                <form onSubmit={handleForceChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <form onSubmit={handlePasswordUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                     {error && (
                                         <div style={{ 
                                             padding: '1rem', 
-                                            backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+                                            backgroundColor: 'rgba(220, 38, 38, 0.15)', 
                                             color: '#f87171', 
                                             borderRadius: '16px', 
                                             fontSize: '0.9rem',
-                                            border: '1px solid rgba(220, 38, 38, 0.2)',
+                                            border: '1px solid rgba(220, 38, 38, 0.3)',
                                             fontWeight: '500'
                                         }}>
-                                            <strong>Error:</strong> {error}
+                                            {error}
                                         </div>
                                     )}
 
                                     {changeSuccess ? (
                                         <div style={{ 
                                             padding: '1.2rem', 
-                                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                                            backgroundColor: 'rgba(16, 185, 129, 0.15)', 
                                             color: '#34d399', 
                                             borderRadius: '16px', 
                                             fontSize: '0.95rem',
-                                            border: '1px solid rgba(16, 185, 129, 0.2)',
+                                            border: '1px solid rgba(16, 185, 129, 0.3)',
                                             fontWeight: '600',
                                             textAlign: 'center'
                                         }}>
-                                            ¡Contraseña cambiada con éxito!<br/>
-                                            <span style={{ fontSize: '0.8rem', fontWeight: '400', opacity: 0.8 }}>Redirigiendo al sistema...</span>
+                                            ¡Contraseña actualizada con éxito!<br/>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '400', opacity: 0.8 }}>Redirigiendo a tu cuenta...</span>
                                         </div>
                                     ) : (
                                         <>
@@ -275,7 +662,7 @@ export default function LoginPage() {
                                                     Nueva Contraseña
                                                 </label>
                                                 <div style={{ position: 'relative' }}>
-                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
                                                         <Key size={18} />
                                                     </div>
                                                     <input
@@ -286,24 +673,20 @@ export default function LoginPage() {
                                                         placeholder="Mínimo 6 caracteres"
                                                         style={{ 
                                                             width: '100%', 
-                                                            padding: '0.7rem 3rem 0.7rem 2.8rem', 
+                                                            padding: '0.75rem 3rem 0.75rem 2.8rem', 
                                                             borderRadius: '14px', 
-                                                            border: '1px solid rgba(255,255,255,0.1)',
-                                                            backgroundColor: 'rgba(255,255,255,0.05)',
-                                                            color: 'white',
+                                                            border: '1.5px solid #CBD5E1',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#0F172A',
                                                             fontSize: '1rem',
-                                                            outline: 'none',
-                                                            transition: 'all 0.2s'
+                                                            fontWeight: '600',
+                                                            outline: 'none'
                                                         }}
                                                         className="login-input"
                                                     />
                                                     <button
                                                         type="button"
-                                                        onMouseDown={() => setShowNewPassword(true)}
-                                                        onMouseUp={() => setShowNewPassword(false)}
-                                                        onMouseLeave={() => setShowNewPassword(false)}
-                                                        onTouchStart={() => setShowNewPassword(true)}
-                                                        onTouchEnd={() => setShowNewPassword(false)}
+                                                        onClick={() => setShowNewPassword(!showNewPassword)}
                                                         style={{
                                                             position: 'absolute',
                                                             right: '12px',
@@ -312,14 +695,12 @@ export default function LoginPage() {
                                                             background: 'none',
                                                             border: 'none',
                                                             cursor: 'pointer',
-                                                            color: showNewPassword ? '#10B981' : 'rgba(255,255,255,0.4)',
+                                                            color: showNewPassword ? '#10B981' : '#475569',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            padding: '0.2rem',
-                                                            userSelect: 'none',
-                                                            touchAction: 'none'
+                                                            padding: '0.3rem',
+                                                            zIndex: 5
                                                         }}
-                                                        title="Mantén presionado para ver la contraseña"
                                                     >
                                                         {showNewPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                                                     </button>
@@ -331,7 +712,7 @@ export default function LoginPage() {
                                                     Confirmar Contraseña
                                                 </label>
                                                 <div style={{ position: 'relative' }}>
-                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
                                                         <Key size={18} />
                                                     </div>
                                                     <input
@@ -342,14 +723,14 @@ export default function LoginPage() {
                                                         placeholder="Repite tu contraseña"
                                                         style={{ 
                                                             width: '100%', 
-                                                            padding: '0.7rem 3rem 0.7rem 2.8rem', 
+                                                            padding: '0.75rem 3rem 0.75rem 2.8rem', 
                                                             borderRadius: '14px', 
-                                                            border: '1px solid rgba(255,255,255,0.1)',
-                                                            backgroundColor: 'rgba(255,255,255,0.05)',
-                                                            color: 'white',
+                                                            border: '1.5px solid #CBD5E1',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#0F172A',
                                                             fontSize: '1rem',
-                                                            outline: 'none',
-                                                            transition: 'all 0.2s'
+                                                            fontWeight: '600',
+                                                            outline: 'none'
                                                         }}
                                                         className="login-input"
                                                     />
@@ -367,10 +748,9 @@ export default function LoginPage() {
                                                             color: showConfirmPassword ? '#10B981' : '#475569',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            padding: '0.4rem',
+                                                            padding: '0.3rem',
                                                             zIndex: 5
                                                         }}
-                                                        title={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                                                     >
                                                         {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                                                     </button>
@@ -396,17 +776,17 @@ export default function LoginPage() {
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    gap: '10px',
-                                                    boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
+                                                    gap: '10px'
                                                 }}
                                             >
-                                                {loading ? 'Actualizando...' : 'Confirmar y Guardar'}
+                                                {loading ? 'Guardando...' : 'Confirmar y Guardar Clave'}
                                             </button>
                                         </>
                                     )}
                                 </form>
                             </>
                         ) : (
+                            /* VISTA 4: LOGIN PRINCIPAL */
                             <>
                                 <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
                                     <div style={{
@@ -433,12 +813,12 @@ export default function LoginPage() {
                                         Logistics Pro<span style={{ color: 'var(--secondary)' }}>.</span>
                                     </h1>
                                     <p style={{ 
-                                        color: 'rgba(255, 255, 255, 0.6)', 
+                                        color: 'rgba(255, 255, 255, 0.65)', 
                                         marginTop: '0.2rem',
                                         fontSize: '0.9rem',
                                         fontWeight: '500'
                                     }}>
-                                        Portal de ingreso al sistema Logistics Pro
+                                        Portal de acceso a operaciones y cuentas institucionales
                                     </p>
                                 </div>
 
@@ -446,14 +826,14 @@ export default function LoginPage() {
                                     {error && (
                                         <div style={{ 
                                             padding: '1rem', 
-                                            backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+                                            backgroundColor: 'rgba(220, 38, 38, 0.15)', 
                                             color: '#f87171', 
                                             borderRadius: '16px', 
                                             fontSize: '0.9rem',
-                                            border: '1px solid rgba(220, 38, 38, 0.2)',
+                                            border: '1px solid rgba(220, 38, 38, 0.3)',
                                             fontWeight: '500'
                                         }}>
-                                            <strong>Error:</strong> {error}
+                                            {error}
                                         </div>
                                     )}
 
@@ -470,7 +850,7 @@ export default function LoginPage() {
                                                 type="email"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
-                                                placeholder="socio@frubana.com"
+                                                placeholder="usuario@gmail.com"
                                                 style={{ 
                                                     width: '100%', 
                                                     padding: '0.75rem 1rem 0.75rem 2.8rem', 
@@ -489,9 +869,30 @@ export default function LoginPage() {
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Contraseña
-                                        </label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                Contraseña
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setForgotEmail(email);
+                                                    setShowForgotPassword(true);
+                                                    setError('');
+                                                }}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    color: 'var(--secondary)',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline'
+                                                }}
+                                            >
+                                                ¿Olvidaste tu contraseña?
+                                            </button>
+                                        </div>
                                         <div style={{ position: 'relative' }}>
                                             <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
                                                 <Key size={18} />
@@ -592,71 +993,47 @@ export default function LoginPage() {
                                             fontWeight: '800', 
                                             fontSize: '1.1rem' 
                                         }}>
-                                            Validando tu perfil...
+                                            Cargando credenciales...
                                         </p>
                                         <p style={{ fontSize: '0.85rem', marginBottom: '1.5rem', opacity: 0.8, fontWeight: '500' }}>
-                                            Estamos recuperando tus credenciales de acceso institucional.
+                                            Estamos configurando tu espacio de trabajo.
                                         </p>
                                         
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem' }}>
                                             <button
-                                                onClick={() => router.push('/admin/dashboard')}
-                                                className="btn-premium"
-                                                style={{ 
-                                                    width: '100%', 
-                                                    padding: '0.8rem', 
-                                                    backgroundColor: 'var(--primary)', 
-                                                    color: 'white', 
-                                                    border: 'none', 
-                                                    borderRadius: 'var(--radius-full)', 
-                                                    fontWeight: '800', 
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    fontSize: '0.9rem'
-                                                }}
+                                                onClick={() => window.location.reload()}
+                                                style={{ background: 'transparent', border: 'none', textDecoration: 'underline', color: '#fbbf24', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
                                             >
-                                                Ir al Dashboard <Rocket size={18} />
+                                                Refrescar
                                             </button>
                                             
-                                            <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem' }}>
-                                                <button
-                                                    onClick={() => window.location.reload()}
-                                                    style={{ background: 'transparent', border: 'none', textDecoration: 'underline', color: '#fbbf24', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
-                                                >
-                                                    Refrescar
-                                                </button>
-                                                
-                                                <button
-                                                    onClick={() => signOut()}
-                                                    style={{ 
-                                                        background: 'transparent', 
-                                                        border: 'none', 
-                                                        color: '#fbbf24', 
-                                                        fontSize: '0.8rem', 
-                                                        cursor: 'pointer', 
-                                                        opacity: 0.8,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        fontWeight: '600'
-                                                    }}
-                                                >
-                                                    <LogOut size={14} /> Cerrar Sesión
-                                                </button>
-                                            </div>
+                                            <button
+                                                onClick={() => signOut()}
+                                                style={{ 
+                                                    background: 'transparent', 
+                                                    border: 'none', 
+                                                    color: '#fbbf24', 
+                                                    fontSize: '0.8rem', 
+                                                    cursor: 'pointer', 
+                                                    opacity: 0.8,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    fontWeight: '600'
+                                                }}
+                                            >
+                                                <LogOut size={14} /> Cerrar Sesión
+                                            </button>
                                         </div>
                                     </div>
                                 )}
 
-                                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                                    <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', fontWeight: '500' }}>
-                                        ¿No tienes cuenta para tu negocio? 
+                                <div style={{ marginTop: '2rem', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.25rem' }}>
+                                    <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', fontWeight: '500', margin: 0 }}>
+                                        ¿Eres un restaurante, hotel o negocio institucional?
                                         <br />
-                                        <Link href="/b2b/register" style={{ color: 'var(--secondary)', fontWeight: '800', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '0.5rem' }}>
-                                            Solicita acceso aquí <LayoutDashboard size={16} />
+                                        <Link href="/b2b/register" style={{ color: 'var(--secondary)', fontWeight: '800', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '0.35rem' }}>
+                                            Solicita tu cuenta comercial B2B aquí <LayoutDashboard size={15} />
                                         </Link>
                                     </p>
                                 </div>

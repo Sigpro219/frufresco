@@ -20,14 +20,18 @@ interface Profile {
     needs_password_change?: boolean;
     parent_id?: string;
     custom_permissions?: string[];
+    email?: string;
+    profile_type?: string;
 }
 
 interface AuthContextType {
     user: User | null;
     profile: Profile | null;
+    availableProfiles: Profile[];
     loading: boolean;
     signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
     signOut: () => Promise<void>;
+    switchProfile: (newProfileId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,14 +57,19 @@ export async function logAuthEvent(action: 'LOGIN' | 'LOGOUT', userEmail?: strin
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
+    const [availableProfiles, setAvailableProfiles] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch profile when user changes
-    const fetchProfile = async (userId: string, signal?: AbortSignal) => {
+    // Fetch profile and multi-profiles when user changes
+    const fetchProfile = async (userId: string, signal?: AbortSignal, specificProfileId?: string) => {
         if (!userId) return;
         
-        // Prevent redundant fetches if we already have the profile for this user
-        if (profile && profile.id === userId) {
+        const activeProfileId = specificProfileId || 
+            (typeof window !== 'undefined' ? localStorage.getItem('frufresco_active_profile_id') : null) || 
+            userId;
+        
+        // Prevent redundant fetches if we already have the profile for this user and profileId
+        if (profile && profile.id === activeProfileId) {
             return;
         }
         
@@ -70,33 +79,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        console.log('🔄 Cargando perfil para:', userId);
+        console.log('🔄 Cargando perfil para ID:', activeProfileId);
         // Timeout de seguridad de 6 segundos si no se provee signal
         const internalController = !signal ? new AbortController() : null;
         const effectiveSignal = signal || internalController?.signal;
         const timeoutId = internalController ? setTimeout(() => internalController.abort(), 6000) : null;
 
-        let query = supabase
-            .from('profiles')
-            .select('*, parent:parent_id(pricing_model_id)')
-            .eq('id', userId);
-            
-        if (effectiveSignal) query = query.abortSignal(effectiveSignal);
-
         try {
+            // 1. Cargar el perfil activo solicitado
+            let query = supabase
+                .from('profiles')
+                .select('*, parent:parent_id(pricing_model_id)')
+                .eq('id', activeProfileId);
+                
+            if (effectiveSignal) query = query.abortSignal(effectiveSignal);
+
             const { data, error } = await query.maybeSingle();
-            if (timeoutId) clearTimeout(timeoutId);
 
             if (error) {
-                // Network failure vs. Database error check
                 const isNetworkError = error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('abort');
-                
                 if (isNetworkError) {
                     console.warn('⚠️ Falla de Red o Timeout en Supabase al cargar perfil. Continuando con sesión local...');
                 } else {
                     console.error('❌ Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
                 }
-                
                 logError('authContext fetchProfile', error);
             } else if (data) {
                 if (effectiveSignal?.aborted) return;
@@ -111,17 +117,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                     return;
                 }
-                console.log('✅ Perfil cargado:', data.role);
+                console.log('✅ Perfil activo cargado:', data.role, data.company_name || 'Personal');
                 const profileData = {
                     ...data,
                     pricing_model_id: data.parent_id ? data.parent?.pricing_model_id : data.pricing_model_id
                 };
                 try {
-                    localStorage.setItem(`frufresco_cached_profile_${userId}`, JSON.stringify(profileData));
+                    localStorage.setItem(`frufresco_cached_profile_${activeProfileId}`, JSON.stringify(profileData));
+                    localStorage.setItem('frufresco_active_profile_id', activeProfileId);
                 } catch (e) {}
                 setProfile(profileData as Profile);
+
+                // 2. Si el perfil tiene email, buscar perfiles hermanos asociados a ese mismo correo
+                if (data.email) {
+                    const { data: siblings } = await supabase
+                        .from('profiles')
+                        .select('id, company_name, role, profile_type, custom_permissions, email')
+                        .ilike('email', data.email.trim().toLowerCase());
+                    if (siblings && siblings.length > 0) {
+                        setAvailableProfiles(siblings as Profile[]);
+                    }
+                }
             } else {
-                console.warn('⚠️ Perfil no encontrado en la tabla profiles.');
+                console.warn('⚠️ Perfil no encontrado en la tabla profiles para ID:', activeProfileId);
+                // Si el activeProfileId falló pero no era el userId, intentar con userId
+                if (activeProfileId !== userId) {
+                    localStorage.removeItem('frufresco_active_profile_id');
+                    await fetchProfile(userId, signal, userId);
+                }
             }
         } catch (err: any) {
             if (err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')) {
@@ -291,18 +314,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error };
     };
 
+    const switchProfile = async (newProfileId: string) => {
+        if (!newProfileId || !user) return;
+        setLoading(true);
+        try {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('frufresco_active_profile_id', newProfileId);
+            }
+            await fetchProfile(user.id, undefined, newProfileId);
+        } catch (e) {
+            console.error('Error al cambiar de perfil activo:', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const signOut = async () => {
         const currentEmail = user?.email;
         const currentId = user?.id;
         const currentName = profile?.contact_name || profile?.company_name;
         await logAuthEvent('LOGOUT', currentEmail, currentId, currentName);
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('frufresco_active_profile_id');
+        }
         await supabase.auth.signOut();
         setUser(null);
         setProfile(null);
+        setAvailableProfiles([]);
     };
 
     return (
-        <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ user, profile, availableProfiles, loading, signIn, signOut, switchProfile }}>
             {children}
         </AuthContext.Provider>
     );

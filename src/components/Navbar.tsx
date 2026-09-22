@@ -14,7 +14,7 @@ import { translations, Locale } from '@/lib/translations';
 
 export default function Navbar() {
     const { totalItems, totalPrice, totalWeight, items } = useCart();
-    const { user, profile, signOut, loading } = useAuth();
+    const { user, profile, availableProfiles, switchProfile, signOut, loading } = useAuth();
     const pathname = usePathname();
     // Cart only visible on shopping-context pages (not admin or ops)
     const isShoppingContext = !pathname?.startsWith('/admin') && !pathname?.startsWith('/ops');
@@ -135,25 +135,17 @@ export default function Navbar() {
         };
     }, [mobileOpen]);
 
-    // Persistent Language Logic
-    useEffect(() => {
-        const savedLang = localStorage.getItem('frufresco_lang');
-        const urlLang = searchParams.get('lang');
-        
-        // If there's a saved preference but no URL param, sync URL to preference
-        if (savedLang && !urlLang && savedLang === 'en') {
-            const params = new URLSearchParams(window.location.search);
-            params.set('lang', 'en');
-            router.replace(`${pathname}?${params.toString()}`);
-        }
-    }, [pathname, router, searchParams]);
-
+    // Persistent Language Logic — Español Canónico por defecto
     const changeLanguage = (newLang: string) => {
         localStorage.setItem('frufresco_lang', newLang);
         const params = new URLSearchParams(searchParams.toString());
-        if (newLang === 'es') params.delete('lang');
-        else params.set('lang', newLang);
-        router.push(`${pathname}?${params.toString()}`);
+        if (newLang === 'es') {
+            params.delete('lang');
+        } else {
+            params.set('lang', newLang);
+        }
+        const query = params.toString();
+        router.push(query ? `${pathname}?${query}` : pathname);
     };
 
     // Close dropdown when clicking outside
@@ -374,17 +366,19 @@ export default function Navbar() {
                         </>
                     )}
 
-                    {/* B2B Cliente */}
-                    {mounted && user && profile?.role === 'b2b_client' && (
+                    {/* Clientes (B2B o B2C Institucional) */}
+                    {mounted && user && (profile?.role === 'b2b_client' || profile?.role === 'b2c_client' || profile?.role === 'client') && (
                         <>
-                            <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem' }}>Mi Portal</Link>
+                            <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Building2 size={18} strokeWidth={2} /> Mi Portal Institucional
+                            </Link>
                             <Link href="/b2b/orders" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>Mis Pedidos</Link>
                             <Link href="/b2b/catalog" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>Catálogo Institucional</Link>
                         </>
                     )}
 
                     {/* Empleado FruFresco (Admin/Employee) */}
-                    {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
+                    {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && profile?.role !== 'client' && (
                         <>
                             <Link href="/" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2} /> {t.navHome}
@@ -696,7 +690,51 @@ export default function Navbar() {
 
                     {mounted && !loading && (
                         user ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                {/* Selector rápido de perfil/espacio si tiene múltiples identidades */}
+                                {availableProfiles && availableProfiles.length > 1 && (
+                                    <div style={{ position: 'relative' }}>
+                                        <select
+                                            value={profile?.id || ''}
+                                            onChange={(e) => {
+                                                const selectedId = e.target.value;
+                                                const target = availableProfiles.find(p => p.id === selectedId);
+                                                switchProfile(selectedId);
+                                                if (target?.role === 'b2b_client' || target?.role === 'b2c_client' || target?.role === 'client') {
+                                                    router.push('/b2b/dashboard');
+                                                } else {
+                                                    router.push('/admin/dashboard');
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '0.45rem 1.8rem 0.45rem 0.8rem',
+                                                borderRadius: 'var(--radius-full)',
+                                                border: '1.5px solid #0D7A57',
+                                                backgroundColor: '#F0FDF4',
+                                                color: '#065F46',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                outline: 'none',
+                                                fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
+                                            }}
+                                            title="Cambiar entre tu rol de colaborador y tu cuenta de cliente"
+                                        >
+                                            {availableProfiles.map(p => {
+                                                const isClient = p.role === 'b2b_client' || p.role === 'b2c_client' || p.role === 'client';
+                                                const label = isClient 
+                                                    ? `🛒 ${p.company_name || 'Cliente B2B'}`
+                                                    : `🏢 ${p.role || 'Colaborador'}`;
+                                                return (
+                                                    <option key={p.id} value={p.id}>
+                                                        {label}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div style={{ 
                                     display: 'flex', 
                                     alignItems: 'center', 
