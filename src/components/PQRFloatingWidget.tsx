@@ -8,9 +8,14 @@ import { THEME } from '@/lib/adminTheme';
 
 export default function PQRFloatingWidget() {
     const { user, profile } = useAuth();
+    const [mounted, setMounted] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<'form' | 'success'>('form');
     const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Form states
     const [pqrType, setPqrType] = useState<'queja' | 'reclamo' | 'peticion' | 'sugerencia' | 'felicitacion'>('queja');
@@ -237,7 +242,7 @@ export default function PQRFloatingWidget() {
         }
     }, [focusedClientIndex]);
 
-    if (!isAuthorized) return null;
+    if (!mounted || !isAuthorized) return null;
 
     const selectedClientObj = clients.find(c => c.id === selectedClientId);
 
