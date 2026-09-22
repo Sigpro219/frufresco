@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.1 (Gobernanza de Acuerdos Comerciales: Alertas Predictivas de Vencimiento a 5 Días en Core de Clientes, Acuerdos y Dashboard Comercial)  
+> **Versión:** 1.8.2 (Torre de Control Ejecutiva: KPIs de Dashboard Gerencial & Descarga Masiva Resiliente en Gobernanza de Auditoría)  
 > **Fecha:** 22 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Comercial, CRM de Clientes, Acuerdos Comerciales & Gobernanza ERP
+> **Área:** Dirección General, Comercial, Operaciones & Gobernanza ERP
 
 ---
 
@@ -845,8 +845,83 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
   2. En la tabla de productos, "Ahuyama" muestra: fecha reciente, badge `Modificado` y usuario `admin@frufresco.com`.
   3. Todos los demás 105 productos continúan mostrando su fecha de carga original y su autor `Julissa Arévalo Ramirez`.
   4. Ningún producto expone el UUID interno del usuario.
+### 11.6 Ergonomía de Búsqueda Rápida y Fijación Sticky en Acuerdos Comerciales
 
+1. **Botón de Limpieza Inmediata `[X]` en Input de Búsqueda:**
+   - Todo campo de búsqueda en la galería de acuerdos y en el visor de precios congelados cuenta con un botón de limpieza rápida `[X]` anclado a la derecha del input.
+   - El botón se muestra dinámicamente cuando el término de búsqueda no está vacío (`searchTerm.length > 0`) y restablece el filtro a vacío en un solo clic, devolviendo el foco visual de forma instantánea.
+   - El input cuenta con `paddingRight` adaptativo para evitar cualquier superposición visual entre el texto ingresado y el ícono de borrado.
 
+2. **Fijación Sticky de la Barra de Herramientas y Encabezados de Tabla:**
+   - **Barra Superior de Herramientas (`TOP TOOLBAR CONTROLS`):** Se mantiene fija (`position: sticky; top: 0px; zIndex: 30; background-color: #FFFFFF;`) al desplazarse verticalmente sobre el listado de acuerdos, permitiendo al usuario cambiar filtros de estado ("Todos", "Vigentes", "Por Vencer", "Vencidos"), buscar clientes o crear acuerdos sin perder el contexto visual.
+   - **Encabezados de la Tabla (`thead`):** Se mantienen fijos inmediatamente debajo de la barra de controles (`position: sticky; top: 65px; zIndex: 25; background-color: #F8FAFC;`), garantizando que los nombres de las columnas ("Código", "Cliente B2B", "Vigencia", "Duración", "Estado", "Margen Promedio", "Acciones") permanezcan siempre visibles durante el scroll de largas listas de contratos.
+   - **Visor Lateral de Productos Congelados (Drawer):** Los encabezados de la tabla de productos del acuerdo también adoptan fijación sticky (`position: sticky; top: 0px; zIndex: 10; background-color: #F8FAFC;`) dentro de su contenedor de scroll, facilitando la auditoría de catálogos extensos (100+ SKUs).
 
+#### Escenario 6: Navegación y Búsqueda Ágil en Galería de Acuerdos
+- **Given** un operador comercial navegando en la pestaña "Acuerdos Institucionales" con más de 20 acuerdos listados.
+- **When** escribe "milse" en el buscador y luego desea consultar toda la lista nuevamente.
+- **Then**:
+  1. Aparece el botón `[X]` dentro del campo de texto.
+  2. Al pulsar `[X]`, el buscador se limpia inmediatamente mostrando todos los acuerdos sin requerir borrar letra por letra.
+  3. Al desplazarse hacia abajo mediante scroll, la barra con el buscador, botones de filtro y los encabezados de las columnas permanecen permanentemente visibles y anclados en la parte superior.
 
+---
+
+## 12. Panel Admin Ejecutivo (Dashboard) & Gobernanza de Auditoría Forense (SDD v1.8.2)
+
+### 12.1 Torre de Control Ejecutiva (`/admin/dashboard`)
+
+El Panel de Control Principal de FruFresco (`/admin/dashboard`) opera como la torre de mando unificada para la dirección general y operaciones:
+
+1. **Cuadrante Superior de KPIs en Tiempo Real (D+0):**
+   - **Ventas Hoy:** Sumatoria consolidada de la columna `orders.total` para todos los pedidos registrados desde las `00:00:00` del día corriente.
+   - **Pedidos Pendientes:** Conteo exacto de órdenes en estados operativos no despachados (`draft`, `pending_approval`).
+   - **Leads Nuevos:** Conteo de prospectos comerciales en estado inicial `new`.
+   - **Ticket Promedio:** Media aritmética calculada sobre la totalidad de pedidos históricos registrados en el sistema.
+
+2. **Inteligencia de Ventas & Mix de Presentación (Mes en Curso):**
+   - **Distribución de Presentación (Unidades vs Granel):**
+     - **Granel/Volumen:** Identificado por unidades de medida de masa y peso (`libra`, `libras`, `kg`, `kilo`, `kilos`, `lb`, `lbs`).
+     - **Unidades/Empaque:** Cualquier otra unidad discreta (paquetes, bandejas, mallas, unidades).
+     - **Visualizador Donut:** Gráfico vectorial dinámico que refleja el porcentaje de facturación y volumen físico acumulado de cada categoría durante el mes.
+   - **Despacho Logístico & Carga Promedio:**
+     - Computa el promedio de `total_weight_kg` por pedido despachado en el mes.
+     - Indicador visual de cubicaje proyectado frente a una capacidad estándar de camión de 300 kg.
+   - **Top Variantes con Mayor Margen Extra:**
+     - Cruce algorítmico entre `order_items.selected_options` y la matriz de `product_variants`.
+     - Identifica y ranquea las 5 opciones/variantes que mayor rentabilidad marginal han aportado a la operación.
+
+3. **Radar de Ventas Hogar (B2C) en Tiempo Real:**
+   - Suscripción bidireccional mediante Supabase Realtime (`postgres_changes` sobre la tabla `orders`).
+   - Actualización reactiva instantánea ante nuevas compras sin recargar la página.
+
+4. **Matriz de Seguridad & Accesos Gobernados:**
+   - La visibilidad de los accesos directos (*Catálogo Web, Maestro SKU, Clientes CRM, Proveedores, Ajustes del Sistema*) está supeditada estrictamente a la matriz de permisos `system_roles` evaluada mediante `checkUserPermission`.
+   - El acceso al *Centro de Comando Delta* está reservado exclusivamente para roles de alta gobernanza (`sys_admin`, `admin` o superusuario raíz).
+
+---
+
+### 12.2 Módulo de Gobernanza, Auditoría & Trazabilidad Forense (`/admin/audit`)
+
+El subsistema de auditoría garantiza la trazabilidad inalterable de cada evento transaccional, administrativo y de seguridad ocurrido en el ERP.
+
+1. **Ventana Temporal Máxima de Consulta:**
+   - El motor de consulta impone un límite estricto de **90 días (3 meses)** hacia atrás (`created_at >= NOW() - 90 días`) para optimizar el rendimiento y evitar bloqueos en base de datos.
+   - Paginación continua por lotes de 50 registros (`PAGE_SIZE = 50`).
+
+2. **Estándar de Descarga Masiva Resiliente a Excel (Regla 32K):**
+   - **Restricción Física del Motor Excel (OpenXML / BIFF8):** Una celda en un archivo Excel no puede superar bajo ninguna circunstancia los **32.767 caracteres** (`Text length must not exceed 32767 characters`).
+   - **Saneamiento Preventivo (`sanitizeJsonForExcel`):**
+     - La exportación a `.xlsx` analiza la columna `details` (JSON de auditoría). Si la carga serializada de cambios masivos supera los 3.000 caracteres, el exportador trunca el texto de forma segura con sufijo `... [TRUNCADO_POR_TAMAÑO]`, impidiendo el desbordamiento y el bloqueo de la descarga.
+   - **Resumen en Lenguaje Natural (`formatDetailsSummaryText`):**
+     - Se genera una columna complementaria en español legible que sintetiza los cambios esenciales (Células creadas, líder asignado, costos modificados, correo de sesión, SKU o estado) sin obligar al usuario a descifrar estructuras JSON crudas.
+   - **Capacidad de Exportación:** Carga paginada en lotes de 1.000 registros con un techo seguro de hasta 2.500 eventos por reporte descargado.
+
+#### Escenario 7: Descarga Masiva de Auditoría con Matrices Extensas de Gobernanza
+- **Given** un administrador en `/admin/audit` con eventos de modificación masiva de células de trabajo y permisos de roles cuyos objetos JSON superan los 40.000 caracteres.
+- **When** pulsa el botón "Descargar Reporte (XLSX)".
+- **Then**:
+  1. El sistema no arroja error emergente de *"Text length must not exceed 32767 characters"*.
+  2. Genera y descarga el archivo `Reporte_Auditoria_YYYY-MM-DD.xlsx` de forma transparente.
+  3. Las celdas complejas preservan su resumen legible en lenguaje humano y el campo técnico queda delimitado dentro de los estándares de Excel.
 
