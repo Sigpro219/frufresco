@@ -66,7 +66,7 @@ export default function RouteRectificationDetailPage() {
     // Autocompletar nombre de usuario desde la sesión activa
     useEffect(() => {
         if (profile) {
-            const activeUserDisplayName = profile.contact_name || profile.company_name || profile.email || '';
+            const activeUserDisplayName = profile.contact_name || profile.company_name || (profile as any).email || '';
             if (activeUserDisplayName && (!checkerName || checkerName.trim() === '')) {
                 setCheckerName(activeUserDisplayName);
             }

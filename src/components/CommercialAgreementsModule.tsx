@@ -65,6 +65,7 @@ interface Agreement {
         nit?: string;
         phone?: string;
         address?: string;
+        parent_id?: string | null;
     };
 }
 
@@ -235,7 +236,7 @@ export default function CommercialAgreementsModule() {
             // Fetch quotes where status is 'agreement' and join profiles
             const { data, error } = await supabase
                 .from('quotes')
-                .select('*, profiles:client_id (company_name, contact_name, nit, phone, address), items:quote_items(margin_percent)')
+                .select('*, profiles:client_id (company_name, contact_name, nit, phone, address, parent_id), items:quote_items(margin_percent)')
                 .eq('status', 'agreement')
                 .order('created_at', { ascending: false });
 
@@ -2104,6 +2105,31 @@ export default function CommercialAgreementsModule() {
                                                                 fontWeight: '600' 
                                                             }}>
                                                                 {agreement.model_snapshot_name}
+                                                            </span>
+                                                        )}
+                                                        {agreement.profiles?.parent_id ? (
+                                                            <span style={{ 
+                                                                fontSize: '0.66rem', 
+                                                                backgroundColor: '#EFF6FF', 
+                                                                color: '#1D4ED8', 
+                                                                border: '1px solid #BFDBFE', 
+                                                                padding: '1px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontWeight: '700' 
+                                                            }}>
+                                                                🏢 Sucursal
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ 
+                                                                fontSize: '0.66rem', 
+                                                                backgroundColor: '#F5F3FF', 
+                                                                color: '#6D28D9', 
+                                                                border: '1px solid #DDD6FE', 
+                                                                padding: '1px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontWeight: '700' 
+                                                            }}>
+                                                                🏛️ Matriz
                                                             </span>
                                                         )}
                                                     </div>

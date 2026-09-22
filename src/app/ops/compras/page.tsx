@@ -122,6 +122,12 @@ export default function ProcurementPage() {
   const [searchSub, setSearchSub] = useState("");
   const [subResults, setSubResults] = useState<any[]>([]);
 
+  // Shortage states (Columna K de Inventario)
+  const [isShortageModalOpen, setIsShortageModalOpen] = useState(false);
+  const [shortageReason, setShortageReason] = useState("Agotado en plaza / No lo hay");
+  const [shortageQty, setShortageQty] = useState("");
+  const [isSubmittingShortage, setIsSubmittingShortage] = useState(false);
+
   // Form states
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
@@ -867,6 +873,79 @@ export default function ProcurementPage() {
     } catch (err: any) {
       console.error("Error substituting task:", err);
       alert("Error al guardar la sustitución: " + err.message);
+    }
+  };
+
+  const handleConfirmShortage = async () => {
+    if (!selectedTask) return;
+    const qtyToDeclare = parseFloat(shortageQty);
+    if (isNaN(qtyToDeclare) || qtyToDeclare <= 0) {
+      alert("Por favor ingresa una cantidad válida a declarar como escasa.");
+      return;
+    }
+
+    try {
+      setIsSubmittingShortage(true);
+
+      // 1. Obtener la bodega principal por defecto
+      let warehouseId: string | null = null;
+      try {
+        const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
+        warehouseId = whData?.id || null;
+      } catch (e) {
+        console.warn("No se pudo obtener warehouseId", e);
+      }
+
+      // 2. Insertar movimiento de escasez en inventory_movements (Alimenta Col K de la Sábana)
+      const targetDate = selectedTask.delivery_date || selectedDate || new Date().toISOString().split("T")[0];
+      const movementPayload: any = {
+        product_id: selectedTask.product_id,
+        quantity: qtyToDeclare,
+        type: 'exit',
+        reference_type: 'order_shortage',
+        notes: `[ESCASEZ EN PLAZA]: ${shortageReason} | Declarado por comprador (${(profile as any)?.full_name || user?.email || 'Comprador'}) | Tarea #${selectedTask.id.substring(0, 8)}`,
+        created_at: `${targetDate}T10:00:00.000Z`
+      };
+      if (warehouseId) {
+        movementPayload.warehouse_id = warehouseId;
+      }
+
+      const { error: movErr } = await supabase
+        .from('inventory_movements')
+        .insert([movementPayload]);
+
+      if (movErr) throw movErr;
+
+      // 3. Registrar novedad en provider_novelties para trazabilidad del equipo
+      await supabase.from('provider_novelties').insert([{
+        task_id: selectedTask.id,
+        product_id: selectedTask.product_id,
+        novelty_type: 'shortage',
+        quantity: qtyToDeclare,
+        notes: `Producto escaso: ${shortageReason}`,
+        resolved: true,
+        resolution_action: 'marked_as_shortage'
+      }]);
+
+      // 4. Actualizar la tarea en procurement_tasks
+      const newTotalPurchased = (selectedTask.total_purchased || 0);
+      const isTotallyCovered = (newTotalPurchased + qtyToDeclare) >= selectedTask.total_requested;
+
+      await supabase.from('procurement_tasks').update({
+        status: isTotallyCovered ? 'completed' : 'partial'
+      }).eq('id', selectedTask.id);
+
+      alert(`⚠️ Producto declarado escaso (${qtyToDeclare} ${selectedTask.unit}). Registrado en Columna K de la Sábana de Inventario.`);
+
+      setIsShortageModalOpen(false);
+      setSelectedTask(null);
+      resetForm();
+      fetchTasks(undefined, filterCategory, selectedDate);
+    } catch (err: any) {
+      console.error("Error al declarar producto escaso:", err);
+      alert("Error al declarar producto escaso: " + (err.message || err));
+    } finally {
+      setIsSubmittingShortage(false);
     }
   };
 
@@ -2581,11 +2660,10 @@ export default function ProcurementPage() {
                 {/* Main purchase fields (Only show if no unresolved novelties OR in reprogramming/alternative purchase mode) */}
                 {(novelties.filter(n => n.task_id === selectedTask.id).length === 0 || isReprogramming) && (
                   <>
-                  <div>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.2rem" }}>
                     <button
                       onClick={() => setIsSubstituting(true)}
                       style={{
-                        marginTop: "0.2rem",
                         padding: "0.4rem 0.8rem",
                         border: "1px solid var(--ops-border)",
                         borderRadius: "6px",
@@ -2594,13 +2672,37 @@ export default function ProcurementPage() {
                         fontSize: "0.75rem",
                         fontWeight: "600",
                         cursor: "pointer",
-                        alignSelf: "flex-start",
                         display: "flex",
                         alignItems: "center",
                         gap: "0.4rem",
                       }}
                     >
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><RefreshCw size={12} /> Sustituir Producto</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const missing = Math.max(0, (selectedTask.meta_neteo || selectedTask.total_requested) - (selectedTask.total_purchased || 0));
+                        setShortageQty(String(missing));
+                        setIsShortageModalOpen(true);
+                      }}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        border: "1px solid #F59E0B",
+                        borderRadius: "6px",
+                        backgroundColor: "rgba(245, 158, 11, 0.08)",
+                        color: "#D97706",
+                        fontSize: "0.75rem",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <AlertTriangle size={12} /> Declarar Escaso ("No lo hay")
+                      </span>
                     </button>
                   </div>
 
@@ -3623,6 +3725,140 @@ export default function ProcurementPage() {
                 )}
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE DECLARACIÓN DE ESCASEZ (ALIMENTA COL K DE LA SÁBANA) */}
+      {isShortageModalOpen && selectedTask && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--ops-surface)",
+              borderRadius: "16px",
+              padding: "1.5rem",
+              width: "100%",
+              maxWidth: "460px",
+              border: "1px solid var(--ops-border)",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3)",
+              color: "var(--ops-text)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1rem", color: "#D97706" }}>
+              <AlertTriangle size={24} />
+              <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "800" }}>Declarar Producto Escaso ("No lo hay")</h3>
+            </div>
+
+            <p style={{ fontSize: "0.85rem", color: "var(--ops-text-muted)", marginBottom: "1rem", lineHeight: "1.4" }}>
+              Esta acción notificará al módulo de Picking y registrará la salida en la <strong>Columna K (Producto Escaso)</strong> de la Sábana Diaria de Inventario para cuadrar el balance de masa.
+            </p>
+
+            <div style={{ marginBottom: "1rem", backgroundColor: "rgba(0,0,0,0.03)", padding: "0.8rem", borderRadius: "8px" }}>
+              <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", fontWeight: "bold" }}>PRODUCTO</div>
+              <div style={{ fontSize: "0.95rem", fontWeight: "800", marginTop: "2px" }}>{selectedTask.product_name}</div>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.3rem" }}>
+                CANTIDAD ESCASA ({selectedTask.unit})
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={shortageQty}
+                onChange={(e) => setShortageQty(e.target.value)}
+                placeholder="Cantidad no encontrada..."
+                style={{
+                  width: "100%",
+                  padding: "0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--ops-border)",
+                  backgroundColor: "var(--ops-bg)",
+                  color: "var(--ops-text)",
+                  fontWeight: "bold",
+                  fontSize: "1rem",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.3rem" }}>
+                MOTIVO DEL REPORTE
+              </label>
+              <select
+                value={shortageReason}
+                onChange={(e) => setShortageReason(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--ops-border)",
+                  backgroundColor: "var(--ops-bg)",
+                  color: "var(--ops-text)",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <option value="Agotado en plaza / No lo hay">Agotado en plaza / No lo hay</option>
+                <option value="Calidad pésima en mercado / No apto">Calidad pésima en mercado / No apto</option>
+                <option value="Precio especulativo exorbitante">Precio especulativo exorbitante</option>
+                <option value="Proveedor no despachó / Bloqueo vial">Proveedor no despachó / Bloqueo vial</option>
+                <option value="Cosecha terminada / Fuera de temporada">Cosecha terminada / Fuera de temporada</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.8rem" }}>
+              <button
+                onClick={() => setIsShortageModalOpen(false)}
+                disabled={isSubmittingShortage}
+                style={{
+                  flex: 1,
+                  padding: "0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--ops-border)",
+                  backgroundColor: "transparent",
+                  color: "var(--ops-text-muted)",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmShortage}
+                disabled={isSubmittingShortage}
+                style={{
+                  flex: 1,
+                  padding: "0.8rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "#D97706",
+                  color: "white",
+                  fontWeight: "800",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  boxShadow: "0 4px 6px rgba(217, 119, 6, 0.25)",
+                }}
+              >
+                {isSubmittingShortage ? "Registrando..." : "Confirmar Escasez"}
+              </button>
             </div>
           </div>
         </div>

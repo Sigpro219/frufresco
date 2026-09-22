@@ -50,7 +50,9 @@ import {
     Info,
     Dna,
     Upload,
-    Zap
+    Zap,
+    Lock,
+    Unlock
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { WorkCell } from '@/types/workCells';
@@ -241,6 +243,25 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
+    // Estado de Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
+    const [closingRecord, setClosingRecord] = useState<{
+        id: string;
+        closing_date: string;
+        closed_at: string;
+        closed_by_name: string;
+        is_locked: boolean;
+        notes?: string;
+        total_calculated?: number;
+        total_physical?: number;
+        total_missing?: number;
+        total_surplus?: number;
+        snapshot_items?: any[];
+    } | null>(null);
+    const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
+    const [closingNotes, setClosingNotes] = useState('');
+    const [isSubmittingClosing, setIsSubmittingClosing] = useState(false);
+    const [previousClosingMap, setPreviousClosingMap] = useState<Record<string, number>>({});
+
     // Estado de Edición Directa en Celda (Inline Grid Editing estilo Excel)
     const [editingCell, setEditingCell] = useState<{
         productId: string;
@@ -392,6 +413,44 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         else setLoading(true);
 
         try {
+            // 0. Cargar estado de cierre oficial de la fecha seleccionada
+            try {
+                const { data: closeData } = await supabase
+                    .from('daily_inventory_closings')
+                    .select('*')
+                    .eq('closing_date', balanceDate)
+                    .maybeSingle();
+                setClosingRecord(closeData || null);
+            } catch (closeErr) {
+                console.warn('daily_inventory_closings no disponible o tabla pendiente:', closeErr);
+                setClosingRecord(null);
+            }
+
+            // 0.1 Cargar cierre del día anterior (D-1) para heredar el saldo inicial oficial inmutable
+            const prevClosingSnapshots: Record<string, number> = {};
+            try {
+                const prevDate = new Date(new Date(`${balanceDate}T12:00:00`).getTime() - 86400000).toISOString().split('T')[0];
+                const { data: prevCloseData } = await supabase
+                    .from('daily_inventory_closings')
+                    .select('snapshot_items')
+                    .eq('closing_date', prevDate)
+                    .maybeSingle();
+
+                if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
+                    prevCloseData.snapshot_items.forEach((item: any) => {
+                        const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
+                            ? Number(item.physicalCount)
+                            : Number(item.calculatedStock || 0);
+                        if (item.productId) {
+                            prevClosingSnapshots[item.productId] = finalStock;
+                        }
+                    });
+                }
+            } catch (prevErr) {
+                console.warn('No se pudo cargar cierre del día anterior:', prevErr);
+            }
+            setPreviousClosingMap(prevClosingSnapshots);
+
             // 1. Cargar productos maestros con stock actual (ESTRICTAMENTE ACTIVOS)
             let allActiveProducts: ProductItem[] = [];
             let from = 0;
@@ -592,11 +651,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 }
             });
 
-            // Reconstrucción matemática del Inventario Inicial (Col E):
-            // Stock Inicial = Stock Actual - sum(movimientos desde el inicio del balanceDate hasta hoy)
+            // Inventario Inicial (Col E):
+            // 1. Si existe Cierre Oficial del día anterior (D-1), se hereda su saldo final de forma inmutable (SPEC.md v1.5.0)
+            // 2. Si no existe cierre oficial, se aplica reconstrucción retroactiva: Stock Actual - sum(deltas posteriores).
             const sumDeltasSinceStart = dayMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0) +
                                        laterMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0);
-            const initialStock = Math.max(0, currentStock - sumDeltasSinceStart);
+            const initialStock = previousClosingMap[p.id] !== undefined
+                ? previousClosingMap[p.id]
+                : Math.max(0, currentStock - sumDeltasSinceStart);
 
             // S: Inventario Calculado
             // S = E + F + G - H - J - K + L - M - N + O - P - Q - R
@@ -659,7 +721,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 evidencePhotosX: evidenceX
             };
         });
-    }, [balanceDate, products, movements]);
+    }, [balanceDate, products, movements, previousClosingMap]);
 
     // Agrupamiento Jerárquico Padre - Hijo (Familias de Inventario tipo Kardex)
     const dailyFamilies: DailyFamily[] = useMemo(() => {
@@ -1005,40 +1067,142 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         };
     }, [filteredFamilies]);
 
-    // Exportador XLSX exacto de las 24 columnas con formato oficial del cliente y jerarquía
+    // Realizar Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
+    const handleOfficialClosing = async () => {
+        if (dailyRows.length === 0) {
+            alert('No hay datos en la sábana para cerrar la jornada.');
+            return;
+        }
+
+        try {
+            setIsSubmittingClosing(true);
+
+            const totalCalculated = dailyRows.reduce((acc, r) => acc + (r.colS_calculated || 0), 0);
+            const totalPhysical = dailyRows.reduce((acc, r) => acc + (r.colT_physicalCount !== null ? r.colT_physicalCount : 0), 0);
+            const totalMissing = dailyRows.reduce((acc, r) => acc + (r.colV_missing || 0), 0);
+            const totalSurplus = dailyRows.reduce((acc, r) => acc + (r.colW_surplus || 0), 0);
+
+            // Generar Snapshot inmutable de las 24 columnas
+            const snapshotItems = dailyRows.map(r => ({
+                productId: r.productId,
+                sku: r.sku,
+                accountingId: r.colB_idProducto,
+                inventoryGroup: r.colC_inventoryGroup,
+                productName: r.colD_productName,
+                initialStock: r.colE_initialStock,
+                corrections: r.colF_corrections,
+                purchases: r.colG_purchases,
+                salesKg: r.colH_salesKg,
+                salesUnits: r.colI_salesUnits,
+                weightSalesUnits: r.colJ_weightSalesUnits,
+                shortage: r.colK_shortage,
+                unshipped: r.colL_unshipped,
+                additionalSales: r.colM_additionalSales,
+                employeeSales: r.colN_employeeSales,
+                returns: r.colO_returns,
+                weighingWaste: r.colP_weighingWaste,
+                damageWaste: r.colQ_damageWaste,
+                cleaningWaste: r.colR_cleaningWaste,
+                calculatedStock: r.colS_calculated,
+                physicalCount: r.colT_physicalCount,
+                bodegaPost10am: r.colU_bodegaPost10am,
+                missing: r.colV_missing,
+                surplus: r.colW_surplus,
+                foodBank: r.colX_foodBank
+            }));
+
+            const { data, error } = await supabase
+                .from('daily_inventory_closings')
+                .upsert({
+                    closing_date: balanceDate,
+                    closed_at: new Date().toISOString(),
+                    closed_by_name: 'Supervisor de Operaciones',
+                    notes: closingNotes || 'Cierre oficial ejecutado desde la Sábana Diaria',
+                    total_calculated: totalCalculated,
+                    total_physical: totalPhysical,
+                    total_missing: totalMissing,
+                    total_surplus: totalSurplus,
+                    is_locked: true,
+                    snapshot_items: snapshotItems,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'closing_date' })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            setClosingRecord(data);
+            setIsClosingModalOpen(false);
+            setClosingNotes('');
+            alert(`✅ Jornada del ${balanceDate} cerrada oficialmente y congelada para contabilidad.`);
+        } catch (err: any) {
+            console.error('Error al realizar cierre oficial:', err);
+            alert('Error al realizar cierre oficial: ' + (err.message || err));
+        } finally {
+            setIsSubmittingClosing(false);
+        }
+    };
+
+    const handleReopenClosing = async () => {
+        if (!confirm(`¿Estás seguro de reabrir la jornada contable del ${balanceDate}? Se desbloqueará la edición de registros para esta fecha.`)) {
+            return;
+        }
+
+        try {
+            const { error } = await supabase
+                .from('daily_inventory_closings')
+                .update({
+                    is_locked: false,
+                    notes: `${closingRecord?.notes || ''} | Reabierto el ${new Date().toLocaleString()}`,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('closing_date', balanceDate);
+
+            if (error) throw error;
+
+            setClosingRecord(prev => prev ? { ...prev, is_locked: false } : null);
+            alert(`🔓 Jornada del ${balanceDate} reabierta exitosamente.`);
+        } catch (err: any) {
+            console.error('Error al reabrir jornada:', err);
+            alert('Error al reabrir jornada: ' + (err.message || err));
+        }
+    };
+
+    // Exportador XLSX exacto de las 24 columnas con FÓRMULAS NATIVAS de Excel y Jerarquía (SPEC.md v1.5.0)
     const handleExportOfficialExcel = () => {
         try {
             const rowsForExcel: any[] = [];
 
             filteredFamilies.forEach(f => {
                 const p = f.parent;
-                // Fila principal / consolidada
+                const rowObj = f.isParent ? f.consolidated : p;
+
                 rowsForExcel.push({
                     'Fecha inventario': p.colA_date,
                     'idProducto': p.colB_idProducto,
                     'Lista de Inventario': p.colC_inventoryGroup,
                     'Tipo Registro': f.isParent ? 'Familia' : 'Estándar',
                     'Producto': f.isParent ? `${p.colD_productName} (Consolidado)` : p.colD_productName,
-                    'Inventario inicial': Number((f.isParent ? f.consolidated.colE_initialStock : p.colE_initialStock).toFixed(2)),
-                    'Corrección de inventario': Number((f.isParent ? f.consolidated.colF_corrections : p.colF_corrections).toFixed(2)),
-                    'Compra del día': Number((f.isParent ? f.consolidated.colG_purchases : p.colG_purchases).toFixed(2)),
-                    'Venta del día (KG)': Number((f.isParent ? f.consolidated.colH_salesKg : p.colH_salesKg).toFixed(2)),
-                    'Venta del día (UN)': (f.isParent ? f.consolidated.colI_salesUnits : p.colI_salesUnits) > 0 ? Number((f.isParent ? f.consolidated.colI_salesUnits : p.colI_salesUnits).toFixed(0)) : '',
-                    'Peso Venta UN': Number((f.isParent ? f.consolidated.colJ_weightSalesUnits : p.colJ_weightSalesUnits).toFixed(2)),
-                    'Producto escaso': Number((f.isParent ? f.consolidated.colK_shortage : p.colK_shortage).toFixed(2)),
-                    'Producto sin enviar': Number((f.isParent ? f.consolidated.colL_unshipped : p.colL_unshipped).toFixed(2)),
-                    'Venta adicional cliente': Number((f.isParent ? f.consolidated.colM_additionalSales : p.colM_additionalSales).toFixed(2)),
-                    'Venta adicional empleado': Number((f.isParent ? f.consolidated.colN_employeeSales : p.colN_employeeSales).toFixed(2)),
-                    'Devoluciones': Number((f.isParent ? f.consolidated.colO_returns : p.colO_returns).toFixed(2)),
-                    'Pesada': Number((f.isParent ? f.consolidated.colP_weighingWaste : p.colP_weighingWaste).toFixed(2)),
-                    'Desperdicio': Number((f.isParent ? f.consolidated.colQ_damageWaste : p.colQ_damageWaste).toFixed(2)),
-                    'Basura': Number((f.isParent ? f.consolidated.colR_cleaningWaste : p.colR_cleaningWaste).toFixed(2)),
-                    'Inventario calculado': Number((f.isParent ? f.consolidated.colS_calculated : p.colS_calculated).toFixed(2)),
-                    'Inventario agregado bodega': (f.isParent ? f.consolidated.colT_physicalCount : p.colT_physicalCount) !== null ? Number((f.isParent ? f.consolidated.colT_physicalCount! : p.colT_physicalCount!).toFixed(2)) : '',
-                    'Inventario bodega': (f.isParent ? f.consolidated.colU_bodegaPost10am : p.colU_bodegaPost10am) !== null ? Number((f.isParent ? f.consolidated.colU_bodegaPost10am! : p.colU_bodegaPost10am!).toFixed(2)) : '',
-                    'Faltantes': (f.isParent ? f.consolidated.colV_missing : p.colV_missing) < 0 ? Number((f.isParent ? f.consolidated.colV_missing : p.colV_missing).toFixed(2)) : '',
-                    'Sobrantes': (f.isParent ? f.consolidated.colW_surplus : p.colW_surplus) > 0 ? Number((f.isParent ? f.consolidated.colW_surplus : p.colW_surplus).toFixed(2)) : '',
-                    'Banco de alimentos': Number((f.isParent ? f.consolidated.colX_foodBank : p.colX_foodBank).toFixed(2))
+                    'Inventario inicial': Number(rowObj.colE_initialStock.toFixed(2)),
+                    'Corrección de inventario': Number(rowObj.colF_corrections.toFixed(2)),
+                    'Compra del día': Number(rowObj.colG_purchases.toFixed(2)),
+                    'Venta del día (KG)': Number(rowObj.colH_salesKg.toFixed(2)),
+                    'Venta del día (UN)': rowObj.colI_salesUnits > 0 ? Number(rowObj.colI_salesUnits.toFixed(0)) : 0,
+                    'Peso Venta UN': Number(rowObj.colJ_weightSalesUnits.toFixed(2)),
+                    'Producto escaso': Number(rowObj.colK_shortage.toFixed(2)),
+                    'Producto sin enviar': Number(rowObj.colL_unshipped.toFixed(2)),
+                    'Venta adicional cliente': Number(rowObj.colM_additionalSales.toFixed(2)),
+                    'Venta adicional empleado': Number(rowObj.colN_employeeSales.toFixed(2)),
+                    'Devoluciones': Number(rowObj.colO_returns.toFixed(2)),
+                    'Pesada': Number(rowObj.colP_weighingWaste.toFixed(2)),
+                    'Desperdicio': Number(rowObj.colQ_damageWaste.toFixed(2)),
+                    'Basura': Number(rowObj.colR_cleaningWaste.toFixed(2)),
+                    'Inventario calculado': Number(rowObj.colS_calculated.toFixed(2)),
+                    'Inventario agregado bodega': rowObj.colT_physicalCount !== null ? Number(rowObj.colT_physicalCount.toFixed(2)) : '',
+                    'Inventario bodega': rowObj.colU_bodegaPost10am !== null ? Number(rowObj.colU_bodegaPost10am.toFixed(2)) : '',
+                    'Faltantes': rowObj.colV_missing > 0 ? Number(rowObj.colV_missing.toFixed(2)) : 0,
+                    'Sobrantes': rowObj.colW_surplus > 0 ? Number(rowObj.colW_surplus.toFixed(2)) : 0,
+                    'Banco de alimentos': Number(rowObj.colX_foodBank.toFixed(2))
                 });
 
                 // Si tiene presentaciones hijas, exportar cada una anidada
@@ -1054,7 +1218,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             'Corrección de inventario': Number(ch.colF_corrections.toFixed(2)),
                             'Compra del día': Number(ch.colG_purchases.toFixed(2)),
                             'Venta del día (KG)': Number(ch.colH_salesKg.toFixed(2)),
-                            'Venta del día (UN)': ch.colI_salesUnits > 0 ? Number(ch.colI_salesUnits.toFixed(0)) : '',
+                            'Venta del día (UN)': ch.colI_salesUnits > 0 ? Number(ch.colI_salesUnits.toFixed(0)) : 0,
                             'Peso Venta UN': Number(ch.colJ_weightSalesUnits.toFixed(2)),
                             'Producto escaso': Number(ch.colK_shortage.toFixed(2)),
                             'Producto sin enviar': Number(ch.colL_unshipped.toFixed(2)),
@@ -1067,8 +1231,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             'Inventario calculado': Number(ch.colS_calculated.toFixed(2)),
                             'Inventario agregado bodega': ch.colT_physicalCount !== null ? Number(ch.colT_physicalCount.toFixed(2)) : '',
                             'Inventario bodega': ch.colU_bodegaPost10am !== null ? Number(ch.colU_bodegaPost10am.toFixed(2)) : '',
-                            'Faltantes': ch.colV_missing < 0 ? Number(ch.colV_missing.toFixed(2)) : '',
-                            'Sobrantes': ch.colW_surplus > 0 ? Number(ch.colW_surplus.toFixed(2)) : '',
+                            'Faltantes': ch.colV_missing > 0 ? Number(ch.colV_missing.toFixed(2)) : 0,
+                            'Sobrantes': ch.colW_surplus > 0 ? Number(ch.colW_surplus.toFixed(2)) : 0,
                             'Banco de alimentos': Number(ch.colX_foodBank.toFixed(2))
                         });
                     });
@@ -1077,39 +1241,78 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
             const ws = XLSX.utils.json_to_sheet(rowsForExcel);
 
-            // Anchos de columna optimizados para las 24 columnas (A a X)
+            // Inyectar Fórmulas Nativas de Excel fila por fila (Row 2 a Row N)
+            for (let i = 0; i < rowsForExcel.length; i++) {
+                const rNum = i + 2; // Fila 1 es cabecera (1-indexed)
+                
+                // Col T: Inventario Calculado
+                // T = F + G + H - I - K - L + M - N - O + P - Q - R - S
+                const calcFormula = `F${rNum}+G${rNum}+H${rNum}-I${rNum}-K${rNum}-L${rNum}+M${rNum}-N${rNum}-O${rNum}+P${rNum}-Q${rNum}-R${rNum}-S${rNum}`;
+                ws[`T${rNum}`] = { t: 'n', f: calcFormula, v: rowsForExcel[i]['Inventario calculado'] };
+
+                // Col V: Bodega Post-10 AM (U + P)
+                const post10Formula = `IF(ISBLANK(U${rNum}), "", U${rNum}+P${rNum})`;
+                ws[`V${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario bodega'] };
+
+                // Col W: Faltantes (Si U < T => T - U)
+                const missingFormula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), 0, IF(U${rNum}<T${rNum}, T${rNum}-U${rNum}, 0))`;
+                ws[`W${rNum}`] = { t: 'n', f: missingFormula, v: rowsForExcel[i]['Faltantes'] };
+
+                // Col X: Sobrantes (Si U > T => U - T)
+                const surplusFormula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), 0, IF(U${rNum}>T${rNum}, U${rNum}-T${rNum}, 0))`;
+                ws[`X${rNum}`] = { t: 'n', f: surplusFormula, v: rowsForExcel[i]['Sobrantes'] };
+            }
+
+            // Agregar Fila de Totales Matemáticos al pie
+            const lastDataRow = rowsForExcel.length + 1;
+            const totalRow = lastDataRow + 1;
+
+            const formulaCols = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
+            ws[`E${totalRow}`] = { t: 's', v: 'TOTALES GENERALES:' };
+            formulaCols.forEach(c => {
+                ws[`${c}${totalRow}`] = {
+                    t: 'n',
+                    f: `SUM(${c}2:${c}${lastDataRow})`
+                };
+            });
+
+            // Actualizar rango !ref
+            ws['!ref'] = `A1:Y${totalRow}`;
+
+            // Anchos de columna optimizados
             ws['!cols'] = [
                 { wch: 14 }, // A Fecha
                 { wch: 12 }, // B idProducto
                 { wch: 28 }, // C Lista de Inventario
-                { wch: 32 }, // D Producto
-                { wch: 16 }, // E Inicial
-                { wch: 18 }, // F Corrección
-                { wch: 15 }, // G Compras
-                { wch: 16 }, // H Venta KG
-                { wch: 16 }, // I Venta UN
-                { wch: 15 }, // J Peso UN
-                { wch: 15 }, // K Escaso
-                { wch: 17 }, // L Sin Enviar
-                { wch: 18 }, // M Venta Adic Cliente
-                { wch: 18 }, // N Venta Adic Empleado
-                { wch: 14 }, // O Devoluciones
-                { wch: 12 }, // P Pesada
-                { wch: 14 }, // Q Desperdicio
-                { wch: 12 }, // R Basura
-                { wch: 18 }, // S Calculado
-                { wch: 20 }, // T Agregado Bodega
-                { wch: 16 }, // U Bodega Post-10
-                { wch: 14 }, // V Faltantes
-                { wch: 14 }, // W Sobrantes
-                { wch: 16 }  // X Banco Alimentos
+                { wch: 16 }, // D Tipo Registro
+                { wch: 34 }, // E Producto
+                { wch: 16 }, // F Inicial
+                { wch: 18 }, // G Corrección
+                { wch: 15 }, // H Compras
+                { wch: 16 }, // I Venta KG
+                { wch: 15 }, // J Venta UN
+                { wch: 15 }, // K Peso UN
+                { wch: 15 }, // L Escaso
+                { wch: 17 }, // M Sin Enviar
+                { wch: 18 }, // N Venta Adic Cliente
+                { wch: 18 }, // O Venta Adic Empleado
+                { wch: 14 }, // P Devoluciones
+                { wch: 12 }, // Q Pesada
+                { wch: 14 }, // R Desperdicio
+                { wch: 12 }, // S Basura
+                { wch: 18 }, // T Calculado
+                { wch: 20 }, // U Agregado Bodega
+                { wch: 16 }, // V Bodega Post-10
+                { wch: 14 }, // W Faltantes
+                { wch: 14 }, // X Sobrantes
+                { wch: 16 }  // Y Banco Alimentos
             ];
 
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Balance_Diario_24Col');
             XLSX.writeFile(wb, `Balance_Diario_FruFresco_24Col_${balanceDate}.xlsx`);
         } catch (err: any) {
-            console.error('Error exportando Excel 24 columnas:', err);
+            console.error('Error exportando Excel con fórmulas:', err);
             alert('Error al exportar reporte: ' + err.message);
         }
     };
@@ -1374,6 +1577,10 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         return (
             <td
                 onClick={() => {
+                    if (closingRecord?.is_locked) {
+                        alert(`⚠️ La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`);
+                        return;
+                    }
                     if (!isReadonly) {
                         setEditingCell({
                             productId,
@@ -2745,6 +2952,71 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             </button>
                         </div>
 
+                        {/* Grupo 0: Cierre Diario Oficial & Congelación Contable (SPEC.md v1.5.0) */}
+                        {closingRecord?.is_locked ? (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#DCFCE7',
+                                border: '1px solid #16A34A',
+                                color: '#15803D',
+                                padding: '0 0.6rem',
+                                height: '32px',
+                                borderRadius: '8px',
+                                fontSize: '0.74rem',
+                                fontWeight: '800'
+                            }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
+                                <Lock size={13} strokeWidth={2.5} />
+                                <span>Cerrado</span>
+                                <button
+                                    type="button"
+                                    onClick={handleReopenClosing}
+                                    style={{
+                                        marginLeft: '3px',
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#15803D',
+                                        cursor: 'pointer',
+                                        fontSize: '0.68rem',
+                                        textDecoration: 'underline',
+                                        fontWeight: 'bold',
+                                        padding: '0'
+                                    }}
+                                    title="Reabrir jornada contable para permitir ajustes"
+                                >
+                                    (Reabrir)
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setIsClosingModalOpen(true)}
+                                style={{
+                                    padding: '0 0.65rem',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #15803D',
+                                    backgroundColor: '#16A34A',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#15803D'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#16A34A'}
+                                title="Realizar Cierre Diario Oficial y congelar balance contable"
+                            >
+                                <Lock size={13} strokeWidth={2.5} />
+                                <span>Cierre Diario</span>
+                            </button>
+                        )}
+
                         {/* Grupo 2: Excel y Refrescar */}
                         <div style={{
                             display: 'inline-flex',
@@ -2836,6 +3108,62 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             </button>
                         </div>
                     </div>
+                </div>
+
+                {/* BARRA DE FILTRO RÁPIDO POR CÉLULA DE TRABAJO (RESOLUCIÓN GRILL-ME / ACUERDO 1) */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    padding: '6px 0 3px 0',
+                    scrollbarWidth: 'none',
+                    borderTop: '1px solid #F1F5F9',
+                    borderBottom: '1px solid #F1F5F9'
+                }}>
+                    {cellOptions.map(opt => {
+                        const isSelected = selectedCell === opt.value;
+                        const count = opt.value === 'ALL'
+                            ? dailyFamilies.length
+                            : dailyFamilies.filter(f => (f.consolidated.colC_inventoryGroup || '').toUpperCase().includes(opt.value.toUpperCase())).length;
+
+                        return (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setSelectedCell(opt.value)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '3px 9px',
+                                    borderRadius: '20px',
+                                    border: isSelected ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                    backgroundColor: isSelected ? '#0D7A57' : '#FFFFFF',
+                                    color: isSelected ? '#FFFFFF' : '#334155',
+                                    fontSize: '0.73rem',
+                                    fontWeight: isSelected ? '800' : '600',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.2)' : '0 1px 2px rgba(0,0,0,0.02)',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {opt.icon}
+                                <span>{opt.label.replace(/\(\d+\)/, '')}</span>
+                                <span style={{
+                                    padding: '1px 5px',
+                                    borderRadius: '10px',
+                                    fontSize: '0.62rem',
+                                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#F1F5F9',
+                                    color: isSelected ? '#FFFFFF' : '#64748B',
+                                    fontWeight: '800'
+                                }}>
+                                    {count}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* FILA 2: CONTROLES DE VISTA Y NAVEGADOR DE 24 COLUMNAS (SALTAR A BLOQUE) */}
@@ -3858,6 +4186,170 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 currentDate={balanceDate}
                 products={products}
             />
+
+            {/* MODAL DE CIERRE DIARIO OFICIAL & CONGELACIÓN (SPEC.md v1.5.0 / ACUERDO 2 GRILL-ME) */}
+            {isClosingModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 99999,
+                    padding: '1rem',
+                    backdropFilter: 'blur(3px)'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '1.75rem',
+                        width: '100%',
+                        maxWidth: '520px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #CBD5E1'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.2rem' }}>
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '10px',
+                                backgroundColor: '#DCFCE7',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#16A34A'
+                            }}>
+                                <Lock size={22} strokeWidth={2.5} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: '#0F172A' }}>
+                                    Cierre Diario Oficial de Inventario
+                                </h3>
+                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>
+                                    Jornada: <strong>{balanceDate}</strong> • Bodega Central FruFresco
+                                </p>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: '1.45', marginBottom: '1.2rem' }}>
+                            Al ejecutar el cierre oficial, el balance de masa de esta fecha quedará <strong>congelado e inmutable</strong> para efectos contables y fiscales. El Saldo Físico Final (Col T) se trasladará automáticamente como <strong>Saldo Inicial (Col E)</strong> de la jornada siguiente.
+                        </p>
+
+                        {/* Grid de Resumen de Balance de Masa */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '0.75rem',
+                            marginBottom: '1.2rem',
+                            backgroundColor: '#F8FAFC',
+                            padding: '1rem',
+                            borderRadius: '12px',
+                            border: '1px solid #E2E8F0'
+                        }}>
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold' }}>INVENTARIO CALCULADO (S)</span>
+                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0F172A' }}>
+                                    {formatNumber(columnTotals.totalS)} <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Kg</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold' }}>CONTEO FÍSICO BODEGA (T)</span>
+                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#16A34A' }}>
+                                    {formatNumber(columnTotals.totalT)} <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Kg</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: 'bold' }}>FALTANTES (COL V)</span>
+                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#EF4444' }}>
+                                    {formatNumber(columnTotals.totalV)} <span style={{ fontSize: '0.75rem' }}>Kg</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: '#2563EB', fontWeight: 'bold' }}>SOBRANTES (COL W)</span>
+                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#2563EB' }}>
+                                    {formatNumber(columnTotals.totalW)} <span style={{ fontSize: '0.75rem' }}>Kg</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Campo de Observaciones */}
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#334155', marginBottom: '0.35rem' }}>
+                                OBSERVACIONES O NOVEDADES DEL CIERRE
+                            </label>
+                            <textarea
+                                value={closingNotes}
+                                onChange={e => setClosingNotes(e.target.value)}
+                                placeholder="Ej: Conteo ciego verificado al 100%, novedades de ruta cuadradas..."
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.82rem',
+                                    color: '#0F172A',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    fontFamily: 'inherit'
+                                }}
+                            />
+                        </div>
+
+                        {/* Botones de Acción */}
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsClosingModalOpen(false)}
+                                disabled={isSubmittingClosing}
+                                style={{
+                                    padding: '0.7rem 1.1rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#475569',
+                                    fontSize: '0.82rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleOfficialClosing}
+                                disabled={isSubmittingClosing}
+                                style={{
+                                    padding: '0.7rem 1.4rem',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: '#16A34A',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.82rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.3)',
+                                    opacity: isSubmittingClosing ? 0.7 : 1
+                                }}
+                            >
+                                <Lock size={15} strokeWidth={2.5} />
+                                <span>{isSubmittingClosing ? 'Congelando...' : 'Confirmar y Congelar Jornada'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 
 export async function POST(req: Request) {
@@ -21,14 +21,40 @@ export async function POST(req: Request) {
 
     // 1. If no quoteId provided, create a finalized quote record
     if (!activeQuoteId) {
-      const totalAmount = agreementItems.reduce((acc: number, i: any) => acc + (i.counter_price || i.client_proposed_price || 0), 0);
+      let subtotalAmount = 0;
+      let totalTaxAmount = 0;
+
+      const itemsPayload = agreementItems.map((item: any) => {
+        const unitPrice = Number(item.counter_price || item.client_proposed_price || 0);
+        const ivaRate = Number(item.matched_product?.iva_rate || item.iva_rate || 0);
+        const ivaAmount = unitPrice * (ivaRate / 100);
+        const totalPrice = unitPrice + ivaAmount;
+
+        subtotalAmount += unitPrice;
+        totalTaxAmount += ivaAmount;
+
+        return {
+          product_id: item.matched_product?.id || null,
+          product_name: item.matched_product?.name || item.client_product_name,
+          quantity: 1,
+          cost_basis: Number(item.cost_basis || 0),
+          margin_percent: Number(item.margin_percent || 0),
+          unit_price: unitPrice,
+          iva_rate: ivaRate,
+          iva_amount: ivaAmount,
+          total_price: totalPrice
+        };
+      });
+
+      const totalAmount = subtotalAmount + totalTaxAmount;
+
       const { data: newQuote, error: qErr } = await supabaseAdmin
         .from('quotes')
         .insert([{
           client_id: clientId || null,
           client_name: clientName || 'Cliente',
-          subtotal_amount: totalAmount,
-          total_tax_amount: 0,
+          subtotal_amount: subtotalAmount,
+          total_tax_amount: totalTaxAmount,
           total_amount: totalAmount,
           status: 'agreement',
           version: 2,
@@ -42,23 +68,9 @@ export async function POST(req: Request) {
       if (qErr) throw qErr;
       activeQuoteId = newQuote.id;
 
-      if (agreementItems.length > 0) {
-        const itemsPayload = agreementItems.map((item: any) => ({
-          quote_id: activeQuoteId,
-          product_id: item.matched_product?.id || null,
-          product_name: item.matched_product?.name || item.client_product_name,
-          quantity: 1,
-          cost_basis: item.cost_basis || 0,
-          margin_percent: item.margin_percent || 0,
-          unit_price: item.counter_price || item.client_proposed_price,
-          iva_rate: 0,
-          iva_amount: 0,
-          total_price: item.counter_price || item.client_proposed_price,
-          
-          
-        }));
-
-        await supabaseAdmin.from('quote_items').insert(itemsPayload);
+      if (itemsPayload.length > 0) {
+        const itemsWithQuoteId = itemsPayload.map(i => ({ ...i, quote_id: activeQuoteId }));
+        await supabaseAdmin.from('quote_items').insert(itemsWithQuoteId);
       }
     } else {
       // Update existing quote to 'agreement'
@@ -72,6 +84,24 @@ export async function POST(req: Request) {
           updated_at: new Date().toISOString()
         })
         .eq('id', activeQuoteId);
+    }
+
+    // Registrar evento en audit_logs según SPEC.md Secc. 7.4 y 7.5
+    try {
+      await supabaseAdmin.from('audit_logs').insert({
+        action: 'ACTIVATE_commercial_agreement',
+        module: 'COMMERCIAL',
+        details: {
+          quote_id: activeQuoteId,
+          client_id: clientId || null,
+          client_name: clientName || 'Cliente',
+          valid_until: validityEnd || null,
+          items_count: agreementItems.length,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (auditErr) {
+      console.warn('[Activate Agreement API] Notice inserting audit_logs:', auditErr);
     }
 
     return NextResponse.json({

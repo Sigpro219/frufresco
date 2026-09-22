@@ -324,6 +324,31 @@ export default function DeliveryConfirmationPage() {
                         status: 'pending_review'
                     }));
                     await supabase.from('billing_returns').insert(billingInserts);
+
+                    // Inserción en inventory_movements para alimentar Col O (Devoluciones) y habilitar decisión en /ops/inventory
+                    try {
+                        const warehouseRes = await supabase.from('warehouses').select('id').limit(1).single();
+                        const defaultWarehouseId = warehouseRes.data?.id || null;
+
+                        const inventoryInserts = items.map(item => ({
+                            product_id: item.product_id,
+                            warehouse_id: defaultWarehouseId,
+                            quantity: Number(item.picked_quantity || item.quantity) || 0,
+                            type: 'entry',
+                            reference_type: 'route_return',
+                            reference_id: stop.orders?.id || null,
+                            status_to: 'returned',
+                            notes: `[DEVOLUCIÓN RUTA - CANCELACIÓN TOTAL]: ${novedadReason} | Pedido #${stop.orders?.sequence_id || stop.orders?.id?.substring(0, 8) || 'S/N'}`,
+                            evidence_url: evidenceUrl,
+                            created_at: new Date().toISOString()
+                        })).filter(m => m.quantity > 0);
+
+                        if (inventoryInserts.length > 0) {
+                            await supabase.from('inventory_movements').insert(inventoryInserts);
+                        }
+                    } catch (invErr) {
+                        console.error('Error insertando movimientos de retorno por cancelación:', invErr);
+                    }
                 }
 
                 // Automatic insertion into customer_service_pqrs
@@ -383,6 +408,31 @@ export default function DeliveryConfirmationPage() {
                         status: 'pending_review'
                     }));
                     await supabase.from('billing_returns').insert(returnInserts);
+
+                    // Inserción en inventory_movements para alimentar Col O (Devoluciones) y habilitar decisión en /ops/inventory
+                    try {
+                        const warehouseRes = await supabase.from('warehouses').select('id').limit(1).single();
+                        const defaultWarehouseId = warehouseRes.data?.id || null;
+
+                        const inventoryInserts = partialReturns.map(item => ({
+                            product_id: item.product_id,
+                            warehouse_id: defaultWarehouseId,
+                            quantity: Number(item.returned_qty) || 0,
+                            type: 'entry',
+                            reference_type: 'route_return',
+                            reference_id: stop.orders?.id || null,
+                            status_to: 'returned',
+                            notes: `[DEVOLUCIÓN RUTA - PARCIAL]: ${item.return_reason || 'Rechazo en entrega'} | Pedido #${stop.orders?.sequence_id || stop.orders?.id?.substring(0, 8) || 'S/N'}`,
+                            evidence_url: item.return_evidence_url || evidenceUrl,
+                            created_at: new Date().toISOString()
+                        })).filter(m => m.quantity > 0);
+
+                        if (inventoryInserts.length > 0) {
+                            await supabase.from('inventory_movements').insert(inventoryInserts);
+                        }
+                    } catch (invErr) {
+                        console.error('Error insertando movimientos de retorno parcial:', invErr);
+                    }
 
                     // Automatic insertion into customer_service_pqrs
                     const clientId = stop.orders?.profiles?.id;

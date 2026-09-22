@@ -67,7 +67,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             if (!profile) {
                 router.push('/');
             } else {
-                const isStaff = profile.profile_type === 'employee' || 
+                const isStaff = (profile as any).profile_type === 'employee' || 
                                 (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
                                 (profile.custom_permissions && profile.custom_permissions.length > 0);
                 if (!isStaff) {
@@ -132,7 +132,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     }
 
     // Check if user is staff before rendering operations content
-    const isStaff = profile.profile_type === 'employee' || 
+    const isStaff = (profile as any).profile_type === 'employee' || 
                     (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
                     (profile.custom_permissions && profile.custom_permissions.length > 0);
     if (!isStaff) {

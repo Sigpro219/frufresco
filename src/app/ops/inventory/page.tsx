@@ -739,6 +739,20 @@ export default function OpsInventoryPage() {
 
             if (updateError) throw updateError;
 
+            // Si la decisión es merma o donación, registrar el movimiento de baja correspondiente para balance de masa
+            if (decision === 'waste' || decision === 'donation') {
+                const subType = decision === 'waste' ? 'waste_damage' : 'food_bank';
+                await supabase.from('inventory_movements').insert([{
+                    product_id: (movement as any).product_id || (movement as any).products?.id,
+                    quantity: movement.quantity,
+                    type: 'exit',
+                    reference_type: subType,
+                    notes: `Baja por retorno de ruta clasificado como ${decision.toUpperCase()} | Ref Retorno #${movementId.substring(0, 8)}`,
+                    evidence_url: movement.evidence_url,
+                    created_at: new Date().toISOString()
+                }]);
+            }
+
             window.showToast?.(`Producto gestionado como ${decision}`, 'success');
             fetchReturns();
         } catch (error) {

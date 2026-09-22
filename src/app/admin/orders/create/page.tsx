@@ -1221,6 +1221,7 @@ function CreateOrderContent() {
                     }
                 });
 
+                const agreementProductIds = new Set<string>();
                 if (activeAgreement) {
                     const { data: qItems } = await supabase
                         .from('quote_items')
@@ -1230,6 +1231,7 @@ function CreateOrderContent() {
                     qItems?.forEach((p: any) => {
                         map[p.product_id] = p.unit_price;
                         customIds.add(p.product_id);
+                        agreementProductIds.add(p.product_id);
                     });
                 }
 
@@ -1274,8 +1276,11 @@ function CreateOrderContent() {
                     }
                 }
 
-                // Apply campaign price overrides to the resolved prices map
+                // SPEC.md Secc. 7.2: Inmunidad Contractual - Campañas aplican a productos de catálogo/modelo, NO a SKUs congelados en Acuerdo Comercial
                 Object.keys(campMap).forEach((productId) => {
+                    if (agreementProductIds.has(productId)) {
+                        return; // Blindado por contrato vigente
+                    }
                     const basePrice = map[productId] || 0;
                     if (basePrice > 0) {
                         const campaign = campMap[productId];

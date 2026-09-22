@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { sanitizeDocText, findBestProductMatchDetails, resolveClientProfile } from '@/lib/orders/order-parser-engine';
+import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import * as XLSX from 'xlsx';
 
 export interface CommercialExtractedItem {
@@ -303,27 +304,19 @@ export async function enrichCommercialProposal(
 
   const catalog = dbProducts || [];
 
-  // 2. Fetch General Institucional pricing model rules
-  let generalRulesMap: Record<string, number> = {};
+  // 2. Fetch General Institucional cached prices (pricing_model_prices)
+  let generalPricesMap: Record<string, number> = {};
   try {
-    const { data: genModel } = await supabaseAdmin
-      .from('pricing_models')
-      .select('id')
-      .eq('name', 'General Institucional')
-      .maybeSingle();
+    const { data: pmpData } = await supabaseAdmin
+      .from('pricing_model_prices')
+      .select('product_id, price')
+      .eq('model_id', GENERAL_INSTITUCIONAL_ID);
 
-    if (genModel) {
-      const { data: genRules } = await supabaseAdmin
-        .from('pricing_rules')
-        .select('product_id, margin_adjustment, target_price')
-        .eq('model_id', genModel.id);
-
-      (genRules || []).forEach((r: any) => {
-        generalRulesMap[r.product_id] = r.target_price || 0;
-      });
-    }
+    (pmpData || []).forEach((row: any) => {
+      generalPricesMap[row.product_id] = Number(row.price) || 0;
+    });
   } catch (err) {
-    console.warn('[Enricher] Error fetching General Institucional rules:', err);
+    console.warn('[Enricher] Error fetching General Institucional prices:', err);
   }
 
   // 3. Fetch latest purchase costs / cost matrix
@@ -377,9 +370,20 @@ export async function enrichCommercialProposal(
 
     const accountingId = item.accounting_id || (matchedProd ? (matchedProd.accounting_id ? String(matchedProd.accounting_id) : matchedProd.sku) : '');
     const costBasis = matchedProd ? (costMatrixMap[matchedProd.id] || matchedProd.base_price || 0) : 0;
-    const lastApplied = matchedProd ? (lastAppliedMap[matchedProd.id] || 0) : 0;
-    const genPrice = matchedProd ? (generalRulesMap[matchedProd.id] || (costBasis ? Math.round(costBasis * 1.25) : matchedProd.base_price || 0)) : 0;
-    
+    let genPrice = 0;
+    if (matchedProd) {
+      if (generalPricesMap[matchedProd.id]) {
+        genPrice = generalPricesMap[matchedProd.id];
+      } else if (costBasis > 0) {
+        // SPEC.md Secc. 7.3: Margen Canónico sobre Venta (20% base) con redondeo a $50 COP
+        const rawGen = costBasis / (1 - 0.20);
+        genPrice = Math.ceil(rawGen / 50) * 50;
+      } else {
+        genPrice = matchedProd.base_price || 0;
+      }
+    }
+    const lastApplied = matchedProd ? lastAppliedMap[matchedProd.id] : undefined;
+
     // Calculate margin percent for client proposed price
     const proposedPrice = item.client_proposed_price || 0;
     let marginPct = 0;

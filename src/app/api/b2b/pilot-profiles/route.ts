@@ -57,8 +57,8 @@ export async function GET() {
             return {
                 ...p,
                 company_name: p.company_name || p.contact_name || 'Cliente Piloto',
-                needs_crates: p.needs_crates !== undefined ? p.needs_crates : true,
-                crate_balance: p.crate_balance !== undefined ? p.crate_balance : (pilotBalances[p.id] || 14),
+                needs_crates: (p as any).needs_crates !== undefined ? (p as any).needs_crates : true,
+                crate_balance: (p as any).crate_balance !== undefined ? (p as any).crate_balance : (pilotBalances[p.id] || 14),
                 allow_off_agreement_purchases: effectiveAllow !== undefined ? effectiveAllow : true
             };
         });

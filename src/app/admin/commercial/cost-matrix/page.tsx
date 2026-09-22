@@ -1004,6 +1004,21 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
             if (authorizedIds.length > 0) {
                 await triggerPricingSync(undefined, undefined, authorizedIds);
+
+                // Registrar trazabilidad auditada de la autorización masiva
+                fetch('/api/audit/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'BATCH_SMART_COSTS_AUTHORIZED',
+                        module: 'COMMERCIAL',
+                        collaborator_name: profile?.contact_name || profile?.company_name || user?.email || 'Administrador Comercial',
+                        details: {
+                            authorized_count: authorizedIds.length,
+                            product_ids: authorizedIds
+                        }
+                    })
+                }).catch(e => console.warn('Audit error in batch authorize:', e));
             }
 
             await fetchData();

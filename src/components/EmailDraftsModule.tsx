@@ -3540,6 +3540,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
     let basePrice = 0;
     let foundBase = false;
+    let isFromAgreement = false;
 
     // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
     const activeAgreement = (branchId ? agreements.find(q => q.client_id === branchId) : null)
@@ -3564,6 +3565,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (pr !== undefined && pr !== null) {
             basePrice = pr;
             foundBase = true;
+            isFromAgreement = true;
           }
         }
       }
@@ -3617,8 +3619,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       basePrice = prod?.base_price || 0;
     }
 
-    // Apply Active Campaign if applicable
-    if (effectiveClientId && campaigns.length > 0) {
+    // SPEC.md Secc. 7.2: Inmunidad Contractual - Campañas aplican a catálogo/modelos, NO a SKUs congelados en Acuerdo Comercial
+    if (!isFromAgreement && effectiveClientId && campaigns.length > 0) {
       const metadata = getDraftMetadata(draft);
       const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
       const delivery = deliveryDateStr ? deliveryDateStr.split('T')[0] : new Date().toISOString().split('T')[0];
