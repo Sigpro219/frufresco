@@ -838,7 +838,7 @@ export default function InventoryAdminPage() {
                 .eq('scheduled_date', today);
             
             if (existing && existing.length > 0) {
-                if (!isAuto) alert('El corte de inventario (09:30 AM) ya fue procesado para hoy.');
+                if (!isAuto) (window as any).showToast?.('El corte de inventario (09:30 AM) ya fue procesado para hoy.', 'info');
                 return;
             }
 
@@ -858,7 +858,7 @@ export default function InventoryAdminPage() {
             
             if (stockError) throw stockError;
             if (!stockData || stockData.length === 0) {
-                if (!isAuto) alert('No se detectaron SKUs con movimiento en los últimos 30 días para auditar.');
+                if (!isAuto) (window as any).showToast?.('No se detectaron SKUs con movimiento en los últimos 30 días para auditar.', 'info');
                 return;
             }
 
@@ -910,10 +910,10 @@ export default function InventoryAdminPage() {
             if (itemsError) throw itemsError;
 
             fetchData();
-            if (!isAuto) alert('¡Corte de inventario a las 09:30 AM generado con éxito para ' + selected.length + ' productos!');
+            if (!isAuto) (window as any).showToast?.('¡Corte de inventario a las 09:30 AM generado con éxito para ' + selected.length + ' productos!', 'success');
         } catch (err: any) {
             console.error('Error generating audit snapshot:', err);
-            if (!isAuto) alert('Error en el corte: ' + (err.message || 'Error de conexión'));
+            if (!isAuto) (window as any).showToast?.('Error en el corte: ' + (err.message || 'Error de conexión'), 'error');
         } finally {
             if (!isAuto && isMounted.current) setGeneratingAudit(false);
         }
@@ -1069,7 +1069,7 @@ export default function InventoryAdminPage() {
             }, 2500);
         } catch (err: any) {
             console.error('Error reasignando célula a producto:', err);
-            alert('Error al reasignar célula: ' + (err.message || 'Error de conexión'));
+            (window as any).showToast?.('Error al reasignar célula: ' + (err.message || 'Error de conexión'), 'error');
         } finally {
             if (isMounted.current) setSavingSkuId(null);
         }
@@ -1077,13 +1077,13 @@ export default function InventoryAdminPage() {
 
     const handleAddCellResponsible = async (cellId: string) => {
         if (!selectedStaffForAssign) {
-            alert('Por favor seleccione un colaborador de la planilla oficial de Talento Humano.');
+            (window as any).showToast?.('Por favor seleccione un colaborador de la planilla oficial de Talento Humano.', 'error');
             return;
         }
 
         const found = staffUsers.find(u => u.id === selectedStaffForAssign);
         if (!found) {
-            alert('El colaborador seleccionado no pertenece a la planilla activa de Talento Humano.');
+            (window as any).showToast?.('El colaborador seleccionado no pertenece a la planilla activa de Talento Humano.', 'error');
             return;
         }
 
@@ -1092,7 +1092,7 @@ export default function InventoryAdminPage() {
 
         const currentResps = targetCell.responsibles || [];
         if (currentResps.some(r => r.id === found.id || r.name.trim().toLowerCase() === found.name.trim().toLowerCase())) {
-            alert(`El colaborador "${found.name}" ya se encuentra asignado a esta célula.`);
+            (window as any).showToast?.(`El colaborador "${found.name}" ya se encuentra asignado a esta célula.`, 'info');
             return;
         }
 
@@ -1126,9 +1126,10 @@ export default function InventoryAdminPage() {
             setWorkCells(updatedCells);
             setAssigningCellId(null);
             setSelectedStaffForAssign('');
+            (window as any).showToast?.('Responsable asignado correctamente a la célula.', 'success');
         } catch (err: any) {
             console.error('Error al agregar responsable a la célula:', err);
-            alert('Error al guardar responsable: ' + (err.message || 'Error de conexión'));
+            (window as any).showToast?.('Error al guardar responsable: ' + (err.message || 'Error de conexión'), 'error');
         } finally {
             setIsSavingCell(false);
         }
@@ -1170,7 +1171,7 @@ export default function InventoryAdminPage() {
             setWorkCells(updatedCells);
         } catch (err: any) {
             console.error('Error al remover responsable de la célula:', err);
-            alert('Error al remover responsable: ' + (err.message || 'Error de conexión'));
+            (window as any).showToast?.('Error al remover responsable: ' + (err.message || 'Error de conexión'), 'error');
         } finally {
             setIsSavingCell(false);
         }
@@ -1178,17 +1179,17 @@ export default function InventoryAdminPage() {
 
     const handleCreateNewCell = async () => {
         if (!newCellForm.name.trim()) {
-            alert('Por favor ingrese el nombre de la nueva célula.');
+            (window as any).showToast?.('Por favor ingrese el nombre de la nueva célula.', 'error');
             return;
         }
         if (!newCellForm.inventory_group.trim()) {
-            alert('Por favor ingrese el nombre del Grupo Contable / Inventario.');
+            (window as any).showToast?.('Por favor ingrese el nombre del Grupo Contable / Inventario.', 'error');
             return;
         }
 
         const normalizedGroup = newCellForm.inventory_group.trim().toUpperCase();
         if (workCells.some(c => c.inventory_group && c.inventory_group.trim().toUpperCase() === normalizedGroup)) {
-            alert(`Ya existe una célula configurada con el grupo "${normalizedGroup}".`);
+            (window as any).showToast?.(`Ya existe una célula configurada con el grupo "${normalizedGroup}".`, 'error');
             return;
         }
 
@@ -1253,9 +1254,10 @@ export default function InventoryAdminPage() {
                 description: '',
                 initial_responsible_id: ''
             });
+            (window as any).showToast?.('Nueva célula creada con éxito.', 'success');
         } catch (err: any) {
             console.error('Error al crear nueva célula:', err);
-            alert('Error al crear la célula: ' + (err.message || 'Error de conexión'));
+            (window as any).showToast?.('Error al crear la célula: ' + (err.message || 'Error de conexión'), 'error');
         } finally {
             setIsSavingCell(false);
         }
@@ -1336,7 +1338,7 @@ export default function InventoryAdminPage() {
         } catch (error: any) {
             console.error('Error applying inventory movement:', error);
             const message = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-            alert('Error al aplicar ajuste: ' + message);
+            (window as any).showToast?.('Error al aplicar ajuste: ' + message, 'error');
         }
     }, [fetchData]);
 
@@ -2034,7 +2036,7 @@ export default function InventoryAdminPage() {
             XLSX.writeFile(wb, fileName);
         } catch (err: any) {
             console.error('Error al exportar Excel:', err);
-            alert('Error exportando Excel: ' + (err.message || 'Error desconocido'));
+            (window as any).showToast?.('Error exportando Excel: ' + (err.message || 'Error desconocido'), 'error');
         } finally {
             setExportingExcel(false);
         }
@@ -2115,7 +2117,7 @@ export default function InventoryAdminPage() {
             XLSX.writeFile(wb, `Matriz_Gobernanza_FruFresco_${todayStr}.xlsx`);
         } catch (err: any) {
             console.error('Error exportando matriz de gobernanza:', err);
-            alert('Error exportando matriz de gobernanza: ' + (err.message || 'Error desconocido'));
+            (window as any).showToast?.('Error exportando matriz de gobernanza: ' + (err.message || 'Error desconocido'), 'error');
         } finally {
             setExportingGovernance(false);
         }
@@ -6629,12 +6631,14 @@ export default function InventoryAdminPage() {
                                     step="any"
                                     placeholder="0,00" 
                                     value={adjModalQty}
+                                    onFocus={(e) => e.target.select()}
                                     onChange={(e) => setAdjModalQty(e.target.value)}
                                     style={{ 
                                         ...styles.input, 
                                         fontWeight: '700', 
                                         fontSize: '1rem', 
                                         padding: '0.55rem 0.85rem',
+                                        fontVariantNumeric: 'tabular-nums',
                                         borderColor: (adjModalType === 'exit' && Number(adjModalQty) > (selectedProduct.currentStock || 0)) ? '#F59E0B' : undefined
                                     }} 
                                 />
@@ -6697,7 +6701,7 @@ export default function InventoryAdminPage() {
                                 onClick={() => {
                                     const qty = parseFloat(adjModalQty);
                                     if (!qty || isNaN(qty) || qty <= 0) {
-                                        alert('Por favor ingrese una cantidad numérica mayor a cero.');
+                                        (window as any).showToast?.('Por favor ingrese una cantidad numérica mayor a cero.', 'error');
                                         return;
                                     }
                                     const fullNotes = `[${adjModalReason}] ${adjModalNotes.trim()}`.trim();

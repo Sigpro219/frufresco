@@ -559,13 +559,13 @@ export default function OpsInventoryPage() {
     const handleSaveSingleItem = async (product: ProductWithStock) => {
         const rawVal = counts[product.id];
         if (rawVal === undefined || rawVal === '' || isNaN(parseFloat(rawVal))) {
-            alert('Ingrese una cantidad válida.');
+            window.showToast?.('Ingrese una cantidad válida.', 'error');
             return;
         }
 
         const countedQty = parseFloat(rawVal);
         if (countedQty < 0) {
-            alert('La cantidad no puede ser negativa.');
+            window.showToast?.('La cantidad no puede ser negativa.', 'error');
             return;
         }
 
@@ -613,7 +613,7 @@ export default function OpsInventoryPage() {
             });
         } catch (err: any) {
             console.error('Error saving single item count:', err);
-            alert(`Error al guardar: ${err?.message || 'Error desconocido'}`);
+            window.showToast?.(`Error al guardar: ${err?.message || 'Error desconocido'}`, 'error');
         } finally {
             setSavingItem(null);
         }
@@ -627,7 +627,7 @@ export default function OpsInventoryPage() {
         });
 
         if (countedIds.length === 0) {
-            alert('Por favor ingrese al menos una cantidad física antes de guardar.');
+            window.showToast?.('Por favor ingrese al menos una cantidad física antes de guardar.', 'info');
             return;
         }
 
@@ -682,7 +682,7 @@ export default function OpsInventoryPage() {
             await fetchCountProducts();
         } catch (err: any) {
             console.error('Error saving physical count batch:', err);
-            alert(`Error al guardar conteo: ${err?.message || 'Error desconocido'}`);
+            window.showToast?.(`Error al guardar conteo: ${err?.message || 'Error desconocido'}`, 'error');
         } finally {
             setSubmitting(false);
         }
@@ -715,7 +715,7 @@ export default function OpsInventoryPage() {
             fetchTasks();
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Error desconocido';
-            alert('Error al guardar: ' + message);
+            window.showToast?.('Error al guardar: ' + message, 'error');
         } finally {
             setSubmitting(false);
         }
@@ -1507,6 +1507,13 @@ export default function OpsInventoryPage() {
                                                 step="any"
                                                 placeholder="0.00"
                                                 value={rawVal}
+                                                onFocus={(e) => e.target.select()}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleSaveSingleItem(standaloneProduct);
+                                                    }
+                                                }}
                                                 onChange={(e) => setCounts({ ...counts, [standaloneProduct.id]: e.target.value })}
                                                 style={{
                                                     width: '100%',
@@ -1517,6 +1524,7 @@ export default function OpsInventoryPage() {
                                                     fontSize: '1.35rem',
                                                     fontWeight: '950',
                                                     color: 'var(--ops-text)',
+                                                    fontVariantNumeric: 'tabular-nums',
                                                     outline: 'none'
                                                 }}
                                             />
@@ -1642,7 +1650,7 @@ export default function OpsInventoryPage() {
                             </div>
                             <button
                                 onClick={() => {
-                                    alert('Ingrese el nombre de la sucursal y la cantidad de canastillas recibidas físicamente en patio.');
+                                    (window as any).showToast?.('Ingrese el nombre de la sucursal y la cantidad de canastillas recibidas físicamente en patio.', 'info');
                                 }}
                                 style={{ padding: '0.8rem 1.25rem', borderRadius: '14px', border: 'none', backgroundColor: '#10B981', color: 'white', fontWeight: '900', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)' }}
                             >
@@ -1762,8 +1770,9 @@ export default function OpsInventoryPage() {
                                                 type="number" 
                                                 placeholder="0.00" 
                                                 value={auditCounts[item.id] || ''} 
+                                                onFocus={(e) => e.target.select()}
                                                 onChange={(e) => setAuditCounts({ ...auditCounts, [item.id]: e.target.value })}
-                                                style={{ width: '100%', padding: '0.85rem 3rem 0.85rem 1rem', borderRadius: '12px', border: '1.5px solid var(--ops-border)', backgroundColor: 'var(--ops-bg)', fontSize: '1.25rem', fontWeight: '950', color: 'var(--ops-text)' }}
+                                                style={{ width: '100%', padding: '0.85rem 3rem 0.85rem 1rem', borderRadius: '12px', border: '1.5px solid var(--ops-border)', backgroundColor: 'var(--ops-bg)', fontSize: '1.25rem', fontWeight: '950', color: 'var(--ops-text)', fontVariantNumeric: 'tabular-nums' }}
                                             />
                                             <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
                                                 {item.products.unit_of_measure}
@@ -1776,7 +1785,7 @@ export default function OpsInventoryPage() {
                                     disabled={submitting} 
                                     style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', border: 'none', background: 'var(--ops-primary)', color: 'white', fontSize: '1rem', fontWeight: '950', cursor: 'pointer' }}
                                 >
-                                    {submitting ? '⏳ Guardando...' : 'Finalizar Auditoría'}
+                                    {submitting ? 'Guardando...' : 'Finalizar Auditoría'}
                                 </button>
                             </div>
                         )}

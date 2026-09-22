@@ -160,7 +160,7 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
             XLSX.writeFile(wb, `Reporte_Facturacion_Ventas_Adicionales_${startDate}_al_${endDate}.xlsx`);
         } catch (err: any) {
             console.error('Error exportando Excel facturación:', err);
-            alert('Error exportando reporte: ' + err.message);
+            (window as any).showToast?.('Error exportando reporte: ' + err.message, 'error');
         }
     };
 

@@ -337,7 +337,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             setReassignReason('');
         } catch (err: any) {
             console.error('Error saving reassignment:', err);
-            alert('Error al guardar la asignación: ' + (err.message || err));
+            setToastMessage('Error al guardar la asignación: ' + (err.message || err));
+            setTimeout(() => setToastMessage(null), 4000);
         } finally {
             setSavingReassignment(false);
         }

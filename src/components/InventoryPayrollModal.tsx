@@ -180,7 +180,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
             XLSX.writeFile(wb, `Reporte_Nomina_Ventas_Empleados_${startDate}_al_${endDate}.xlsx`);
         } catch (err: any) {
             console.error('Error exportando Excel nómina:', err);
-            alert('Error al exportar reporte de nómina: ' + err.message);
+            (window as any).showToast?.('Error al exportar reporte de nómina: ' + err.message, 'error');
         }
     };
 
