@@ -32,6 +32,7 @@ import {
     ExternalLink,
     X,
     Eye,
+    PenTool,
     BarChart3,
     Apple,
     Carrot,
@@ -213,10 +214,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
     const todayStr = new Date().toISOString().split('T')[0];
     const [balanceDate, setBalanceDate] = useState<string>(todayStr);
+    const [sheetMode, setSheetMode] = useState<'view' | 'manual_edit'>('view');
     const [selectedCell, setSelectedCell] = useState<string>('ALL');
-    const [isCellComboboxOpen, setIsCellComboboxOpen] = useState(false);
-    const [cellComboboxSearch, setCellComboboxSearch] = useState('');
-    const cellComboboxRef = useRef<HTMLDivElement>(null);
 
     const cellOptions = useMemo(() => [
         { value: 'ALL', label: `Todas (${workCells.length})`, icon: <Boxes size={14} color="#0D7A57" strokeWidth={2} /> },
@@ -230,26 +229,6 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     const selectedCellOption = useMemo(() => {
         return cellOptions.find(opt => opt.value === selectedCell) || cellOptions[0];
     }, [cellOptions, selectedCell]);
-
-    const filteredCellOptions = useMemo(() => {
-        if (!cellComboboxSearch.trim()) return cellOptions;
-        const term = cellComboboxSearch.toLowerCase().trim();
-        return cellOptions.filter(opt => opt.label.toLowerCase().includes(term));
-    }, [cellOptions, cellComboboxSearch]);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (cellComboboxRef.current && !cellComboboxRef.current.contains(event.target as Node)) {
-                setIsCellComboboxOpen(false);
-            }
-        };
-        if (isCellComboboxOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isCellComboboxOpen]);
 
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [showHelpTooltip, setShowHelpTooltip] = useState<boolean>(false);
@@ -304,6 +283,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             setToast(prev => (prev?.message === message ? null : prev));
         }, 4500);
     }, []);
+
+    const handleSwitchMode = useCallback((newMode: 'view' | 'manual_edit') => {
+        if (newMode === 'manual_edit' && !canEditSheet) {
+            notify('Acceso restringido: La Hoja Manual de Edición está reservada exclusivamente para la jefatura de inventarios (Yina Cortés) o administradores.', 'warning');
+            return;
+        }
+        setSheetMode(newMode);
+    }, [canEditSheet, notify]);
 
     // Medición reactiva de la Toolbar Dock para sincronización con cabecera de tabla
     const dockRef = useRef<HTMLDivElement>(null);
@@ -1597,7 +1584,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         isReadonly: boolean = false,
         extraChildren?: React.ReactNode
     ) => {
-        const isEditing = !isReadonly && canEditSheet && editingCell?.productId === productId && editingCell?.colKey === colKey;
+        const isEditing = !isReadonly && canEditSheet && sheetMode === 'manual_edit' && editingCell?.productId === productId && editingCell?.colKey === colKey;
 
         if (isEditing) {
             return (
@@ -1638,13 +1625,19 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             );
         }
 
-        const effectiveReadonly = isReadonly || !canEditSheet;
+        const effectiveReadonly = isReadonly || !canEditSheet || sheetMode === 'view';
 
         return (
             <td
                 onClick={() => {
                     if (closingRecord?.is_locked) {
                         notify(`La jornada del ${balanceDate} está cerrada y congelada oficialmente. Para modificar registros debes reabrir la jornada contable.`, 'warning');
+                        return;
+                    }
+                    if (sheetMode === 'view') {
+                        if (canEditSheet) {
+                            notify('Estás en la Sábana Oficial (Solo Vista). Para editar celdas o realizar ajustes, activa la "Hoja Manual" en la barra superior.', 'info');
+                        }
                         return;
                     }
                     if (!canEditSheet) {
@@ -1665,7 +1658,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     cursor: effectiveReadonly ? 'default' : 'pointer',
                     userSelect: 'none'
                 }}
-                title={effectiveReadonly ? 'Modo Solo Lectura (Gobernanza Yina Cortés)' : 'Clic para editar este valor'}
+                title={sheetMode === 'view' ? 'Sábana Oficial (Solo Vista) • Conmuta a Hoja Manual para editar' : (effectiveReadonly ? 'Celda calculada de solo lectura' : 'Clic para editar este valor')}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
                     {val !== null ? renderNumericCell(val, decimals) : <span style={{ color: '#94A3B8', fontWeight: '600' }}>-</span>}
@@ -2482,15 +2475,15 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     transition: 'all 0.2s ease-in-out'
                 }}
             >
-                {/* FILA 1: CONTEXTO OPERATIVO, FILTRO DE MOVIMIENTO, BÚSQUEDA Y ACCIONES PRINCIPALES */}
+                {/* LÍNEA 1: CONTEXTO TEMPORAL, MODO DE HOJA, BÚSQUEDA, FILTRO Y ACCIONES */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '0.5rem',
+                    gap: '0.65rem',
                     flexWrap: 'nowrap'
                 }}>
-                    {/* IZQUIERDA: Selector Temporal + Célula + Toggle "Solo con Movimiento" */}
+                    {/* IZQUIERDA: Selector Temporal + Segmented Mode Switch (Sábana Oficial vs Hoja Manual) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
                         {/* Selector de Fecha */}
                         <div style={{
@@ -2542,148 +2535,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             </button>
                         </div>
 
-                        {/* Combobox de Célula */}
-                        <div ref={cellComboboxRef} style={{ position: 'relative' }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsCellComboboxOpen(prev => !prev);
-                                    setCellComboboxSearch('');
-                                }}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '0 0.65rem',
-                                    borderRadius: '8px',
-                                    border: `1px solid ${selectedCell !== 'ALL' ? '#0D7A57' : '#CBD5E1'}`,
-                                    backgroundColor: selectedCell !== 'ALL' ? '#EAEFEA' : '#FFFFFF',
-                                    color: selectedCell !== 'ALL' ? '#0D7A57' : '#1E293B',
-                                    fontWeight: '700',
-                                    fontSize: '0.78rem',
-                                    cursor: 'pointer',
-                                    outline: 'none',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                                    transition: 'all 0.2s',
-                                    height: '32px',
-                                    maxWidth: '180px'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.borderColor = '#0D7A57'}
-                                onMouseLeave={(e) => e.currentTarget.style.borderColor = selectedCell !== 'ALL' ? '#0D7A57' : '#CBD5E1'}
-                                title="Filtrar por Célula / Grupo de Inventario"
-                            >
-                                <span style={{ display: 'flex', alignItems: 'center' }}>
-                                    {selectedCellOption.icon}
-                                </span>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {selectedCellOption.label}
-                                </span>
-                                <ChevronsUpDown size={12} strokeWidth={2} style={{ opacity: 0.6, flexShrink: 0, marginLeft: '2px' }} />
-                            </button>
-
-                            {isCellComboboxOpen && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + 4px)',
-                                    left: 0,
-                                    width: '260px',
-                                    backgroundColor: '#FFFFFF',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                                    border: '1px solid #E2E8F0',
-                                    zIndex: 100,
-                                    padding: '6px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '4px'
-                                }}>
-                                    {/* Buscador interno del Combobox */}
-                                    <div style={{ position: 'relative', padding: '2px 4px 6px 4px', borderBottom: '1px solid #E2E8F0' }}>
-                                        <Search size={13} strokeWidth={2} style={{ position: 'absolute', left: '12px', top: '40%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar célula..."
-                                            value={cellComboboxSearch}
-                                            onChange={(e) => setCellComboboxSearch(e.target.value)}
-                                            autoFocus
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.35rem 0.5rem 0.35rem 1.8rem',
-                                                fontSize: '0.78rem',
-                                                fontWeight: '500',
-                                                borderRadius: '6px',
-                                                border: '1px solid #CBD5E1',
-                                                outline: 'none',
-                                                backgroundColor: '#F8FAF9',
-                                                color: '#0F172A',
-                                                boxSizing: 'border-box'
-                                            }}
-                                            onFocus={(e) => e.currentTarget.style.borderColor = '#0D7A57'}
-                                            onBlur={(e) => e.currentTarget.style.borderColor = '#CBD5E1'}
-                                        />
-                                    </div>
-
-                                    {/* Lista de opciones */}
-                                    <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                        {filteredCellOptions.length === 0 ? (
-                                            <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', color: '#94A3B8' }}>
-                                                No se encontraron células
-                                            </div>
-                                        ) : (
-                                            filteredCellOptions.map((opt) => {
-                                                const isSelected = selectedCell === opt.value;
-                                                return (
-                                                    <button
-                                                        key={opt.value}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setSelectedCell(opt.value);
-                                                            setIsCellComboboxOpen(false);
-                                                        }}
-                                                        style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'space-between',
-                                                            padding: '0.45rem 0.65rem',
-                                                            borderRadius: '6px',
-                                                            border: 'none',
-                                                            backgroundColor: isSelected ? '#EAEFEA' : 'transparent',
-                                                            color: isSelected ? '#0D7A57' : '#1E293B',
-                                                            fontWeight: isSelected ? '700' : '500',
-                                                            fontSize: '0.76rem',
-                                                            cursor: 'pointer',
-                                                            textAlign: 'left',
-                                                            transition: 'all 0.12s ease',
-                                                            width: '100%'
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            if (!isSelected) e.currentTarget.style.backgroundColor = '#F1F5F9';
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
-                                                        }}
-                                                    >
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                                                            <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                                                                {opt.icon}
-                                                            </span>
-                                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {opt.label}
-                                                            </span>
-                                                        </div>
-                                                        {isSelected && (
-                                                            <Check size={14} strokeWidth={2.5} style={{ color: '#0D7A57', flexShrink: 0, marginLeft: '6px' }} />
-                                                        )}
-                                                    </button>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* SEGMENTED CONTROL: Solo con Movimiento vs Todos */}
+                        {/* SWITCH DE MODO: Sábana Oficial (Vista) vs Hoja Manual (Edición / Contingencia) */}
                         <div style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -2697,77 +2549,71 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         }}>
                             <button
                                 type="button"
-                                onClick={() => setOnlyWithMovement(true)}
+                                onClick={() => setSheetMode('view')}
                                 style={{
-                                    padding: '0 0.55rem',
+                                    padding: '0 0.65rem',
                                     height: '100%',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: onlyWithMovement ? '#0D7A57' : 'transparent',
-                                    color: onlyWithMovement ? '#FFFFFF' : '#475569',
-                                    fontSize: '0.72rem',
+                                    backgroundColor: sheetMode === 'view' ? '#0F172A' : 'transparent',
+                                    color: sheetMode === 'view' ? '#FFFFFF' : '#64748B',
+                                    fontSize: '0.73rem',
                                     fontWeight: '800',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '5px',
                                     transition: 'all 0.15s ease',
-                                    boxShadow: onlyWithMovement ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
+                                    boxShadow: sheetMode === 'view' ? '0 1px 3px rgba(15, 23, 42, 0.25)' : 'none'
                                 }}
-                                title="Mostrar exclusivamente familias y productos que registraron movimientos o existencias hoy (Col E a X)"
+                                title="Sábana Oficial: Balance consolidado inmutable para consulta, gerencia y auditoría"
                             >
-                                <Zap size={12} color={onlyWithMovement ? '#FCD34D' : '#0D7A57'} strokeWidth={2.5} />
-                                <span>Con Movimiento</span>
-                                <span style={{
-                                    backgroundColor: onlyWithMovement ? 'rgba(255,255,255,0.22)' : '#E2E8F0',
-                                    color: onlyWithMovement ? '#FFFFFF' : '#0F172A',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    fontSize: '0.64rem',
-                                    fontWeight: '900'
-                                }}>
-                                    {countFamiliesWithMovement}
-                                </span>
+                                <Eye size={13} strokeWidth={2.2} />
+                                <span>Sábana Oficial</span>
                             </button>
 
                             <button
                                 type="button"
-                                onClick={() => setOnlyWithMovement(false)}
+                                onClick={() => handleSwitchMode('manual_edit')}
                                 style={{
-                                    padding: '0 0.55rem',
+                                    padding: '0 0.65rem',
                                     height: '100%',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: !onlyWithMovement ? '#FFFFFF' : 'transparent',
-                                    color: !onlyWithMovement ? '#0F172A' : '#64748B',
-                                    fontSize: '0.72rem',
+                                    backgroundColor: sheetMode === 'manual_edit' ? '#0D7A57' : 'transparent',
+                                    color: sheetMode === 'manual_edit' ? '#FFFFFF' : '#64748B',
+                                    fontSize: '0.73rem',
                                     fontWeight: '800',
-                                    cursor: 'pointer',
+                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px',
+                                    gap: '5px',
                                     transition: 'all 0.15s ease',
-                                    boxShadow: !onlyWithMovement ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                                    boxShadow: sheetMode === 'manual_edit' ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
                                 }}
-                                title="Mostrar todo el catálogo de familias activas"
+                                title={canEditSheet ? "Hoja Manual: Taller de ajustes, contingencias y registros de Yina Cortés" : "Acceso restringido a Jefatura de Inventarios"}
                             >
-                                <span>Todos</span>
-                                <span style={{
-                                    backgroundColor: !onlyWithMovement ? '#F1F5F9' : '#E2E8F0',
-                                    color: !onlyWithMovement ? '#0F172A' : '#64748B',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    fontSize: '0.64rem',
-                                    fontWeight: '800'
-                                }}>
-                                    {dailyFamilies.length}
-                                </span>
+                                <PenTool size={13} strokeWidth={2.2} />
+                                <span>Hoja Manual</span>
+                                {canEditSheet && (
+                                    <span style={{
+                                        backgroundColor: sheetMode === 'manual_edit' ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
+                                        color: sheetMode === 'manual_edit' ? '#FFFFFF' : '#0D7A57',
+                                        padding: '1px 4px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.6rem',
+                                        fontWeight: '900'
+                                    }}>
+                                        Yina
+                                    </span>
+                                )}
                             </button>
                         </div>
                     </div>
 
-                    {/* CENTRO: Buscador Inteligente Potenciado + Contador + Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: 1, minWidth: '220px', maxWidth: '340px' }}>
+                    {/* CENTRO: Buscador Inteligente + Filtro Con Movimiento */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, maxWidth: '440px' }}>
+                        {/* Buscador */}
                         <div style={{ position: 'relative', flex: 1 }}>
                             <div style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
                                 <Search size={14} strokeWidth={1.8} />
@@ -2829,188 +2675,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             )}
                         </div>
 
-                        {/* Contador de Familias Filtradas + Botón Info FUSIONADOS */}
-                        <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            height: '32px',
-                            backgroundColor: (searchQuery || selectedCell !== 'ALL') ? '#EAEFEA' : '#F8FAFC',
-                            color: (searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#64748B',
-                            border: `1px solid ${(searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#CBD5E1'}`,
-                            borderRadius: '8px',
-                            padding: '0 0 0 0.55rem',
-                            fontSize: '0.74rem',
-                            fontWeight: '700',
-                            flexShrink: 0,
-                            position: 'relative',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                            transition: 'all 0.2s ease'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', paddingRight: '0.35rem' }}>
-                                {(searchQuery || selectedCell !== 'ALL') ? <Search size={12} strokeWidth={2} /> : <Database size={12} strokeWidth={2} />}
-                                <span>
-                                    <strong style={{ color: (searchQuery || selectedCell !== 'ALL') ? '#0D7A57' : '#0F172A' }}>{formatNumber(filteredFamilies.length)}</strong>
-                                </span>
-                            </div>
-
-                            <div style={{ width: '1px', height: '16px', backgroundColor: (searchQuery || selectedCell !== 'ALL') ? '#A7D7C5' : '#E2E8F0' }} />
-
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowHelpTooltip(prev => !prev);
-                                }}
-                                style={{
-                                    height: '100%',
-                                    padding: '0 0.5rem',
-                                    border: 'none',
-                                    backgroundColor: showHelpTooltip ? '#0D7A57' : 'transparent',
-                                    color: showHelpTooltip ? '#FFFFFF' : '#0D7A57',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderTopRightRadius: '7px',
-                                    borderBottomRightRadius: '7px',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                title="Ver guía de comandos (@ / #)"
-                            >
-                                <Info size={13} strokeWidth={2.2} />
-                            </button>
-
-                            {/* Dropdown del Tooltip con Backdrop */}
-                            {showHelpTooltip && (
-                                <>
-                                    <div
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowHelpTooltip(false);
-                                        }}
-                                        style={{
-                                            position: 'fixed',
-                                            top: 0,
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0,
-                                            zIndex: 99998,
-                                            cursor: 'default'
-                                        }}
-                                    />
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: 'calc(100% + 6px)',
-                                        right: '0',
-                                        width: '340px',
-                                        backgroundColor: '#111827',
-                                        color: 'white',
-                                        padding: '1.1rem',
-                                        borderRadius: '14px',
-                                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
-                                        zIndex: 99999,
-                                        fontSize: '0.78rem',
-                                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                                        lineHeight: '1.5',
-                                        animation: 'fadeInDown 0.2s ease-out'
-                                    }}>
-                                        <div style={{ fontWeight: '800', color: '#10B981', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Dna size={14} strokeWidth={2} /> COMANDOS DE BÚSQUEDA (@ / #)
-                                            </div>
-                                            <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'normal' }}>Clic para aplicar</span>
-                                        </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px 9px' }}>
-                                            {[
-                                                { tag: '@bajo', desc: 'Bajo stock / Faltante' },
-                                                { tag: '@disponible', desc: 'Stock positivo' },
-                                                { tag: '@agotado', desc: 'Sin stock' },
-                                                { tag: '@sobrantes', desc: 'Con sobrantes (+)' },
-                                                { tag: '@padre', desc: 'Familias / Cabezas' },
-                                                { tag: '@hijo', desc: 'Presentaciones' },
-                                                { tag: '@padrehijo', desc: 'Doble rol (P y H)' },
-                                                { tag: '@fresas', desc: 'Fresas y Moras' },
-                                                { tag: '@hortalizas', desc: 'Hortalizas' },
-                                                { tag: '@verduras', desc: 'Verduras' },
-                                                { tag: '@frutas', desc: 'Frutas y Otros' },
-                                                { tag: '@papas', desc: 'Papas & Plátano' },
-                                                { tag: '#ID', desc: 'ID Contable (#12)' }
-                                            ].map((item, i) => (
-                                                <div
-                                                    key={i}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const cleanTag = item.tag === '#ID' ? '#' : item.tag;
-                                                        setSearchQuery(prev => {
-                                                            if (!prev) return cleanTag;
-                                                            if (prev.toLowerCase().includes(cleanTag.toLowerCase())) return prev;
-                                                            return `${prev}, ${cleanTag}`;
-                                                        });
-                                                    }}
-                                                    style={{
-                                                        cursor: 'pointer',
-                                                        padding: '4px 6px',
-                                                        borderRadius: '6px',
-                                                        backgroundColor: 'rgba(255,255,255,0.05)',
-                                                        transition: 'background 0.15s'
-                                                    }}
-                                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)')}
-                                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)')}
-                                                >
-                                                    <b style={{ color: '#FCD34D' }}>{item.tag}</b>: {item.desc}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
-                                            Tip: Separa múltiples criterios con comas (,). Ej: <code>acelga, @bajo</code>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* DERECHA: Grupos de Acciones Operativas y Excel */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
-                        {/* Indicador de Gobernanza de Edición SoD (Yina Cortés) */}
-                        {canEditSheet ? (
-                            <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                backgroundColor: '#ECFDF5',
-                                border: '1px solid #A7F3D0',
-                                color: '#065F46',
-                                padding: '0 0.6rem',
-                                height: '32px',
-                                borderRadius: '8px',
-                                fontSize: '0.72rem',
-                                fontWeight: '800',
-                                boxShadow: '0 1px 2px rgba(16, 185, 129, 0.08)'
-                            }} title="Permiso de edición activo: Jefatura de Inventarios (Yina Cortés) / Administrador">
-                                <ShieldCheck size={14} color="#059669" strokeWidth={2.5} />
-                                <span>Edición Autorizada (Yina Cortés)</span>
-                            </div>
-                        ) : (
-                            <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                backgroundColor: '#F8FAFC',
-                                border: '1px solid #E2E8F0',
-                                color: '#64748B',
-                                padding: '0 0.6rem',
-                                height: '32px',
-                                borderRadius: '8px',
-                                fontSize: '0.72rem',
-                                fontWeight: '800'
-                            }} title="Sábana maestra en modo estricto de solo lectura. Solo modificable bajo supervisión de Yina Cortés.">
-                                <Lock size={13} color="#64748B" strokeWidth={2.2} />
-                                <span>Solo Lectura</span>
-                            </div>
-                        )}
-
-                        {/* Grupo 1: Registro de Novedades (Segmented Pill Group) */}
+                        {/* Segmented Control Con Movimiento / Todos */}
                         <div style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -3020,180 +2685,284 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             border: '1px solid #CBD5E1',
                             boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                             height: '32px',
-                            boxSizing: 'border-box'
+                            boxSizing: 'border-box',
+                            flexShrink: 0
                         }}>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!canEditSheet) {
-                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar mermas desde la sábana maestra.', 'warning');
-                                        return;
-                                    }
-                                    setIsWasteModalOpen(true);
-                                }}
+                                onClick={() => setOnlyWithMovement(true)}
                                 style={{
-                                    padding: '0 0.65rem',
+                                    padding: '0 0.55rem',
                                     height: '100%',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: canEditSheet ? '#0D7A57' : '#94A3B8',
-                                    color: '#FFFFFF',
-                                    fontSize: '0.74rem',
+                                    backgroundColor: onlyWithMovement ? '#0D7A57' : 'transparent',
+                                    color: onlyWithMovement ? '#FFFFFF' : '#475569',
+                                    fontSize: '0.72rem',
                                     fontWeight: '800',
+                                    cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '4px',
-                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.15s ease',
-                                    boxShadow: canEditSheet ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
+                                    boxShadow: onlyWithMovement ? '0 1px 3px rgba(13, 122, 87, 0.3)' : 'none'
                                 }}
-                                onMouseEnter={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#0A5F43'; }}
-                                onMouseLeave={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#0D7A57'; }}
-                                title="Registrar Merma / Novedad (Jefatura de Inventario)"
+                                title="Mostrar familias con movimiento hoy"
                             >
-                                <Plus size={13} strokeWidth={2.5} />
-                                <span>+ Merma</span>
+                                <Zap size={11} color={onlyWithMovement ? '#FCD34D' : '#0D7A57'} strokeWidth={2.5} />
+                                <span>Con Mov.</span>
+                                <span style={{
+                                    backgroundColor: onlyWithMovement ? 'rgba(255,255,255,0.22)' : '#E2E8F0',
+                                    color: onlyWithMovement ? '#FFFFFF' : '#0F172A',
+                                    padding: '1px 4px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.62rem',
+                                    fontWeight: '900'
+                                }}>
+                                    {countFamiliesWithMovement}
+                                </span>
                             </button>
 
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!canEditSheet) {
-                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar descuentos de nómina.', 'warning');
-                                        return;
-                                    }
-                                    setIsPayrollModalOpen(true);
-                                }}
+                                onClick={() => setOnlyWithMovement(false)}
                                 style={{
                                     padding: '0 0.55rem',
                                     height: '100%',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: 'transparent',
-                                    color: '#334155',
-                                    fontSize: '0.74rem',
-                                    fontWeight: '700',
+                                    backgroundColor: !onlyWithMovement ? '#FFFFFF' : 'transparent',
+                                    color: !onlyWithMovement ? '#0F172A' : '#64748B',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px',
-                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
-                                    transition: 'all 0.15s ease'
+                                    gap: '3px',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: !onlyWithMovement ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
                                 }}
-                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
-                                title="Descuento de Nómina a Empleados (Columna N)"
+                                title="Mostrar todo el catálogo de familias"
                             >
-                                <User size={13} color="#2563EB" strokeWidth={2} />
-                                <span>Nómina</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!canEditSheet) {
-                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar ventas extra.', 'warning');
-                                        return;
-                                    }
-                                    setIsAdditionalSalesModalOpen(true);
-                                }}
-                                style={{
-                                    padding: '0 0.55rem',
-                                    height: '100%',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    color: '#334155',
-                                    fontSize: '0.74rem',
-                                    fontWeight: '700',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
-                                title="Venta Extra / Mostrador (Columna M)"
-                            >
-                                <ShoppingCart size={13} color="#7E22CE" strokeWidth={2} />
-                                <span>Extra</span>
+                                <span>Todos</span>
+                                <span style={{
+                                    backgroundColor: !onlyWithMovement ? '#F1F5F9' : '#E2E8F0',
+                                    color: !onlyWithMovement ? '#0F172A' : '#64748B',
+                                    padding: '1px 4px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.62rem',
+                                    fontWeight: '800'
+                                }}>
+                                    {dailyFamilies.length}
+                                </span>
                             </button>
                         </div>
+                    </div>
 
-                        {/* Grupo 0: Cierre Diario Oficial & Congelación Contable (SPEC.md v1.5.0) */}
-                        {closingRecord?.is_locked ? (
-                            <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                backgroundColor: '#DCFCE7',
-                                border: '1px solid #16A34A',
-                                color: '#15803D',
-                                padding: '0 0.6rem',
-                                height: '32px',
-                                borderRadius: '8px',
-                                fontSize: '0.74rem',
-                                fontWeight: '800'
-                            }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
-                                <Lock size={13} strokeWidth={2.5} />
-                                <span>Cerrado</span>
-                                {canEditSheet && (
-                                    <button
-                                        type="button"
-                                        onClick={handleReopenClosing}
-                                        style={{
-                                            marginLeft: '3px',
-                                            background: 'none',
-                                            border: 'none',
-                                            color: '#15803D',
-                                            cursor: 'pointer',
-                                            fontSize: '0.68rem',
-                                            textDecoration: 'underline',
-                                            fontWeight: 'bold',
-                                            padding: '0'
-                                        }}
-                                        title="Reabrir jornada contable para permitir ajustes (Jefatura de Inventario)"
-                                    >
-                                        (Reabrir)
-                                    </button>
-                                )}
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!canEditSheet) {
-                                        notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden realizar el cierre oficial.', 'warning');
-                                        return;
-                                    }
-                                    setIsClosingModalOpen(true);
-                                }}
-                                style={{
-                                    padding: '0 0.65rem',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #15803D',
-                                    backgroundColor: canEditSheet ? '#16A34A' : '#94A3B8',
-                                    color: '#FFFFFF',
-                                    fontSize: '0.74rem',
-                                    fontWeight: '800',
+                    {/* DERECHA: ACCIONES DEPENDIENTES DEL MODO */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                        {sheetMode === 'manual_edit' ? (
+                            /* MODO EDICIÓN: Herramientas de Registro y Ajuste Operacional (Merma, Nómina, Extra, Carga Excel) */
+                            <>
+                                <div style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '5px',
-                                    cursor: canEditSheet ? 'pointer' : 'not-allowed',
-                                    boxShadow: canEditSheet ? '0 1px 3px rgba(22, 163, 74, 0.3)' : 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#15803D'; }}
-                                onMouseLeave={e => { if (canEditSheet) e.currentTarget.style.backgroundColor = '#16A34A'; }}
-                                title="Realizar Cierre Diario Oficial y congelar balance contable"
-                            >
-                                <Lock size={13} strokeWidth={2.5} />
-                                <span>Cierre Diario</span>
-                            </button>
+                                    backgroundColor: '#FEF3C7',
+                                    border: '1px solid #FDE68A',
+                                    borderRadius: '8px',
+                                    padding: '2px',
+                                    height: '32px',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!canEditSheet) {
+                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar mermas.', 'warning');
+                                                return;
+                                            }
+                                            setIsWasteModalOpen(true);
+                                        }}
+                                        style={{
+                                            padding: '0 0.55rem',
+                                            height: '100%',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            backgroundColor: '#D97706',
+                                            color: '#FFFFFF',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Registrar Merma / Baja de Producto (Cols P, Q, R)"
+                                    >
+                                        <Plus size={12} strokeWidth={2.5} />
+                                        <span>+ Merma</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!canEditSheet) {
+                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar descuentos de nómina.', 'warning');
+                                                return;
+                                            }
+                                            setIsPayrollModalOpen(true);
+                                        }}
+                                        style={{
+                                            padding: '0 0.55rem',
+                                            height: '100%',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            backgroundColor: 'transparent',
+                                            color: '#1E293B',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '700',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Descuento de Nómina a Empleados (Columna N)"
+                                    >
+                                        <User size={12} color="#2563EB" strokeWidth={2.2} />
+                                        <span>Nómina</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!canEditSheet) {
+                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden registrar ventas extra.', 'warning');
+                                                return;
+                                            }
+                                            setIsAdditionalSalesModalOpen(true);
+                                        }}
+                                        style={{
+                                            padding: '0 0.55rem',
+                                            height: '100%',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            backgroundColor: 'transparent',
+                                            color: '#1E293B',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '700',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Venta Extra / Mostrador (Columna M)"
+                                    >
+                                        <ShoppingCart size={12} color="#7E22CE" strokeWidth={2.2} />
+                                        <span>Extra</span>
+                                    </button>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setIsExcelImportModalOpen(true)}
+                                    style={{
+                                        padding: '0 0.55rem',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #BFDBFE',
+                                        backgroundColor: '#EFF6FF',
+                                        color: '#1D4ED8',
+                                        fontSize: '0.73rem',
+                                        fontWeight: '800',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    title="Cargar / Simular Operación Diaria desde Excel (.xlsx)"
+                                >
+                                    <Upload size={12} strokeWidth={2.2} />
+                                    <span>Cargar Excel</span>
+                                </button>
+                            </>
+                        ) : (
+                            /* MODO VISTA: Cierre Oficial & Gobernanza */
+                            <>
+                                {closingRecord?.is_locked ? (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        backgroundColor: '#DCFCE7',
+                                        border: '1px solid #16A34A',
+                                        color: '#15803D',
+                                        padding: '0 0.6rem',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.73rem',
+                                        fontWeight: '800'
+                                    }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
+                                        <Lock size={12} strokeWidth={2.5} />
+                                        <span>Cerrado</span>
+                                        {canEditSheet && (
+                                            <button
+                                                type="button"
+                                                onClick={handleReopenClosing}
+                                                style={{
+                                                    marginLeft: '3px',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#15803D',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.66rem',
+                                                    textDecoration: 'underline',
+                                                    padding: 0
+                                                }}
+                                            >
+                                                (Reabrir)
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!canEditSheet) {
+                                                notify('Solo la jefatura de inventarios (Yina Cortés) o administradores pueden congelar el cierre oficial del día.', 'warning');
+                                                return;
+                                            }
+                                            setIsClosingModalOpen(true);
+                                        }}
+                                        style={{
+                                            padding: '0 0.6rem',
+                                            height: '32px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            backgroundColor: canEditSheet ? '#16A34A' : '#94A3B8',
+                                            color: '#FFFFFF',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: canEditSheet ? 'pointer' : 'not-allowed',
+                                            boxShadow: canEditSheet ? '0 1px 3px rgba(22, 163, 74, 0.3)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title={canEditSheet ? "Congelar y cerrar balance oficial del día" : "Solo supervisión autorizada puede cerrar jornada"}
+                                    >
+                                        <Lock size={12} strokeWidth={2.2} />
+                                        <span>Cerrar Día</span>
+                                    </button>
+                                )}
+                            </>
                         )}
 
-                        {/* Grupo 2: Excel y Refrescar */}
+                        {/* Acciones comunes: Exportar Excel + Refrescar */}
                         <div style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -3216,7 +2985,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     border: 'none',
                                     backgroundColor: '#ECFDF5',
                                     color: '#0D7A57',
-                                    fontSize: '0.74rem',
+                                    fontSize: '0.73rem',
                                     fontWeight: '800',
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -3230,32 +2999,6 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             >
                                 <FileSpreadsheet size={13} color="#0D7A57" strokeWidth={2} />
                                 <span>Excel</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setIsExcelImportModalOpen(true)}
-                                style={{
-                                    padding: '0 0.55rem',
-                                    height: '100%',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    backgroundColor: '#EFF6FF',
-                                    color: '#1D4ED8',
-                                    fontSize: '0.74rem',
-                                    fontWeight: '800',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#DBEAFE')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
-                                title="Cargar / Simular Operación Diaria desde Excel (.xlsx)"
-                            >
-                                <Upload size={13} color="#1D4ED8" strokeWidth={2} />
-                                <span>Cargar Excel</span>
                             </button>
 
                             <div style={{ width: '1px', height: '16px', backgroundColor: '#E2E8F0', margin: '0 1px' }} />
@@ -3286,106 +3029,102 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     </div>
                 </div>
 
-                {/* BARRA DE FILTRO RÁPIDO POR CÉLULA DE TRABAJO (RESOLUCIÓN GRILL-ME / ACUERDO 1) */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    overflowX: 'auto',
-                    padding: '6px 0 3px 0',
-                    scrollbarWidth: 'none',
-                    borderTop: '1px solid #F1F5F9',
-                    borderBottom: '1px solid #F1F5F9'
-                }}>
-                    {cellOptions.map(opt => {
-                        const isSelected = selectedCell === opt.value;
-                        const count = opt.value === 'ALL'
-                            ? dailyFamilies.length
-                            : dailyFamilies.filter(f => (f.consolidated.colC_inventoryGroup || '').toUpperCase().includes(opt.value.toUpperCase())).length;
-
-                        return (
-                            <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => setSelectedCell(opt.value)}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    padding: '3px 9px',
-                                    borderRadius: '20px',
-                                    border: isSelected ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
-                                    backgroundColor: isSelected ? '#0D7A57' : '#FFFFFF',
-                                    color: isSelected ? '#FFFFFF' : '#334155',
-                                    fontSize: '0.73rem',
-                                    fontWeight: isSelected ? '800' : '600',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.2)' : '0 1px 2px rgba(0,0,0,0.02)',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                {opt.icon}
-                                <span>{opt.label.replace(/\(\d+\)/, '')}</span>
-                                <span style={{
-                                    padding: '1px 5px',
-                                    borderRadius: '10px',
-                                    fontSize: '0.62rem',
-                                    backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#F1F5F9',
-                                    color: isSelected ? '#FFFFFF' : '#64748B',
-                                    fontWeight: '800'
-                                }}>
-                                    {count}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* FILA 2: CONTROLES DE VISTA Y NAVEGADOR DE 24 COLUMNAS (SALTAR A BLOQUE) */}
+                {/* LÍNEA 2: CÉLULAS DE TRABAJO (ÚNICA FUENTE) + DENSIDAD + SALTO A BLOQUE */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '0.55rem',
-                    flexWrap: 'nowrap'
+                    gap: '0.6rem',
+                    paddingTop: '3px',
+                    borderTop: '1px solid #F1F5F9'
                 }}>
-                    {/* IZQUIERDA: Herramientas de Árbol y Densidad */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                    {/* IZQUIERDA: Chips de Células de Trabajo */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        overflowX: 'auto',
+                        scrollbarWidth: 'none',
+                        flex: 1
+                    }}>
+                        {cellOptions.map(opt => {
+                            const isSelected = selectedCell === opt.value;
+                            const count = opt.value === 'ALL'
+                                ? dailyFamilies.length
+                                : dailyFamilies.filter(f => (f.consolidated.colC_inventoryGroup || '').toUpperCase().includes(opt.value.toUpperCase())).length;
+
+                            return (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => setSelectedCell(opt.value)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        padding: '2px 8px',
+                                        borderRadius: '20px',
+                                        border: isSelected ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                        backgroundColor: isSelected ? '#0D7A57' : '#FFFFFF',
+                                        color: isSelected ? '#FFFFFF' : '#334155',
+                                        fontSize: '0.72rem',
+                                        fontWeight: isSelected ? '800' : '600',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: isSelected ? '0 1px 3px rgba(13, 122, 87, 0.2)' : 'none',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    {opt.icon}
+                                    <span>{opt.label.replace(/\(\d+\)/, '')}</span>
+                                    <span style={{
+                                        padding: '1px 5px',
+                                        borderRadius: '10px',
+                                        fontSize: '0.62rem',
+                                        backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#F1F5F9',
+                                        color: isSelected ? '#FFFFFF' : '#64748B',
+                                        fontWeight: '800'
+                                    }}>
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* DERECHA: Herramientas de Vista (Expandir/Colapsar, Cols A-D) + Dropdown Saltar a Bloque + Flechas paso a paso */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
                         {/* Toggle expandir / colapsar familias */}
                         <button
                             type="button"
                             onClick={toggleAllFamilies}
                             style={{
-                                padding: '0 0.6rem',
+                                padding: '0 0.55rem',
                                 height: '28px',
                                 borderRadius: '6px',
                                 border: '1px solid #CBD5E1',
                                 backgroundColor: '#FFFFFF',
                                 color: '#334155',
-                                fontSize: '0.72rem',
-                                fontWeight: '800',
+                                fontSize: '0.71rem',
+                                fontWeight: '700',
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '5px',
-                                flexShrink: 0,
+                                gap: '4px',
                                 boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                 transition: 'all 0.15s ease'
                             }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFFFF'}
                             title={allCollapsed ? "Expandir todas las presentaciones hijas" : "Colapsar todas las familias a vista compacta"}
                         >
                             {allCollapsed ? <FolderPlus size={12} color="#0D7A57" strokeWidth={2.2} /> : <FolderMinus size={12} color="#D97706" strokeWidth={2.2} />}
-                            <span>{allCollapsed ? "Expandir Todo" : "Colapsar Todo"}</span>
+                            <span>{allCollapsed ? "Expandir" : "Colapsar"}</span>
                         </button>
 
                         {/* Toggle Columnas A-D Compacto */}
                         <button
                             type="button"
                             onClick={() => setIsCompactIdentification(!isCompactIdentification)}
-                            title={isCompactIdentification ? "Cambiar a vista de 4 columnas separadas (A: Fecha, B: ID, C: Célula, D: Producto)" : "Modo Compacto: Fusiona A-D en una sola columna de 220px (Ahorra hasta 170px para ver más datos)"}
+                            title={isCompactIdentification ? "Cambiar a vista de 4 columnas separadas (A: Fecha, B: ID, C: Célula, D: Producto)" : "Modo Compacto: Fusiona A-D en una sola columna de 220px (Ahorra hasta 170px)"}
                             style={{
                                 padding: '0 0.55rem',
                                 height: '28px',
@@ -3393,236 +3132,58 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 border: isCompactIdentification ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
                                 backgroundColor: isCompactIdentification ? '#ECFDF5' : '#FFFFFF',
                                 color: isCompactIdentification ? '#0D7A57' : '#64748B',
-                                fontSize: '0.72rem',
-                                fontWeight: '800',
+                                fontSize: '0.71rem',
+                                fontWeight: '700',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '5px',
+                                gap: '4px',
                                 cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                flexShrink: 0
+                                transition: 'all 0.15s ease'
                             }}
-                            onMouseEnter={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
-                            onMouseLeave={e => { if (!isCompactIdentification) e.currentTarget.style.backgroundColor = isCompactIdentification ? '#ECFDF5' : '#FFFFFF'; }}
                         >
                             <Columns size={12} color={isCompactIdentification ? '#0D7A57' : '#64748B'} strokeWidth={2.2} />
                             <span>{isCompactIdentification ? 'A-D Compacto' : 'Cols A-D'}</span>
-                            {isCompactIdentification && (
-                                <span style={{ fontSize: '0.58rem', backgroundColor: '#D1FAE5', color: '#065F46', padding: '1px 4px', borderRadius: '3px', fontWeight: '800' }}>
-                                    -170px
-                                </span>
-                            )}
                         </button>
 
-                        {!isCompactIdentification && (
-                            <button
-                                type="button"
-                                onClick={() => setCellColumnMode(prev => (isCellCollapsed ? 'expanded' : 'collapsed'))}
-                                title={isCellCollapsed ? "Célula colapsada a icono + inicial (ahorra 86px). Clic para expandir." : "Colapsar Célula a Icono + Inicial (ahorra 86px)"}
-                                style={{
-                                    padding: '0 0.55rem',
-                                    height: '28px',
-                                    borderRadius: '6px',
-                                    border: isCellCollapsed ? '1px solid #FDE68A' : '1px solid #CBD5E1',
-                                    backgroundColor: isCellCollapsed ? '#FEF3C7' : '#FFFFFF',
-                                    color: isCellCollapsed ? '#92400E' : '#64748B',
-                                    fontSize: '0.72rem',
-                                    fontWeight: '700',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease',
-                                    flexShrink: 0
+                        {/* Dropdown Compacto: Saltar a Bloque de 24 Columnas */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            padding: '0 0.4rem',
+                            height: '28px',
+                            gap: '4px'
+                        }}>
+                            <Layers size={12} color="#0D7A57" strokeWidth={2.2} />
+                            <select
+                                value={activeBlock || ''}
+                                onChange={(e) => {
+                                    const val = e.target.value as ColumnBlockId;
+                                    if (val) scrollToColumnGroup(val);
                                 }}
-                                onMouseEnter={e => { if (!isCellCollapsed) e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
-                                onMouseLeave={e => { if (!isCellCollapsed) e.currentTarget.style.backgroundColor = isCellCollapsed ? '#FEF3C7' : '#FFFFFF'; }}
+                                style={{
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    fontSize: '0.71rem',
+                                    fontWeight: '700',
+                                    color: '#334155',
+                                    cursor: 'pointer',
+                                    outline: 'none',
+                                    paddingRight: '2px'
+                                }}
                             >
-                                <Sprout size={12} color={isCellCollapsed ? '#92400E' : '#64748B'} strokeWidth={2} />
-                                <span>{isCellCollapsed ? 'Célula: Inicial' : 'Célula: Completa'}</span>
-                            </button>
-                        )}
-                    </div>
-
-                    {/* DERECHA: NAVEGADOR DE BLOQUES DE COLUMNAS (SALTAR A BLOQUE) */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        padding: '2px 4px',
-                        backgroundColor: '#F8FAFC',
-                        borderRadius: '8px',
-                        border: '1px solid #CBD5E1',
-                        height: '30px',
-                        boxSizing: 'border-box',
-                        overflowX: 'auto',
-                        whiteSpace: 'nowrap'
-                    }}>
-                        <span style={{ color: '#64748B', fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 3px', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <Layers size={12} color="#0D7A57" />
-                            <span>Saltar a Bloque:</span>
-                        </span>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('identificacion')}
-                            title="Ir a columnas de Identificación (Cols A - D)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'identificacion' ? '1.5px solid #64748B' : '1px solid #CBD5E1',
-                                backgroundColor: activeBlock === 'identificacion' ? '#F1F5F9' : '#FFFFFF',
-                                color: '#334155',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'identificacion' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <FileText size={11} color="#475569" />
-                            <span>Identificación (A-D)</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('entradas')}
-                            title="Centrar en pantalla columnas de Entradas y Compras (Cols E - G)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'entradas' ? '1.5px solid #16A34A' : '1px solid #86EFAC',
-                                backgroundColor: activeBlock === 'entradas' ? '#DCFCE7' : '#F0FDF4',
-                                color: '#15803D',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'entradas' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <ArrowDownToLine size={11} color="#15803D" />
-                            <span>Entradas (E-G)</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('ventas')}
-                            title="Centrar en pantalla columnas de Ventas y Pedidos (Cols H - J)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'ventas' ? '1.5px solid #2563EB' : '1px solid #93C5FD',
-                                backgroundColor: activeBlock === 'ventas' ? '#DBEAFE' : '#EFF6FF',
-                                color: '#1D4ED8',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'ventas' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <ShoppingCart size={11} color="#1D4ED8" />
-                            <span>Ventas (H-J)</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('excepciones')}
-                            title="Centrar en pantalla columnas de Excepciones y Ventas Extras (Cols K - N)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'excepciones' ? '1.5px solid #9333EA' : '1px solid #D8B4FE',
-                                backgroundColor: activeBlock === 'excepciones' ? '#F3E8FF' : '#FAF5FF',
-                                color: '#7E22CE',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'excepciones' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <AlertTriangle size={11} color="#7E22CE" />
-                            <span>Excepciones (K-N)</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('mermas')}
-                            title="Centrar en pantalla columnas de Devoluciones y Mermas (Cols O - R)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'mermas' ? '1.5px solid #D97706' : '1px solid #FCD34D',
-                                backgroundColor: activeBlock === 'mermas' ? '#FEF3C7' : '#FFFBEB',
-                                color: '#B45309',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'mermas' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <Trash2 size={11} color="#B45309" />
-                            <span>Mermas (O-R)</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('cierre')}
-                            title="Centrar en pantalla columnas de Cierre y Bodega Post-10 (Cols S - U)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'cierre' ? '1.5px solid #0D9488' : '1px solid #5EEAD4',
-                                backgroundColor: activeBlock === 'cierre' ? '#CCFBF1' : '#F0FDFA',
-                                color: '#0F766E',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'cierre' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <Package size={11} color="#0F766E" />
-                            <span>Cierre & Bodega (S-U)</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => scrollToColumnGroup('conciliacion')}
-                            title="Centrar en pantalla columnas de Conciliación y Diferencias (Cols V - X)"
-                            style={{
-                                padding: '2px 7px',
-                                borderRadius: '5px',
-                                border: activeBlock === 'conciliacion' ? '1.5px solid #059669' : '1px solid #6EE7B7',
-                                backgroundColor: activeBlock === 'conciliacion' ? '#D1FAE5' : '#ECFDF5',
-                                color: '#065F46',
-                                cursor: 'pointer',
-                                fontSize: '0.7rem',
-                                fontWeight: activeBlock === 'conciliacion' ? '800' : '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <Scale size={11} color="#065F46" />
-                            <span>Conciliación (V-X)</span>
-                        </button>
+                                <option value="" disabled>⚓ Ir a Bloque...</option>
+                                <option value="identificacion">A-D: Identificación</option>
+                                <option value="entradas">E-G: Entradas & Compras</option>
+                                <option value="ventas">H-J: Ventas & Pedidos</option>
+                                <option value="excepciones">K-N: Novedades & Nómina</option>
+                                <option value="mermas">P-R: Mermas & Bajas</option>
+                                <option value="cierre">S-U: Saldo Teórico & Físico</option>
+                                <option value="conciliacion">V-X: Faltantes & Sobrantes</option>
+                            </select>
+                        </div>
 
                         {/* Flechas de desplazamiento lateral paso a paso */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '2px' }}>

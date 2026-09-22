@@ -508,6 +508,25 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 1. Los cálculos de Compras (Col G), Ventas (Cols H, I, J) y Devoluciones de Ruta (Col O) se calculan por **agregación determinista SQL** a partir de los eventos operativos reales generados en `/ops/compras`, `/admin/commercial/billing` y `/ops/driver/delivery/[id]`.
 2. Queda terminantemente prohibido que una modificación manual sobreescriba o destruya las transacciones originales del motor operativo.
 
+#### 8.8.4 Arquitectura Dual: Sábana Oficial (Modo Vista) vs Hoja Manual (Modo Edición / Contingencia) & Toolbar Enterprise
+1. **Segregación Estricta de Modos de Operación:**
+   - **🔒 Sábana Oficial (Modo Vista / Auditoría):**
+     - Destinado a consulta directiva, gerencial, comercial y de auditoría general.
+     - **Inmutabilidad Absoluta:** Todas las celdas de las 24 columnas se comportan como estado de cuenta financiero estrictamente de solo lectura.
+     - **Limpieza Visual Total:** Se ocultan todos los controles de taller o contingencia (`+ Merma`, `Nómina`, `Extra`, `Carga Masiva Excel`).
+     - **Acciones Disponibles:** Selector de fecha, switch de modo, buscador, filtro de movimiento, `Exportar Excel` y `Cierre Diario` (o indicador `Cerrado`).
+   - **📝 Hoja Manual (Modo Edición / Contingencia):**
+     - Destinado exclusivamente a la Jefatura de Inventario (**Yina Cortés**) y Administradores para contingencias operacionales, ajustes masivos y correcciones de balance.
+     - **Desbloqueo de Herramientas de Ajuste Operativo:** La barra superior activa el kit de recursos:
+       - `+ Merma` (Cols P, Q, R): Registro de mermas por pesaje, desperdicio y descapote.
+       - `Nómina` (Col N): Descuento de ventas a colaboradores para Talento Humano.
+       - `Extra` (Col M): Registro de ventas mostrador no programadas.
+       - `Carga Masiva Excel`: Simulación o ingesta por archivo `.xlsx`.
+     - **Edición Inline de Celdas:** Permite afinar números fila por fila con navegación por teclado (`Enter`, `Tab`, `Escape`) y auto-selección de texto.
+2. **Consolidación Ergonómica en 2 Líneas (Toolbar Enterprise):**
+   - **Línea 1 (Master Bar - 38px):** Fecha con botón "Hoy", Switch de Modo (`Sábana Oficial` vs `Hoja Manual`), Buscador (#ID, @tag, texto), Filtro "Con Mov. / Todos", y acciones contextuales por modo.
+   - **Línea 2 (Cell & Navigation Bar - 30px):** Filtros rápidos de células de trabajo (única fuente con conteos en tiempo real), toggle de densidad (`Expandir/Colapsar`, `A-D Compacto`), selector desplegable de navegación (`⚓ Ir a Bloque...`) y flechas de desplazamiento horizontal paso a paso.
+
 ---
 
 ## 9. Módulo de Operaciones (Ops): Trazabilidad Física End-to-End & Circuito Cerrado con Pedidos, Transporte e Inventario
