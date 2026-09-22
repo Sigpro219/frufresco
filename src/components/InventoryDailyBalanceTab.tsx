@@ -3246,8 +3246,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     ref={tableScrollRef}
                     onScroll={handleTableScroll}
                     style={{ 
+                        maxHeight: 'calc(100vh - 210px)',
                         overflowX: 'auto', 
-                        overflowY: 'visible',
+                        overflowY: 'auto',
                         position: 'relative',
                         WebkitOverflowScrolling: 'touch'
                     }}
@@ -3260,16 +3261,18 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             zIndex: 40, 
                             backgroundColor: '#0F172A', 
                             color: '#F8FAFC',
-                            boxShadow: '0 4px 10px -2px rgba(0, 0, 0, 0.15)'
+                            boxShadow: '0 4px 10px -2px rgba(0, 0, 0, 0.25)'
                         }}>
-                            <tr>
+                            <tr style={{ height: '32px' }}>
                                 <th 
                                     data-block-id="identificacion"
                                     colSpan={isCompactIdentification ? 1 : 4} 
                                     onClick={() => scrollToColumnGroup('identificacion')}
                                     title="Clic para enfocar Identificación"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B', 
@@ -3277,8 +3280,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         borderTop: '3px solid #64748B',
                                         fontWeight: '800', 
                                         position: 'sticky',
+                                        top: 0,
                                         left: 0,
-                                        zIndex: 45,
+                                        zIndex: 55,
                                         width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
                                         maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
@@ -3304,18 +3308,23 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     onClick={() => scrollToColumnGroup('entradas')}
                                     title="Clic para centrar Entradas (+)"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #10B981',
                                         fontWeight: '800', 
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 40,
                                         cursor: 'pointer'
                                     }}
                                 >
                                     <span style={{ 
-                                        backgroundColor: 'rgba(16, 185, 129, 0.18)', 
+                                        backgroundColor: 'rgba(160, 185, 129, 0.18)', 
                                         color: '#34D399', 
                                         padding: '2px 8px', 
                                         borderRadius: '5px', 
@@ -3331,13 +3340,18 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     onClick={() => scrollToColumnGroup('ventas')}
                                     title="Clic para centrar Ventas & Pedidos (-)"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #3B82F6',
                                         fontWeight: '800', 
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 40,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3358,13 +3372,18 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     onClick={() => scrollToColumnGroup('excepciones')}
                                     title="Clic para centrar Excepciones"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #A855F7',
                                         fontWeight: '800', 
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 40,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3385,13 +3404,18 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     onClick={() => scrollToColumnGroup('mermas')}
                                     title="Clic para centrar Devoluciones & Mermas"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #F59E0B',
                                         fontWeight: '800', 
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 40,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3412,13 +3436,18 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     onClick={() => scrollToColumnGroup('cierre')}
                                     title="Clic para centrar Cierre & Bodega"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderRight: '2px solid #334155', 
                                         borderTop: '3px solid #0D9488',
                                         fontWeight: '800', 
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 40,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3439,12 +3468,17 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     onClick={() => scrollToColumnGroup('conciliacion')}
                                     title="Clic para centrar Conciliación"
                                     style={{ 
-                                        padding: '7px 10px', 
+                                        height: '32px',
+                                        boxSizing: 'border-box',
+                                        padding: '5px 10px', 
                                         textAlign: 'center', 
                                         backgroundColor: '#0F172A', 
                                         borderBottom: '1px solid #1E293B',
                                         borderTop: '3px solid #0D7A57',
                                         fontWeight: '800', 
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 40,
                                         cursor: 'pointer'
                                     }}
                                 >
@@ -3462,12 +3496,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             </tr>
 
                             {/* Cabecera Nivel 2: Nombres exactos de las columnas */}
-                            <tr style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: '2px solid #334155' }}>
+                            <tr style={{ height: '32px', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: '2px solid #334155' }}>
                                 {/* Sticky A, B, C, D (Compacto o Tradicional) */}
                                 {isCompactIdentification ? (
                                     <th 
                                         data-sticky-last="true"
                                         style={{
+                                            height: '32px',
+                                            boxSizing: 'border-box',
                                             padding: '6px 8px',
                                             textAlign: 'left',
                                             width: '240px',
@@ -3475,8 +3511,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                             maxWidth: '240px',
                                             borderRight: '2px solid #334155',
                                             position: 'sticky',
+                                            top: '32px',
                                             left: 0,
-                                            zIndex: 45,
+                                            zIndex: 55,
                                             backgroundColor: '#0F172A',
                                             boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
                                             fontSize: '0.7rem',
@@ -3490,20 +3527,23 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </th>
                                 ) : (
                                     <>
-                                        <th style={{ padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: 'sticky', left: 0, zIndex: 45, backgroundColor: '#0F172A' }}>A: Fecha</th>
-                                        <th style={{ padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', left: '85px', zIndex: 45, backgroundColor: '#0F172A' }}>B: ID Prod</th>
+                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '85px', minWidth: '85px', maxWidth: '85px', position: 'sticky', top: '32px', left: 0, zIndex: 55, backgroundColor: '#0F172A' }}>A: Fecha</th>
+                                        <th style={{ height: '32px', boxSizing: 'border-box', padding: '6px 8px', textAlign: 'center', width: '70px', minWidth: '70px', maxWidth: '70px', position: 'sticky', top: '32px', left: '85px', zIndex: 55, backgroundColor: '#0F172A' }}>B: ID Prod</th>
                                         <th 
                                             onClick={() => setCellColumnMode(prev => prev === 'collapsed' ? 'expanded' : 'collapsed')}
                                             title={isCellCollapsed ? "C: Célula colapsada (Clic para expandir nombre completo)" : "C: Célula (Clic para colapsar y maximizar espacio de datos)"}
                                             style={{ 
+                                                height: '32px',
+                                                boxSizing: 'border-box',
                                                 padding: isCellCollapsed ? '6px 4px' : '6px 8px', 
                                                 textAlign: isCellCollapsed ? 'center' : 'left', 
                                                 width: isCellCollapsed ? '44px' : '130px', 
                                                 minWidth: isCellCollapsed ? '44px' : '130px', 
                                                 maxWidth: isCellCollapsed ? '44px' : '130px', 
                                                 position: 'sticky', 
+                                                top: '32px',
                                                 left: '155px', 
-                                                zIndex: 45, 
+                                                zIndex: 55, 
                                                 backgroundColor: '#0F172A', 
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
@@ -3525,6 +3565,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                         <th 
                                             data-sticky-last="true"
                                             style={{ 
+                                                height: '32px',
+                                                boxSizing: 'border-box',
                                                 padding: '6px 10px', 
                                                 textAlign: 'left', 
                                                 width: '190px', 
@@ -3532,8 +3574,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                                 maxWidth: '190px', 
                                                 borderRight: '2px solid #334155', 
                                                 position: 'sticky', 
+                                                top: '32px',
                                                 left: isCellCollapsed ? '199px' : '285px', 
-                                                zIndex: 45, 
+                                                zIndex: 55, 
                                                 backgroundColor: '#0F172A', 
                                                 boxShadow: '4px 0 10px -2px rgba(0,0,0,0.3)',
                                                 transition: 'left 0.2s ease, width 0.2s ease'
@@ -3545,30 +3588,35 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 )}
 
                                 {/* Columnas E - G */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>E: Inicial (+)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>F: Correc. (±)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>G: Compra (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>E: Inicial (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>F: Correc. (±)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>G: Compra (+)</th>
 
                                 {/* Columnas H - J */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px' }}>H: Venta KG (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px' }}>I: Venta UN (Info)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>J: Peso UN (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', width: '95px', minWidth: '95px', maxWidth: '95px' }}>H: Venta KG (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#94A3B8', width: '95px', minWidth: '95px', maxWidth: '95px' }}>I: Venta UN (Info)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>J: Peso UN (-)</th>
 
                                 {/* Columnas K - N */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>K: Escaso (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>L: Sin Enviar (+)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px' }}>M: Vta Extra (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>N: Vta Nómina (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>K: Escaso (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>L: Sin Enviar (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#C084FC', width: '95px', minWidth: '95px', maxWidth: '95px' }}>M: Vta Extra (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#60A5FA', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>N: Vta Nómina (-)</th>
 
                                 {/* Columnas O - R */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>O: Devol. (+)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>P: Pesada (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>Q: Desperd. (-)</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>R: Basura (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', width: '95px', minWidth: '95px', maxWidth: '95px' }}>O: Devol. (+)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#FBBF24', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>P: Pesada (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#F87171', backgroundColor: '#0F172A', width: '95px', minWidth: '95px', maxWidth: '95px' }}>Q: Desperd. (-)</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#FBBF24', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>R: Basura (-)</th>
 
                                 {/* Columnas S - U */}
                                 <th style={{ 
-                                    padding: '6px 8px', 
+                                    height: '32px',
+                                    boxSizing: 'border-box',
+                                    position: 'sticky',
+                                    top: '32px',
+                                    zIndex: 40,
+                                    padding: '4px 8px', 
                                     textAlign: 'right', 
                                     color: '#5EEAD4', 
                                     backgroundColor: '#042F2E', 
@@ -3578,20 +3626,20 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     minWidth: '95px',
                                     maxWidth: '95px'
                                 }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                        <span style={{ fontSize: '0.52rem', fontWeight: '900', backgroundColor: '#0D9488', color: '#FFFFFF', padding: '1px 4px', borderRadius: '3px', letterSpacing: '0.04em' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
+                                        <span style={{ fontSize: '0.50rem', fontWeight: '900', backgroundColor: '#0D9488', color: '#FFFFFF', padding: '1px 3px', borderRadius: '3px', letterSpacing: '0.04em', lineHeight: 1 }}>
                                             RESULTADO
                                         </span>
-                                        <span>S: Calc. Final</span>
+                                        <span style={{ lineHeight: 1.1 }}>S: Calc. Final</span>
                                     </div>
                                 </th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>U: Bodega Post-10</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>U: Bodega Post-10</th>
 
                                 {/* Columnas V - X */}
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>W: Sobrantes</th>
-                                <th style={{ padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px' }}>X: Donación</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#34D399', width: '95px', minWidth: '95px', maxWidth: '95px' }}>W: Sobrantes</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F472B6', width: '95px', minWidth: '95px', maxWidth: '95px' }}>X: Donación</th>
                             </tr>
                         </thead>
 
