@@ -1919,9 +1919,9 @@ export default function CommercialAgreementsModule() {
                 borderRadius: THEME.radius.lg, 
                 border: `1px solid ${THEME.colors.border}`, 
                 boxShadow: THEME.shadow.sm, 
-                overflow: 'hidden' 
+                position: 'relative'
             }}>
-                {/* TOP TOOLBAR CONTROLS */}
+                {/* TOP TOOLBAR CONTROLS (STICKY) */}
                 <div style={{ 
                     padding: '1.1rem 1.25rem', 
                     borderBottom: `1px solid ${THEME.colors.border}`, 
@@ -1930,10 +1930,16 @@ export default function CommercialAgreementsModule() {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '1.25rem',
-                    flexWrap: 'wrap'
+                    flexWrap: 'wrap',
+                    position: 'sticky',
+                    top: '0px',
+                    zIndex: 30,
+                    borderTopLeftRadius: THEME.radius.lg,
+                    borderTopRightRadius: THEME.radius.lg,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                 }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
-                        <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                        <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, pointerEvents: 'none' }} />
                         <input 
                             type="text" 
                             placeholder="Buscar por cliente o código de acuerdo..." 
@@ -1941,14 +1947,56 @@ export default function CommercialAgreementsModule() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{
                                 width: '100%',
-                                padding: '0.65rem 0.65rem 0.65rem 2.5rem',
+                                padding: searchTerm ? '0.65rem 2.4rem 0.65rem 2.5rem' : '0.65rem 0.65rem 0.65rem 2.5rem',
                                 borderRadius: THEME.radius.md,
                                 border: `1px solid ${THEME.colors.border}`,
                                 fontSize: '0.85rem',
                                 outline: 'none',
-                                fontFamily: THEME.typography.fontFamilySecondary
+                                fontFamily: THEME.typography.fontFamilySecondary,
+                                transition: 'border-color 0.15s, box-shadow 0.15s'
+                            }}
+                            onFocus={e => {
+                                e.target.style.borderColor = THEME.colors.primary;
+                                e.target.style.boxShadow = `0 0 0 3px ${THEME.colors.primaryLight}`;
+                            }}
+                            onBlur={e => {
+                                e.target.style.borderColor = THEME.colors.border;
+                                e.target.style.boxShadow = 'none';
                             }}
                         />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                style={{
+                                    position: 'absolute',
+                                    right: '10px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: '4px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'color 0.15s, background-color 0.15s'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.color = '#334155';
+                                    e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.color = '#94A3B8';
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                                title="Limpiar búsqueda"
+                            >
+                                <X size={15} />
+                            </button>
+                        )}
                     </div>
 
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -2065,7 +2113,7 @@ export default function CommercialAgreementsModule() {
                         position: 'relative'
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                            <thead style={{ position: 'sticky', top: 0, zIndex: 15 }}>
+                            <thead style={{ position: 'sticky', top: '65px', zIndex: 25 }}>
                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
                                     {/* CÓDIGO */}
                                     <th 
@@ -2663,19 +2711,19 @@ export default function CommercialAgreementsModule() {
                                     }
 
                                     return (
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                            <thead>
-                                                <tr style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader }}>Cod. Contable</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader }}>Producto</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>U.M.</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Costo Base</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Precio Acordado</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>IVA</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Fecha / Hora</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left' }}>Usuario</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px' }}>Acciones</th>
+                                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                                            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                                <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Cod. Contable</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Producto</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>U.M.</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Costo Base</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Precio Acordado</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>IVA</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Margen</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Fecha / Hora</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Usuario</th>
+                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2846,14 +2894,9 @@ export default function CommercialAgreementsModule() {
                                                                     return (
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                             <User size={13} color="#64748B" />
-                                                                            <div>
-                                                                                <span style={{ fontWeight: '600', color: THEME.colors.textMain, display: 'block' }}>
-                                                                                    {itemAudit.author}
-                                                                                </span>
-                                                                                <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>
-                                                                                    ID: {itemAudit.userId}
-                                                                                </span>
-                                                                            </div>
+                                                                            <span style={{ fontWeight: '600', color: THEME.colors.textMain }}>
+                                                                                {itemAudit.author}
+                                                                            </span>
                                                                         </div>
                                                                     );
                                                                 })()}
@@ -3201,7 +3244,7 @@ export default function CommercialAgreementsModule() {
                                                             {leftAudit?.formatted || ''}
                                                         </td>
                                                         <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: '0.72rem' }}>
-                                                            {leftAudit?.userId || leftAudit?.author?.split(' ')[0] || ''}
+                                                            {leftAudit?.author || ''}
                                                         </td>
 
                                                         {/* LADO DERECHO */}
@@ -3224,7 +3267,7 @@ export default function CommercialAgreementsModule() {
                                                             {rightAudit?.formatted || ''}
                                                         </td>
                                                         <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: '0.72rem' }}>
-                                                            {rightAudit?.userId || rightAudit?.author?.split(' ')[0] || ''}
+                                                            {rightAudit?.author || ''}
                                                         </td>
                                                     </tr>
                                                 );

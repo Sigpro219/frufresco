@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.2 (Torre de Control Ejecutiva: KPIs de Dashboard Gerencial & Descarga Masiva Resiliente en Gobernanza de Auditoría)  
+> **Versión:** 1.8.3 (Panel Admin Ejecutivo, Delta Command Center & Ecosistema de Módulos Maestros: SKU, Proveedores, Ajustes, Clientes, Catálogo Web y Gobernanza)  
 > **Fecha:** 22 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección General, Comercial, Operaciones & Gobernanza ERP
+> **Área:** Dirección General, IT/SaaS Infraestructura, Comercial, Operaciones & Gobernanza ERP
 
 ---
 
@@ -867,11 +867,11 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
 
 ---
 
-## 12. Panel Admin Ejecutivo (Dashboard) & Gobernanza de Auditoría Forense (SDD v1.8.2)
+## 12. Panel Admin Ejecutivo, Delta Command Center & Ecosistema de Módulos Maestros (SDD v1.8.3)
 
 ### 12.1 Torre de Control Ejecutiva (`/admin/dashboard`)
 
-El Panel de Control Principal de FruFresco (`/admin/dashboard`) opera como la torre de mando unificada para la dirección general y operaciones:
+El Panel de Control Principal de FruFresco (`/admin/dashboard`) opera como la torre de mando ejecutiva y el portal central de enrutamiento RBAC para la dirección general y operaciones:
 
 1. **Cuadrante Superior de KPIs en Tiempo Real (D+0):**
    - **Ventas Hoy:** Sumatoria consolidada de la columna `orders.total` para todos los pedidos registrados desde las `00:00:00` del día corriente.
@@ -895,13 +895,87 @@ El Panel de Control Principal de FruFresco (`/admin/dashboard`) opera como la to
    - Suscripción bidireccional mediante Supabase Realtime (`postgres_changes` sobre la tabla `orders`).
    - Actualización reactiva instantánea ante nuevas compras sin recargar la página.
 
-4. **Matriz de Seguridad & Accesos Gobernados:**
-   - La visibilidad de los accesos directos (*Catálogo Web, Maestro SKU, Clientes CRM, Proveedores, Ajustes del Sistema*) está supeditada estrictamente a la matriz de permisos `system_roles` evaluada mediante `checkUserPermission`.
-   - El acceso al *Centro de Comando Delta* está reservado exclusivamente para roles de alta gobernanza (`sys_admin`, `admin` o superusuario raíz).
+4. **Matriz de Seguridad & Accesos Gobernados (RBAC Gateway):**
+   - La visibilidad de los accesos directos (*Catálogo Web, Maestro SKU, Clientes CRM, Proveedores, Ajustes del Sistema, Gobernanza*) está supeditada estrictamente a la matriz de permisos `system_roles` evaluada mediante `checkUserPermission(profile, permission, roles)`:
+     - `admin.products.catalog` $\rightarrow$ Catálogo Web (`/admin/products`)
+     - `admin.products.master` $\rightarrow$ Maestro SKU (`/admin/master/products`)
+     - `admin.clients` $\rightarrow$ Clientes CRM (`/admin/clients`)
+     - `admin.procurement.providers` $\rightarrow$ Proveedores (`/admin/procurement/providers`)
+     - `admin.dashboard.audit` $\rightarrow$ Gobernanza & Auditoría (`/admin/audit`)
+     - `admin.dashboard.settings` $\rightarrow$ Ajustes del Sistema (`/admin/settings`)
+   - El acceso al **Centro de Comando Delta** está reservado exclusivamente para roles de máxima jerarquía técnica (`sys_admin`, `admin` o el superusuario institucional `admin@frufresco.com`).
 
 ---
 
-### 12.2 Módulo de Gobernanza, Auditoría & Trazabilidad Forense (`/admin/audit`)
+### 12.2 Delta Command Center: Consola de Alta Gobernanza & Orquestación SaaS (`/admin/command-center`)
+
+El **Delta Command Center** es el núcleo de ingeniería y control de infraestructura de la plataforma, diseñado con aislamiento de seguridad Nivel 3. Se estructura en 6 consolas especializadas:
+
+1. **Pestaña 1: Gobernanza del Sistema (`governance`):**
+   - **Estandarización de Unidades de Medida (`standard_units`, `suspended_units`):** Gestión del catálogo canónico de unidades (kg, lb, g, atado, caja, bandeja). Permite activar, suspender o reactivar unidades, impidiendo que el catálogo comercial introduzca unidades corruptas.
+   - **Matriz de Roles Técnicos & Permisos (`system_roles`):** Asignación granular de capacidades por rol (`admin`, `commercial`, `logistics`, `procurement`, `driver`, `customer`) con control de switches booleanos por módulo.
+   - **Atributos Maestros de Catálogo (`ManageAttributesModal`):** Configuración de atributos globales dinámicos (calibres, maduración, procedencia, certificaciones) para el Maestro SKU.
+   - **Enrutamiento de Webhooks de Correo Inbound:** Inspección y configuración de las casillas de entrada para ingesta automática (`inbox_email_orders` para pedidos B2B y `inbox_email_commercial` para cotizaciones).
+
+2. **Pestaña 2: Aprobaciones & Usuarios Técnicos (`approvals` / `TechUserGovernance`):**
+   - Panel de auditoría y autorización previa para operadores técnicos, desarrolladores y personal con privilegios elevados.
+   - Restricción de doble factor y validación de correo corporativo para mitigar escalamiento de privilegios no autorizados.
+
+3. **Pestaña 3: Mesa de Ayuda & SLAs Operativos (`helpdesk`):**
+   - Indicadores de rendimiento de soporte (`support_tickets_metrics`): Tickets abiertos, tickets cerrados hoy, tiempo promedio de primera respuesta (MTTR) y tasa de resolución en primer contacto.
+   - Flujo de estados normativo: `open` $\rightarrow$ `in_progress` $\rightarrow$ `waiting_user` $\rightarrow$ `resolved` $\rightarrow$ `closed`.
+
+4. **Pestaña 4: Geocercas Operativas (`geofencing` / `GeofencingManager`):**
+   - Integración visual de alta precisión con Google Maps API (`@vis.gl/react-google-maps`).
+   - Definición de polígonos geoespaciales para delimitar:
+     - **Zonas B2B Institucionales:** Cobertura para camiones refrigerados de carga pesada.
+     - **Zonas B2C Hogares:** Radios de reparto exprés con ventanas horarias y tarifas de flete diferenciadas.
+     - Bloqueo preventivo de checkout para direcciones fuera de polígono habilitado.
+
+5. **Pestaña 5: Control de Flota SaaS & Despliegue Multi-Tenant (`fleet`):**
+   - Gestión de instancias cliente (`fleet_tenants`) conectadas al repositorio Core.
+   - **Pipeline de Despliegue en Dos Fases:**
+     - **Fase 1 (Sincronización de Código Git):** Ejecuta `/api/maintenance/update-all` propagando los cambios aprobados desde la rama `main`/`CORE` hacia las 7 ramas remotas activas (`main`, `liard`, `CORE`, `core`, `tenant-frufresco`, `tenant1`, `white-label`).
+     - **Fase 2 (Sincronización de Base de Datos y Marca):** Ejecuta `/api/fleet/sync` actualizando llaves de entorno, esquemas SQL y metadatos de configuración en Supabase por cada inquilino.
+   - Diagnóstico visual de salud (Healthcheck HTTP 200) y versión de commit desplegado en cada tenant.
+
+6. **Pestaña 6: Auditoría Irrestricta (`audit`):**
+   - Consola forense de máxima visibilidad que omite la restricción temporal de 90 días del módulo de gobernanza estándar, permitiendo búsquedas históricas ilimitadas con filtrado multidimensional por UUID de usuario, IP, módulo y acción.
+
+---
+
+### 12.3 Ecosistema de Módulos Maestros Satélite
+
+El Admin Dashboard coordina 5 módulos satélite esenciales que alimentan la operación diaria:
+
+1. **Maestro de SKU (`/admin/master/products`):**
+   - **Fuente Única de Verdad (Single Source of Truth):** Define el producto técnico base, su código contable único, su descripción oficial y sus parámetros fiscales (IVA).
+   - **Matriz de Conversión Multi-Nivel:** Establece los factores de conversión matemática entre la unidad base de compra/almacenamiento (`from_unit`) y las unidades de venta o fraccionamiento (`to_unit`), garantizando el balance de masa estricto en inventario.
+   - **Costo Base Oficial:** Almacena el costo estándar de referencia utilizado por el cotizador comercial para garantizar los márgenes mínimos de rentabilidad.
+
+2. **Maestro de Proveedores (`/admin/procurement/providers`):**
+   - Directorio institucional de fuentes de abastecimiento, cooperativas agrícolas y productores locales.
+   - Registro de plazos de pago (contado, 8, 15, 30, 45 días), cupos de crédito, contacto comercial y categorías autorizadas de suministro.
+   - Trazabilidad de órdenes de compra emitidas y evaluación de cumplimiento en entregas.
+
+3. **Catálogo Web B2C (`/admin/products`):**
+   - Módulo de comercialización directa al consumidor final (Hogares).
+   - Gestión de precios minoristas, promociones temporales, destacados de portada y activación/desactivación inmediata en vitrina digital.
+   - Carga de fotografía de producto y etiquetas de búsqueda (Tags).
+
+4. **CRM de Clientes Institucionales (`/admin/clients` - `ClientsModule`):**
+   - Gestión de la relación B2B bajo el principio estricto de jerarquía Matriz vs Sucursales (Sección 1).
+   - Administración de acuerdos comerciales vigentes, plazos de crédito institucional, direcciones de entrega georreferenciadas y contactos operativos por sede.
+   - Puntos de contacto WhatsApp estandarizados bajo norma E.164.
+
+5. **Ajustes del Sistema (`/admin/settings`):**
+   - Configuración global de identidad corporativa y branding (nombre de empresa, NIT, logos e isotipos).
+   - Integración con bucket de almacenamiento seguro Supabase Storage (`branding`).
+   - Parámetros operativos generales: costos de envío base, umbrales de flete gratuito y plantillas de notificación.
+
+---
+
+### 12.4 Módulo de Gobernanza, Auditoría & Trazabilidad Forense (`/admin/audit`)
 
 El subsistema de auditoría garantiza la trazabilidad inalterable de cada evento transaccional, administrativo y de seguridad ocurrido en el ERP.
 
@@ -917,6 +991,10 @@ El subsistema de auditoría garantiza la trazabilidad inalterable de cada evento
      - Se genera una columna complementaria en español legible que sintetiza los cambios esenciales (Células creadas, líder asignado, costos modificados, correo de sesión, SKU o estado) sin obligar al usuario a descifrar estructuras JSON crudas.
    - **Capacidad de Exportación:** Carga paginada en lotes de 1.000 registros con un techo seguro de hasta 2.500 eventos por reporte descargado.
 
+---
+
+### 12.5 Criterios de Aceptación & Escenarios BDD
+
 #### Escenario 7: Descarga Masiva de Auditoría con Matrices Extensas de Gobernanza
 - **Given** un administrador en `/admin/audit` con eventos de modificación masiva de células de trabajo y permisos de roles cuyos objetos JSON superan los 40.000 caracteres.
 - **When** pulsa el botón "Descargar Reporte (XLSX)".
@@ -924,4 +1002,21 @@ El subsistema de auditoría garantiza la trazabilidad inalterable de cada evento
   1. El sistema no arroja error emergente de *"Text length must not exceed 32767 characters"*.
   2. Genera y descarga el archivo `Reporte_Auditoria_YYYY-MM-DD.xlsx` de forma transparente.
   3. Las celdas complejas preservan su resumen legible en lenguaje humano y el campo técnico queda delimitado dentro de los estándares de Excel.
+
+#### Escenario 8: Despliegue Multi-Tenant Seguro desde Delta Command Center
+- **Given** un usuario autenticado con rol `sys_admin` ubicado en la pestaña "Flota SaaS" de `/admin/command-center`.
+- **When** activa la sincronización general pulsando "Actualizar Todas las Instancias".
+- **Then**:
+  1. El backend ejecuta de forma secuencial Fase 1 (`/api/maintenance/update-all`) asegurando la paridad Git en las 7 ramas del ecosistema.
+  2. Ejecuta Fase 2 (`/api/fleet/sync`) refrescando la parametrización de bases de datos de cada cliente SaaS.
+  3. Despliega en pantalla el estado individual de salud de cada tenant con su versión de commit confirmada.
+  4. Ningún usuario con roles inferiores (`commercial`, `logistics`, `procurement`) tiene visibilidad o acceso a dicha consola.
+
+#### Escenario 9: Gobernanza Integral de SKU desde Maestro hasta Catálogo Web y Acuerdos
+- **Given** la creación o modificación de un producto en el Maestro de SKU (`/admin/master/products`) con código contable `SKU-MANZ-01`, costo base \$3.200 y unidad base `kg`.
+- **When** el producto es consultado en el cotizador de Acuerdos Comerciales B2B o publicado en el Catálogo Web B2C.
+- **Then**:
+  1. El cotizador comercial adopta de forma inmediata el costo base oficial (\$3.200) para calcular el margen objetivo.
+  2. En caso de venta por unidades o bandejas, el factor de conversión estipulado en el Maestro rige la deducción física en el balance de inventario (Sección 8).
+  3. Los cambios en el Maestro generan un registro inmutable en `audit_logs` trazable tanto en Gobernanza (`/admin/audit`) como en la consola forense de Delta Command Center.
 
