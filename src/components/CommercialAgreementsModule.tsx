@@ -1915,28 +1915,30 @@ export default function CommercialAgreementsModule() {
 
             {/* UNIFIED CONTAINER: CONTROLS & AGREEMENTS TABLE */}
             <div style={{ 
-                backgroundColor: THEME.colors.surface, 
+                backgroundColor: 'white', 
                 borderRadius: THEME.radius.lg, 
-                border: `1px solid ${THEME.colors.border}`, 
+                minHeight: '380px',
                 boxShadow: THEME.shadow.sm, 
+                border: `1px solid ${THEME.colors.border}`, 
                 position: 'relative'
             }}>
                 {/* TOP TOOLBAR CONTROLS (STICKY) */}
                 <div style={{ 
-                    padding: '1.1rem 1.25rem', 
-                    borderBottom: `1px solid ${THEME.colors.border}`, 
-                    backgroundColor: '#FFFFFF',
+                    padding: '0.85rem 1.25rem', 
+                    borderBottom: `1px solid #E2E8F0`, 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    backdropFilter: 'blur(16px)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '1.25rem',
                     flexWrap: 'wrap',
                     position: 'sticky',
-                    top: '0px',
-                    zIndex: 30,
+                    top: '85px',
+                    zIndex: 90,
                     borderTopLeftRadius: THEME.radius.lg,
                     borderTopRightRadius: THEME.radius.lg,
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03)'
                 }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
                         <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, pointerEvents: 'none' }} />
@@ -2107,20 +2109,29 @@ export default function CommercialAgreementsModule() {
                         </div>
                     </div>
                 ) : (
-                    <div style={{ 
-                        overflowX: 'auto', 
-                        width: '100%', 
-                        position: 'relative'
-                    }}>
+                    <div>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                            <thead style={{ position: 'sticky', top: '65px', zIndex: 25 }}>
-                                <tr style={{ backgroundColor: '#F8FAFC' }}>
+                            <thead style={{ position: 'sticky', top: '148px', zIndex: 40 }}>
+                                <tr style={{ backgroundColor: '#F9FAFB' }}>
                                     {/* CÓDIGO */}
                                     <th 
                                         onClick={() => toggleSort('quote_number')}
-                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            position: 'sticky', 
+                                            top: '148px', 
+                                            zIndex: 40, 
+                                            backgroundColor: '#F9FAFB', 
+                                            borderBottom: '2px solid #E2E8F0', 
+                                            borderTopLeftRadius: '12px', 
+                                            boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            cursor: 'pointer', 
+                                            userSelect: 'none', 
+                                            transition: 'background 0.15s',
+                                            ...THEME.typography.tableHeader 
+                                        }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Código</span>
@@ -2135,9 +2146,21 @@ export default function CommercialAgreementsModule() {
                                     {/* CLIENTE B2B */}
                                     <th 
                                         onClick={() => toggleSort('client_name')}
-                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            position: 'sticky', 
+                                            top: '148px', 
+                                            zIndex: 40, 
+                                            backgroundColor: '#F9FAFB', 
+                                            borderBottom: '2px solid #E2E8F0', 
+                                            boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            cursor: 'pointer', 
+                                            userSelect: 'none', 
+                                            transition: 'background 0.15s',
+                                            ...THEME.typography.tableHeader 
+                                        }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Cliente B2B</span>
@@ -2152,9 +2175,21 @@ export default function CommercialAgreementsModule() {
                                     {/* VIGENCIA */}
                                     <th 
                                         onClick={() => toggleSort('valid_until')}
-                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            position: 'sticky', 
+                                            top: '148px', 
+                                            zIndex: 40, 
+                                            backgroundColor: '#F9FAFB', 
+                                            borderBottom: '2px solid #E2E8F0', 
+                                            boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            cursor: 'pointer', 
+                                            userSelect: 'none', 
+                                            transition: 'background 0.15s',
+                                            ...THEME.typography.tableHeader 
+                                        }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Vigencia</span>
@@ -2169,9 +2204,21 @@ export default function CommercialAgreementsModule() {
                                     {/* DURACIÓN */}
                                     <th 
                                         onClick={() => toggleSort('duration')}
-                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            position: 'sticky', 
+                                            top: '148px', 
+                                            zIndex: 40, 
+                                            backgroundColor: '#F9FAFB', 
+                                            borderBottom: '2px solid #E2E8F0', 
+                                            boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            cursor: 'pointer', 
+                                            userSelect: 'none', 
+                                            transition: 'background 0.15s',
+                                            ...THEME.typography.tableHeader 
+                                        }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Duración</span>
@@ -2186,9 +2233,21 @@ export default function CommercialAgreementsModule() {
                                     {/* ESTADO */}
                                     <th 
                                         onClick={() => toggleSort('status')}
-                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            position: 'sticky', 
+                                            top: '148px', 
+                                            zIndex: 40, 
+                                            backgroundColor: '#F9FAFB', 
+                                            borderBottom: '2px solid #E2E8F0', 
+                                            boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            cursor: 'pointer', 
+                                            userSelect: 'none', 
+                                            transition: 'background 0.15s',
+                                            ...THEME.typography.tableHeader 
+                                        }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span>Estado</span>
@@ -2203,9 +2262,22 @@ export default function CommercialAgreementsModule() {
                                     {/* MARGEN PROMEDIO */}
                                     <th 
                                         onClick={() => toggleSort('margin')}
-                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        style={{ 
+                                            padding: '0.65rem 0.85rem', 
+                                            position: 'sticky', 
+                                            top: '148px', 
+                                            zIndex: 40, 
+                                            backgroundColor: '#F9FAFB', 
+                                            borderBottom: '2px solid #E2E8F0', 
+                                            boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            textAlign: 'center', 
+                                            cursor: 'pointer', 
+                                            userSelect: 'none', 
+                                            transition: 'background 0.15s',
+                                            ...THEME.typography.tableHeader 
+                                        }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                             <span>Margen Promedio</span>
@@ -2218,7 +2290,19 @@ export default function CommercialAgreementsModule() {
                                     </th>
 
                                     {/* ACCIONES */}
-                                    <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>
+                                    <th style={{ 
+                                        padding: '0.65rem 1rem', 
+                                        position: 'sticky', 
+                                        top: '148px', 
+                                        zIndex: 40, 
+                                        backgroundColor: '#F9FAFB', 
+                                        borderBottom: '2px solid #E2E8F0', 
+                                        borderTopRightRadius: '12px', 
+                                        boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                        textAlign: 'right', 
+                                        whiteSpace: 'nowrap',
+                                        ...THEME.typography.tableHeader 
+                                    }}>
                                         Acciones
                                     </th>
                                 </tr>

@@ -10,7 +10,6 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 import TechUserGovernance from '@/components/admin/TechUserGovernance';
 import ManageAttributesModal from '@/components/ManageAttributesModal';
 import { THEME } from '@/lib/adminTheme';
-import * as XLSX from 'xlsx';
 
 interface Point {
     lat: number;
@@ -19,6 +18,12 @@ interface Point {
 
 const AVAILABLE_MODULES = [
     { id: 'dashboard', label: 'Dashboard' },
+    { id: 'admin.products.catalog', label: 'Catálogo Web B2C' },
+    { id: 'admin.products.master', label: 'Maestro SKU' },
+    { id: 'admin.clients', label: 'Clientes CRM' },
+    { id: 'admin.procurement.providers', label: 'Proveedores' },
+    { id: 'admin.dashboard.audit', label: 'Gobernanza / Auditoría' },
+    { id: 'admin.dashboard.settings', label: 'Ajustes Globales' },
     { id: 'hr', label: 'Talento Humano' },
     { id: 'inventory', label: 'Inventarios' },
     { id: 'commercial', label: 'Comercial' },
@@ -367,9 +372,23 @@ export default function CommandCenter() {
         }
     };
 
+    const sanitizeJsonForExcel = (details: any): string => {
+        if (!details) return '';
+        try {
+            const str = JSON.stringify(details);
+            if (str.length > 3000) {
+                return str.substring(0, 3000) + '... [TRUNCADO_POR_TAMAÑO]';
+            }
+            return str;
+        } catch {
+            return '';
+        }
+    };
+
     const handleExportAuditXLSX = async () => {
         setAuditExporting(true);
         try {
+            const XLSX = await import('xlsx');
             let query = supabase
                 .from('audit_logs')
                 .select('*');
@@ -384,7 +403,7 @@ export default function CommandCenter() {
                 'Acción': formatActionName(log.action),
                 'Módulo': translateModule(log.module),
                 'Resumen Detalles': formatDetailsSummary(log),
-                'Detalles JSON': JSON.stringify(log.details)
+                'Detalles JSON': sanitizeJsonForExcel(log.details)
             }));
             
             const ws = XLSX.utils.json_to_sheet(exportData);

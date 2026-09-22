@@ -120,13 +120,18 @@ export default function AdminDashboard() {
             .select('*', { count: 'exact', head: true })
             .eq('status', 'new');
 
-        // 4. Ticket Promedio
-        const { data: allOrders } = await supabase
-            .from('orders')
-            .select('total');
+        // 4. Ticket Promedio (Acotado a ventana de 90 días para evitar desbordamiento y límite de 1.000 filas PostgREST)
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        ninetyDaysAgo.setHours(0, 0, 0, 0);
 
-        const avgTicket = allOrders && allOrders.length > 0
-            ? allOrders.reduce((acc: number, curr: { total: number }) => acc + (curr.total || 0), 0) / allOrders.length
+        const { data: recentOrdersForAvg } = await supabase
+            .from('orders')
+            .select('total')
+            .gte('created_at', ninetyDaysAgo.toISOString());
+
+        const avgTicket = recentOrdersForAvg && recentOrdersForAvg.length > 0
+            ? recentOrdersForAvg.reduce((acc: number, curr: { total: number }) => acc + (curr.total || 0), 0) / recentOrdersForAvg.length
             : 0;
 
         setStats({
@@ -183,15 +188,25 @@ export default function AdminDashboard() {
                 const totalWeight = monthOrders.reduce((acc, curr) => acc + (curr.total_weight_kg || 0), 0);
                 setAvgLogisticsWeight(totalWeight / monthOrders.length);
 
-                // Fetch order items
+                // Fetch order items en chunks de 100 IDs para prevenir desbordamiento PostgREST (1.000 filas)
                 const orderIds = monthOrders.map(o => o.id);
-                const { data: items } = await supabase
-                    .from('order_items')
-                    .select(`
-                        id, order_id, product_id, quantity, unit_price, unit, selected_options,
-                        products:product_id(name, base_price)
-                    `)
-                    .in('order_id', orderIds);
+                let items: any[] = [];
+                const CHUNK_SIZE = 100;
+                
+                for (let i = 0; i < orderIds.length; i += CHUNK_SIZE) {
+                    const chunk = orderIds.slice(i, i + CHUNK_SIZE);
+                    const { data: chunkItems } = await supabase
+                        .from('order_items')
+                        .select(`
+                            id, order_id, product_id, quantity, unit_price, unit, selected_options,
+                            products:product_id(name, base_price)
+                        `)
+                        .in('order_id', chunk);
+
+                    if (chunkItems && chunkItems.length > 0) {
+                        items = items.concat(chunkItems);
+                    }
+                }
 
                 if (items && items.length > 0) {
                     // Fetch product variants
@@ -730,7 +745,9 @@ export default function AdminDashboard() {
                         {hasPermission('admin.procurement.providers') && (
                             <AdminCard title="Proveedores" href="/admin/procurement/providers" icon={<Store size={22} strokeWidth={1.5} />} desc="Maestro Compras" />
                         )}
-                        <AdminCard title="Gobernanza" href="/admin/audit" icon={<ShieldCheck size={22} strokeWidth={1.5} />} desc="Auditoría" />
+                        {hasPermission('admin.dashboard.audit') && (
+                            <AdminCard title="Gobernanza" href="/admin/audit" icon={<ShieldCheck size={22} strokeWidth={1.5} />} desc="Auditoría" />
+                        )}
                         {hasPermission('admin.dashboard.settings') && (
                             <AdminCard title="Ajustes" href="/admin/settings" icon={<Settings size={22} strokeWidth={1.5} />} desc="Configuración" />
                         )}
