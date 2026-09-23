@@ -4009,7 +4009,47 @@ function OrderLoadingContent() {
                                         </div>
                                     ) : (
                                         /* Document Cards Grid (MODO DIGITAL NUBE) */
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+                                        <div>
+                                            <div style={{
+                                                backgroundColor: '#EFF6FF',
+                                                border: '1px solid #BFDBFE',
+                                                borderRadius: '10px',
+                                                padding: '8px 12px',
+                                                marginBottom: '0.75rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                flexWrap: 'wrap',
+                                                gap: '8px'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <Info size={16} color="#1D4ED8" />
+                                                    <span style={{ fontSize: '0.72rem', color: '#1E40AF', fontWeight: '700' }}>
+                                                        <strong>Modo Digital (Sin Papel):</strong> Las órdenes pasarán a <em>para_compra</em> para sincronizarse en tablets y terminales de bodega. <u>No se imprimirán documentos físicos</u> automáticamente.
+                                                    </span>
+                                                </div>
+                                                <Link
+                                                    href={`/admin/orders/contingency-print?mode=all&orderIds=${Array.from(selectedOrders).join(',')}`}
+                                                    target="_blank"
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        backgroundColor: '#FFFFFF',
+                                                        border: '1px solid #2563EB',
+                                                        color: '#1D4ED8',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.70rem',
+                                                        fontWeight: '800',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    <Printer size={12} /> ¿Necesitas papel? Imprimir Kit 1-Clic
+                                                </Link>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
                                             {/* Doc 1: Compras */}
                                             <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                                 <div>
@@ -4086,7 +4126,8 @@ function OrderLoadingContent() {
                                                 </Link>
                                             </div>
                                         </div>
-                                    )}
+                                    </div>
+                                )}
                                 </div>
 
                                 {/* Footer Action Buttons */}
@@ -4118,7 +4159,7 @@ function OrderLoadingContent() {
                                             color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', 
                                             cursor: updateLoading ? 'wait' : 'pointer', 
                                             boxShadow: dispatchMode === 'contingency' ? '0 4px 14px rgba(180, 83, 9, 0.35)' : '0 4px 14px rgba(13, 122, 87, 0.35)', 
-                                            transition: 'all 0.15s', fontSize: '0.95rem', letterSpacing: '0.01em', 
+                                            transition: 'all 0.15s', fontSize: '0.92rem', letterSpacing: '0.01em', 
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                         }}
                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = dispatchMode === 'contingency' ? '#92400E' : THEME.colors.primaryHover}
@@ -4137,10 +4178,16 @@ function OrderLoadingContent() {
                                         ) : (
                                             <>
                                                 <Truck size={18} strokeWidth={2} />
-                                                <span>FIRMAR Y LANZAR A PROCESO LOGÍSTICO</span>
+                                                <span>LANZAR A TERMINALES DIGITALES (TABLETS / SIN PAPEL)</span>
                                             </>
                                         )}
                                     </button>
+                                </div>
+
+                                <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '0.70rem', color: '#64748B' }}>
+                                    {dispatchMode === 'contingency' 
+                                        ? '🏭 Modo Manual: Asignará bahías en piso y te guiará para imprimir la sábana, compras, remisiones y rótulos.' 
+                                        : '📱 Modo Digital: Sincronizará compras y picking directamente en tablets de bodega (Paperless sin papel).'}
                                 </div>
 
                             </div>

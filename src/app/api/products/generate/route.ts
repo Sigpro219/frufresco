@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+    executeWithObsolescenceGuard,
+    PRIMARY_AI_MODEL,
+    CANONICAL_MODEL_CASCADE,
+    getGeminiApiKey,
+} from '@/lib/ai/aiModelConfig';
 import { verifySessionAndPermission } from '@/lib/auth';
-
-const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 export async function POST(req: Request) {
     // Validate session and permission
@@ -21,15 +25,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Faltan datos del producto (nombre o categoría)' }, { status: 400 });
         }
 
-        if (!GEMINI_KEY) {
+        const apiKey = getGeminiApiKey();
+        if (!apiKey) {
             return NextResponse.json({ error: 'Google AI API Key no configurada' }, { status: 500 });
         }
-
-        // Usamos el SDK oficial de Google para mayor estabilidad
-        const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-        
-        // Usamos gemini-3.5-flash (el estándar de vanguardia en 2026)
-        const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
         const prompt = `
 Eres un experto en marketing gastronómico y nutrición para FruFresco, una tienda premium de frutas y verduras.
@@ -56,12 +55,29 @@ REQUERIMIENTOS:
 No incluyas markdown, solo el JSON puro.
 `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text().trim().replace(/```json|```/g, '');
-        
+        const aiResult = await executeWithObsolescenceGuard(
+            async (modelName: string, keyToUse: string) => {
+                const genAI = new GoogleGenerativeAI(keyToUse);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                const text = response.text().trim().replace(/```json|```/g, '');
+                return text;
+            },
+            {
+                apiKey,
+                moduleName: 'products_generate',
+                operationName: 'description_generation',
+                timeoutMs: 30000,
+            }
+        );
+
+        const text = aiResult;
         try {
             const aiData = JSON.parse(text);
+            if (aiResult._obsolescenceWarning) {
+                aiData._obsolescenceWarning = aiResult._obsolescenceWarning;
+            }
             return NextResponse.json(aiData);
         } catch (parseErr) {
             console.error('Error parsing AI JSON:', text);
@@ -75,25 +91,6 @@ No incluyas markdown, solo el JSON puro.
 
     } catch (error: any) {
         console.error('❌ [Product AI Engine] Error:', error.message);
-        
-        // Si el error es específicamente de "model not found", intentamos un último recurso con gemini-2.5-flash
-        if (error.message.includes('not found') || error.message.includes('not supported')) {
-            try {
-                console.log('🔄 Reintentando con modelo alternativo (gemini-3.1-flash-lite)...');
-                const genAI = new GoogleGenerativeAI(GEMINI_KEY as string);
-                const backupModel = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
-                const result = await backupModel.generateContent("Traduce a ingles: " + name);
-                const response = await result.response;
-                return NextResponse.json({
-                    description_es: current_description || "Descripción generada",
-                    description_en: response.text(),
-                    name_en: response.text()
-                });
-            } catch (innerError) {
-                return NextResponse.json({ error: "El modelo de IA no está disponible en esta región o con esta llave." }, { status: 500 });
-            }
-        }
-
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

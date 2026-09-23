@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+    executeWithObsolescenceGuard,
+    PRIMARY_AI_MODEL,
+    CANONICAL_MODEL_CASCADE,
+    getGeminiApiKey,
+} from '@/lib/ai/aiModelConfig';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -606,17 +612,10 @@ function calculateSimulationAssignments(orders: any[], vehicles: any[], fleetSta
 
 async function generateAiExplanation(orders: any[], vehicles: any[], assignments: Record<string, string[]>, unassignedOrders: any[]) {
     try {
-        const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+        const apiKey = getGeminiApiKey();
         if (!apiKey) {
             return "No se pudo generar el informe de la IA porque no está configurada la API Key de Gemini en el servidor.";
         }
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        
-        // Try models in order of preference
-        const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
-        let explanation = "";
-        let errorDetails = "";
 
         // Build a concise description of the assignments for the prompt
         let summaryText = `Analiza la siguiente asignación de despacho de la flota de FruFresco y redacta un informe de máximo 3 a 4 párrafos/viñetas explicando brevemente y con emojis la lógica/estrategia de esta planeación.
@@ -658,19 +657,32 @@ INSTRUCCIÓN ADICIONAL CRÍTICA:
 Menciona explícitamente y al inicio del informe que NO se pudieron programar todos los pedidos. Lista brevemente las razones (por ejemplo, porque la capacidad de carga está saturada o hay incompatibilidad en ventanas de tiempo con los vehículos activos) e indica los nombres de los clientes/pedidos que quedaron sin asignar.`;
         }
 
-        for (const modelName of modelsToTry) {
-            try {
-                console.log(`Intentando generar informe con modelo: ${modelName}`);
-                const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent(summaryText);
-                explanation = result.response.text();
-                if (explanation) {
-                    return explanation;
+        try {
+            const explanation = await executeWithObsolescenceGuard(
+                async (modelName: string, keyToUse: string) => {
+                    console.log(`[TransportOptimizer] Generando informe con modelo: ${modelName}`);
+                    const genAI = new GoogleGenerativeAI(keyToUse);
+                    const model = genAI.getGenerativeModel({ model: modelName });
+                    const result = await model.generateContent(summaryText);
+                    const text = result.response.text();
+                    if (!text) {
+                        throw new Error(`Modelo ${modelName} no devolvió texto.`);
+                    }
+                    return text;
+                },
+                {
+                    apiKey,
+                    moduleName: 'transport_logistics',
+                    operationName: 'route_optimization_explanation',
+                    timeoutMs: 30000,
                 }
-            } catch (innerErr: any) {
-                console.warn(`Error con modelo ${modelName}:`, innerErr);
-                errorDetails += `[${modelName}]: ${innerErr.message || innerErr}\n`;
+            );
+
+            if (explanation) {
+                return explanation;
             }
+        } catch (aiCascadeErr: any) {
+            console.warn('[TransportOptimizer] IA cascade falló o se agotó, recurriendo a resumen programático:', aiCascadeErr?.message || aiCascadeErr);
         }
 
         // Programmatic fallback explanation if all AI calls fail

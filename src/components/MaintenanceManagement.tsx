@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
-import * as XLSX from 'xlsx';
 import { 
     AlertTriangle, 
     AlertCircle, 
@@ -182,12 +181,13 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
         }
     }, []);
 
-    const downloadHistory = () => {
+    const downloadHistory = async () => {
         if (history.length === 0) {
             alert('No hay historial para exportar.');
             return;
         }
 
+        const XLSX = await import('xlsx');
         const dataToExport = history.map(log => ({
             'Vehículo': log.vehicle?.plate,
             'Tarea': log.task_name,

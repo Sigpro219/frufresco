@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.8 (Poka-Yoke Comercial: Detección, Alerta y Auto-Activación de SKUs Inactivos en Acuerdos de Precios)  
+> **Versión:** 1.9.1 (Gobernanza Central de Modelos IA, Centinela de Obsolescencia & Torre de Control de Transporte)  
 > **Fecha:** 23 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección General, IT/SaaS Infraestructura, Comercial, Operaciones & Gobernanza ERP
+> **Área:** Dirección General, IT/SaaS Infraestructura, Operaciones & Logística Terrestre
 
 ---
 
@@ -38,7 +38,10 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
                                      ▼
                       [CEREBRO LÓGICO COMPARTIDO]
                      src/lib/orders/order-parser-engine.ts
-                     ├── Gemini 2.5 Flash / Flash-Lite OCR
+                     ├── Gemini 3.8 Flash (v3.0 / 2026, 1M context, integrated reasoning) with Obsolescence Sentinel & Contingency Cascade
+                     │   ├── src/lib/ai/aiModelConfig.ts (Gobernanza Central & Centinela)
+                     │   ├── Cascada Canónica: [gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash, gemini-flash-latest, gemini-2.5-flash]
+                     │   └── executeWithObsolescenceGuard (Failover 404/410 + Audit Log)
                      ├── resolveClientProfile (Multisede/NIT/Emails)
                      ├── findBestProductMatchDetails (Tokens + Catálogo)
                      └── document_learning_memory (Auto-Aprendizaje)
@@ -794,7 +797,7 @@ Para subsanar registros históricos de abarrotes configurados erróneamente en `
 
 ---
 
-## 10. Módulo de Autenticación, Seguridad Multi-Rol & Gobernanza de Idioma (SDD v1.8.0)
+## 10. Módulo de Autenticación, Seguridad Multi-Rol, Gobernanza de Idioma & Modelos de IA (SDD v1.9.1)
 
 ### 10.1 Principios Rectores del Ciclo de Vida de Identidad
 
@@ -837,6 +840,131 @@ Para subsanar registros históricos de abarrotes configurados erróneamente en `
   1. El sistema no lo redirige de golpe; despliega la tarjeta interactiva de selección de rol.
   2. Si elige *FruFresco Operaciones*, ingresa al ERP con acceso restringido a su módulo de inventarios.
   3. Si elige *Portal Institucional (Yina Cortes Amaya)*, ingresa al `/b2b/dashboard` viendo únicamente la cartera, pedidos y acuerdos de dicha sucursal.
+
+### 10.3 Centinela de Gobernanza de Modelos IA & Detección de Obsolescencia (SDD v1.9.1 / gemini-3.8-flash)
+
+#### 10.3.1 Principio Rector de Inmunidad Operativa ante Deprecación de IA
+En el ecosistema B2B y operativo de FruFresco, los modelos de Inteligencia Artificial gestionan tareas críticas de alta disponibilidad: extracción multimodal de pedidos (PDF/Excel), extracción de cotizaciones y acuerdos comerciales, optimización y síntesis explicativa de rutas de transporte y flota, generación bilingüe de descripciones de producto y enriquecimiento semántico de búsquedas en catálogo.
+> **«Principio Rector: Tolerancia Cero a la Parálisis por Deprecación de Modelos de IA. Ningún retiro de versión por Google Gemini, cambio de endpoint en v1beta ni obsolescencia de modelos externos puede interrumpir la toma de pedidos, la liquidación de acuerdos comerciales ni el despacho logístico. Todo el tráfico de IA del ERP y canales cliente se rige por una fuente única de verdad con detección Poka-Yoke de obsolescencia, conmutación automática en cascada, auditoría inmutable en `audit_logs` y resiliencia transparente hacia la interfaz.»**
+
+#### 10.3.2 Fuente Única de Verdad: Parámetros Canónicos (`src/lib/ai/aiModelConfig.ts`)
+Toda llamada a modelos generativos de Google en la plataforma debe resolver sus dependencias a través del módulo central `src/lib/ai/aiModelConfig.ts`:
+
+1. **Modelo Primario Oficial (`PRIMARY_AI_MODEL`):**
+   - **Identificador Técnico:** `'gemini-3.8-flash'`
+   - **Versión de Arquitectura:** Generación Gemini 3.0 (2026).
+   - **Capacidad de Entrada:** 1.048.576 tokens (Ventana de contexto de 1M).
+   - **Capacidad de Salida:** 65.536 tokens (64k tokens de generación).
+   - **Capacidades Nativas:** Razonamiento reflexivo integrado (`thinking: true`), generación de contenido estructurado JSON, conteo de tokens y soporte multimodal nativo de documentos PDF e imágenes binarias mediante `inline_data`.
+
+2. **Cascada Canónica de Contingencia (`CANONICAL_MODEL_CASCADE`):**
+   - Jerarquía obligatoria e inmutable de 5 niveles en estricto orden de prioridad descendente:
+     ```typescript
+     export const PRIMARY_AI_MODEL = 'gemini-3.8-flash';
+
+     export const CANONICAL_MODEL_CASCADE: readonly string[] = [
+       'gemini-3.8-flash',
+       'gemini-3.7-flash',
+       'gemini-3.5-flash',
+       'gemini-flash-latest',
+       'gemini-2.5-flash',
+     ] as const;
+     ```
+   - Si el modelo primario o cualquier nivel intermedio es retirado por el proveedor, el sistema transiciona automáticamente al siguiente peldaño sin excepción ni bloqueo del usuario.
+
+#### 10.3.3 Mecanismo Centinela: Wrapper `executeWithObsolescenceGuard`
+El Centinela Poka-Yoke encapsula cada invocación a los modelos generativos garantizando aislamiento de fallos, timeout determinista y failover sin pérdida de estado:
+
+1. **Firmas de Detección de Obsolescencia (`isObsolescenceError`):**
+   Se tipifica como evento de obsolescencia o deprecación cuando la respuesta o excepción del SDK/REST de Google satisface:
+   - Código de estado HTTP `404` (`Not Found`) o `410` (`Gone`).
+   - Propiedad `statusText` con valor `'Not Found'` o `'Gone'`, o `rawStatus === 'NOT_FOUND'`.
+   - Mensaje de error conteniendo patrones canónicos:
+     - `'MODEL_DEPRECATED'`
+     - `'[404 Not Found]'`
+     - `'is not found for API version'`
+     - `'not supported for generateContent'`
+     - `'is deprecated'`
+     - `'has been discontinued'`
+     - `'model not found'`
+
+2. **Aislamiento Estricto de Errores de Cuota y Cliente (Poka-Yoke Anti-Falsas Conmutaciones):**
+   - **Errores HTTP 429 (`RESOURCE_EXHAUSTED`, Rate Limit o Quota Exceeded):** **NUNCA** se tipifican como obsolescencia. Conmutar de modelo ante un límite de cuota o rate limit violaría las cuotas del proyecto y ocultaría la saturación de tráfico. El Centinela relanza inmediatamente el error 429 para que el cliente aplique backoff exponencial o informe al usuario.
+   - **Errores de Formato o Documento Corrupto (HTTP 400):** No gatillan conmutación de modelo; se reportan al cliente para subsanar el archivo subido.
+   - **Errores de Timeout o Conectividad de Red (`AbortError`, `ETIMEDOUT`):** Se cancelan mediante `AbortController` sin marcar el modelo como obsoleto.
+
+3. **Gestión de Timeouts Deterministas:**
+   - Cada ejecución define un timeout configurable (por defecto 45.000 ms para extracción de pedidos y documentos complejos; acotado a 4.000 - 5.000 ms para búsquedas semánticas o SEO en tiempo real).
+   - El control se efectúa mediante `AbortController.signal` y `Promise.race`, liberando sockets y memoria al expirar.
+
+4. **Registro Inmutable en `audit_logs` (Non-Blocking):**
+   - Ante cualquier conmutación forzada por obsolescencia, el Centinela persiste de forma asíncrona y no bloqueante un registro en la tabla Supabase `audit_logs`:
+     - `action`: `'AI_MODEL_OBSOLESCENCE_DETECTED'`
+     - `module`: Identificador del módulo origen (ej. `'orders'`, `'commercial'`, `'transport'`, `'ai_governance'`).
+     - `collaborator_id`: `null` (garantizando compatibilidad referencial ante ejecuciones desatendidas o fallbacks de FK).
+     - `collaborator_name`: `'System / AI Obsolescence Sentinel'`
+     - `details` (JSONB):
+       ```json
+       {
+         "failedModel": "gemini-3.8-flash",
+         "fallbackModel": "gemini-3.7-flash",
+         "reason": "models/gemini-3.8-flash is not found for API version v1beta...",
+         "statusCode": 404,
+         "operationName": "order_parser_engine",
+         "timestamp": "2026-09-23T19:27:22.000Z"
+       }
+       ```
+   - **Salvaguarda de Aislamiento:** Si la inserción en `audit_logs` experimenta un fallo o micro-desconexión con Postgres, se captura silenciosamente en consola y **jamás interrumpe el flujo operativo ni bloquea la respuesta al usuario**.
+
+5. **Inyección Transparente de Advertencia (`_obsolescenceWarning`):**
+   - Al conmutar de modelo exitosamente, el Centinela adjunta al objeto de resultado retornado la propiedad opcional `_obsolescenceWarning`:
+     ```typescript
+     export interface ObsolescenceWarningMetadata {
+       failedModel: string;
+       fallbackModel: string;
+       reason: string;
+       timestamp: string;
+       statusCode?: number;
+     }
+     ```
+   - Las APIs y controladores propagan esta bandera en los metadatos de respuesta JSON, permitiendo a consolas de monitoreo y administradores visualizar alertas proactivas sin alterar las interfaces ni los esquemas de datos del ERP.
+
+#### 10.3.4 Centinela de Diagnóstico y Salud del Catálogo (`/api/ai/health`)
+El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico activo de la infraestructura cognitiva:
+1. **Prueba Activa de Latencia:** Emite una inferencia ligera de verificación sobre `gemini-3.8-flash`, registrando la latencia de respuesta en milisegundos (`latency_ms`) y estado operativo (`operational`).
+2. **Escaneo del Catálogo Google (`/v1beta/models`):** Audita la disponibilidad del modelo primario directamente en el catálogo de modelos de Google Cloud y detecta si existen versiones Flash superiores en el mercado para emitir recomendaciones preventivas a DevOps.
+3. **Estado de Salud Normalizado:** Retorna un contrato estructurado con `ok: true/false`, `status: 'healthy' | 'degraded' | 'obsolescence_detected' | 'error'`, telemetría del modelo primario y estado de disponibilidad de la cascada.
+
+#### 10.3.5 Criterios de Aceptación BDD (Gherkin)
+
+##### Escenario 25: Conexión Primaria Exitosa a Gemini 3.8 Flash con PDF Binario
+- **Given** un archivo de orden de compra en formato PDF binario (`application/pdf`) de 70 KB codificado en `inline_data` base64.
+- **And** el modelo institucional configurado es `gemini-3.8-flash`.
+- **When** el motor de ingesta `order-parser-engine.ts` procesa el documento invocando a Gemini.
+- **Then**:
+  1. La inferencia se ejecuta contra el modelo primario `gemini-3.8-flash` con razonamiento integrado.
+  2. El modelo procesa los tokens de imagen/documento nativamente y extrae con exactitud el cliente, fecha de entrega requerida y la lista de ítems.
+  3. No se dispara conmutación en la cascada y la respuesta no contiene `_obsolescenceWarning`.
+  4. La orden de compra se previsualiza en la Mesa de Trabajo sin errores de codificación binaria.
+
+##### Escenario 26: Detección Poka-Yoke de Obsolescencia y Conmutación en Cascada con Registro en Audit Logs
+- **Given** una simulación de deprecación donde la API de Google retorna `HTTP 404 Not Found` o `'MODEL_DEPRECATED'` para el modelo primario `gemini-3.8-flash`.
+- **When** un operador o webhook dispara la extracción de un pedido o propuesta comercial a través de `executeWithObsolescenceGuard`.
+- **Then**:
+  1. El Centinela captura el error 404 mediante `isObsolescenceError` y detiene la propagación de la excepción hacia el usuario.
+  2. Conmuta de forma automática e inmediata al siguiente modelo disponible de la cascada canónica (`gemini-3.7-flash`).
+  3. Ejecuta la inferencia con éxito en el modelo de relevo y completa la extracción de datos.
+  4. Inserta de forma asíncrona un registro en `audit_logs` con `action: 'AI_MODEL_OBSOLESCENCE_DETECTED'`, `collaborator_id: null` y los detalles del incidente (`failedModel: 'gemini-3.8-flash'`, `fallbackModel: 'gemini-3.7-flash'`).
+  5. Retorna la información extraída con el metadato inyectado `_obsolescenceWarning`, permitiendo al sistema notificar al administrador mientras el operador continúa trabajando sin interrupciones.
+
+##### Escenario 27: Telemetría Proactiva y Auditoría de Catálogo en `/api/ai/health`
+- **Given** el endpoint de diagnóstico de infraestructura cognitiva en `/api/ai/health`.
+- **When** un monitor de infraestructura o el panel de administración ejecuta una petición HTTP `GET /api/ai/health`.
+- **Then**:
+  1. El endpoint verifica la presencia y validez de la API Key institucional.
+  2. Mide y reporta la latencia en milisegundos de `gemini-3.8-flash`.
+  3. Consulta el catálogo `/v1beta/models` de Google y valida que el modelo primario esté listado y activo.
+  4. Retorna código HTTP `200` con `status: 'healthy'`, detallando el estado del modelo primario y la disponibilidad de los modelos de la cascada de contingencia.
 
 ---
 
@@ -1444,3 +1572,237 @@ Para blindar el flujo comercial, se establecen cuatro salvaguardas de gobernanza
 - **Then**:
   1. El Drawer lateral se abre y muestra en la parte superior el banner ámbar: *"Atención: Este acuerdo contiene X producto(s) inactivos en el catálogo..."*.
   2. Al pulsar el botón "Reactivar X Productos en Catálogo", el sistema ejecuta la mutación en Supabase, remueve el banner y actualiza los badges a estado activo instantáneamente.
+
+---
+
+## 18. Módulo de Transporte, Flota & Torre de Control Logística (`/admin/transport`) (SDD v1.9.0)
+
+### 18.1 Misión del Dominio & Principio Rector Logístico
+La Torre de Control de Transporte (`src/app/admin/transport/page.tsx`) es el epicentro de orquestación, balanceo de carga, monitoreo telemático y gobernanza vehicular de FruFresco en su Bodega Central (Corabastos):
+
+> **«Ningún kilogramo de producto sale a reparto sin estar cubicado, georreferenciado, asignado a una bahía física de muelle (1 a 150) y respaldado por una ruta optimizada con conductor autorizado. La Torre de Control cierra el ciclo entre la venta aprobada, el alistamiento en piso y la entrega física al cliente institucional o consumidor final, garantizando el balance Kardex de canastillas en calle.»**
+
+---
+
+### 18.2 Las 8 Consolas de Operación Logística
+
+1. **Monitor Global en Vivo (`map`):**
+   - Integración con `@vis.gl/react-google-maps` (Map ID institucional `bf725916f72f2fd`).
+   - Telemetría en tiempo real: Marcadores inteligentes de vehículos disponibles en patio (esmeralda), en ruta (azul) y en mantenimiento (ámbar/rojo).
+   - Feed lateral de rutas activas (`activeRoutes`): cálculo dinámico de avance porcentual de paradas completadas vs. pendientes, volumen total a bordo (kg) y acceso directo a WhatsApp del conductor en 1 clic.
+   - HUD flotante con estadísticas consolidadas: En Tránsito, Entregas Hoy, Volumen Total (kg) y Alertas/Novedades (`delivery_events`).
+
+2. **Planeador Algorítmico de Rutas (`planner` - `RoutePlanner.tsx`):**
+   - Orquestador de despachos $D+1$ con soporte para optimización automática o enrutamiento manual.
+   - Integración con **Google Maps Route Optimization API** (`/api/transport/optimize`) y motor de fallback heurístico local.
+   - Restricciones operativas duras: Capacidad máxima del furgón (`capacity_kg`), ventanas de entrega RFC3339 B2B (priorizando manual `is_manual_delivery` sobre perfil de cliente), duración de servicio por parada y pausa activa legal obligatoria de 45 minutos.
+   - Despacho y confirmación atómica (`/api/transport/confirm`): Inserción simultánea en `routes`, `route_stops`, actualización de `orders.status = 'picking'`, cómputo de canastillas y asignación de bahías de muelle.
+
+3. **Muelle / Gestión de Bahías de Piso (`staging` - `StagingSpacesManagement.tsx`):**
+   - Matriz visual interactiva de las **150 Bahías Físicas** de la nave central de bodega.
+   - Asignación dinámica temporal basada en el intervalo de ocupación sin traslape:
+     $$[\text{salida} - \text{duración} - 15\text{m buffer},\ \text{salida}]$$
+   - Algoritmo de agrupamiento geográfico por corredores urbanos (Suroccidente, Fontibón/Salitre, Centro, Chapinero/Zona T, Norte/Sabana, Sur/Kennedy).
+   - Capacidad estricta: 36 canastillas apilables por bahía; pedidos voluminosos reservan múltiples bahías contiguas.
+
+4. **Gestión de Flota Vehicular (`fleet` - `FleetManagement.tsx`):**
+   - Maestro de vehículos (`fleet_vehicles`): Placa, marca, modelo, furgón térmico/refrigerado, capacidad en kg y canastillas máximas.
+   - Telemetría de odómetro: Registro de kilometraje actual (`current_odometer`), cálculo automático de recorrido promedio diario (`avg_daily_km`) e historial de lecturas.
+   - Control de estados del vehículo: `available` (en patio), `on_route` (en despacho), `maintenance` (en taller) e `inactive`.
+
+5. **Panel de Conductores & Especialidades (`drivers_panel` - `ConductorPanel.tsx`):**
+   - Directorio de colaboradores autorizados con rol y especialidad de conductor (`collaborators` / `profiles` con `role = 'driver'`).
+   - Asignación 1:1 o rotativa de vehículo asignado por defecto (`fleet_vehicles.driver_id`).
+   - Métricas de desempeño individual: Rutas realizadas, tasa de entregas exitosas, kilos transportados y registro de novedades de ruta.
+
+6. **Mantenimiento Preventivo & Correctivo (`maintenance` - `MaintenanceManagement.tsx`):**
+   - Programación de tareas rutinarias (`maintenance_schedules`): Cambio de aceite (cada 5.000 km), pastillas de frenos (cada 15.000 km), rotación de llantas, alineación y balanceo, inspección de refrigeración de furgón.
+   - Alertas preventivas automáticas: Tareas marcadas como urgentes si el odómetro supera el `next_due_km` o la fecha supera `next_due_date`.
+   - Historial de ejecución (`maintenance_history_logs`): Registro del mantenimiento ejecutado, costo, evidencias fotográficas o facturas en Supabase Storage, y recalibración automática del próximo ciclo.
+   - Exportación de reportes de mantenimiento a Excel optimizada con Dynamic Import (`await import('xlsx')`).
+
+7. **Insights & KPIs de Torre de Control (`kpis` - `ControlTowerKPIs.tsx`):**
+   - Comparativa de eficiencia: Rutas generadas por optimización algorítmica vs. rutas trazadas manualmente.
+   - Indicadores operativos clave: Paradas promedio por ruta, kilómetros promedio por parada, minutos promedio de atención en cliente y factor de ocupación cúbica de los furgones.
+
+8. **Torre de Control de Canastillas & Kardex de Patio (`crates`):**
+   - Gobernanza del activo retornable más crítico de la operación (canastillas plásticas estándar de 12.5 kg).
+   - Balance dinámico total:
+     $$\text{Total Canastillas} = \text{Canastillas en Calle (Préstamo Clientes)} + \text{Canastillas en Tránsito (Camiones)} + \text{Stock en Patio (Bodega Central)}$$
+   - Poka-Yoke de Alerta Roja: Clientes o sucursales con retención acumulada $> 40$ canastillas se categorizan en alerta de retención, exigiendo recolección obligatoria en el siguiente despacho.
+   - Ajustes de Patio / Kardex: Registro transaccional de compras de canastillas nuevas, bajas por rotura/daño y ajustes de inventario físico inicial.
+
+---
+
+### 18.3 Contratos Matemáticos & Algoritmos de Transporte
+
+#### 1. Algoritmo de Estimación de Canastillas por Pedido
+Para planificar la cubicación física de los camiones y el muelle antes del pesaje de picking:
+$$\text{Canastillas Estimadas} = \max\left(1,\ \left\lceil \frac{\text{total\_weight\_kg}}{\text{avg\_kg\_per\_crate}} \right\rceil\right)$$
+Donde $\text{avg\_kg\_per\_crate} = 12.5\text{ kg}$ por defecto (configurable en `logistic_parameters`).
+
+#### 2. Ecuación Canónica de Asignación Temporal de Bahías (Poka-Yoke de Traslape)
+Una bahía física $S \in [1, 150]$ se asigna a un pedido si y solo si, para cada intervalo previamente reservado $[A_k, B_k]$ en esa bahía, se cumple la condición de disyunción temporal estricta:
+$$\neg \Big( (T_{\text{inicio}} < B_k) \land (A_k < T_{\text{fin}}) \Big)$$
+Donde:
+- $T_{\text{fin}} = \text{Hora de Salida del Vehículo}$ (ej. 04:30 AM).
+- $T_{\text{inicio}} = T_{\text{fin}} - \left( 15\text{m base} + \left( \text{Total Canastillas} \times \frac{5\text{m}}{10} \right) \right) - 15\text{m buffer}$.
+
+#### 3. Capacidad Máxima de Carga Vehicular
+Para todo vehículo $V$, la asignación de pedidos en el planeador debe respetar:
+$$\sum_{o \in \text{Ruta}(V)} o.\text{total\_weight\_kg} \le V.\text{capacity\_kg}$$
+Si la suma supera la capacidad, el planeador emite una advertencia visual inmediata de sobrepeso y bloquea la confirmación automática a menos que exista autorización manual de sobrecupo.
+
+---
+
+### 18.4 Contratos de Datos & Tablas Canónicas
+
+```
+┌─────────────────────┐        ┌─────────────────────┐
+│   fleet_vehicles    │        │      profiles       │
+├─────────────────────┤        ├─────────────────────┤
+│ id (PK)             │◀───┐   │ id (PK)             │
+│ plate (UNIQUE)      │    │   │ role ('driver',...) │
+│ capacity_kg         │    │   │ needs_crates        │
+│ current_odometer    │    │   │ crate_balance       │
+│ driver_id (FK) ─────┼────┼───┤ logistics_data      │
+│ status              │    │   └─────────────────────┘
+└──────────┬──────────┘    │              ▲
+           │ 1             │              │ driver_id
+           │               │              │
+           ▼ N             │       ┌──────┴──────────────┐
+┌─────────────────────┐    │       │       routes        │
+│maintenance_schedules│    │       ├─────────────────────┤
+├─────────────────────┤    │       │ id (PK)             │
+│ id (PK)             │    │       │ vehicle_plate       │
+│ vehicle_id (FK)     │    │       │ driver_id (FK)      │
+│ task_name           │    │       │ status              │
+│ next_due_km         │    │       │ total_kilos         │
+│ is_urgent           │    │       │ is_optimized        │
+└─────────────────────┘    │       └──────────┬──────────┘
+                           │                  │ 1
+                           │                  ▼ N
+                           │       ┌─────────────────────┐
+                           │       │     route_stops     │
+                           │       ├─────────────────────┤
+                           │       │ id (PK)             │
+                           │       │ route_id (FK)       │
+                           │       │ order_id (FK) ──────┼──► orders (crates_count,
+                           │       │ sequence_number     │    warehouse_spaces,
+                           │       │ status              │    delivery_slot)
+                           │       └─────────────────────┘
+```
+
+---
+
+### 18.5 Matriz de Permisos RBAC & Gobernanza
+
+| Permiso Técnico | Etiqueta en Consola | Capacidades Autorizadas |
+| :--- | :--- | :--- |
+| `admin.transport.view` | Visualizar Torre de Control (Lectura) | Inspección de Google Maps en vivo, lectura de feed de rutas, consulta de odómetros, revisión de cronograma de mantenimiento y consulta de saldos de canastillas. |
+| `admin.transport.edit` | Operar y Modificar Logística (Escritura) | Optimización y confirmación de rutas (`/api/transport/confirm`), reasignación de bahías de muelle, alta/modificación de vehículos y conductores, registro de mantenimientos y ajuste de stock de patio de canastillas. |
+
+---
+
+### 18.6 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 21: Asignación Temporal de Bahías de Muelle sin Colisión Horaria
+- **Given** una ruta para el vehículo "FXX-001" que sale a las 05:00 AM y requiere 3 bahías contiguas para 90 canastillas (ocupación de 03:45 AM a 05:00 AM).
+- **When** el despachador ejecuta la confirmación de rutas en el planeador.
+- **Then**:
+  1. El sistema evalúa las bahías 1 a 150 y asigna espacios libres que no tengan intervalos solapados.
+  2. Escribe en `orders.warehouse_spaces` los números de bahía asignados.
+  3. En la matriz de `StagingSpacesManagement.tsx`, las bahías asignadas se iluminan con el color correspondiente y muestran el nombre del cliente y código de ruta.
+
+#### Escenario 22: Alerta Temprana de Sobrecupo en Flota
+- **Given** un vehículo con capacidad máxima de 2.000 kg.
+- **When** el operador arrastra o asigna pedidos cuya masa combinada suma 2.150 kg.
+- **Then**:
+  1. La barra de carga del vehículo cambia inmediatamente a rojo vibrante con el indicador `107.5% (+150 kg sobrecupo)`.
+  2. El botón de confirmación muestra una advertencia visual de exceso de peso.
+
+#### Escenario 23: Sincronización Bidireccional de Pestañas vía URL (`?tab=`)
+- **Given** un enlace externo proveniente de Novedades de Inventario con `href="/admin/transport?tab=maintenance"`.
+- **When** el usuario navega a la URL o abre el vínculo en una pestaña nueva.
+- **Then**:
+  1. La Torre de Control carga directamente en la consola de **Mantenimiento**.
+  2. Al conmutar a la consola de "Canastillas", la barra de navegación del navegador se actualiza instantáneamente a `?tab=crates` sin recargar la página.
+
+#### Escenario 24: Alerta Automática de Retención de Canastillas (> 40 Unidades)
+- **Given** un cliente B2B ("Restaurante El Portal") cuyo saldo acumulado en `profiles.crate_balance` es de 52 canastillas.
+- **When** el despachador o analista logístico consulta la pestaña "Canastillas" en la Torre de Control.
+- **Then**:
+  1. La cuenta se clasifica automáticamente en el bloque de **Sucursales en Alerta**.
+  2. Muestra un badge rojo `[Retención Alta: 52 und]` y la recomendación operativa de recolección prioritaria en el siguiente despacho.
+
+---
+
+- [x] **Tarea TRS-1:** Documentar la Sección 18 en `SPEC.md` con las 8 consolas, contratos matemáticos de asignación de bahías y matriz RBAC.
+- [x] **Tarea TRS-2:** Desacoplar las 6 consolas pesadas en `src/app/admin/transport/page.tsx` con Dynamic Imports (`next/dynamic`, `ssr: false`, `SubtabSkeleton`) para aligerar el bundle inicial.
+- [x] **Tarea TRS-3:** Implementar sincronización bidireccional de parámetros URL (`?tab=...`) para soportar enlaces directos a consolas satélite.
+- [x] **Tarea TRS-4:** Migrar `import * as XLSX from 'xlsx'` en `MaintenanceManagement.tsx` a dynamic import bajo demanda (`await import('xlsx')`).
+- [x] **Tarea TRS-5:** Actualizar la auditoría de integración de módulos en `module_integration_audit.md` marcando el Módulo 7 como Homologado.
+
+---
+
+### 18.8 Resoluciones del Grill-Me Táctico & Arquitectura de Cierre
+
+Tras el interrogatorio técnico táctico (/grill-me) de 6 fases, se consolidan las siguientes resoluciones vinculantes de arquitectura:
+
+| Código | Brecha / Dominio | Resolución Aprobada en Grill-Me | Especificación Técnica & Contrato |
+| :--- | :--- | :--- | :--- |
+| **TRS-GAP-01** | Identidad de Conductores | **Unificación Hacia `profiles`** | Todo conductor debe existir como cuenta institucional en `profiles` con `role = 'driver'`. Se migra `fleet_vehicles.driver_id` y `ConductorPanel.tsx` para operar sobre `profiles.id`, garantizando que `routes.driver_id = auth.uid()` opere nativamente con las políticas RLS de la App Móvil (`/ops/driver/route`). |
+| **TRS-GAP-02** | Seguridad Lógica RLS | **Aislamiento Estricto por Rol** | Eliminación de políticas `USING (true)` para `anon`. Lectura y mutación restringidas estrictamente a personal interno de bodega (`admin`, `sys_admin`, `logistics`, `driver`). Roles de clientes (`b2b_client`, `client`) y anónimos quedan 100% excluidos de consultar rutas, flota y Kardex. |
+| **TRS-GAP-03** | Trazabilidad de Canastillas | **Doble Asiento Automático en Ruta** | En el momento de la entrega en punto de cliente (`/ops/driver/route`), el sistema registra atómicamente: 1. Préstamo de canastillas entregadas (`delivery_loan` en `crates_ledger` e incremento en `profiles.crate_balance`). 2. Devolución de canastillas vacías recolectadas (`driver_pickup` y decremento en `profiles.crate_balance`). |
+| **TRS-GAP-04** | Reactividad en Tiempo Real | **Suscripción Realtime Condicionada al Radar** | Para optimizar recursos de conexión y ancho de banda, la suscripción a `postgres_changes` sobre `routes` y `delivery_events` se activa **exclusivamente cuando la pestaña `Monitor Global` (`activeTab === 'map'`) está abierta y visible**, desuscribiéndose al navegar a otras consolas. |
+| **TRS-GAP-05** | Stock de Canastillas de Patio | **Semilla en Base de Datos & Carga Dinámica** | Se erradica el valor hardcodeado `420` en React. El saldo inicial de patio se gobierna mediante la clave `warehouse_crate_stock` en `app_settings` (inicializada vía script SQL oficial). En la interfaz se renderiza un estado de carga limpio hasta obtener la respuesta de la base de datos. |
+| **TRS-GAP-06** | Optimización Cloud & Telemetría | **Resiliencia GCP en Vercel + Respaldo GPS Apps-360** | 1. `/api/transport/optimize` admite `GCP_SERVICE_ACCOUNT_JSON` directo desde variables de entorno de Vercel. 2. Se incorpora en el Monitor Global un visor lateral / drawer interactivo de respaldo que enlaza a `https://plataforma.apps-360.online/ui/map/objects/list` para validar en tiempo real los chips GPS físicos de los vehículos. |
+
+---
+
+### 18.9 Conexión Canónica con Google Route Optimization API & Telemetría Satelital
+
+#### A. Arquitectura del Conector Google Cloud Route Optimization (`/api/transport/optimize`)
+La planificación algorítmica de despachos de FruFresco se articula directamente con el servicio empresarial de Google Cloud:
+1. **Endpoint REST Canónico:** `https://routeoptimization.googleapis.com/v1/projects/${projectId}:optimizeTours`
+2. **Autenticación en Dos Capas:**
+   - **Capa Primaria (OAuth2 JWT Service Account):** Genera y almacena en memoria un token Bearer con alcance `https://www.googleapis.com/auth/cloud-platform` válido por 55 minutos, generado a partir de `gcp-service-account.json` (desarrollo local) o `process.env.GCP_SERVICE_ACCOUNT_JSON` (producción Vercel).
+   - **Capa Secundaria (API Key):** Inyección de query parameter `?key=${gcpApiKey}` en caso de contingencia.
+3. **Mapeo de Dominio FruFresco a Google Cloud:**
+   - **Depósito de Salida/Llegada:** Coordenadas de Bodega Central Corabastos (`lat: 4.628, lng: -74.153`).
+   - **Envíos (Shipments):** Cada orden aprobada se traduce en una parada con demanda de peso (`total_weight_kg`) y canastillas (`crates_count`).
+   - **Ventanas Horarias RFC3339:** Extraídas en hora local de Bogotá (`America/Bogota`), priorizando ventanas manuales de cliente B2B sobre ventanas del perfil institucional.
+   - **Regla de Pausa Activa Obligatoria:** Inyección de descanso reglamentario de 45 minutos (`driver_break_mins`) entre la hora 4 y 6 de turno del conductor.
+   - **Condiciones de Tráfico:** `considerRoadTraffic: true` y estrategia de búsqueda `CONSUME_ALL_AVAILABLE_TIME`.
+4. **Fallback Heurístico de Alta Resiliencia:** Si la cuota de GCP se agota o hay microcortes de red, el motor conmuta automáticamente a un clusterer heurístico territorial por centroides y vecinos cercanos (*nearest-neighbor*), impidiendo que la planta de despacho se detenga.
+5. **Síntesis Explicativa Multimodal (Gemini 2.5 Flash):** Al recibir la solución de Google, se ejecuta una consulta con Gemini para generar un resumen ejecutivo en lenguaje natural que explica al despachador el porqué de la agrupación de cada camión.
+
+#### B. Respaldo Satelital con Chips GPS Físicos (`apps-360.online`)
+Como salvaguarda ante zonas sin señal de telefonía celular o teléfonos de conductor apagados:
+- Se integra en el Monitor Global un acceso directo / Drawer de Inspección Satelital apuntando a la consola de rastreo de hardware vehicular `https://plataforma.apps-360.online/ui/map/objects/list`.
+- Permite al despachador cotejar en una sola pantalla la posición telemática calculada por la ruta frente a la ubicación geofísica real transmitida por el chip satelital del camión.
+
+---
+
+### 18.10 Poka-Yoke de Asignación Física de Bahías & Prevención de Ambigüedad en Lanzamiento
+
+#### A. Contrato de Cubicaje y Representación Fraccionada en Plano de 150 Bahías
+1. **Regla de Invarianza de Capacidad:** La capacidad nominal por bahía en suelo se establece en **36 canastillas apilables** (`logistic_parameters.space_capacity = 36`).
+2. **Representación Fraccionada Anti-Confusión:** Cuando un pedido supera la capacidad de una bahía y requiere $N$ espacios contiguos ($N > 1$):
+   - Cada celda en el plano de las 150 bahías debe renderizar la fracción de carga correspondiente:
+     $$\text{Carga por celda} = \left\lceil \frac{\text{Canastillas Totales}}{N} \right\rceil \quad \longrightarrow \quad \text{Etiqueta: } \mathbf{X\text{c } [k/N]}$$
+   - *Ejemplo:* Un pedido con 32 canastillas asignado a 2 bahías (#05 y #06) mostrará `16c [1/2]` en la bahía 5 y `16c [2/2]` en la bahía 6. Queda terminantemente prohibido duplicar el total (mostrar `32c` en ambas celdas), eliminando la falsa percepción de duplicidad de volumen (64 canastillas).
+3. **Detección Reactiva de Descalce:** Si las bahías guardadas en base de datos (`orders.warehouse_spaces`) difieren del cálculo teórico bajo la capacidad actual (`calculateCratesAndSpaces`), la interfaz despliega un **Banner de Alerta Preventiva** con botón de *«Sincronizar Todo a X Canastillas/Bahía»* y controles individuales de *«Ajustar a N bahía(s)»* por cliente.
+4. **Auto-Clustering en Entrada:** Al ingresar al Asistente de Despacho Manual o Centro de Muelle sin bahías asignadas para la tanda, el sistema genera la asignación automática en memoria con capacidad 36 evitando campos vacíos o inconsistentes.
+
+#### B. Prevención de Ambigüedad en Lanzamiento de Despacho (Digital vs Físico)
+1. **Diferenciación Terminológica Inequívoca:**
+   - **Modo Digital (Nube / Paperless):** El botón de acción ejecuta la sincronización en la nube hacia tablets y terminales de bodega con el rótulo explícito:  
+     `LANZAR A TERMINALES DIGITALES (TABLETS / SIN PAPEL)`. Se advierte de forma explícita que no emitirá hojas de impresión.
+   - **Modo Manual (Piso / Contingencia):** El botón inicia el asistente lineal guiado de 4 pasos con el rótulo:  
+     `INICIAR ASISTENTE GUIADO (PASO A PASO) ➔`.
+2. **Acceso Directo Universal de Impresión 1-Clic:** Tanto en la vista modal de lanzamiento como en el paso final del asistente guiado, se dispone de un botón permanente y visible:  
+   `[Imprimir Kit de Contingencia Completo (1-Clic)]` enlazado a `/admin/orders/contingency-print?mode=all&orderIds=...`, permitiendo al supervisor emitir la totalidad del juego físico (Sábana de Alistamiento, Consolidado de Compras, Remisiones Duplicadas y Rótulos Térmicos) sin bloqueos operativos.
+
+
+

@@ -18,6 +18,7 @@ import {
     Calendar,
     Layers,
     ShieldAlert,
+    AlertTriangle,
     Search,
     Maximize2,
     Minimize2,
@@ -274,15 +275,21 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
         }
     };
 
-    // Construir la cuadrícula física de los 150 espacios
+    // Construir la cuadrícula física de los 150 espacios con desglose fraccionado
     const grid150 = useMemo(() => {
         const slots: Record<number, any> = {};
 
         preparedOrders.forEach(o => {
             const assigned = manualSpacesMap[o.id] || [];
             const { crates, spaces } = calculateCratesAndSpaces(o.total_weight_kg, avgKgPerCrate, spaceCapacity);
-            assigned.forEach(slot => {
+            const totalAssigned = assigned.length;
+
+            assigned.forEach((slot, idx) => {
                 if (slot >= 1 && slot <= 150) {
+                    const slotCrates = totalAssigned > 1
+                        ? Math.max(1, Math.round(crates / totalAssigned))
+                        : crates;
+
                     slots[slot] = {
                         orderId: o.id,
                         sequenceId: o.sequence_id,
@@ -291,8 +298,10 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                         totalKg: o.total_weight_kg,
                         clientType: o.clientType || 'institucional',
                         crates,
+                        slotCrates,
+                        slotIndex: idx,
                         spacesCount: spaces,
-                        assignedCount: assigned.length,
+                        assignedCount: totalAssigned,
                         assignedSlots: assigned
                     };
                 }
@@ -305,6 +314,16 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 slotNum,
                 occupiedBy: slots[slotNum] || null
             };
+        });
+    }, [preparedOrders, manualSpacesMap, avgKgPerCrate, spaceCapacity]);
+
+    // Detección reactiva de descalce entre bahías asignadas y capacidad configurada
+    const mismatchedOrders = useMemo(() => {
+        return preparedOrders.filter(o => {
+            const assigned = manualSpacesMap[o.id] || [];
+            if (assigned.length === 0) return true; // sin bahía asignada
+            const { spaces } = calculateCratesAndSpaces(o.total_weight_kg, avgKgPerCrate, spaceCapacity);
+            return assigned.length !== spaces;
         });
     }, [preparedOrders, manualSpacesMap, avgKgPerCrate, spaceCapacity]);
 
@@ -558,6 +577,67 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 </div>
             </div>
 
+            {/* Banner de Sincronización Reactiva de Bahías (Poka-Yoke de Cubicaje) */}
+            {mismatchedOrders.length > 0 && (
+                <div style={{
+                    backgroundColor: '#FFFBEB',
+                    border: '1.5px solid #FCD34D',
+                    borderRadius: THEME.radius.lg,
+                    padding: '10px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '10px',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                            backgroundColor: '#FEF3C7',
+                            padding: '6px',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <ShieldAlert size={20} color="#B45309" />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.84rem', fontWeight: 900, color: '#92400E' }}>
+                                Descalce de Capacidad Detectado: {mismatchedOrders.length} pedido{mismatchedOrders.length > 1 ? 's' : ''} no coincide{mismatchedOrders.length > 1 ? 'n' : ''} con {spaceCapacity} canastillas/bahía
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: '#B45309' }}>
+                                Hay asignaciones guardadas que difieren de la capacidad actual. Haz clic para re-alinear todas las bahías automáticamente.
+                            </div>
+                        </div>
+                    </div>
+                    {!readOnly && (
+                        <button
+                            onClick={handleApplyAutoClustering}
+                            style={{
+                                backgroundColor: '#D97706',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '6px 14px',
+                                fontSize: '0.76rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)',
+                                transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#B45309'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#D97706'}
+                        >
+                            <Sparkles size={14} /> Sincronizar Todo a {spaceCapacity} Canastillas/Bahía
+                        </button>
+                    )}
+                </div>
+            )}
+
             {/* Layout Principal: Dos Columnas o 1 Columna en Pantalla Completa */}
             <div style={{ 
                 display: 'grid', 
@@ -775,7 +855,9 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                 whiteSpace: 'nowrap',
                                                 flexShrink: 0
                                             }}>
-                                                {slot.occupiedBy.crates}c
+                                                {slot.occupiedBy.assignedCount > 1
+                                                    ? `${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.assignedCount}]`
+                                                    : `${slot.occupiedBy.crates}c`}
                                             </span>
                                         )}
                                     </div>
@@ -867,7 +949,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                         {order.clientType === 'hogar' ? 'Hogar' : 'Institucional'}
                                                     </span>
                                                 </div>
-                                                <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap' }}>
                                                     <span><strong>{Math.round(order.total_weight_kg)} kg</strong></span>
                                                     <span>&bull;</span>
                                                     <span>{crates} canastillas</span>
@@ -876,6 +958,46 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                         {spaces} {spaces > 1 ? 'bahías' : 'bahía'}
                                                     </span>
                                                 </div>
+                                                {assigned.length > 0 && assigned.length !== spaces && (
+                                                    <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{
+                                                            fontSize: '0.58rem',
+                                                            fontWeight: 800,
+                                                            padding: '1px 5px',
+                                                            borderRadius: '3px',
+                                                            backgroundColor: assigned.length > spaces ? '#FEF3C7' : '#FEE2E2',
+                                                            color: assigned.length > spaces ? '#92400E' : '#991B1B',
+                                                            border: `1px solid ${assigned.length > spaces ? '#FCD34D' : '#FCA5A5'}`
+                                                        }}>
+                                                            {assigned.length > spaces ? `⚠️ ${assigned.length} bahías (sobra ${assigned.length - spaces})` : `⚠️ ${assigned.length} bahía (requiere ${spaces})`}
+                                                        </span>
+                                                        {!readOnly && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newSpaces = assigned.length > spaces ? assigned.slice(0, spaces) : assigned;
+                                                                    setManualSpacesMap(prev => ({
+                                                                        ...prev,
+                                                                        [order.id]: newSpaces
+                                                                    }));
+                                                                    setSaveSuccess(false);
+                                                                }}
+                                                                style={{
+                                                                    fontSize: '0.58rem',
+                                                                    fontWeight: 800,
+                                                                    padding: '1px 5px',
+                                                                    borderRadius: '3px',
+                                                                    backgroundColor: '#0D7A57',
+                                                                    color: '#FFFFFF',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Ajustar a {spaces}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Input de Edición Manual */}
@@ -1018,9 +1140,14 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                     </div>
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: '0.56rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Canastillas</div>
+                                    <div style={{ fontSize: '0.56rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                        {hoveredSlot.occupiedBy.assignedCount > 1 ? 'Carga Esta Bahía' : 'Canastillas'}
+                                    </div>
                                     <div style={{ fontSize: '0.82rem', fontWeight: 900, color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-                                        <Package size={11} color="#D97706" /> {hoveredSlot.occupiedBy.crates} und
+                                        <Package size={11} color="#D97706" /> 
+                                        {hoveredSlot.occupiedBy.assignedCount > 1 
+                                            ? `~${hoveredSlot.occupiedBy.slotCrates} und [Bahía ${hoveredSlot.occupiedBy.slotIndex + 1}/${hoveredSlot.occupiedBy.assignedCount}]` 
+                                            : `${hoveredSlot.occupiedBy.crates} und`}
                                     </div>
                                 </div>
                             </div>
@@ -1036,7 +1163,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                     marginTop: '2px', 
                                     border: `1px solid ${hoveredSlot.occupiedBy.clientType === 'hogar' ? '#BFDBFE' : '#A7F3D0'}` 
                                 }}>
-                                    Bahías asignadas: {hoveredSlot.occupiedBy.assignedSlots.map((s: number) => `#${s}`).join(', ')} ({hoveredSlot.occupiedBy.spacesCount} requeridas)
+                                    Pedido total: {hoveredSlot.occupiedBy.crates} canastillas distribuidas en {hoveredSlot.occupiedBy.assignedSlots.length} bahías ({hoveredSlot.occupiedBy.assignedSlots.map((s: number) => `#${s}`).join(', ')}). Requeridas según capacidad ({spaceCapacity}c/b): {hoveredSlot.occupiedBy.spacesCount} bahía(s).
                                 </div>
                             )}
                         </div>

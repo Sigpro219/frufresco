@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase, createAdminClient } from '@/lib/supabase';
+import {
+    executeWithObsolescenceGuard,
+    PRIMARY_AI_MODEL,
+    CANONICAL_MODEL_CASCADE,
+    getGeminiApiKey,
+} from '@/lib/ai/aiModelConfig';
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 export async function POST(req: Request) {
     try {
@@ -57,27 +62,48 @@ export async function POST(req: Request) {
         };
 
         // 3. Intentar mejorar con IA (Opcional, si falla usamos la base de arriba)
-        if (GEMINI_KEY) {
+        const geminiKey = getGeminiApiKey();
+        if (geminiKey) {
             try {
-                console.log(`📡 Intentando optimización con IA (Gemini 3.5)...`);
-                const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_KEY}`, {
+                console.log(`📡 Intentando optimización con IA (${PRIMARY_AI_MODEL})...`);
+                const seoPrompt = `Eres experto en SEO. Genera JSON con: meta_title (max 60 car), meta_description (max 160 car) y keywords (array 5) para FruFresco en ${municipality} para ${audience}.`;
 
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Eres experto en SEO. Genera JSON con: meta_title (max 60 car), meta_description (max 160 car) y keywords (array 5) para FruFresco en ${municipality} para ${audience}.` }] }]
-                    }),
-                    signal: AbortSignal.timeout(5000) // No esperar más de 5 segundos
-                });
+                const aiResult = await executeWithObsolescenceGuard(
+                    async (modelName: string, keyToUse: string, signal?: AbortSignal) => {
+                        const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: seoPrompt }] }]
+                            }),
+                            signal
+                        });
 
-                if (aiResponse.ok) {
-                    const result = await aiResponse.json();
-                    const text = result.candidates[0].content.parts[0].text.trim().replace(/```json|```/g, '');
-                    const aiData = JSON.parse(text);
-                    seoData = { ...seoData, ...aiData };
+                        if (!aiResponse.ok) {
+                            const errData = await aiResponse.json().catch(() => ({}));
+                            const msg = errData?.error?.message || aiResponse.statusText;
+                            const err = new Error(`[Gemini ${aiResponse.status}] ${msg}`);
+                            (err as any).status = aiResponse.status;
+                            (err as any).statusCode = aiResponse.status;
+                            throw err;
+                        }
+
+                        const result = await aiResponse.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.replace(/```json|```/g, '');
+                        if (!text) throw new Error('No text returned');
+                        return JSON.parse(text);
+                    },
+                    {
+                        apiKey: geminiKey,
+                        moduleName: 'seo',
+                        operationName: 'geofence_seo_generation',
+                        timeoutMs: 5000,
+                    }
+                );
+
+                if (aiResult) {
+                    seoData = { ...seoData, ...aiResult };
                     console.log(`✅ IA optimizó los metadatos exitosamente.`);
-                } else {
-                    console.warn(`⚠️ IA saturada. Usando plantilla híbrida de alta calidad.`);
                 }
             } catch (aiErr) {
                 console.warn(`⚠️ Error de IA ignorado. Usando motor híbrido de seguridad.`);

@@ -1,4 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  executeWithObsolescenceGuard,
+  PRIMARY_AI_MODEL,
+  CANONICAL_MODEL_CASCADE,
+  getGeminiApiKey,
+} from '@/lib/ai/aiModelConfig';
 import { sanitizeDocText, findBestProductMatchDetails, resolveClientProfile } from '@/lib/orders/order-parser-engine';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import * as XLSX from 'xlsx';
@@ -28,6 +34,7 @@ export interface CommercialProposalExtraction {
   items: CommercialExtractedItem[];
   observations?: string;
   _modelUsed?: string;
+  _obsolescenceWarning?: any;
 }
 
 /**
@@ -89,81 +96,74 @@ export async function extractCommercialProposalAI(
     }
   `;
 
-  const isPdf = mimeType === 'application/pdf';
-  const modelsToTry = isPdf
-    ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
-    : ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash-lite'];
+  const resolvedApiKey = apiKey?.trim() || getGeminiApiKey();
 
-  let resultText: string | null = null;
-  let successfulModel: string = '';
-  let lastError: any = null;
-  let allModelsNotFound = true;
-
-  for (const modelName of modelsToTry) {
-    try {
-      const parts: any[] = [];
-      if (base64Data && base64Data.trim().length > 0) {
-        parts.push({
-          inline_data: {
-            mime_type: mimeType,
-            data: base64Data.trim()
-          }
-        });
+  const parts: any[] = [];
+  if (base64Data && base64Data.trim().length > 0) {
+    parts.push({
+      inline_data: {
+        mime_type: mimeType,
+        data: base64Data.trim()
       }
-      parts.push({ text: prompt });
+    });
+  }
+  parts.push({ text: prompt });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
+  let successfulModelUsed = PRIMARY_AI_MODEL;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts }] }),
-          signal: controller.signal
-        }
-      );
-      clearTimeout(timeoutId);
+  const extractionResult = await executeWithObsolescenceGuard(
+    async (modelName: string, keyToUse: string, signal?: AbortSignal) => {
+      successfulModelUsed = modelName;
+      console.log(`[CommercialParserEngine] Extrayendo propuesta con modelo central: ${modelName}...`);
 
-      const data = await response.json();
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
+        signal: signal
+      });
+
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         const errorMsg = data?.error?.message || response.statusText || 'Error desconocido';
         console.warn(`[CommercialParserEngine] Error ${response.status} con ${modelName}:`, errorMsg);
 
-        if (response.status !== 404 && response.status !== 410) {
-          allModelsNotFound = false;
-        }
-
-        if (errorMsg.includes('has no pages') || errorMsg.includes('no pages')) {
+        if (errorMsg.includes('has no pages') || errorMsg.includes('no pages') || errorMsg.includes('empty page')) {
           throw new Error('El documento adjunto no contiene páginas legibles o está vacío.');
         }
 
-        lastError = new Error(`[Gemini ${response.status}] ${errorMsg}`);
-        continue;
+        if (response.status === 400 && (errorMsg.includes('corrupted') || errorMsg.includes('failed to parse') || errorMsg.includes('invalid argument') || errorMsg.includes('Invalid base64 payload'))) {
+          const badReqErr = new Error(`Archivo dañado o no compatible. No fue posible interpretar la estructura del documento.`);
+          (badReqErr as any).status = 400;
+          (badReqErr as any).statusCode = 400;
+          throw badReqErr;
+        }
+
+        const apiErr = new Error(`[Gemini ${response.status}] ${errorMsg}`);
+        (apiErr as any).status = response.status;
+        (apiErr as any).statusCode = response.status;
+        throw apiErr;
       }
 
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text) {
-        resultText = text;
-        successfulModel = modelName;
-        break;
+      if (!text) {
+        throw new Error(`El modelo ${modelName} no devolvió texto en la respuesta.`);
       }
-    } catch (err: any) {
-      if (err.message && err.message.includes('páginas')) {
-        throw err;
-      }
-      lastError = err;
-    }
-  }
 
-  if (!resultText) {
-    if (allModelsNotFound) {
-      throw new Error('El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo.');
+      return { rawText: text, modelUsed: modelName };
+    },
+    {
+      apiKey: resolvedApiKey,
+      moduleName: 'commercial',
+      operationName: 'commercial-proposal-extraction',
+      timeoutMs: 45000,
     }
-    throw lastError || new Error('No fue posible procesar la propuesta comercial con el motor de Inteligencia Artificial.');
-  }
+  );
+
+  const resultText = extractionResult.rawText;
 
   // Parse JSON
   let cleanJson = resultText.trim();
@@ -177,8 +177,11 @@ export async function extractCommercialProposalAI(
     }
   }
 
-  const parsed = JSON.parse(cleanJson);
-  parsed._modelUsed = successfulModel;
+  const parsed: CommercialProposalExtraction = JSON.parse(cleanJson);
+  parsed._modelUsed = extractionResult.modelUsed || successfulModelUsed;
+  if (extractionResult._obsolescenceWarning) {
+    parsed._obsolescenceWarning = extractionResult._obsolescenceWarning;
+  }
   return parsed;
 }
 

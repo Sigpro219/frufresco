@@ -55,8 +55,17 @@ interface OrderData {
 export default function ContingencyPrintPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const rawOrderIds = searchParams.get('orderIds') || '';
+    const rawOrderIds = searchParams.get('orderIds') || searchParams.get('ids') || '';
+    const paramDate = searchParams.get('date');
     const mode = searchParams.get('mode') || 'all'; // 'all' | 'picking' | 'remissions' | 'dispatch' | 'purchases'
+
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        if (paramDate) return paramDate;
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        return tomorrow.toISOString().split('T')[0];
+    });
 
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,28 +73,32 @@ export default function ContingencyPrintPage() {
 
     useEffect(() => {
         const fetchOrdersData = async () => {
-            if (!rawOrderIds) {
-                setLoading(false);
-                return;
-            }
-
-            const ids = rawOrderIds.split(',').map(id => id.trim()).filter(Boolean);
-            if (ids.length === 0) {
-                setLoading(false);
-                return;
-            }
-
+            setLoading(true);
             try {
-                const { data, error } = await supabase
+                let query = supabase
                     .from('orders')
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
                         shipping_address, admin_notes, special_notes, warehouse_spaces,
                         profiles:profiles(id, company_name, contact_name, contact_phone, address, nit, role),
                         order_items(id, quantity, unit, unit_price, nickname, variant_label, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, inventory_group))
-                    `)
-                    .in('id', ids)
-                    .order('created_at', { ascending: true });
+                    `);
+
+                if (rawOrderIds) {
+                    const ids = rawOrderIds.split(',').map(id => id.trim()).filter(Boolean);
+                    if (ids.length === 0) {
+                        setLoading(false);
+                        return;
+                    }
+                    query = query.in('id', ids);
+                } else if (selectedDate) {
+                    query = query.eq('delivery_date', selectedDate).neq('status', 'cancelled');
+                } else {
+                    setLoading(false);
+                    return;
+                }
+
+                const { data, error } = await query.order('created_at', { ascending: true });
 
                 if (error) {
                     console.error('Error cargando pedidos para contingencia:', error);
@@ -100,7 +113,7 @@ export default function ContingencyPrintPage() {
         };
 
         fetchOrdersData();
-    }, [rawOrderIds]);
+    }, [rawOrderIds, selectedDate]);
 
     // Consolidado de compras Corabastos
     const consolidatedPurchases = useMemo(() => {
@@ -210,13 +223,23 @@ export default function ContingencyPrintPage() {
                     </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
                         onClick={() => router.back()}
-                        style={{ padding: '10px 18px', backgroundColor: '#F1F5F9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem' }}
+                        style={{ padding: '8px 16px', backgroundColor: '#F1F5F9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem' }}
                     >
                         Volver
                     </button>
+
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '10px', padding: '6px 12px' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>Fecha:</span>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.85rem', fontWeight: '800', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
+                        />
+                    </div>
 
                     {/* Botón Descargar PDF */}
                     <button

@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  executeWithObsolescenceGuard,
+  PRIMARY_AI_MODEL,
+  CANONICAL_MODEL_CASCADE,
+  getGeminiApiKey,
+} from '@/lib/ai/aiModelConfig';
 import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
@@ -13,23 +19,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const apiKey = getGeminiApiKey();
 
     if (!apiKey) {
       return NextResponse.json({ translatedText: text });
     }
 
-    // Usamos el SDK oficial para máxima estabilidad
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
-    
     const prompt = `Translate exactly this product name from Spanish to ${targetLang === 'en' ? 'English' : 'Spanish'}. 
     Return ONLY the translated text. Do not add anything else.
     Input Text: "${text}"`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const translated = response.text().trim().replace(/["']/g, '');
+    const translatedResult = await executeWithObsolescenceGuard(
+      async (modelName: string, keyToUse: string) => {
+        const genAI = new GoogleGenerativeAI(keyToUse);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        return response.text().trim().replace(/["']/g, '');
+      },
+      {
+        apiKey,
+        moduleName: 'translate',
+        operationName: 'sku_name_translation',
+        timeoutMs: 15000,
+      }
+    );
+
+    const translated = translatedResult;
 
     // Background cache update
     try {

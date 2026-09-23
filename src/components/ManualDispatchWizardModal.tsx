@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { 
     OrderStagingInput, 
     allocateStagingSpacesGeographically, 
+    calculateCratesAndSpaces,
     formatSpaceLabel 
 } from '@/lib/stagingSpaceAllocator';
 import { 
@@ -73,11 +74,44 @@ export default function ManualDispatchWizardModal({
     useEffect(() => {
         if (!isOpen) return;
         const initialMap: Record<string, number[]> = {};
+        let ordersWithSpaces = 0;
         selectedOrdersList.forEach(o => {
             if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
                 initialMap[o.id] = o.warehouse_spaces;
+                ordersWithSpaces++;
             }
         });
+
+        // Poka-Yoke: si las órdenes seleccionadas no tienen bahías en DB, calcularlas automáticamente
+        if (ordersWithSpaces === 0 && selectedOrdersList.length > 0) {
+            const rawInputs: OrderStagingInput[] = selectedOrdersList.map(o => {
+                const totalKg = Number(o.total_weight_kg) || 
+                    (o.order_items || []).reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0) * (Number(it.products?.weight_kg) || 1), 0);
+                return {
+                    id: o.id,
+                    sequence_id: o.sequence_id,
+                    client_id: o.profile_id || o.profiles?.id,
+                    customer_name: o.customer_name || o.profiles?.contact_name,
+                    company_name: o.profiles?.company_name || o.customer_name || 'Cliente sin nombre',
+                    shipping_address: o.shipping_address || o.profiles?.address || '',
+                    neighborhood: o.profiles?.neighborhood || '',
+                    delivery_slot: o.delivery_slot || '',
+                    manual_delivery_time: o.manual_delivery_time || '',
+                    is_manual_delivery: o.is_manual_delivery || false,
+                    total_weight_kg: totalKg > 0 ? totalKg : 15,
+                    existing_spaces: []
+                };
+            });
+            const autoAssigned = allocateStagingSpacesGeographically(rawInputs, {
+                avg_kg_per_crate: 12.5,
+                space_capacity: 36,
+                max_spaces: 150
+            });
+            autoAssigned.forEach(a => {
+                initialMap[a.order_id] = a.assigned_spaces;
+            });
+        }
+
         setManualSpacesMap(initialMap);
     }, [isOpen, selectedOrdersList]);
 
@@ -218,16 +252,24 @@ export default function ManualDispatchWizardModal({
         }).length;
     }, [selectedOrdersList, manualSpacesMap]);
 
-    // Cuadrícula visual de las 150 bahías
+    // Cuadrícula visual de las 150 bahías con desglose fraccionado
     const floorGrid150 = useMemo(() => {
         const slots: Record<number, any> = {};
         preparedOrders.forEach(o => {
             const spaces = manualSpacesMap[o.id] || [];
-            spaces.forEach(slot => {
+            const totalSpaces = spaces.length;
+            const { crates, spaces: theoreticalSpaces } = calculateCratesAndSpaces(o.total_weight_kg, 12.5, 36);
+            spaces.forEach((slot, idx) => {
                 if (slot >= 1 && slot <= 150) {
+                    const slotCrates = totalSpaces > 1 ? Math.max(1, Math.round(crates / totalSpaces)) : crates;
                     slots[slot] = {
                         customerName: o.company_name,
-                        totalKg: o.total_weight_kg
+                        totalKg: o.total_weight_kg,
+                        crates,
+                        slotCrates,
+                        slotIndex: idx,
+                        totalSpaces,
+                        theoreticalSpaces
                     };
                 }
             });
@@ -658,7 +700,9 @@ export default function ManualDispatchWizardModal({
                                     {floorGrid150.map(slot => (
                                         <div
                                             key={slot.slotNum}
-                                            title={slot.occupiedBy ? `${slot.occupiedBy.customerName} (${slot.occupiedBy.totalKg} kg)` : 'Bahía Libre'}
+                                            title={slot.occupiedBy 
+                                                ? `${slot.occupiedBy.customerName} (${slot.occupiedBy.totalSpaces > 1 ? `~${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.totalSpaces}]` : `${slot.occupiedBy.crates}c`} - ${Math.round(slot.occupiedBy.totalKg)} kg)` 
+                                                : 'Bahía Libre'}
                                             style={{
                                                 padding: '4px 2px',
                                                 textAlign: 'center',
@@ -667,10 +711,22 @@ export default function ManualDispatchWizardModal({
                                                 backgroundColor: slot.occupiedBy ? '#ECFDF5' : '#FFFFFF',
                                                 color: slot.occupiedBy ? '#065F46' : '#94A3B8',
                                                 fontSize: '0.62rem',
-                                                fontWeight: '800'
+                                                fontWeight: '800',
+                                                minHeight: '28px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'center',
+                                                alignItems: 'center'
                                             }}
                                         >
-                                            {slot.slotNum}
+                                            <div>{slot.slotNum}</div>
+                                            {slot.occupiedBy && (
+                                                <div style={{ fontSize: '0.48rem', fontWeight: 900, color: '#047857', whiteSpace: 'nowrap' }}>
+                                                    {slot.occupiedBy.totalSpaces > 1 
+                                                        ? `${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.totalSpaces}]`
+                                                        : `${slot.occupiedBy.crates}c`}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -732,12 +788,23 @@ export default function ManualDispatchWizardModal({
                                                                 fontWeight: '900',
                                                                 textAlign: 'center',
                                                                 borderRadius: '6px',
-                                                                border: currentSpaces.length > 0 ? '1.5px solid #0D7A57' : '1.5px solid #EF4444',
-                                                                backgroundColor: currentSpaces.length > 0 ? '#F0FDF4' : '#FEF2F2',
-                                                                color: currentSpaces.length > 0 ? '#065F46' : '#991B1B',
+                                                                border: currentSpaces.length > 0 
+                                                                    ? (currentSpaces.length !== item.spaces_needed ? '1.5px solid #F59E0B' : '1.5px solid #0D7A57') 
+                                                                    : '1.5px solid #EF4444',
+                                                                backgroundColor: currentSpaces.length > 0 
+                                                                    ? (currentSpaces.length !== item.spaces_needed ? '#FFFBEB' : '#F0FDF4') 
+                                                                    : '#FEF2F2',
+                                                                color: currentSpaces.length > 0 
+                                                                    ? (currentSpaces.length !== item.spaces_needed ? '#B45309' : '#065F46') 
+                                                                    : '#991B1B',
                                                                 outline: 'none'
                                                             }}
                                                         />
+                                                        {currentSpaces.length > 0 && currentSpaces.length !== item.spaces_needed && (
+                                                            <div style={{ fontSize: '0.55rem', color: '#B45309', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                                                {currentSpaces.length > item.spaces_needed ? `Sobran (${currentSpaces.length} vs ${item.spaces_needed})` : `Faltan (${currentSpaces.length} vs ${item.spaces_needed})`}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );
@@ -1224,8 +1291,44 @@ export default function ManualDispatchWizardModal({
                             </div>
                         </div>
 
+                        {/* Botón de Impresión de Contingencia Total 1-Clic */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FEF3C7', border: '1.5px solid #FCD34D', borderRadius: '14px', padding: '12px 16px', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ backgroundColor: '#FDE68A', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                    <Printer size={18} color="#92400E" />
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#92400E' }}>
+                                        Impresión Completa del Kit de Contingencia (1-Clic)
+                                    </div>
+                                    <div style={{ fontSize: '0.70rem', color: '#B45309' }}>
+                                        Envía a imprimir todos los documentos físicos de la tanda juntos: Compras, Sábana, Remisiones y Rótulos.
+                                    </div>
+                                </div>
+                            </div>
+                            <Link
+                                href={`/admin/orders/contingency-print?mode=all&orderIds=${orderIdsParam}`}
+                                target="_blank"
+                                style={{
+                                    padding: '8px 14px',
+                                    backgroundColor: '#B45309',
+                                    color: '#FFFFFF',
+                                    borderRadius: '8px',
+                                    fontSize: '0.76rem',
+                                    fontWeight: '900',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 6px rgba(180, 83, 9, 0.3)'
+                                }}
+                            >
+                                <Printer size={13} /> Imprimir Kit 1-Clic Completo <ExternalLink size={10} />
+                            </Link>
+                        </div>
+
                         {/* Footer Paso 4 & Botón de Sello Final */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1rem', borderTop: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1rem', borderTop: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '12px' }}>
                             <button
                                 onClick={() => setCurrentStep(3)}
                                 style={{
@@ -1244,32 +1347,37 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep4Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#7E22CE', cursor: 'pointer' }}
                                 />
-                                Rótulos térmicos impresos y verificados.
+                                Rótulos térmicos y documentos físicos verificados.
                             </label>
 
-                            <button
-                                onClick={handleFinalizeLaunch}
-                                disabled={finalizingLoading}
-                                style={{
-                                    padding: '12px 24px',
-                                    backgroundColor: '#059669',
-                                    color: '#FFFFFF',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    fontWeight: '900',
-                                    fontSize: '0.90rem',
-                                    letterSpacing: '0.01em',
-                                    cursor: finalizingLoading ? 'wait' : 'pointer',
-                                    boxShadow: '0 4px 14px rgba(5, 150, 105, 0.4)',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <CheckCircle2 size={18} />
-                                {finalizingLoading ? 'Sellando Tanda en Base de Datos...' : 'FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO'}
-                            </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                <button
+                                    onClick={handleFinalizeLaunch}
+                                    disabled={finalizingLoading}
+                                    style={{
+                                        padding: '12px 24px',
+                                        backgroundColor: '#059669',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontWeight: '900',
+                                        fontSize: '0.90rem',
+                                        letterSpacing: '0.01em',
+                                        cursor: finalizingLoading ? 'wait' : 'pointer',
+                                        boxShadow: '0 4px 14px rgba(5, 150, 105, 0.4)',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <CheckCircle2 size={18} />
+                                    {finalizingLoading ? 'Sellando Tanda en Base de Datos...' : 'FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO'}
+                                </button>
+                                <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '600' }}>
+                                    Pasa pedidos a <strong>para_compra</strong> (Compras Corabastos &amp; Alistamiento)
+                                </span>
+                            </div>
                         </div>
                     </div>
                 )}

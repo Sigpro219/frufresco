@@ -1,4 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  executeWithObsolescenceGuard,
+  PRIMARY_AI_MODEL,
+  CANONICAL_MODEL_CASCADE,
+  getGeminiApiKey,
+} from '@/lib/ai/aiModelConfig';
 
 /**
  * 🛠️ Sanitizador de Texto Inteligente para OCR/PDF/Email
@@ -24,7 +30,7 @@ export function sanitizeDocText(text: string): string {
 }
 
 /**
- * ⚡ Extractor IA con Resiliencia y Reintentos para Cuotas (HTTP 429)
+ * ⚡ Extractor IA con Gobernanza Central y Centinela de Obsolescencia Poka-Yoke
  */
 export async function fetchGeminiExtraction(
   apiKey: string,
@@ -32,58 +38,40 @@ export async function fetchGeminiExtraction(
   base64Data?: string,
   mimeType: string = 'application/pdf'
 ): Promise<any> {
-  const isPdf = mimeType === 'application/pdf';
-  // Modelos válidos en la API v1beta:
-  // - Para PDF: gemini-2.5-flash y gemini-2.5-flash-lite son nativamente multimodales con soporte de documentos.
-  //   Los modelos gemini-3.x en v1beta no aceptan documentos PDF en inline_data y devuelven 400 INVALID_ARGUMENT.
-  const modelsToTry = isPdf
-    ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
-    : ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash-lite'];
+  const resolvedApiKey = apiKey?.trim() || getGeminiApiKey();
 
-  let resultText: string | null = null;
-  let successfulModel: string = '';
-  let lastError: any = null;
-  let allModelsNotFound = true;
-
-  for (const modelName of modelsToTry) {
-    try {
-      console.log(`[OrderParserEngine] Extrayendo con modelo ultrarrápido: ${modelName}...`);
-
-      const parts: any[] = [];
-      if (base64Data && base64Data.trim().length > 0) {
-        parts.push({
-          inline_data: {
-            mime_type: mimeType,
-            data: base64Data.trim()
-          }
-        });
+  const parts: any[] = [];
+  if (base64Data && base64Data.trim().length > 0) {
+    parts.push({
+      inline_data: {
+        mime_type: mimeType,
+        data: base64Data.trim()
       }
-      parts.push({ text: prompt });
+    });
+  }
+  parts.push({ text: prompt });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
+  let successfulModelUsed = PRIMARY_AI_MODEL;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts }] }),
-          signal: controller.signal
-        }
-      );
-      clearTimeout(timeoutId);
+  const extractionResult = await executeWithObsolescenceGuard(
+    async (modelName: string, keyToUse: string, signal?: AbortSignal) => {
+      successfulModelUsed = modelName;
+      console.log(`[OrderParserEngine] Extrayendo con modelo central: ${modelName}...`);
 
-      const data = await response.json();
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
+        signal: signal
+      });
+
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         const errorMsg = data?.error?.message || response.statusText || 'Error desconocido';
         console.warn(`[OrderParserEngine] Respuesta ${response.status} con modelo ${modelName}:`, errorMsg);
-
-        // Si el modelo NO es un 404/410, no consideramos que todos los modelos están deprecados
-        if (response.status !== 404 && response.status !== 410) {
-          allModelsNotFound = false;
-        }
 
         // Si el error es de cliente (el archivo no tiene páginas, documento inválido, etc.)
         // NO tiene sentido reintentar con otros modelos: el archivo es el que tiene el problema.
@@ -91,47 +79,36 @@ export async function fetchGeminiExtraction(
           throw new Error('Archivo dañado o no compatible. El documento PDF no contiene páginas legibles o está vacío. Por favor verifique que sea un documento PDF original completo.');
         }
 
-        if (response.status === 400 && (errorMsg.includes('corrupted') || errorMsg.includes('failed to parse') || errorMsg.includes('invalid argument'))) {
-          throw new Error(`Archivo dañado o no compatible. No fue posible interpretar la estructura del documento.`);
+        if (response.status === 400 && (errorMsg.includes('corrupted') || errorMsg.includes('failed to parse') || errorMsg.includes('invalid argument') || errorMsg.includes('Invalid base64 payload'))) {
+          const badReqErr = new Error(`Archivo dañado o no compatible. No fue posible interpretar la estructura del documento.`);
+          (badReqErr as any).status = 400;
+          (badReqErr as any).statusCode = 400;
+          throw badReqErr;
         }
 
-        lastError = new Error(`[Gemini ${response.status}] ${errorMsg}`);
-        continue;
+        const apiErr = new Error(`[Gemini ${response.status}] ${errorMsg}`);
+        (apiErr as any).status = response.status;
+        (apiErr as any).statusCode = response.status;
+        throw apiErr;
       }
 
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text) {
-        resultText = text;
-        successfulModel = modelName;
-        console.log(`[OrderParserEngine] ✅ Extracción exitosa con modelo ${modelName}`);
-        break;
-      } else {
-        lastError = new Error(`El modelo ${modelName} no devolvió texto en la respuesta.`);
-      }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.warn(`[OrderParserEngine] Timeout de 45s con modelo ${modelName}`);
-        lastError = new Error(`Timeout esperando respuesta del modelo ${modelName}`);
-        allModelsNotFound = false;
-        continue;
+      if (!text) {
+        throw new Error(`El modelo ${modelName} no devolvió texto en la respuesta.`);
       }
 
-      // Si es un error explícito de archivo sin páginas o corrupto, lo propagamos de inmediato
-      if (err.message && (err.message.includes('páginas') || err.message.includes('corrupto') || err.message.includes('vacío'))) {
-        throw err;
-      }
-
-      console.warn(`[OrderParserEngine] Advertencia con modelo ${modelName}:`, err.message);
-      lastError = err;
+      console.log(`[OrderParserEngine] ✅ Extracción exitosa con modelo ${modelName}`);
+      return { rawText: text, modelUsed: modelName };
+    },
+    {
+      apiKey: resolvedApiKey,
+      moduleName: 'orders',
+      operationName: 'order-parser-extraction',
+      timeoutMs: 45000,
     }
-  }
+  );
 
-  if (!resultText) {
-    if (allModelsNotFound) {
-      throw new Error('El modelo de Inteligencia Artificial ya no está vigente. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo.');
-    }
-    throw lastError || new Error('No fue posible procesar el documento con el motor de Inteligencia Artificial. Verifique el archivo o ingrese los datos manualmente.');
-  }
+  const resultText = extractionResult.rawText;
 
   // Sanitizar el bloque JSON de la respuesta de forma ultra-robusta
   let parsedJson: any = null;
@@ -161,7 +138,10 @@ export async function fetchGeminiExtraction(
     parsedJson = JSON.parse(cleanJson);
   }
 
-  parsedJson._modelUsed = successfulModel;
+  parsedJson._modelUsed = extractionResult.modelUsed || successfulModelUsed;
+  if (extractionResult._obsolescenceWarning) {
+    parsedJson._obsolescenceWarning = extractionResult._obsolescenceWarning;
+  }
   return parsedJson;
 }
 

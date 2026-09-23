@@ -169,3 +169,166 @@ export const buildDualUnitMetadata = (params: {
     };
 };
 
+/**
+ * Derives the canonical specification variant key for procurement grouping and picking isolation.
+ * Examples: "und de 2 kg; Maduro", "und de 2 kg; Pintón", "und de 550 gr", "Maduro".
+ * If no structured specification exists, returns "".
+ */
+export const getStructuredSpecKey = (item: {
+    variant_label?: string | null;
+    nickname?: string | null;
+    selected_options?: Record<string, any> | null;
+}): string => {
+    if (!item) return '';
+
+    const opts = item.selected_options || {};
+    let unitWeightPart = '';
+    const attributeParts: string[] = [];
+
+    // 1. Determine unit presentation weight
+    const unitWeightGr = opts._unit_weight_gr || opts.unit_weight_gr;
+    if (unitWeightGr && Number(unitWeightGr) > 0) {
+        const gr = Number(unitWeightGr);
+        const weightStr = gr >= 1000 
+            ? ((gr / 1000) % 1 === 0 ? (gr / 1000).toString() : (gr / 1000).toFixed(1)) + ' kg'
+            : `${gr} gr`;
+        unitWeightPart = `und de ${weightStr}`;
+    } else {
+        const pres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '') as string;
+        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        if (matchGr) {
+            const gr = parseFloat(matchGr[1].replace(',', '.'));
+            const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
+            unitWeightPart = `und de ${weightStr}`;
+        }
+    }
+
+    // 2. Extract valid culinary attributes (Maduración, etc.)
+    const knownKeys = ['Maduración', 'Maduracion', 'Corte', 'Calibre', 'Punto', 'Especificación', 'Especificacion'];
+    knownKeys.forEach(k => {
+        if (opts[k] && typeof opts[k] === 'string' && opts[k].trim()) {
+            const val = opts[k].trim();
+            if (!/^\d+$/.test(val) && val.toLowerCase() !== 'estandar' && val.toLowerCase() !== 'estándar') {
+                attributeParts.push(val);
+            }
+        }
+    });
+
+    if (attributeParts.length === 0 && item.variant_label) {
+        const raw = item.variant_label.trim();
+        const culinaryKeywords = ['maduro', 'pinton', 'pintón', 'verde', 'biche', 'tajar', 'tajadas', 'primera', 'segunda', 'grueso', 'mediano', 'delgado', 'limpio', 'lavado'];
+        const matched: string[] = [];
+        culinaryKeywords.forEach(kw => {
+            const regex = new RegExp(`\\b${kw}\\b`, 'i');
+            if (regex.test(raw)) {
+                matched.push(kw.charAt(0).toUpperCase() + kw.slice(1));
+            }
+        });
+        if (matched.length > 0) {
+            attributeParts.push(...Array.from(new Set(matched)));
+        }
+    }
+
+    const attrStr = attributeParts.join(', ');
+    if (unitWeightPart && attrStr) return `${unitWeightPart}; ${attrStr}`;
+    if (unitWeightPart) return unitWeightPart;
+    if (attrStr) return attrStr;
+    return '';
+};
+
+/**
+ * Formats the clean structured operational specification:
+ * e.g. "12 und de 2 kg; Maduro"
+ * Returns null if no structured specification exists (avoids noise).
+ */
+export const formatStructuredSpecification = (item: {
+    quantity?: number;
+    unit?: string;
+    variant_label?: string | null;
+    nickname?: string | null;
+    selected_options?: Record<string, any> | null;
+}): string | null => {
+    if (!item) return null;
+
+    const opts = item.selected_options || {};
+    let discretePart: string | null = null;
+    const attributeParts: string[] = [];
+
+    // 1. Extract discrete part from explicit _original_qty and _unit_weight_gr
+    const origQty = opts._original_qty || opts.original_qty;
+    const unitWeightGr = opts._unit_weight_gr || opts.unit_weight_gr;
+    const origUnit = (opts._original_unit || opts.original_unit || 'und').toLowerCase();
+
+    if (origQty && unitWeightGr) {
+        const noun = origUnit.includes('bandeja') ? 'bandeja' : 'und';
+        let weightStr = '';
+        if (unitWeightGr >= 1000) {
+            const kg = unitWeightGr / 1000;
+            weightStr = (kg % 1 === 0 ? kg.toString() : kg.toFixed(1)) + ' kg';
+        } else {
+            weightStr = `${unitWeightGr} gr`;
+        }
+        discretePart = `${origQty} ${noun} de ${weightStr}`;
+    } else {
+        // Fallback: match from Presentación or variant_label like "Unidad 2000 gr"
+        const pres = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '');
+        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        if (matchGr) {
+            const gr = parseFloat(matchGr[1].replace(',', '.'));
+            const kgPerUnit = gr / 1000;
+            const currentQty = Number(item.quantity) || 1;
+            const currentUnit = (item.unit || 'kg').toLowerCase();
+            let count = 1;
+            if (currentUnit.includes('kg') || currentUnit.includes('kilo')) {
+                count = Math.round(currentQty / kgPerUnit);
+                if (count < 1) count = 1;
+            } else {
+                count = Math.round(currentQty);
+            }
+            const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
+            const isBandeja = /bandeja/i.test(pres);
+            discretePart = `${count} ${isBandeja ? 'bandeja' : 'und'} de ${weightStr}`;
+        }
+    }
+
+    // 2. Extract valid culinary attributes (Maduración, Corte, Calibre, etc.)
+    const knownKeys = ['Maduración', 'Maduracion', 'Corte', 'Calibre', 'Punto', 'Especificación', 'Especificacion'];
+    knownKeys.forEach(k => {
+        if (opts[k] && typeof opts[k] === 'string' && opts[k].trim()) {
+            const val = opts[k].trim();
+            if (!/^\d+$/.test(val) && val.toLowerCase() !== 'estandar' && val.toLowerCase() !== 'estándar') {
+                attributeParts.push(val);
+            }
+        }
+    });
+
+    if (attributeParts.length === 0 && item.variant_label) {
+        const raw = item.variant_label.trim();
+        const culinaryKeywords = ['maduro', 'pinton', 'pintón', 'verde', 'biche', 'tajar', 'tajadas', 'primera', 'segunda', 'grueso', 'mediano', 'delgado', 'limpio', 'lavado'];
+        const matched: string[] = [];
+        culinaryKeywords.forEach(kw => {
+            const regex = new RegExp(`\\b${kw}\\b`, 'i');
+            if (regex.test(raw)) {
+                matched.push(kw.charAt(0).toUpperCase() + kw.slice(1));
+            }
+        });
+        if (matched.length > 0) {
+            attributeParts.push(...Array.from(new Set(matched)));
+        }
+    }
+
+    // 3. Assemble
+    const attrStr = attributeParts.join(', ');
+    if (discretePart && attrStr) {
+        return `${discretePart}; ${attrStr}`;
+    }
+    if (discretePart) {
+        return discretePart;
+    }
+    if (attrStr) {
+        return attrStr;
+    }
+    return null;
+};
+
+

@@ -1,15 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
-import FleetManagement from '@/components/FleetManagement';
-import MaintenanceManagement from '@/components/MaintenanceManagement';
-import RoutePlanner from '@/components/RoutePlanner';
-import StagingSpacesManagement from '@/components/StagingSpacesManagement';
-import ConductorPanel from '@/components/ConductorPanel';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { 
     Truck, 
@@ -44,7 +40,61 @@ import {
     ExternalLink,
     Clock
 } from 'lucide-react';
-import ControlTowerKPIs from '@/components/ControlTowerKPIs';
+
+function SubtabSkeleton({ title }: { title: string }) {
+    return (
+        <div style={{
+            padding: '3rem 2rem',
+            maxWidth: '1600px',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '1rem',
+            minHeight: '420px',
+            backgroundColor: THEME.colors.surface,
+            borderRadius: THEME.radius.xl,
+            border: `1px solid ${THEME.colors.border}`,
+            boxShadow: THEME.shadow.sm
+        }}>
+            <Loader2 className="animate-spin" size={36} color={THEME.colors.primary} />
+            <span style={{ fontSize: '0.88rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>
+                Cargando consola de {title}...
+            </span>
+        </div>
+    );
+}
+
+const RoutePlanner = dynamic(() => import('@/components/RoutePlanner'), {
+    loading: () => <SubtabSkeleton title="Planeador de Rutas" />,
+    ssr: false
+});
+
+const StagingSpacesManagement = dynamic(() => import('@/components/StagingSpacesManagement'), {
+    loading: () => <SubtabSkeleton title="Muelle / Bahías 1-150" />,
+    ssr: false
+});
+
+const FleetManagement = dynamic(() => import('@/components/FleetManagement'), {
+    loading: () => <SubtabSkeleton title="Gestión de Flota" />,
+    ssr: false
+});
+
+const ConductorPanel = dynamic(() => import('@/components/ConductorPanel'), {
+    loading: () => <SubtabSkeleton title="Panel de Conductores" />,
+    ssr: false
+});
+
+const MaintenanceManagement = dynamic(() => import('@/components/MaintenanceManagement'), {
+    loading: () => <SubtabSkeleton title="Mantenimiento de Flota" />,
+    ssr: false
+});
+
+const ControlTowerKPIs = dynamic(() => import('@/components/ControlTowerKPIs'), {
+    loading: () => <SubtabSkeleton title="Insights & KPIs" />,
+    ssr: false
+});
 
 interface ActiveRoute {
     id: string;
@@ -73,10 +123,42 @@ interface ActiveRoute {
 
 const MAP_ID = 'bf725916f72f2fd';
 
+type TransportTab = 'map' | 'planner' | 'staging' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates';
+const VALID_TABS: TransportTab[] = ['map', 'planner', 'staging', 'fleet', 'maintenance', 'drivers_panel', 'kpis', 'crates'];
+
 export default function TransportControlTower() {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
-    const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'staging' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates'>('map');
+    const [activeTab, setActiveTab] = useState<TransportTab>('map');
+
+    useEffect(() => {
+        const syncParams = () => {
+            if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const tab = params.get('tab') as TransportTab;
+                if (tab && VALID_TABS.includes(tab)) {
+                    setActiveTab(tab);
+                }
+            }
+        };
+
+        syncParams();
+        window.addEventListener('popstate', syncParams);
+        return () => window.removeEventListener('popstate', syncParams);
+    }, []);
+
+    const handleSelectTab = (tab: TransportTab) => {
+        setActiveTab(tab);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            if (tab === 'map') {
+                url.searchParams.delete('tab');
+            } else {
+                url.searchParams.set('tab', tab);
+            }
+            window.history.replaceState({}, '', url.toString());
+        }
+    };
     const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
     const [crateProfiles, setCrateProfiles] = useState<any[]>([]);
     const [patioStock, setPatioStock] = useState<number>(420);
@@ -403,7 +485,7 @@ export default function TransportControlTower() {
                             return (
                                 <button
                                     key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as any)}
+                                    onClick={() => handleSelectTab(tab.id as TransportTab)}
                                     style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.45rem 0.85rem', borderRadius: '8px', border: 'none',
                                         backgroundColor: isActive ? THEME.colors.primary : 'transparent',
@@ -511,7 +593,7 @@ export default function TransportControlTower() {
                                                 : 'La flota se encuentra disponible para programar despachos del día.'}
                                         </p>
                                         <button
-                                            onClick={() => setActiveTab('planner')}
+                                            onClick={() => handleSelectTab('planner')}
                                             style={{
                                                 backgroundColor: THEME.colors.primary,
                                                 color: 'white',
@@ -840,7 +922,7 @@ export default function TransportControlTower() {
                                                                             </a>
                                                                         ) : (
                                                                             <button 
-                                                                                onClick={() => setActiveTab('drivers_panel')}
+                                                                                onClick={() => handleSelectTab('drivers_panel')}
                                                                                 style={{ 
                                                                                     flex: 1, 
                                                                                     padding: '0.4rem', 

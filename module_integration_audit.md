@@ -102,9 +102,9 @@ El flujo operativo se divide en las siguientes etapas secuenciales:
 - **Input:** Pedidos alistados, Flota disponible.
 - **Output:** Rutas creadas (`routes`), Pedidos asignados a rutas.
 - **Chequeo:**
-  - [ ] ¿Se pueden ver todos los pedidos pendientes de despacho?
-  - [ ] ¿Al crear una ruta, los pedidos cambian de estado a `in_transit` o `routed`?
-  - [ ] ¿Se descuenta la capacidad de carga del vehículo correctamente?
+  - [x] ¿Se pueden ver todos los pedidos pendientes de despacho? *(Auditado: Monitor Global y Planeador reflejan pedidos filtrados por fecha de entrega y estado).*
+  - [x] ¿Al crear una ruta, los pedidos cambian de estado a `in_transit` o `routed`? *(Auditado: Al confirmar ruta pasan a `picking` con asignación de bahía en `/api/transport/confirm`, y a `in_transit` al despachar).*
+  - [x] ¿Se descuenta la capacidad de carga del vehículo correctamente? *(Auditado: El planeador totaliza kg contra `capacity_kg` y alerta sobrecupo).*
 
 ### 8. Módulo: Entrega (Driver View)
 
@@ -140,7 +140,7 @@ El flujo operativo se divide en las siguientes etapas secuenciales:
 | **Validación**  |  ⬜ Pendiente   |                    |
 | **Compras**     |  ⬜ Pendiente   |                    |
 | **Picking**     |  ⬜ Pendiente   |                    |
-| **Transporte**  |  ⬜ Pendiente   |                    |
+| **Transporte**  |  🟢 **Homologado (SDD v1.9.0)** | Torre de Control con 8 consolas desacopladas con Dynamic Imports, soporte de `?tab=` y especificación en Sección 18 de `SPEC.md`. |
 | **Entregas**    |  ⬜ Pendiente   |                    |
 | **Facturación** |  ⬜ Pendiente   |                    |
 
