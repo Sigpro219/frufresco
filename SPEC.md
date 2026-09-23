@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.6 (Resolución Contractual Resiliente & Paginación Mandatoria PostgREST en Borradores de Pedidos)  
+> **Versión:** 1.8.7 (Gobernanza de Catálogo: Normalización Dimensional de SKUs Masivos y Bultos Cerrados)  
 > **Fecha:** 23 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, IT/SaaS Infraestructura, Comercial, Operaciones & Gobernanza ERP
@@ -1273,5 +1273,51 @@ El inventario de FruFresco trasciende el conteo numérico de ítems para modelar
 - **Then**:
   1. El modal proyecta en vivo: Variación: `-1.00 Kg` y Nuevo Stock en Masa: `4.00 Kg`.
   2. Al confirmar el ajuste, el Kardex almacena el movimiento y la masa de bodega se descuenta por exactamente 1.00 kg.
+
+---
+
+## 15. Gobernanza de Catálogo: Normalización Dimensional de SKUs Masivos y Bultos Cerrados (SDD v1.8.7)
+
+### 15.1 Principio de Calibración Dimensional (Unidad de Cobro vs. Unidad de Medida)
+Para erradicar la multiplicación dimensional cruzada y garantizar que la liquidación comercial coincida exactamente con la realidad física del Gemba, se establece la siguiente regla de oro en el Catálogo Maestro de Productos (`products`):
+
+1. **Definición de SKU de Presentación Cerrada:**
+   - Todo producto que represente un empaque, bulto, caja, bloque, galón o cubeta cerrada comercializado bajo un precio global fijo por presentación (ej. `Arroz bulto x 50 kg`, `Azucar bulto x 50 kg`, `Sal bulto x 50 kilos`, `Panela caja x 18kg`, `Pasta de ajo galon x 4 kg`) **DEBE** parametrizarse contractualmente con:
+     - `unit_of_measure = 'Unidad'`
+     - `web_unit = 'Unidad'`
+     - `weight_kg = [Peso neto en kilogramos de la presentación]` (ej. `50.0`, `18.0`, `4.0`, etc.)
+     - `base_price = [Valor monetario total de la presentación completa]`
+
+2. **Prohibición de Asignación de 'Kg' a Precios Globales:**
+   - Queda estrictamente prohibido asignar `unit_of_measure = 'Kg'` a productos cuyo precio base no haya sido dividido previamente por su peso neto unitario. La asignación de `'Kg'` se reserva exclusivamente para productos a granel cuyo precio unitario corresponda al costo de 1 kilogramo real.
+
+3. **Cálculo de Masa Logística y Cubicaje (Despacho / Transporte):**
+   - Al capturar o aprobar pedidos en cualquier canal (Manual o Email), el motor de cubicaje evalúa:
+     $$M_{\text{línea}} = \text{Cantidad} \times \begin{cases} 1.00\text{ kg} & \text{si } \text{unit\_of\_measure} = \text{'Kg'} \\ \text{weight\_kg} & \text{si } \text{unit\_of\_measure} = \text{'Unidad'} \land \text{weight\_kg} > 0 \\ 1.00\text{ kg} & \text{en otro caso} \end{cases}$$
+   - Esto garantiza que al ordenar `2 Unidades` de un bulto de 50 kg:
+     - La liquidación financiera sea: $2 \times \$167.050 = \mathbf{\$334.100\text{ COP}}$.
+     - El peso logístico acumulado en `orders.total_weight_kg` sea: $2 \times 50\text{ kg} = \mathbf{100\text{ Kg}}$.
+
+4. **Higiene de la Tabla de Equivalencias (`product_conversions`):**
+   - Queda prohibida la existencia de factores multiplicadores de masa dentro de `product_conversions` (ej. `Saco -> Kg: 50`) para SKUs cuya unidad comercial ya sea la presentación cerrada. La tabla de equivalencias debe reservarse para conversiones auténticas de unidades alternativas a la unidad base del producto.
+
+### 15.2 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 14: Liquidación Exacta de Bulto Cerrado de Arroz en Captura de Pedidos
+- **Given** el producto "Arroz bulto x 50 kg" (ID Contable: 1180) con `unit_of_measure = 'Unidad'`, `weight_kg = 50` y tarifa B2B institucional de \$167.050 COP.
+- **When** el operador agrega 2 bultos del producto en `/admin/orders/create` para el cliente TERMOCITY SAS.
+- **Then**:
+  1. El carrito registra `Cantidad: 2 Unidad`.
+  2. El precio unitario visualizado y liquidado es de \$167.050 COP.
+  3. El subtotal de la línea es exactamente \$334.100 COP (y no \$16.705.000 COP).
+  4. El resumen de cubicaje logístico calcula un peso acumulado de 100 kg para el camión.
+
+#### Escenario 15: Integridad Financiera en SKUs Masivos sin Acuerdos Comerciales Específicos
+- **Given** los productos masivos del catálogo (Papa pastusa bulto x 50 kg, Azúcar bulto x 50 kg, Sal bulto x 50 kg, Panela caja x 18 kg).
+- **When** se capturan órdenes para clientes con Tarifa General Institucional.
+- **Then**:
+  1. Cada ítem liquida su precio por unidad cerrada sin ser multiplicado por el factor de kilogramos.
+  2. La orden final en `orders` totaliza la suma exacta de las unidades pedidas multiplicadas por su precio de presentación.
+
 
 
