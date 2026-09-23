@@ -1050,7 +1050,7 @@ function CreateOrderContent() {
                 if (!currentProfile) {
                     const { data } = await supabase
                         .from('profiles')
-                        .select('id, company_name, pricing_model_id, parent_id, role, credit_limit, payment_days')
+                        .select('id, company_name, pricing_model_id, parent_id, role, payment_days, logistics_data')
                         .eq('id', selectedClient)
                         .maybeSingle();
                     if (data) currentProfile = data;
@@ -1327,7 +1327,7 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, credit_limit, payment_days')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, payment_days')
                 .eq('role', 'b2b_client')
                 .eq('is_active', true)
                 .order('company_name', { ascending: true });
@@ -3300,37 +3300,34 @@ function CreateOrderContent() {
             const client = clients.find((c: any) => c.id === profileId);
             if (!client) return { allowed: true };
 
-            const creditLimit = Number(client.credit_limit) || 0;
+            const creditLimit = Number(client.logistics_data?.credit_limit ?? client.credit_limit) || 0;
+            const paymentDays = Number(client.payment_days) || 0;
             
-            // Consultar órdenes del cliente para evaluar facturas pendientes y en mora
-            const { data: clientOrders } = await supabase
+            // Consultar órdenes del cliente para evaluar saldo pendiente y facturas en mora
+            const { data: unpaidOrders } = await supabase
                 .from('orders')
-                .select('id')
-                .eq('profile_id', profileId);
+                .select('id, total, payment_status, delivery_date')
+                .eq('profile_id', profileId)
+                .neq('payment_status', 'paid')
+                .neq('status', 'cancelled');
 
             let pendingDebt = 0;
             let hasOverdue = false;
             let overdueCount = 0;
 
-            if (clientOrders && clientOrders.length > 0) {
-                const orderIds = clientOrders.map((o: any) => o.id);
-                const { data: unpaidInvoices } = await supabase
-                    .from('billing_invoices')
-                    .select('id, total_final, payment_status, due_date')
-                    .in('order_id', orderIds)
-                    .neq('payment_status', 'paid')
-                    .neq('status', 'cancelled');
-
-                if (unpaidInvoices && unpaidInvoices.length > 0) {
-                    const now = new Date();
-                    unpaidInvoices.forEach((inv: any) => {
-                        pendingDebt += Number(inv.total_final) || 0;
-                        if (inv.due_date && new Date(inv.due_date) < now) {
+            if (unpaidOrders && unpaidOrders.length > 0) {
+                const now = new Date();
+                unpaidOrders.forEach((ord: any) => {
+                    pendingDebt += Number(ord.total) || 0;
+                    if (ord.delivery_date) {
+                        const dueDate = new Date(ord.delivery_date);
+                        dueDate.setDate(dueDate.getDate() + paymentDays);
+                        if (dueDate < now) {
                             hasOverdue = true;
                             overdueCount++;
                         }
-                    });
-                }
+                    }
+                });
             }
 
             const projectedDebt = pendingDebt + orderTotal;
