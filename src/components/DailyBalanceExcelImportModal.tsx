@@ -195,7 +195,18 @@ export default function DailyBalanceExcelImportModal({
 
                 // Mapear índices de columnas (por posición fija A-X o por nombre)
                 const getColIdx = (letter: string, headerQuery: string) => {
-                    const found = headers.findIndex(h => h.toLowerCase().includes(headerQuery.toLowerCase()));
+                    const query = headerQuery.toLowerCase();
+                    // 1. Búsqueda exacta
+                    let found = headers.findIndex(h => h.toLowerCase() === query);
+                    if (found !== -1) return found;
+                    // 2. Búsqueda parcial excluyendo id para nombre de producto
+                    found = headers.findIndex(h => {
+                        const clean = h.toLowerCase();
+                        if (query === 'producto') {
+                            return clean.includes('producto') && !clean.includes('id');
+                        }
+                        return clean.includes(query);
+                    });
                     if (found !== -1) return found;
                     const letterIdx = letter.charCodeAt(0) - 65;
                     return letterIdx < headers.length ? letterIdx : -1;

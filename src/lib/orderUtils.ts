@@ -12,3 +12,160 @@ export const getFriendlyOrderId = (order: { created_at: string; sequence_id?: nu
     
     return `${day}${month}_${seq}`;
 };
+
+/**
+ * Sanitizes any physical instruction string to ensure the word "estándar"
+ * is strictly eliminated per contract SDD v1.8.5.
+ */
+export const cleanPhysicalInstruction = (text?: string | null): string | null => {
+    if (!text) return null;
+    return text
+        .replace(/\best[áa]ndar\b\s*/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+};
+
+export interface DualUnitResult {
+    billingQuantity: number;
+    billingUnit: string;
+    physicalInstruction: string;
+    originalQty: number;
+    originalUnit: string;
+    unitWeightGr: number;
+    conversionFactor: number;
+}
+
+/**
+ * Derives or extracts the canonical physical instruction for an order item.
+ * Supports explicit _physical_instruction and provides retroactive heuristics
+ * for existing orders with presentation options (e.g. "Unidad 2000 gr").
+ */
+export const resolvePhysicalInstruction = (item: {
+    quantity?: number;
+    unit?: string;
+    variant_label?: string | null;
+    nickname?: string | null;
+    selected_options?: Record<string, any> | null;
+}): string | null => {
+    if (!item) return null;
+
+    // 1. Explicit instruction in selected_options
+    const explicit = item.selected_options?._physical_instruction;
+    if (explicit && typeof explicit === 'string') {
+        return cleanPhysicalInstruction(explicit);
+    }
+
+    // 2. Retroactive derivation from selected_options or variant_label
+    const opts = item.selected_options || {};
+    const presText = (opts['Presentación'] || opts['Presentacion'] || item.variant_label || item.nickname || '') as string;
+    if (!presText) return null;
+
+    // Match "Unidad 2000 gr", "Und 800 g", "Bandeja 500 gr", etc.
+    const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
+    if (matchGr) {
+        const weightGr = parseFloat(matchGr[1].replace(',', '.'));
+        const weightKg = weightGr / 1000;
+        const currentQty = Number(item.quantity) || 1;
+        const currentUnit = (item.unit || 'Kg').toLowerCase();
+
+        let unitCount = 1;
+        if (currentUnit.includes('kg') || currentUnit.includes('kilo')) {
+            // If quantity is in kg (e.g. 2 Kg of Papaya 2000 gr), calculate units
+            unitCount = Math.round(currentQty / weightKg);
+            if (unitCount < 1) unitCount = 1;
+        } else {
+            // Already counted in discrete units
+            unitCount = Math.round(currentQty);
+        }
+
+        const isBandeja = /bandeja/i.test(presText);
+        const noun = isBandeja ? (unitCount === 1 ? 'Bandeja' : 'Bandejas') : (unitCount === 1 ? 'Unidad' : 'Unidades');
+        return `${unitCount} ${noun} ${Math.round(weightGr)} gr`;
+    }
+
+    // Match "Unidad 2 Kg", "Und 1.5 Kg", etc.
+    const matchKg = presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i);
+    if (matchKg) {
+        const weightKg = parseFloat(matchKg[1].replace(',', '.'));
+        const weightGr = Math.round(weightKg * 1000);
+        const currentQty = Number(item.quantity) || 1;
+        const currentUnit = (item.unit || 'Kg').toLowerCase();
+
+        let unitCount = 1;
+        if (currentUnit.includes('kg') || currentUnit.includes('kilo')) {
+            unitCount = Math.round(currentQty / weightKg);
+            if (unitCount < 1) unitCount = 1;
+        } else {
+            unitCount = Math.round(currentQty);
+        }
+
+        const noun = unitCount === 1 ? 'Unidad' : 'Unidades';
+        return `${unitCount} ${noun} ${weightGr} gr`;
+    }
+
+    return null;
+};
+
+/**
+ * Builds canonical dual-unit metadata when an item is selected or modified.
+ */
+export const buildDualUnitMetadata = (params: {
+    quantity: number;
+    unit?: string;
+    selectedOptions?: Record<string, any> | null;
+    product?: { unit_of_measure?: string; weight_kg?: number } | null;
+}): DualUnitResult | null => {
+    const { quantity, unit = 'Kg', selectedOptions, product } = params;
+    if (!quantity || quantity <= 0) return null;
+
+    const opts = selectedOptions || {};
+    const presText = (opts['Presentación'] || opts['Presentacion'] || '') as string;
+    if (!presText) return null;
+
+    const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
+    const matchKg = !matchGr ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+
+    let weightGr = 0;
+    let isBandeja = false;
+
+    if (matchGr) {
+        weightGr = parseFloat(matchGr[1].replace(',', '.'));
+        isBandeja = /bandeja/i.test(presText);
+    } else if (matchKg) {
+        weightGr = parseFloat(matchKg[1].replace(',', '.')) * 1000;
+    } else {
+        return null;
+    }
+
+    const weightKg = weightGr / 1000;
+    const isMasterKg = (product?.unit_of_measure || 'Kg').toLowerCase().includes('kg');
+    const inputIsUnit = unit.toLowerCase().includes('un') || unit.toLowerCase().includes('bandeja');
+
+    let discreteQty = quantity;
+    let billingKg = quantity;
+
+    if (inputIsUnit || isMasterKg) {
+        // User entered discrete count (e.g. 1 unit of Papaya 2000 gr)
+        discreteQty = Math.round(quantity);
+        billingKg = Number((discreteQty * weightKg).toFixed(3));
+    } else {
+        // User entered kg directly (e.g. 2 kg of Papaya 2000 gr)
+        discreteQty = Math.round(quantity / weightKg);
+        if (discreteQty < 1) discreteQty = 1;
+        billingKg = quantity;
+    }
+
+    const noun = isBandeja ? (discreteQty === 1 ? 'Bandeja' : 'Bandejas') : (discreteQty === 1 ? 'Unidad' : 'Unidades');
+    const instruction = `${discreteQty} ${noun} ${Math.round(weightGr)} gr`;
+
+    return {
+        billingQuantity: billingKg,
+        billingUnit: isMasterKg ? (product?.unit_of_measure || 'Kg') : unit,
+        physicalInstruction: instruction,
+        originalQty: discreteQty,
+        originalUnit: isBandeja ? 'Bandeja' : 'Unidad',
+        unitWeightGr: Math.round(weightGr),
+        conversionFactor: weightKg
+    };
+};
+

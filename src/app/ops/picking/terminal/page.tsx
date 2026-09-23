@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { isAbortError } from '@/lib/errorUtils';
+import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 
 // Types
 type PickingItem = {
@@ -14,6 +15,7 @@ type PickingItem = {
     unit_of_measure: string;
     customer_name: string;
     zone_name: string;
+    physical_instruction?: string | null;
 };
 
 interface SupabaseOrderItem {
@@ -21,6 +23,9 @@ interface SupabaseOrderItem {
     product_id: string;
     quantity: number;
     picked_quantity: number | null;
+    variant_label?: string | null;
+    nickname?: string | null;
+    selected_options?: Record<string, any> | null;
     products: {
         id: string;
         name: string;
@@ -61,7 +66,7 @@ export default function PickingTerminal() {
             const { data, error } = await supabase
                 .from('order_items')
                 .select(`
-                    id, product_id, quantity, picked_quantity,
+                    id, product_id, quantity, picked_quantity, variant_label, nickname, selected_options,
                     products!inner (id, name, unit_of_measure),
                     orders!inner (
                         status,
@@ -93,15 +98,26 @@ export default function PickingTerminal() {
                             ? (p.company_name || 'Sin Razón Social') 
                             : (p.contact_name || p.company_name || 'Cliente B2C');
                     }
+                    const physicalInst = resolvePhysicalInstruction({
+                        quantity: item.quantity,
+                        unit: item.products.unit_of_measure,
+                        variant_label: item.variant_label,
+                        nickname: item.nickname,
+                        selected_options: item.selected_options
+                    });
+                    const variant = item.variant_label || item.nickname || '';
+                    const dispName = variant ? `${item.products.name} (${variant})` : item.products.name;
+
                     return {
                         id: item.id,
                         product_id: item.product_id || item.products.id,
-                        product_name: item.products.name,
+                        product_name: dispName,
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity || 0,
                         unit_of_measure: item.products.unit_of_measure,
                         customer_name: customerName,
-                        zone_name: 'General'
+                        zone_name: 'General',
+                        physical_instruction: physicalInst
                     };
                 });
                 
@@ -224,6 +240,11 @@ export default function PickingTerminal() {
                     <div key={item.id} className="bg-gray-800 rounded-lg p-4 shadow-lg border-l-4 border-yellow-500 flex justify-between items-center">
                         <div className="flex-1">
                             <h3 className="text-lg font-bold text-white">{item.product_name}</h3>
+                            {item.physical_instruction && (
+                                <div className="text-emerald-400 text-xs font-bold mt-0.5">
+                                    ↳ {item.physical_instruction}
+                                </div>
+                            )}
                             <div className="text-gray-400 text-sm mt-1">
                                 {item.customer_name}
                             </div>

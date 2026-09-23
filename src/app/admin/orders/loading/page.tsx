@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -4823,22 +4823,32 @@ function OrderLoadingContent() {
                                                                         {item.products?.unit_of_measure}
                                                                     </span>
                                                                 </span>
-                                                                {/* Physical Unit Badge: shows original discrete qty when applicable */}
-                                                                {item.selected_options?._physical_instruction && (
-                                                                    <span style={{
-                                                                        fontSize: '0.68rem',
-                                                                        fontWeight: '700',
-                                                                        color: '#065F46',
-                                                                        backgroundColor: '#D1FAE5',
-                                                                        border: '1px solid #6EE7B7',
-                                                                        borderRadius: '4px',
-                                                                        padding: '1px 6px',
-                                                                        letterSpacing: '0.02em',
-                                                                        whiteSpace: 'nowrap'
-                                                                    }}>
-                                                                        {item.selected_options._physical_instruction}
-                                                                    </span>
-                                                                )}
+                                                                {/* Physical Unit Badge: shows discrete units alongside weight */}
+                                                                {(() => {
+                                                                    const badgeText = resolvePhysicalInstruction({
+                                                                        quantity: item.quantity,
+                                                                        unit: item.products?.unit_of_measure,
+                                                                        variant_label: item.variant_label,
+                                                                        nickname: item.nickname,
+                                                                        selected_options: item.selected_options
+                                                                    });
+                                                                    if (!badgeText) return null;
+                                                                    return (
+                                                                        <span style={{
+                                                                            fontSize: '0.68rem',
+                                                                            fontWeight: '700',
+                                                                            color: '#065F46',
+                                                                            backgroundColor: '#D1FAE5',
+                                                                            border: '1px solid #6EE7B7',
+                                                                            borderRadius: '4px',
+                                                                            padding: '1px 6px',
+                                                                            letterSpacing: '0.02em',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}>
+                                                                            {badgeText}
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </td>

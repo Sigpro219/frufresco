@@ -16,7 +16,7 @@ import Link from 'next/link';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
-import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction } from '@/lib/orderUtils';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -2084,16 +2084,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const newEdits = [...editableItems];
     const qty = parseQuantity(variantQuantity) || 0;
     
-    newEdits[idx].quantity = qty;
-    newEdits[idx].quantity_text = undefined;
-    newEdits[idx].unit = selectedUnit;
-    newEdits[idx].conversion_factor = selectedConversionFactor;
-    newEdits[idx].selected_options = selectedOptions;
-    newEdits[idx].isConfirmed = true;
-    
-    const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 1);
-    if (newEdits[idx].originalQuantity) {
-      newEdits[idx].conversion_factor = parseFloat((qty / origQty).toFixed(3));
+    const dual = buildDualUnitMetadata({
+      quantity: qty,
+      unit: selectedUnit,
+      selectedOptions,
+      product: selectedProductForVariant
+    });
+
+    if (dual) {
+      newEdits[idx].quantity = dual.billingQuantity;
+      newEdits[idx].quantity_text = undefined;
+      newEdits[idx].unit = dual.billingUnit;
+      newEdits[idx].conversion_factor = dual.conversionFactor;
+      newEdits[idx].selected_options = {
+        ...selectedOptions,
+        _original_qty: dual.originalQty,
+        _original_unit: dual.originalUnit,
+        _unit_weight_gr: dual.unitWeightGr,
+        _conversion_factor: dual.conversionFactor,
+        _physical_instruction: dual.physicalInstruction
+      };
+      newEdits[idx].isConfirmed = true;
+    } else {
+      newEdits[idx].quantity = qty;
+      newEdits[idx].quantity_text = undefined;
+      newEdits[idx].unit = selectedUnit;
+      newEdits[idx].conversion_factor = selectedConversionFactor;
+      newEdits[idx].selected_options = selectedOptions;
+      newEdits[idx].isConfirmed = true;
+      
+      const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 1);
+      if (newEdits[idx].originalQuantity) {
+        newEdits[idx].conversion_factor = parseFloat((qty / origQty).toFixed(3));
+      }
     }
     
     setEditableItems(newEdits);
@@ -4949,6 +4972,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 }
                 totalWeight += qtyNum * w;
 
+                const enrichedOptions = { ...(item.selected_options || {}) };
+                if (!enrichedOptions._physical_instruction) {
+                  const resolvedInst = resolvePhysicalInstruction({
+                    quantity: qtyNum,
+                    unit: item.unit || prod.unit_of_measure || 'Kg',
+                    variant_label: item.observations || null,
+                    nickname: item.originalName || null,
+                    selected_options: enrichedOptions
+                  });
+                  if (resolvedInst) {
+                    enrichedOptions._physical_instruction = resolvedInst;
+                  }
+                }
+
                 itemsData.push({
                   product_id: prod.id,
                   quantity: qtyNum,
@@ -4956,7 +4993,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
                   variant_label: item.observations || null,
                   unit: item.unit || prod.unit_of_measure || 'Kg',
-                  selected_options: item.selected_options || {}
+                  selected_options: enrichedOptions
                 });
               }
             }
@@ -5392,6 +5429,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }
             totalWeight += qtyNum * w;
 
+            const enrichedOptions = { ...(item.selected_options || {}) };
+            if (!enrichedOptions._physical_instruction) {
+              const resolvedInst = resolvePhysicalInstruction({
+                quantity: qtyNum,
+                unit: item.unit || prod.unit_of_measure || 'Kg',
+                variant_label: item.observations || null,
+                nickname: item.originalName || null,
+                selected_options: enrichedOptions
+              });
+              if (resolvedInst) {
+                enrichedOptions._physical_instruction = resolvedInst;
+              }
+            }
+
             itemsData.push({
               product_id: prod.id,
               quantity: qtyNum,
@@ -5399,7 +5450,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
               variant_label: item.observations || null,
               unit: item.unit || prod.unit_of_measure || 'Kg',
-              selected_options: item.selected_options || {}
+              selected_options: enrichedOptions
             });
           }
         }

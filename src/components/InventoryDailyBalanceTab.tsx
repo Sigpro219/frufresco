@@ -2520,8 +2520,14 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             <Calendar size={13} color="#0D7A57" strokeWidth={2.2} />
                             <input
                                 type="date"
+                                className="hide-native-date-picker-indicator"
                                 value={balanceDate}
                                 onChange={e => setBalanceDate(e.target.value)}
+                                onClick={(e) => {
+                                    try {
+                                        (e.target as any).showPicker?.();
+                                    } catch (_) {}
+                                }}
                                 style={{
                                     padding: '0.15rem 0.2rem',
                                     borderRadius: '4px',

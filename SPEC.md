@@ -1,8 +1,8 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.4 (Subsanación de Vacíos: Blindaje RBAC Granular en Command Center, Excel 32K Unificado, Tarjeta de Gobernanza & Paginación PostgREST Resiliente)  
-> **Fecha:** 22 de Septiembre, 2026  
+> **Versión:** 1.8.5 (Contrato Canónico de Trazabilidad Dual: Unidades Nominales y Peso Logístico en Ciclo de Vida de Pedido)  
+> **Fecha:** 23 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, IT/SaaS Infraestructura, Comercial, Operaciones & Gobernanza ERP
 
@@ -689,6 +689,74 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
   2. Se inserta exactamente una fila en `inventory_movements` con `reference_type: 'route_return'`, `status_to: 'returned'` y cantidad 10 kg (alimentando Columna O).
   3. Se genera un registro en `billing_returns` con `status: 'pending_review'`.
   4. Facturación NO aplica la Nota Crédito hasta que Control de Calidad audite la remisión tachada y apruebe el registro en `billing_returns`.
+
+### 9.7 Contrato Canónico de Trazabilidad Dual: Unidades Nominales y Peso Logístico (Dual-Unit Lifecycle)
+
+#### 9.7.1 Principio de Dualidad Físico-Comercial
+En la operación agroindustrial y HORECA, existen productos cuya unidad de costeo, facturación y capacidad de transporte es el **Kilogramo (Kg)**, pero cuya manipulación física por parte del cliente y del operario en planta se realiza por **Unidades Discretas con Peso Nominal** (ej. Papaya institucional 2000 gr, Sandía 4000 gr, Melón 1500 gr, Piña Gold 1200 gr).
+
+> **Regla de Oro Contractual (Prohibición Léxica):**  
+> Queda **estrictamente prohibido** utilizar la palabra `"estándar"` en cualquier badge, interfaz gráfica, comando de terminal o documento de remisión/facturación. El conteo físico debe expresarse con claridad meridiana usando la sintaxis canónica:  
+> `"${qty} ${unit} ${weightGr} gr"` (ej. `"1 Unidad 2000 gr"`, `"3 Unidades 2000 gr"`).
+
+#### 9.7.2 Contrato Matemático de Recálculo y Equivalencia
+Para cualquier producto cuya unidad maestra contable sea `Kg` y cuente con una presentación o variante ponderada en gramos ($P_{\text{gr}}$):
+
+1. **Factor de Conversión:**
+   $$F_{\text{kg}} = \frac{P_{\text{gr}}}{1000}$$
+2. **Derivación de Masa Logística y Facturación:**
+   Si el cliente o comercial ingresa $U$ unidades:
+   $$Q_{\text{kg}} = U \times F_{\text{kg}}$$
+   - `order_items.quantity` = $Q_{\text{kg}}$
+   - `order_items.unit` = `'Kg'`
+   - `orders.total_weight_kg` acumula $Q_{\text{kg}}$ para cubicaje de furgón.
+   - Subtotal comercial = $Q_{\text{kg}} \times \text{Precio por Kg}$.
+3. **Derivación Inversa (Resiliencia para Pedidos Históricos):**
+   Si una orden previa registra $Q_{\text{kg}}$ con variante de presentación $P_{\text{gr}}$, el sistema deduce automáticamente las unidades:
+   $$U = \frac{Q_{\text{kg}}}{F_{\text{kg}}}$$
+
+#### 9.7.3 Estructura Canónica de Metadatos en `order_items.selected_options` (JSONB)
+Todo ítem configurado con unidad dual debe persistir en su payload JSONB:
+```json
+{
+  "_original_qty": 1,
+  "_original_unit": "Unidad",
+  "_unit_weight_gr": 2000,
+  "_conversion_factor": 2.0,
+  "_physical_instruction": "1 Unidad 2000 gr"
+}
+```
+
+#### 9.7.4 Cadena de Custodia en las 7 Estaciones Operativas
+1. **Estación 1 - Ingesta Comercial (`EmailDraftsModule` y `orders/create`):**
+   Al asociar la presentación con peso nominal, se calcula la masa en Kg y se inyecta `_physical_instruction` canónico sin la palabra "estándar".
+2. **Estación 2 - Monitoreo & Torre de Control (`admin/orders/loading`):**
+   El modal de pedidos visualiza concurrentemente la masa total `2,0 Kg` y el badge verde `'1 Unidad 2000 gr'`. Si un pedido histórico carece de la llave `_physical_instruction`, un parser heurístico deduce el badge desde `selected_options.Presentación` o `variant_label`.
+3. **Estación 3 - Planilla de Alistamiento Físico (`alistamiento-print`):**
+   La hoja impresa de alistamiento incluye la instrucción física para que el bodeguero extraiga las unidades físicas exactas antes de llevar a báscula.
+4. **Estación 4 - Células de Trabajo & Terminal Rápido (`ops/picking` y `terminal`):**
+   La terminal de pesaje presenta al operario: "Alistar: 1 Unidad 2000 gr | Peso esperado: 2,0 Kg". El operario coloca la unidad física sobre la báscula y confirma el pesaje real (`picked_quantity`).
+5. **Estación 5 - Rectificación LIFO (`ops/rectificacion`):**
+   El checker de muelle valida visualmente que la canastilla contenga el conteo de frutos correspondiente antes del sellado del manifiesto.
+6. **Estación 6 - Aplicación Móvil del Conductor (`driver/delivery`):**
+   El chofer visualiza: `2,0 Kg | 1 Unidad 2000 gr`, permitiéndole entregar en el piso del cliente la unidad exacta sin generar discusiones por diferencias entre kilos y unidades.
+7. **Estación 7 - Remisión Oficial de Despacho & Facturación (`billing/print`):**
+   El documento legal impreso desglosa: `Papaya institucional - Maduro [1 Unidad 2000 gr]` con cantidad facturada `2,0 Kg`, garantizando transparencia jurídica y contable ante el cliente corporativo.
+
+#### 9.7.5 Criterios de Aceptación BDD (Gherkin)
+##### Escenario 1: Ingesta de Papaya con Presentación Unitaria de 2000 gr
+- **Given** un borrador de correo o creación manual de pedido para un cliente B2B.
+- **When** el usuario selecciona "Papaya institucional" con presentación "Unidad 2000 gr" y cantidad 1 Unidad.
+- **Then**:
+  1. `order_items.quantity` se fija en exactamente `2.0` con `unit = 'Kg'`.
+  2. `order_items.selected_options._physical_instruction` se registra como `"1 Unidad 2000 gr"`.
+  3. No figura en ningún registro la palabra `"estándar"`.
+  4. En el modal de detalle del pedido se visualizan ambos datos: `2,0 Kg` y el badge `"1 Unidad 2000 gr"`.
+
+##### Escenario 2: Resiliencia Retroactiva en Pedidos Existentes sin Metadatos Explícitos
+- **Given** el pedido histórico `2309_0887` en base de datos con `quantity: 2`, `unit: "Kg"` y `selected_options: { "Presentación": "Unidad 2000 gr" }`.
+- **When** el usuario abre el modal de auditoría de pedidos en `/admin/orders/loading`.
+- **Then** el parser resuelve automáticamente $2\text{ Kg} / 2.0 = 1\text{ Unidad}$ y renderiza el badge `"1 Unidad 2000 gr"` junto a `2,0 Kg`.
 
 ---
 

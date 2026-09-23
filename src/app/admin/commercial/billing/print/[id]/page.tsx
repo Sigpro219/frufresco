@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Printer } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';
 import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow } from '@/components/print';
@@ -28,7 +28,7 @@ export default function BillingPrintPage() {
                     .select(`
                         id, sequence_id, created_at, total, document_type, remission_with_prices,
                         profiles(company_name, contact_name, contact_phone, address, document_type, remission_with_prices),
-                        order_items(quantity, unit_price, nickname, products(name, sku, unit_of_measure))
+                        order_items(quantity, unit_price, nickname, variant_label, selected_options, products(name, sku, unit_of_measure))
                     `)
                     .eq('billing_cut_id', id);
                 
@@ -155,15 +155,33 @@ export default function BillingPrintPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {order.order_items?.map((item: any, i: number) => (
-                                        <tr key={i}>
-                                            <td style={{ fontFamily: 'monospace', color: '#64748B' }}>{item.products?.sku || '---'}</td>
-                                            <td><strong>{item.nickname || item.products?.name}</strong></td>
-                                            <td className="text-right" style={{ fontWeight: 'bold' }}>{item.quantity}</td>
-                                            {showPrices && <td className="text-right">${item.unit_price?.toLocaleString('es-CO')}</td>}
-                                            {showPrices && <td className="text-right" style={{ fontWeight: 'bold' }}>${(item.quantity * item.unit_price)?.toLocaleString('es-CO')}</td>}
-                                        </tr>
-                                    ))}
+                                    {order.order_items?.map((item: any, i: number) => {
+                                        const physicalInst = resolvePhysicalInstruction({
+                                            quantity: item.quantity,
+                                            unit: item.products?.unit_of_measure,
+                                            variant_label: item.variant_label,
+                                            nickname: item.nickname,
+                                            selected_options: item.selected_options
+                                        });
+                                        return (
+                                            <tr key={i}>
+                                                <td style={{ fontFamily: 'monospace', color: '#64748B' }}>{item.products?.sku || '---'}</td>
+                                                <td>
+                                                    <strong>{item.nickname || item.products?.name}</strong>
+                                                    {physicalInst && (
+                                                        <div style={{ fontSize: '0.62rem', color: '#0D7A57', fontWeight: 700, marginTop: '1px' }}>
+                                                            ↳ {physicalInst}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="text-right" style={{ fontWeight: 'bold' }}>
+                                                    {item.quantity} <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{item.products?.unit_of_measure || 'Kg'}</span>
+                                                </td>
+                                                {showPrices && <td className="text-right">${item.unit_price?.toLocaleString('es-CO')}</td>}
+                                                {showPrices && <td className="text-right" style={{ fontWeight: 'bold' }}>${(item.quantity * item.unit_price)?.toLocaleString('es-CO')}</td>}
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                                 {showPrices && (
                                     <tfoot>

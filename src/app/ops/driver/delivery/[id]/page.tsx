@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MapPin, Camera, X, Check, AlertTriangle, Package } from 'lucide-react';
 import RoleProcessGuide from '@/components/common/RoleProcessGuide';
 import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
+import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 
 interface DeliverableItem {
     id: string;
@@ -16,6 +17,7 @@ interface DeliverableItem {
     picked_quantity: number;
     returned_qty: number;
     unit: string;
+    physical_instruction?: string | null;
     return_reason?: string;
     return_evidence_url?: string;
 }
@@ -107,7 +109,7 @@ export default function DeliveryConfirmationPage() {
                             id, company_name, contact_name, role
                         ),
                         order_items (
-                            id, product_id, quantity, picked_quantity, nickname, variant_label,
+                            id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
                             products (id, name, unit_of_measure)
                         )
                     )
@@ -140,6 +142,13 @@ export default function DeliveryConfirmationPage() {
                 const formattedItems = (order.order_items as any[]).map(item => {
                     const variant = item.variant_label || item.nickname || '';
                     const dispName = variant ? `${item.products?.name || 'Producto'} (${variant})` : (item.products?.name || 'Producto');
+                    const physicalInst = resolvePhysicalInstruction({
+                        quantity: item.quantity,
+                        unit: item.products?.unit_of_measure,
+                        variant_label: item.variant_label,
+                        nickname: item.nickname,
+                        selected_options: item.selected_options
+                    });
                     return {
                         id: item.id,
                         product_id: item.product_id || item.products?.id,
@@ -147,7 +156,8 @@ export default function DeliveryConfirmationPage() {
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity || item.quantity,
                         returned_qty: 0,
-                        unit: item.products?.unit_of_measure || 'un'
+                        unit: item.products?.unit_of_measure || 'un',
+                        physical_instruction: physicalInst
                     };
                 });
                 setItems(formattedItems);
@@ -596,6 +606,34 @@ export default function DeliveryConfirmationPage() {
                     </div>
                 )}
 
+                {/* Resumen de Productos a Entregar */}
+                {items.length > 0 && (
+                    <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '1.5rem' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#10B981', marginBottom: '0.8rem', letterSpacing: '0.5px' }}>
+                            PRODUCTOS A ENTREGAR ({items.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            {items.map(item => (
+                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.4rem' }}>
+                                    <div style={{ flex: 1, paddingRight: '0.5rem' }}>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'white' }}>{item.product_name}</div>
+                                        {item.physical_instruction && (
+                                            <div style={{ fontSize: '0.72rem', color: '#6EE7B7', fontWeight: '700', marginTop: '1px' }}>
+                                                ↳ {item.physical_instruction}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#F3F4F6' }}>
+                                            {item.picked_quantity || item.quantity} {item.unit}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Photo Evidence Section */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', marginBottom: '0.6rem', letterSpacing: '0.5px' }}>EVIDENCIA (FOTO)</div>
@@ -822,6 +860,11 @@ export default function DeliveryConfirmationPage() {
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>{item.product_name}</div>
                                                         <div style={{ fontSize: '0.65rem', color: '#9CA3AF', marginTop: '2px' }}>Pedido: {item.picked_quantity} {item.unit}</div>
+                                                        {item.physical_instruction && (
+                                                            <div style={{ fontSize: '0.65rem', color: '#10B981', fontWeight: '700', marginTop: '1px' }}>
+                                                                ↳ {item.physical_instruction}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '800' }}>DV:</span>

@@ -9,6 +9,7 @@ import { sanitizeDocText, resolveClientProfile, findBestProductMatch, findBestPr
 import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
+import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction } from '@/lib/orderUtils';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
@@ -2089,15 +2090,31 @@ function CreateOrderContent() {
         // When a conversion factor is applied (e.g. 30 Unidades × 550 gr = 16.5 Kg),
         // we embed the original physical instruction into selected_options so it
         // flows through to DB and surfaces in loading, alistamiento-print and picking.
-        const enrichedOptions = resolvedFactor !== 1
+        const dual = buildDualUnitMetadata({
+            quantity: qtyNum,
+            unit: resolvedUnit,
+            selectedOptions,
+            product: selectedProductForModal
+        });
+
+        const enrichedOptions = dual
             ? {
                 ...selectedOptions,
-                _original_qty: qtyNum,
-                _conversion_factor: resolvedFactor,
-                _original_unit: resolvedUnit,
-                _physical_instruction: `${qtyNum} ${resolvedUnit}`
+                _original_qty: dual.originalQty,
+                _conversion_factor: dual.conversionFactor,
+                _original_unit: dual.originalUnit,
+                _unit_weight_gr: dual.unitWeightGr,
+                _physical_instruction: dual.physicalInstruction
             }
-            : { ...selectedOptions };
+            : (resolvedFactor !== 1
+                ? {
+                    ...selectedOptions,
+                    _original_qty: qtyNum,
+                    _conversion_factor: resolvedFactor,
+                    _original_unit: resolvedUnit,
+                    _physical_instruction: cleanPhysicalInstruction(`${qtyNum} ${resolvedUnit}`) || `${qtyNum} ${resolvedUnit}`
+                }
+                : { ...selectedOptions });
 
         if (editingStagedItemId !== null) {
             const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
@@ -7246,24 +7263,33 @@ function CreateOrderContent() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Physical Unit Badge — shown when item was entered as discrete units (e.g. 30 Und × 550 gr) */}
-                                                    {item.selected_options?._physical_instruction && item.conversion_factor && item.conversion_factor !== 1 && (
-                                                        <div style={{ textAlign: 'center', marginTop: '-2px' }}>
-                                                            <span style={{
-                                                                display: 'inline-block',
-                                                                fontSize: '0.7rem',
-                                                                fontWeight: '700',
-                                                                color: '#065F46',
-                                                                backgroundColor: '#D1FAE5',
-                                                                border: '1px solid #6EE7B7',
-                                                                borderRadius: '4px',
-                                                                padding: '1px 6px',
-                                                                letterSpacing: '0.02em'
-                                                            }}>
-                                                                {item.selected_options._physical_instruction}
-                                                            </span>
-                                                        </div>
-                                                    )}
+                                                    {/* Physical Unit Badge — shown when item was entered as discrete units (e.g. 1 Unidad 2000 gr) */}
+                                                    {(() => {
+                                                        const badgeText = resolvePhysicalInstruction({
+                                                            quantity: Number(item.qty) || 0,
+                                                            unit: item.product.unit_of_measure,
+                                                            variant_label: item.variant_label,
+                                                            selected_options: item.selected_options
+                                                        });
+                                                        if (!badgeText) return null;
+                                                        return (
+                                                            <div style={{ textAlign: 'center', marginTop: '-2px' }}>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#065F46',
+                                                                    backgroundColor: '#D1FAE5',
+                                                                    border: '1px solid #6EE7B7',
+                                                                    borderRadius: '4px',
+                                                                    padding: '1px 6px',
+                                                                    letterSpacing: '0.02em'
+                                                                }}>
+                                                                    {badgeText}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })()}
 
                                                     {/* Price Edit Input */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
