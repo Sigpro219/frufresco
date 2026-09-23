@@ -1651,20 +1651,43 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                         </div>
 
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>
-                                                Peso Log. (kg)
-                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: formData.unit_of_measure?.toLowerCase() === 'unidad' ? '#065F46' : '#6B7280', margin: 0 }}>
+                                                    {formData.unit_of_measure?.toLowerCase() === 'unidad' ? 'Peso Unit. (kg)' : 'Peso Log. (kg)'}
+                                                </label>
+                                                {formData.unit_of_measure?.toLowerCase() === 'unidad' && (
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#047857', padding: '1px 5px', borderRadius: '4px' }}>
+                                                        DESPACHO
+                                                    </span>
+                                                )}
+                                            </div>
                                             <input
                                                 type="number"
                                                 step="0.001"
                                                 min="0.001"
-                                                value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : (formData.unit_of_measure?.toLowerCase() === 'unidad' ? 1.0 : 0.1)}
+                                                readOnly={formData.unit_of_measure?.toLowerCase() !== 'unidad'}
+                                                disabled={formData.unit_of_measure?.toLowerCase() !== 'unidad'}
+                                                value={formData.unit_of_measure?.toLowerCase() === 'unidad' 
+                                                    ? (formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : 0.3)
+                                                    : 1.0
+                                                }
                                                 onChange={(e) => {
-                                                    const val = e.target.value === '' ? 0.1 : parseFloat(e.target.value);
+                                                    const val = e.target.value === '' ? 0.3 : parseFloat(e.target.value);
                                                     setFormData({ ...formData, weight_kg: val });
                                                 }}
                                                 onFocus={(e) => e.target.select()}
-                                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '1rem', fontWeight: '800' }}
+                                                title={formData.unit_of_measure?.toLowerCase() !== 'unidad' ? 'En compras por Kilos, 1 kg siempre equivale a 1.00 kg base' : 'Peso físico real de una unidad/botella/frasco/cubeta'}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '0.8rem', 
+                                                    borderRadius: '8px', 
+                                                    border: formData.unit_of_measure?.toLowerCase() === 'unidad' ? '1.5px solid #10B981' : '1px solid #E2E8F0', 
+                                                    backgroundColor: formData.unit_of_measure?.toLowerCase() === 'unidad' ? '#FFFFFF' : '#F1F5F9',
+                                                    color: formData.unit_of_measure?.toLowerCase() === 'unidad' ? '#065F46' : '#94A3B8',
+                                                    fontSize: '1rem', 
+                                                    fontWeight: '800',
+                                                    cursor: formData.unit_of_measure?.toLowerCase() === 'unidad' ? 'text' : 'not-allowed'
+                                                }}
                                             />
                                         </div>
 
@@ -1709,6 +1732,39 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* MICRO-BANNER PEDAGÓGICO DE COHERENCIA LOGÍSTICA */}
+                                    {formData.unit_of_measure?.toLowerCase() === 'unidad' ? (
+                                        <div style={{
+                                            backgroundColor: '#EFF6FF',
+                                            border: '1px solid #BFDBFE',
+                                            padding: '8px 12px',
+                                            borderRadius: '10px',
+                                            fontSize: '0.78rem',
+                                            color: '#1E40AF',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}>
+                                            <Package size={15} style={{ flexShrink: 0, color: '#2563EB' }} />
+                                            <span><strong>Unidad Discreta (Abarrotes / Botellas / Cubetas):</strong> Registra el peso real de 1 envase/unidad en báscula. Es mandatorio para que el sistema cubique con exactitud la capacidad del camión.</span>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            backgroundColor: '#F0FDF4',
+                                            border: '1px solid #BBF7D0',
+                                            padding: '8px 12px',
+                                            borderRadius: '10px',
+                                            fontSize: '0.78rem',
+                                            color: '#166534',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}>
+                                            <Scale size={15} style={{ flexShrink: 0, color: '#16A34A' }} />
+                                            <span><strong>Granel / Por Peso (Kg):</strong> 1 kilo siempre pesa 1,00 kg físico inmutable. Si comercializas este SKU en presentaciones por unidad física o atado (ej. Atado 300 gr), configúralas en la <strong>Pestaña 3 (Venta Web / Poka-Yoke)</strong>.</span>
+                                        </div>
+                                    )}
 
                                     {/* Banner inteligente hacia gestión comercial E-Commerce */}
                                     <div style={{ 
