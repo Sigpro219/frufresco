@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId, resolvePhysicalInstruction } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -4793,14 +4793,24 @@ function OrderLoadingContent() {
                                                              {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
                                                          </div>
                                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
-                                                             {item.variant_label && (
-                                                                  <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                      <Sparkles size={10} strokeWidth={1.5} /> {(() => {
-                                                                          const cleaned = item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim();
-                                                                          return cleaned;
-                                                                      })()}
-                                                                  </div>
-                                                             )}
+                                                             {(() => {
+                                                                 const spec = formatStructuredSpecification({
+                                                                     quantity: item.quantity,
+                                                                     unit: item.products?.unit_of_measure,
+                                                                     variant_label: item.variant_label,
+                                                                     nickname: item.nickname,
+                                                                     selected_options: item.selected_options
+                                                                 });
+                                                                 if (!item.variant_label || spec) return null;
+                                                                 if (/^\d+\s*,\s*\d+/.test(item.variant_label)) return null;
+                                                                 const cleaned = item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim();
+                                                                 if (!cleaned) return null;
+                                                                 return (
+                                                                     <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                         <Sparkles size={10} strokeWidth={1.5} /> {cleaned}
+                                                                     </div>
+                                                                 );
+                                                             })()}
                                                              {(() => {
                                                                  const exc = clientExceptions.find(e => e.product_id === (item.product_id || item.products?.id));
                                                                  return (
@@ -4870,29 +4880,29 @@ function OrderLoadingContent() {
                                                                         {item.products?.unit_of_measure}
                                                                     </span>
                                                                 </span>
-                                                                {/* Physical Unit Badge: shows discrete units alongside weight */}
+                                                                {/* Especificación Culinaria/Operativa Estructurada (e.g. "12 und de 2 kg; Maduro") */}
                                                                 {(() => {
-                                                                    const badgeText = resolvePhysicalInstruction({
+                                                                    const specText = formatStructuredSpecification({
                                                                         quantity: item.quantity,
                                                                         unit: item.products?.unit_of_measure,
                                                                         variant_label: item.variant_label,
                                                                         nickname: item.nickname,
                                                                         selected_options: item.selected_options
                                                                     });
-                                                                    if (!badgeText) return null;
+                                                                    if (!specText) return null;
                                                                     return (
                                                                         <span style={{
-                                                                            fontSize: '0.68rem',
+                                                                            fontSize: '0.72rem',
                                                                             fontWeight: '700',
                                                                             color: '#065F46',
                                                                             backgroundColor: '#D1FAE5',
                                                                             border: '1px solid #6EE7B7',
-                                                                            borderRadius: '4px',
-                                                                            padding: '1px 6px',
-                                                                            letterSpacing: '0.02em',
+                                                                            borderRadius: '5px',
+                                                                            padding: '2px 8px',
+                                                                            letterSpacing: '0.01em',
                                                                             whiteSpace: 'nowrap'
                                                                         }}>
-                                                                            {badgeText}
+                                                                            {specText}
                                                                         </span>
                                                                     );
                                                                 })()}

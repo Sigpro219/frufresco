@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare, Download } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
@@ -534,10 +534,9 @@ export default function AlistamientoSabanaPrintPage() {
             
             // Normalizar a Kilogramos
             const norm = normalizeToKg(it.quantity, it.unit, it.product?.unit_of_measure);
-            const userNote = filterMeaningfulNote(it.variant_label || it.nickname, pName);
-            // Include physical instruction (e.g. "30 Unidad de 550 gr") from selected_options when present
-            const physicalInstruction = it.selected_options?._physical_instruction as string | undefined;
-            const combinedNote = [physicalInstruction || userNote, !physicalInstruction ? norm.subNote : undefined].filter(Boolean).join(' - ');
+            // Especificación Culinaria/Operativa Estructurada (e.g. "12 und de 2 kg; Maduro")
+            // Si no está estructurada la característica tipo, DEBE APARECER VACÍO (cero ruido visual)
+            const combinedNote = formatStructuredSpecification(it) || '';
 
             if (!groups[cell].productsMap.has(pId)) {
                 groups[cell].productsMap.set(pId, {
@@ -969,16 +968,11 @@ export default function AlistamientoSabanaPrintPage() {
                                                         {ord.space_label}
                                                     </td>
 
-                                                    {/* Sucursal y Nombre del Cliente (Sin redundancias) */}
+                                                    {/* Sucursal del Cliente (Estricto: solo nombre de sucursal) */}
                                                     <td style={{ textAlign: 'left', padding: '5px 8px', border: '1px solid #94A3B8', color: '#000000', maxWidth: '235px' }} title={ord.branch_name}>
                                                         <div style={{ fontWeight: 800, fontSize: '7.4pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
                                                             {ord.branch_name}
                                                         </div>
-                                                        {ord.client_name && ord.client_name !== ord.branch_name && !ord.branch_name.includes(ord.client_name) && (
-                                                            <div style={{ fontSize: '5.8pt', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {ord.client_name}
-                                                            </div>
-                                                        )}
                                                     </td>
 
                                                     {/* Tipo (I = Institucional, H = Hogar) */}

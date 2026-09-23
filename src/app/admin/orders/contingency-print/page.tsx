@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getFriendlyOrderId, formatStructuredSpecification, cleanPhysicalInstruction } from '@/lib/orderUtils';
 import { Printer, ShieldAlert, ArrowLeft, Download } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
@@ -16,6 +16,7 @@ interface OrderItem {
     unit_price?: number;
     nickname?: string;
     variant_label?: string;
+    selected_options?: Record<string, any> | null;
     products?: {
         id?: string;
         name: string;
@@ -81,7 +82,7 @@ export default function ContingencyPrintPage() {
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
                         shipping_address, admin_notes, special_notes, warehouse_spaces,
                         profiles:profiles(id, company_name, contact_name, contact_phone, address, nit, role),
-                        order_items(id, quantity, unit, unit_price, nickname, variant_label, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, inventory_group))
+                        order_items(id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, inventory_group))
                     `);
 
                 if (rawOrderIds) {
@@ -435,7 +436,17 @@ export default function ContingencyPrintPage() {
                                                 <td style={{ textAlign: 'center', fontSize: '0.75rem' }}>&#9633;</td>
                                                 <td>
                                                     <strong>{pName}</strong>
-                                                    {itm.variant_label && <span style={{ fontSize: '0.60rem', color: '#475569' }}> ({itm.variant_label})</span>}
+                                                    {(() => {
+                                                        const spec = formatStructuredSpecification({
+                                                            quantity: itm.quantity,
+                                                            unit: itm.unit || itm.products?.unit_of_measure,
+                                                            variant_label: itm.variant_label,
+                                                            nickname: itm.nickname,
+                                                            selected_options: itm.selected_options
+                                                        }) || cleanPhysicalInstruction(itm.variant_label);
+                                                        if (!spec) return null;
+                                                        return <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: 600 }}>{spec}</div>;
+                                                    })()}
                                                 </td>
                                                 <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                                                     {Number(itm.quantity || 0).toLocaleString('es-CO')}
@@ -552,7 +563,17 @@ export default function ContingencyPrintPage() {
                                                 <td style={{ textAlign: 'center', fontSize: '0.75rem' }}>&#9633;</td>
                                                 <td>
                                                     <strong>{pName}</strong>
-                                                    {itm.variant_label && <span style={{ fontSize: '0.60rem', color: '#64748B' }}> ({itm.variant_label})</span>}
+                                                    {(() => {
+                                                        const spec = formatStructuredSpecification({
+                                                            quantity: itm.quantity,
+                                                            unit: itm.unit || itm.products?.unit_of_measure,
+                                                            variant_label: itm.variant_label,
+                                                            nickname: itm.nickname,
+                                                            selected_options: itm.selected_options
+                                                        }) || cleanPhysicalInstruction(itm.variant_label);
+                                                        if (!spec) return null;
+                                                        return <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: 600 }}>{spec}</div>;
+                                                    })()}
                                                 </td>
                                                 <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{qty.toLocaleString('es-CO')}</td>
                                                 <td style={{ textAlign: 'center' }}>{unit}</td>

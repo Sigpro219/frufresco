@@ -9,7 +9,7 @@ import { sanitizeDocText, resolveClientProfile, findBestProductMatch, findBestPr
 import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
-import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction } from '@/lib/orderUtils';
+import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction, getStructuredSpecKey } from '@/lib/orderUtils';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
@@ -3487,8 +3487,14 @@ function CreateOrderContent() {
                 tax += itemTax;
                 total += itemTotal;
 
-                const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
-                const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+                const structuredSpec = getStructuredSpecKey(item);
+                const publicOptionValues = item.selected_options 
+                    ? Object.entries(item.selected_options)
+                        .filter(([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim())
+                        .map(([_, v]) => (v as string).trim())
+                    : [];
+                const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
+                const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
 
                 return {
                     product_id: prod.id,
@@ -3689,8 +3695,14 @@ function CreateOrderContent() {
             const itemsToInject = stagedItems
                 .filter(item => item.suggestedProduct)
                 .map(item => {
-                    const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
-                    const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+                    const structuredSpec = getStructuredSpecKey(item);
+                    const publicOptionValues = item.selected_options 
+                        ? Object.entries(item.selected_options)
+                            .filter(([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim())
+                            .map(([_, v]) => (v as string).trim())
+                        : [];
+                    const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
+                    const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
                     const prodId = item.suggestedProduct?.id;
                     const resolvedPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                         ? contractPrices[prodId]
@@ -3864,8 +3876,14 @@ function CreateOrderContent() {
                     tax += itemTax;
                     totalWeight += itemWeight;
 
-                    const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
-                    const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
+                    const structuredSpec = getStructuredSpecKey(item);
+                    const publicOptionValues = item.selected_options 
+                        ? Object.entries(item.selected_options)
+                            .filter(([k, v]) => !k.startsWith('_') && typeof v === 'string' && v.trim())
+                            .map(([_, v]) => (v as string).trim())
+                        : [];
+                    const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
+                    const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
 
                     return {
                         product_id: item.suggestedProduct.id,

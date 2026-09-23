@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
+import { getStructuredSpecKey } from '@/lib/orderUtils';
 import confetti from "canvas-confetti";
 import { 
   Calendar, 
@@ -670,6 +671,8 @@ export default function ProcurementPage() {
                   quantity, 
                   product_id, 
                   variant_label,
+                  nickname,
+                  selected_options,
                   products(unit_of_measure),
                   orders!inner(delivery_date, status)
               `,
@@ -687,7 +690,7 @@ export default function ProcurementPage() {
       return;
     }
 
-    // 2. Agrupar por producto, variante Y FECHA
+    // 2. Agrupar por producto, variante canónica Y FECHA
     const totals: Record<
       string,
       {
@@ -698,16 +701,16 @@ export default function ProcurementPage() {
         delivery_date: string;
       }
     > = {};
-    items.forEach((item) => {
-      const variant = item.variant_label || "";
+    items.forEach((item: any) => {
+      const canonicalVariant = getStructuredSpecKey(item) || item.variant_label || "";
       const dDate = item.orders?.delivery_date || targetDate;
-      const key = `${item.product_id}_${variant}_${dDate}`;
+      const key = `${item.product_id}_${canonicalVariant}_${dDate}`;
       if (!totals[key]) {
         totals[key] = {
           qty: 0,
           unit: item.products?.unit_of_measure || "kg",
           pid: item.product_id,
-          variant: variant,
+          variant: canonicalVariant,
           delivery_date: dDate,
         };
       }

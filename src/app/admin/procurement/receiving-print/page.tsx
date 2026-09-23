@@ -8,6 +8,7 @@ import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import UniversalLetterhead from '@/components/print/UniversalLetterhead';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { printViaNewWindow } from '@/components/print';
+import { getStructuredSpecKey } from '@/lib/orderUtils';
 
 interface ReceivingItem {
     id: string;
@@ -55,7 +56,7 @@ export default function ReceivingPrintPage() {
             if (rawTasks.length === 0) {
                 const { data: ordersWithItems } = await supabase
                     .from('orders')
-                    .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label)')
+                    .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label, selected_options)')
                     .eq('delivery_date', selectedDate)
                     .neq('status', 'cancelled');
 
@@ -65,16 +66,18 @@ export default function ReceivingPrintPage() {
                         (ord.order_items || []).forEach((it: any) => {
                             const pId = it.product_id;
                             if (!pId) return;
-                            if (!map[pId]) {
-                                map[pId] = {
+                            const vLabel = getStructuredSpecKey(it) || it.variant_label || '';
+                            const mapKey = `${pId}_${vLabel}`;
+                            if (!map[mapKey]) {
+                                map[mapKey] = {
                                     id: it.id,
                                     product_id: pId,
                                     total_requested: 0,
-                                    variant_label: it.variant_label,
+                                    variant_label: vLabel || undefined,
                                     unit: it.unit
                                 };
                             }
-                            map[pId].total_requested += Number(it.quantity) || 0;
+                            map[mapKey].total_requested += Number(it.quantity) || 0;
                         });
                     });
                     rawTasks = Object.values(map);

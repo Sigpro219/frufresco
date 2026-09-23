@@ -1804,5 +1804,47 @@ Como salvaguarda ante zonas sin señal de telefonía celular o teléfonos de con
 2. **Acceso Directo Universal de Impresión 1-Clic:** Tanto en la vista modal de lanzamiento como en el paso final del asistente guiado, se dispone de un botón permanente y visible:  
    `[Imprimir Kit de Contingencia Completo (1-Clic)]` enlazado a `/admin/orders/contingency-print?mode=all&orderIds=...`, permitiendo al supervisor emitir la totalidad del juego físico (Sábana de Alistamiento, Consolidado de Compras, Remisiones Duplicadas y Rótulos Térmicos) sin bloqueos operativos.
 
+---
+
+## 19. ESTÁNDAR CANÓNICO DE ESPECIFICACIONES OPERATIVAS, AGRUPACIÓN DE VARIANTES Y SUPRESIÓN DE RUIDO VISUAL
+
+### 19.1 Arquitectura del Formato Canónico de Ítems de Pedido
+Toda vista operativa de detalle (`/admin/orders/loading`, `/admin/orders/[id]`) y documento impreso debe respetar estrictamente la jerarquía visual de dos líneas para productos con variantes culinarias o unidades discretas de peso:
+
+$$\mathbf{\text{Línea 1 (Magnitud de Facturación/Despacho):}} \quad 24\text{ kg}$$
+$$\mathbf{\text{Línea 2 (Instrucción Física Operativa):}} \quad 12\text{ und de } 2\text{ kg; Maduro}$$
+
+#### Reglas de Integridad de Datos:
+1. **Erradicación de Fugas JSON Internas:** Queda terminantemente prohibido imprimir o renderizar serializaciones sucias de `selected_options` (como `2, 24, Unidad, 24 Unidad, 2000, Maduro` o claves privadas prefijadas con guion bajo como `_original_qty`, `_conversion_factor`, `_unit_weight_gr`).
+2. **Generador Canónico Centralizado:** Toda la lógica de extracción de especificaciones opera a través de las funciones puras `formatStructuredSpecification(item)` y `getStructuredSpecKey(item)` en `@/lib/orderUtils`.
+3. **Persistencia Normalizada:** Al crear o importar pedidos (`/admin/orders/create`), el campo `order_items.variant_label` se almacena directamente con la clave canónica estructurada (ej: `und de 2 kg; Maduro`), garantizando congruencia entre base de datos, compras y bodega.
+
+---
+
+### 19.2 Regla de Supresión de Ruido Visual en Planilla de Alistamiento (`/admin/orders/alistamiento-print`)
+La sábana física de alistamiento es un instrumento de trabajo de alta velocidad para operarios de patio en Corabastos. Por tanto, se rige bajo los siguientes principios Lean Poka-Yoke:
+
+1. **Celda Vacía por Defecto ante Ausencia de Especificación Estructurada:**  
+   Si una línea de pedido no posee una especificación operativa estructurada (es decir, `formatStructuredSpecification(item)` retorna `null`), el espacio secundario de la celda de producto **DEBE PERMANECER 100% VACÍO** (`debe aparecer vacío`).
+   - Se prohíbe terminantemente inyectar notas libres de clientes, observaciones comerciales o alias no estructurados en la matriz de cantidades, eliminando distracciones visuales que provocan errores de conteo.
+2. **Columna SUCURSAL / CLIENTE Estricta:**  
+   En la cabecera de fila de cada pedido, la columna `SUCURSAL / CLIENTE` debe mostrar **exclusivamente el nombre de la sucursal** (`ord.branch_name`). Se suprime la segunda línea con la razón social corporativa del cliente (`ord.client_name`), evitando redundancia visual y truncamiento de texto.
+
+---
+
+### 19.3 Regla Algorítmica de Agrupación de Variantes en Compras y Consolidación (`/ops/compras`, `/admin/procurement/purchases-print`)
+La consolidación de compras para plaza Corabastos debe segregar o sumar requerimientos de acuerdo a su condición física real:
+
+1. **Suma de Ítems con Idénticas Condiciones:**  
+   Si dos o más pedidos solicitan el mismo producto con exactamente las mismas condiciones canónicas (ej: `Papaya maradol` con `und de 2 kg; Maduro` en Pedido A por 24 kg y en Pedido B por 10 kg), el motor de compras consolida ambas demandas en **un único requerimiento sumado**:
+   $$\text{Clave de Agrupación:} \quad \text{product\_id} + \text{"\_und de 2 kg; Maduro\_"} + \text{delivery\_date} \quad \longrightarrow \quad \text{Total: } 34\text{ kg}$$
+2. **Segregación Estricta de Variantes Diferentes:**  
+   Si otro pedido solicita una condición culinaria o de calibre diferente (ej: `und de 2 kg; Pintón` por 14 kg):
+   $$\text{Clave de Agrupación:} \quad \text{product\_id} + \text{"\_und de 2 kg; Pintón\_"} + \text{delivery\_date} \quad \longrightarrow \quad \text{Línea Separada: } 14\text{ kg}$$
+   El sistema lo tratará como un ítem de compra independiente en la planilla física de compras y en el panel digital de compras, permitiendo al comprador negociar específicamente bultos de fruta pintona sin mezclarla con la madura.
+3. **Consolidación de Ítems Base Sin Especificación:**  
+   Los ítems estándar sin opciones ni especificaciones especiales se consolidan sobre la clave base vacía (`product_id + "__" + delivery_date`).
+
+
 
 

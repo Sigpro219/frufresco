@@ -9,6 +9,7 @@ import UniversalLetterhead from '@/components/print/UniversalLetterhead';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { printViaNewWindow } from '@/components/print';
 import * as XLSX from 'xlsx';
+import { getStructuredSpecKey } from '@/lib/orderUtils';
 
 interface PurchaseItem {
     id: string;
@@ -63,7 +64,7 @@ export default function PurchasesPrintPage() {
             if (rawTasks.length === 0) {
                 const { data: ordersWithItems, error: oErr } = await supabase
                     .from('orders')
-                    .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label)')
+                    .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label, selected_options)')
                     .eq('delivery_date', selectedDate)
                     .neq('status', 'cancelled');
 
@@ -73,16 +74,18 @@ export default function PurchasesPrintPage() {
                         (ord.order_items || []).forEach((it: any) => {
                             const pId = it.product_id;
                             if (!pId) return;
-                            if (!taskMap[pId]) {
-                                taskMap[pId] = {
+                            const vLabel = getStructuredSpecKey(it) || it.variant_label || '';
+                            const mapKey = `${pId}_${vLabel}`;
+                            if (!taskMap[mapKey]) {
+                                taskMap[mapKey] = {
                                     id: it.id,
                                     product_id: pId,
                                     total_requested: 0,
-                                    variant_label: it.variant_label,
+                                    variant_label: vLabel || undefined,
                                     unit: it.unit
                                 };
                             }
-                            taskMap[pId].total_requested += Number(it.quantity) || 0;
+                            taskMap[mapKey].total_requested += Number(it.quantity) || 0;
                         });
                     });
                     rawTasks = Object.values(taskMap);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';
 import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
 import Link from 'next/link';
@@ -654,11 +654,24 @@ export default function OrderDetailPage() {
                                                 <td style={{ padding: '1rem' }}>
                                                     <div style={{ fontWeight: '600', color: '#1F2937' }}>
                                                         {item.product?.name}
-                                                        {label && (
-                                                            <span style={{ fontSize: '0.8rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px', color: '#D97706' }}>
-                                                                {label}
-                                                            </span>
-                                                        )}
+                                                        {(() => {
+                                                            const spec = formatStructuredSpecification({
+                                                                quantity: item.quantity,
+                                                                unit: item.product?.unit_of_measure,
+                                                                variant_label: item.variant_label,
+                                                                nickname: item.nickname,
+                                                                selected_options: item.selected_options
+                                                            });
+                                                            if (spec) return null;
+                                                            if (label && label !== item.product?.name && !/^\d+\s*,\s*\d+/.test(label)) {
+                                                                return (
+                                                                    <span style={{ fontSize: '0.8rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px', color: '#D97706' }}>
+                                                                        {label}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
                                                     </div>
                                                     <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{formatMoney(item.unit_price)} / {item.product?.unit_of_measure}</div>
                                                 </td>
@@ -675,7 +688,35 @@ export default function OrderDetailPage() {
                                                             <button onClick={() => handleRemoveItem(i)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem' }}><Trash2 size={16} strokeWidth={1.5} /></button>
                                                         </div>
                                                     ) : (
-                                                        <div style={{ fontWeight: '700' }}>{item.quantity} {item.product?.unit_of_measure}</div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                                            <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '1rem' }}>
+                                                                {formatNumber(item.quantity, 1)} {item.product?.unit_of_measure || 'Kg'}
+                                                            </div>
+                                                            {(() => {
+                                                                const spec = formatStructuredSpecification({
+                                                                    quantity: item.quantity,
+                                                                    unit: item.product?.unit_of_measure,
+                                                                    variant_label: item.variant_label,
+                                                                    nickname: item.nickname,
+                                                                    selected_options: item.selected_options
+                                                                });
+                                                                if (!spec) return null;
+                                                                return (
+                                                                    <span style={{
+                                                                        fontSize: '0.72rem',
+                                                                        color: '#047857',
+                                                                        fontWeight: '700',
+                                                                        backgroundColor: '#D1FAE5',
+                                                                        border: '1px solid #6EE7B7',
+                                                                        padding: '1px 6px',
+                                                                        borderRadius: '4px',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        {spec}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                     )}
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
