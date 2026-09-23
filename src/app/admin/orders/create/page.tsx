@@ -211,14 +211,10 @@ const getParsedWeight = (text: string): number | null => {
 export const formatWeightKg = (val: number | null | undefined): string => {
     if (val === null || val === undefined || isNaN(val)) return '0';
     const num = Number(val);
-    const rounded3 = Math.round(num * 1000) / 1000;
-    // Dynamic precision: 3 decimals only for fractional eighths/125g multiples (0.125, 0.375...), otherwise clean 2 decimals max without trailing zeros
-    const hasThirdDecimal = Math.round(num * 100) / 100 !== rounded3;
-    const maxDecimals = hasThirdDecimal ? 3 : 2;
-    
-    return rounded3.toLocaleString('es-CO', {
+    const rounded = Math.round(num * 100) / 100;
+    return rounded.toLocaleString('es-CO', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: maxDecimals
+        maximumFractionDigits: 2
     });
 };
 
@@ -313,35 +309,24 @@ function CreateOrderContent() {
 
     // Helpers to format inputs with thousands separator (.) and decimal (,)
     const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
-        if (qtyStr === undefined || qtyStr === null) return '';
+        if (qtyStr === undefined || qtyStr === null || qtyStr === '') return '';
         
+        let num: number;
         if (typeof qtyStr === 'number') {
-            const parts = qtyStr.toString().split('.');
-            const integerPart = parts[0];
-            const decimalPart = parts[1];
-            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
-        }
-
-        const str = qtyStr.toString();
-        const hasComma = str.includes(',');
-        const hasDot = str.includes('.');
-
-        if (hasComma) {
-            const parts = str.replace(/\./g, '').split(',');
-            const integerPart = parts[0];
-            const decimalPart = parts[1];
-            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
-        } else if (hasDot) {
-            const parts = str.split('.');
-            const integerPart = parts[0];
-            const decimalPart = parts[1];
-            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+            num = qtyStr;
         } else {
-            return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            const cleanStr = String(qtyStr).replace(/\./g, '').replace(',', '.');
+            num = parseFloat(cleanStr);
         }
+
+        if (isNaN(num)) return String(qtyStr);
+
+        // Strict 2-decimal constraint: maximum 2 digits after comma
+        const rounded = Math.round(num * 100) / 100;
+        return rounded.toLocaleString('es-CO', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
     };
 
     const formatPriceDisplay = (price: number | string | undefined | null): string => {

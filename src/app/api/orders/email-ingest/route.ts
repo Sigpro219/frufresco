@@ -114,44 +114,99 @@ export async function POST(req: Request) {
       const ocNumber = ocMatch ? ocMatch[1] : null;
 
       // 2. IMMEDIATE DEDUPLICATION CHECK (Anti-rebote de 15 minutos previo a inserción / Gemini)
+      // Debe prevenir únicamente REINTENTOS DUPLICADOS IDÉNTICOS (mismo message-id, mismo archivo/OC),
+      // PERO NUNCA descartar correos distintos del mismo cliente que traen adjuntos u órdenes diferentes con asunto genérico ("Envio documentos", "Pedido", etc.).
+      const incomingAtts = (payload.attachments || []).map((att: any) => ({
+        name: (att.filename || att.file_name || '').toLowerCase().trim(),
+        size: att.content ? att.content.length : (att.size || 0)
+      })).filter((a: any) => a.name);
+
       const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       const { data: recentDrafts } = await supabaseAdmin
         .from('order_drafts')
-        .select('id, email_subject, source_email, created_at, extracted_items')
+        .select('id, email_subject, email_body, source_email, created_at, extracted_items')
         .gte('created_at', fifteenMinutesAgo);
 
       if (recentDrafts && recentDrafts.length > 0) {
         const isDuplicate = recentDrafts.some((d: any) => {
-          // Check OC match
+          const dSubject = d.email_subject || '';
+          const dSource = (d.source_email || '').toLowerCase();
+          const sameSender = dSource === senderEmail ||
+                             dSource === rawFrom.toLowerCase() ||
+                             (forwardedOriginalEmail && dSource === forwardedOriginalEmail);
+
+          // Si el remitente NO coincide en absoluto, no es un duplicado de este remitente
+          if (!sameSender) return false;
+
+          // 1. Verificación por Message-ID idéntico (reintentos exactos del webhook o servidor de correo)
+          const dDebugPayload = d.extracted_items?.debug_payload;
+          const dHeaders = dDebugPayload?.headers || {};
+          const dEnvelope = dDebugPayload?.envelope || {};
+          const dMsgId = dHeaders['message-id'] || dHeaders['Message-ID'] || dEnvelope?.id || null;
+          if (messageId && dMsgId && messageId === dMsgId) {
+            console.log(`[Email Inbound] Deduplicación: Message-ID idéntico (${messageId}) detectado.`);
+            return true;
+          }
+
+          // 2. Verificación por número de Orden de Compra explícita en asunto (OC / OCC)
           if (ocNumber) {
-            const dSub = (d.email_subject || '');
-            if (dSub.includes(ocNumber)) {
+            if (dSubject.includes(ocNumber)) {
+              console.log(`[Email Inbound] Deduplicación: Misma OC (${ocNumber}) ya registrada para ${senderEmail}.`);
               return true;
             }
           }
 
-          // Check normalized subject + sender match
-          const prevSub = (d.email_subject || '')
-            .replace(/^\[EML-[A-Z0-9]+\]\s*/i, '')
-            .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
-            .replace(/^\[Adjunto\s+\d+\/\d+\]\s*/i, '')
-            .replace(/^\[Pedido\s+\d+\/\d+\]\s*/i, '')
-            .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
-            .trim()
-            .toLowerCase();
-
-          const currSub = cleanSubject.toLowerCase();
-          const sameSubject = prevSub === currSub;
-          const sameSender = (d.source_email || '').toLowerCase() === senderEmail ||
-                             (d.source_email || '').toLowerCase() === rawFrom.toLowerCase() ||
-                             (forwardedOriginalEmail && (d.source_email || '').toLowerCase() === forwardedOriginalEmail);
-
-          if (sameSubject && sameSender) {
-            return true;
+          // 3. Verificación inteligente por archivos adjuntos
+          let dAttNames: string[] = [];
+          if (Array.isArray(d.extracted_items)) {
+            const meta = d.extracted_items.find((x: any) => x && x.isMetadata);
+            if (meta?.attachments && Array.isArray(meta.attachments)) {
+              dAttNames = meta.attachments.map((a: any) => (a.name || a.filename || '').toLowerCase().trim()).filter(Boolean);
+            } else if (meta?.attachmentName) {
+              dAttNames = [meta.attachmentName.toLowerCase().trim()];
+            }
+          } else if (dDebugPayload?.attachments && Array.isArray(dDebugPayload.attachments)) {
+            dAttNames = dDebugPayload.attachments.map((a: any) => (a.filename || a.file_name || '').toLowerCase().trim()).filter(Boolean);
           }
 
-          if (sameSubject && cleanSubject.length > 10) {
-            return true;
+          // Si AMBOS correos tienen adjuntos:
+          if (incomingAtts.length > 0 && dAttNames.length > 0) {
+            // Solo si tienen exactamente los mismos adjuntos
+            const hasSameAttachments = incomingAtts.every((att: any) => dAttNames.includes(att.name));
+            if (hasSameAttachments) {
+              console.log(`[Email Inbound] Deduplicación: Adjuntos idénticos (${dAttNames.join(', ')}) detectados para ${senderEmail}.`);
+              return true;
+            }
+            // Si traen archivos con nombres distintos (ej. 1_010OCC17309_.pdf vs 1_010OCC17310_.pdf), SON PEDIDOS DISTINTOS
+            return false;
+          }
+
+          // Si uno tiene adjuntos y el otro no, no son duplicados
+          if ((incomingAtts.length > 0 && dAttNames.length === 0) || (incomingAtts.length === 0 && dAttNames.length > 0)) {
+            return false;
+          }
+
+          // 4. Si NINGUNO tiene adjuntos (correo de texto plano puro sin documento)
+          if (incomingAtts.length === 0 && dAttNames.length === 0) {
+            const prevSub = dSubject
+              .replace(/^\[EML-[A-Z0-9]+\]\s*/i, '')
+              .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
+              .replace(/^\[Adjunto\s+\d+\/\d+\]\s*/i, '')
+              .replace(/^\[Pedido\s+\d+\/\d+\]\s*/i, '')
+              .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
+              .trim()
+              .toLowerCase();
+            const currSub = cleanSubject.toLowerCase();
+
+            // Solo si tanto el asunto como el texto inicial del mensaje son idénticos
+            if (prevSub === currSub && cleanSubject.length > 3) {
+              const prevBody = (d.email_body || dDebugPayload?.plain || '').replace(/\s+/g, ' ').trim().slice(0, 150);
+              const currBody = (plainText || '').replace(/\s+/g, ' ').trim().slice(0, 150);
+              if (prevBody && currBody && prevBody === currBody) {
+                console.log(`[Email Inbound] Deduplicación: Correo de texto idéntico repetido de ${senderEmail}.`);
+                return true;
+              }
+            }
           }
 
           return false;
@@ -312,20 +367,52 @@ export async function POST(req: Request) {
           }
 
           // 2. DEDUPLICACIÓN INTELIGENTE (Anti-rebote de 5 minutos)
-          // Si ya existe un borrador reciente para este mismo remitente y asunto similar,
-          // ignorar este envío duplicado para no crear registros dobles.
+          // Si ya existe un borrador reciente para este mismo remitente y mismo archivo/OC, ignorar.
+          // Pero si trae adjuntos diferentes (ej. múltiples pedidos de Monserrate), NO borrar.
           const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
           const cleanSubjectForDedupe = (cleanSubject || subject || '').trim();
 
           const { data: existingRecentDrafts } = await supabaseAdmin
             .from('order_drafts')
-            .select('id, email_subject, created_at')
+            .select('id, email_subject, email_body, created_at, extracted_items')
             .eq('source_email', senderEmail)
             .gte('created_at', fiveMinutesAgo)
             .neq('id', mailId || '');
 
           if (existingRecentDrafts && existingRecentDrafts.length > 0) {
+            const currentAttNames = attachments.map((a: any) => (a.filename || a.file_name || '').toLowerCase().trim()).filter(Boolean);
+
             const isDuplicate = existingRecentDrafts.some((d: any) => {
+              // 1. Verificación por número de Orden de Compra explícita
+              if (ocNumber && (d.email_subject || '').includes(ocNumber)) {
+                return true;
+              }
+
+              // 2. Comprobar adjuntos
+              let dAttNames: string[] = [];
+              if (Array.isArray(d.extracted_items)) {
+                const meta = d.extracted_items.find((x: any) => x && x.isMetadata);
+                if (meta?.attachments && Array.isArray(meta.attachments)) {
+                  dAttNames = meta.attachments.map((a: any) => (a.name || a.filename || '').toLowerCase().trim()).filter(Boolean);
+                } else if (meta?.attachmentName) {
+                  dAttNames = [meta.attachmentName.toLowerCase().trim()];
+                }
+              } else if (d.extracted_items?.debug_payload?.attachments) {
+                dAttNames = d.extracted_items.debug_payload.attachments.map((a: any) => (a.filename || a.file_name || '').toLowerCase().trim()).filter(Boolean);
+              }
+
+              // Si ambos tienen adjuntos:
+              if (currentAttNames.length > 0 && dAttNames.length > 0) {
+                // Solo si traen exactamente los mismos archivos
+                return currentAttNames.every((name: string) => dAttNames.includes(name));
+              }
+
+              // Si uno tiene y otro no, no es duplicado
+              if (currentAttNames.length > 0 || dAttNames.length > 0) {
+                return false;
+              }
+
+              // 3. Si ninguno tiene adjuntos (texto plano puro), comparar asunto normalizado y cuerpo
               const prevSub = (d.email_subject || '')
                 .replace(/^\[EML-[A-Z0-9]+\]\s*/i, '')
                 .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
@@ -336,7 +423,14 @@ export async function POST(req: Request) {
               const currSub = cleanSubjectForDedupe
                 .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
                 .trim();
-              return prevSub.toLowerCase() === currSub.toLowerCase();
+
+              if (prevSub.toLowerCase() === currSub.toLowerCase() && cleanSubjectForDedupe.length > 3) {
+                const prevBody = (d.email_body || d.extracted_items?.debug_payload?.plain || '').replace(/\s+/g, ' ').trim().slice(0, 150);
+                const currBody = (plainText || '').replace(/\s+/g, ' ').trim().slice(0, 150);
+                return prevBody && currBody && prevBody === currBody;
+              }
+
+              return false;
             });
 
             if (isDuplicate) {

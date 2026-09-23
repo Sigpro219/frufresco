@@ -250,13 +250,10 @@ const getParsedWeight = (str: string): number | null => {
 const formatWeightKg = (val: number | null | undefined): string => {
     if (val === null || val === undefined || isNaN(val)) return '0';
     const num = Number(val);
-    const rounded3 = Math.round(num * 1000) / 1000;
-    const hasThirdDecimal = Math.round(num * 100) / 100 !== rounded3;
-    const maxDecimals = hasThirdDecimal ? 3 : 2;
-    
-    return rounded3.toLocaleString('es-CO', {
+    const rounded = Math.round(num * 100) / 100;
+    return rounded.toLocaleString('es-CO', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: maxDecimals
+        maximumFractionDigits: 2
     });
 };
 
@@ -1923,9 +1920,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (val === undefined || val === null || val === '') return '';
     const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
     if (isNaN(num)) return '';
-    return num.toLocaleString('es-CO', {
+    const rounded = Math.round(num * 100) / 100;
+    return rounded.toLocaleString('es-CO', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 3
+      maximumFractionDigits: 2
     });
   };
 
@@ -2056,7 +2054,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setSelectedRowForVariant(rowIndex);
     
     const item = editableItems[rowIndex];
-    setVariantQuantity(item.quantity ? String(item.quantity).replace('.', ',') : '1');
+    setVariantQuantity(item.quantity ? Number(Number(item.quantity).toFixed(2)).toString().replace('.', ',') : '1');
     setSelectedUnit(item.unit || product.unit_of_measure || 'Kg');
     setSelectedConversionFactor(item.conversion_factor || 1);
     setSelectedOptions(item.selected_options || {});
@@ -2310,11 +2308,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
     const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
-    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(3));
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
     
     const factor = newEdits[duplicateIndex].conversion_factor || 1;
     newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
-    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(3));
+    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(2));
     newEdits[duplicateIndex].isConfirmed = true;
     
     newEdits[rowIndex].isDeleted = true;
@@ -2917,9 +2915,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const currQtyNum = Number(item.quantity);
     let initialQtyStr = '1';
     if (!isNaN(currQtyNum) && currQtyNum > 0) {
-      initialQtyStr = String(currQtyNum);
+      initialQtyStr = Number(currQtyNum.toFixed(2)).toString().replace('.', ',');
     } else if (!isNaN(origQtyNum) && origQtyNum > 0) {
-      initialQtyStr = String(origQtyNum);
+      initialQtyStr = Number(origQtyNum.toFixed(2)).toString().replace('.', ',');
     }
     const defaultUnit = product.unit_of_measure || 'Kg';
     let unit = (item.conversion_factor && item.conversion_factor !== 1) ? (item.originalUnit || item.unit || defaultUnit) : defaultUnit;
@@ -2932,6 +2930,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       Object.entries(exc.preferred_options).forEach(([k, v]) => {
         if (v) opts[k] = String(v);
       });
+    }
+
+    // Pre-populate default presentation option if not already selected
+    const presOpt = (product.options_config || []).find((opt: any) =>
+      opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
+    );
+    if (presOpt && (!opts[presOpt.name] || opts[presOpt.name] === '')) {
+      if (presOpt.values && presOpt.values.length > 0) {
+        opts[presOpt.name] = presOpt.values[0];
+      }
     }
 
     // Determine initial unit and factor from presentation options if selected or default
@@ -2952,6 +2960,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
     });
+
+    // Poka-Yoke: Discrete unit items (like whole watermelon) cannot have fractional count < 1
+    if (factor > 1 && parseFloat(initialQtyStr.replace(',', '.')) < 1) {
+      initialQtyStr = '1';
+    }
 
     setCustomizingModalItem({
       rowIndex,
@@ -2999,10 +3012,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (!customizingModalItem) return;
     const { rowIndex, product, options, quantity, unit, factor } = customizingModalItem;
     const parsedQty = parseFloat(quantity.replace(',', '.')) || 1;
+    const cleanQty = parseFloat(parsedQty.toFixed(2));
     
     // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
     const minAllowedKg = getProductMinSaleKg(product);
-    const baseQty = parseFloat((parsedQty * factor).toFixed(3));
+    const baseQty = parseFloat((cleanQty * factor).toFixed(2));
     if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
       showToast(`La cantidad mínima de venta para ${product.name} es de ${formatWeightKg(minAllowedKg)} kg`, 'error');
       const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
@@ -3013,8 +3027,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return;
     }
 
-    const optionValues = Object.values(options).filter(Boolean);
-    const variantLabel = optionValues.join(' - ');
+    const dual = buildDualUnitMetadata({
+      quantity: cleanQty,
+      unit: unit,
+      selectedOptions: options,
+      product: product
+    });
+
+    const finalOptions = dual ? {
+      ...options,
+      _original_qty: dual.originalQty,
+      _original_unit: dual.originalUnit,
+      _unit_weight_gr: dual.unitWeightGr,
+      _conversion_factor: dual.conversionFactor,
+      _physical_instruction: dual.physicalInstruction
+    } : options;
+
+    const finalBillingQty = dual ? dual.billingQuantity : cleanQty;
+    const finalBillingUnit = dual ? dual.billingUnit : unit;
+    const finalFactor = dual ? dual.conversionFactor : factor;
+
+    const optionValues = Object.values(options).filter(v => v && typeof v === 'string' && !v.startsWith('_'));
+    const variantLabel = dual?.physicalInstruction || optionValues.join(' - ');
 
     const newEdits = [...editableItems];
     newEdits[rowIndex] = {
@@ -3023,12 +3057,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       name: product.name,
       searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
       skuQuery: product.sku || '',
-      quantity: parsedQty,
-      originalQuantity: parsedQty,
-      unit: unit,
+      quantity: finalBillingQty,
+      quantity_text: undefined,
+      originalQuantity: cleanQty,
+      unit: finalBillingUnit,
       originalUnit: unit,
-      conversion_factor: factor,
-      selected_options: options,
+      conversion_factor: finalFactor,
+      selected_options: finalOptions,
       variant_label: variantLabel || newEdits[rowIndex].observations || undefined,
       isConfirmed: true
     };
@@ -4141,8 +4176,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
 
         let finalQty = item.quantity !== undefined && item.quantity !== null && item.matched_product_id
-          ? parseFloat(Number(item.quantity).toFixed(3))
-          : parseFloat((initialQty * conversionFactor).toFixed(3));
+          ? parseFloat(Number(item.quantity).toFixed(2))
+          : parseFloat((initialQty * conversionFactor).toFixed(2));
+
+        const minSaleKg = getProductMinSaleKg(prod);
+        let defaultDualPresVal: string | null = null;
+        if (prod && minSaleKg && minSaleKg >= 1.5 && finalQty < minSaleKg) {
+          const presOpt = (prod.options_config || []).find((opt: any) => 
+            opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
+          );
+          if (presOpt && presOpt.values && presOpt.values.length > 0) {
+            defaultDualPresVal = presOpt.values[0];
+            const cleanPres = defaultDualPresVal.includes('|') ? defaultDualPresVal.split('|')[0] : defaultDualPresVal;
+            finalUnit = cleanPres;
+            conversionFactor = minSaleKg;
+            finalQty = minSaleKg;
+          }
+        }
 
         return {
             ...item,
@@ -4257,6 +4307,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }
                   }
                 });
+              }
+              if (defaultDualPresVal) {
+                const presOpt = (prod.options_config || []).find((opt: any) => 
+                  opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
+                );
+                if (presOpt) {
+                  autoSelectedOptions[presOpt.name] = defaultDualPresVal;
+                }
               }
               return autoSelectedOptions;
             })()
@@ -8581,7 +8639,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 id={`draft-qty-input-${i}`}
                                 disabled={isApprovedDraft || item.isDeleted}
                                 readOnly={isApprovedDraft}
-                                value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : (item.quantity !== undefined && item.quantity !== null ? Number(Number(item.quantity).toFixed(2)).toString().replace('.', ',') : '')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
                                 onFocus={(e) => {
                                   if (isApprovedDraft) return;
                                   setFocusedRowIndex(i);
@@ -11779,6 +11837,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     onBlur={(e) => {
                       e.target.style.borderColor = '#E2E8F0';
                       e.target.style.boxShadow = 'none';
+                      const rawNum = parseFloat(quantity.replace(',', '.'));
+                      if (!isNaN(rawNum) && rawNum > 0) {
+                        const formatted = Number(rawNum.toFixed(2)).toString().replace('.', ',');
+                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: formatted } : null);
+                      }
                     }}
                   />
                 </div>

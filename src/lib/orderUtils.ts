@@ -146,13 +146,13 @@ export const buildDualUnitMetadata = (params: {
 
     if (inputIsUnit || isMasterKg) {
         // User entered discrete count (e.g. 1 unit of Papaya 2000 gr)
-        discreteQty = Math.round(quantity);
-        billingKg = Number((discreteQty * weightKg).toFixed(3));
+        discreteQty = Math.max(1, Math.round(quantity));
+        billingKg = Number((discreteQty * weightKg).toFixed(2));
     } else {
         // User entered kg directly (e.g. 2 kg of Papaya 2000 gr)
         discreteQty = Math.round(quantity / weightKg);
         if (discreteQty < 1) discreteQty = 1;
-        billingKg = quantity;
+        billingKg = Number(quantity.toFixed(2));
     }
 
     const noun = isBandeja ? (discreteQty === 1 ? 'Bandeja' : 'Bandejas') : (discreteQty === 1 ? 'Unidad' : 'Unidades');
