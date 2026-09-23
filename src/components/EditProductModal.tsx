@@ -1637,9 +1637,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     const newUnit = e.target.value;
                                                     let newWeight = formData.weight_kg;
                                                     if (newUnit === 'Kg') {
-                                                        newWeight = (formData.weight_kg !== undefined && formData.weight_kg > 0 && formData.weight_kg <= 10) ? formData.weight_kg : 0.1;
+                                                        newWeight = 1.0;
                                                     } else {
-                                                        newWeight = (formData.weight_kg !== undefined && formData.weight_kg > 0) ? formData.weight_kg : 1.0;
+                                                        newWeight = (formData.weight_kg !== undefined && formData.weight_kg > 0 && formData.weight_kg !== 1.0) ? formData.weight_kg : 0.3;
                                                     }
                                                     setFormData({ ...formData, unit_of_measure: newUnit, weight_kg: newWeight });
                                                 }}
