@@ -1319,5 +1319,71 @@ Para erradicar la multiplicación dimensional cruzada y garantizar que la liquid
   1. Cada ítem liquida su precio por unidad cerrada sin ser multiplicado por el factor de kilogramos.
   2. La orden final en `orders` totaliza la suma exacta de las unidades pedidas multiplicadas por su precio de presentación.
 
+---
+
+## 16. Módulo de Lanzamiento a Operación, Compuerta de Despacho & Ecosistema de Documentación Impresa (Digital vs. Contingencia) (SDD v1.8.8)
+
+### 16.1 Misión del Lanzamiento y la Compuerta de Despacho (`/admin/orders/loading`)
+La Torre de Control de Pedidos no solo audita estados de facturación, sino que actúa como la **Compuerta de Despacho (Gatekeeper)** que transfiere oficialmente la responsabilidad desde Comercial hacia Operaciones (Corabastos, Bodega y Transporte):
+
+1. **Poka-Yoke de Ventana de Corte Horario (`isWithinCutoffWindow`):**
+   - El lanzamiento masivo de pedidos hacia el proceso logístico de la mañana siguiente (`delivery_date = tomorrow`) está estrictamente acotado entre las **10:00 AM y las 23:50 PM** (Hora Colombia).
+   - Pedidos fuera de esta ventana o con fechas discrepantes no pueden ser lanzados a compra para prevenir compras prematuras o descalces en la plaza mayorista.
+
+2. **Indicadores de Carga y Segmentación:**
+   - La compuerta calcula en tiempo real:
+     - Pedidos a enviar y Destinos únicos (discriminando entre Empresas Matrices y Sucursales/Puntos de entrega).
+     - Peso acumulado en kilogramos y toneladas.
+     - Facturación bruta total del lote.
+     - Segmentación de canales: B2B Institucional vs. B2C Hogar.
+
+3. **Dualidad Operativa (Digital Nube vs. Manual de Contingencia):**
+   - **Modo Digital (Nube):** Diseñado para plantas interconectadas con tablets y terminales móviles en báscula (`/ops/compras`, `/ops/picking/terminal`, `/ops/driver/delivery`).
+   - **Modo Manual (Piso/Emergencia - Contingencia):** Asistente guiado Poka-Yoke de 4 pasos secuenciales para garantizar cero parálisis ante caídas de internet o fallas eléctricas:
+     - *Paso 1:* Asignación de 150 Bahías de Muelle (1 a 150) por ventana LIFO de cargue.
+     - *Paso 2:* Planilla de Compras para Corabastos y Sábana de Alistamiento por Células de Trabajo (`/admin/orders/alistamiento-print`).
+     - *Paso 3:* Remisiones Carta Duplicadas (Original Cliente + Copia Archivo/Contabilidad) con control de canastillas plásticas prestadas (`/admin/orders/contingency-print?mode=remissions`).
+     - *Paso 4:* Rótulos Térmicos de Canastilla con QR (`/admin/orders/print-labels`).
+
+### 16.2 Estándar Técnico de Rótulos Térmicos de Canastilla (100mm × 50mm con QR)
+Para que el alistamiento y el despacho físico en bodega sean 100% operativos:
+
+1. **Dimensiones Físicas y Calibración para Impresoras Térmicas de Rollo (Zebra / Xprinter):**
+   - **Medida Oficial:** `100mm x 50mm` (compatible con rollo estándar de 4" x 2").
+   - **Calibración CSS Print Anti-Desperdicio:** El contenedor imprimible se define con `height: 49.5mm !important; overflow: hidden; page-break-after: always; break-after: page;` y márgenes `@page { size: 100mm 50mm; margin: 0; }`. Esto elimina el error de desbordamiento de 1 subpíxel del navegador que expulsaba una etiqueta en blanco entre cada rótulo útil.
+   - **Contraste Monocromático Puro:** Todo el diseño utiliza negro puro `#000000` con bordes sólidos de `1.5px` para evitar líneas desvanecidas en cabezales térmicos de 203 DPI.
+
+2. **Elementos de Información Mandatorios en el Rótulo:**
+   - **Cabecera Logística:** Rótulo `FRUFRESCO LOGÍSTICA • DESPACHO` con Fecha de Entrega y Franja Horaria (`AM` o `PM`).
+   - **Razón Social del Cliente en Alta Visibilidad:** Tipografía `11.5pt - 13pt` bold para lectura a 2 metros en bodegas con baja luminosidad.
+   - **Sucursal / Dirección de Entrega:** Especificación de la sede receptora.
+   - **Bahía de Muelle Asignada:** Recuadro prominente con `BAHÍA: #XX`.
+   - **Peso Neto del Pedido:** `PESO: XX,X kg`.
+   - **Control de Bultos / Canastillas:** Casilla física táctica `CANASTILLA [ X / Y ]` para que el operario numere la carga (calculada a razón de 12.5 kg por canastilla estándar).
+   - **Código QR Dinámico SVG (`qrcode.react`):** Escaneable con pistolas lectoras 2D o cámaras de smartphone con la firma `FRUFRESCO:{orderId}:{sequenceId}:{crateIndex}/{totalCrates}:{deliveryDate}`.
+   - **ID Amistoso del Pedido:** `#DDMM_XXXX` (ej. `#2409_0913`).
+
+3. **Arquitectura Dual de Impresión:**
+   - Permite alternar entre **Rótulos de Canastilla / Despacho** (por pedido/canastilla) y **Etiquetas de Producto Individual** (para ítems porcionados con lote y vencimiento).
+
+### 16.3 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 16: Lanzamiento de Tanda de Mañana a Proceso Logístico
+- **Given** 25 pedidos seleccionados en `/admin/orders/loading` para la fecha de mañana dentro del horario de 10:00 AM a 23:50 PM.
+- **When** el jefe de operaciones abre el modal "Lanzamiento a Proceso Logístico" y confirma el despacho.
+- **Then**:
+  1. El estado de todos los pedidos seleccionados se actualiza atómicamente a `para_compra` en la base de datos.
+  2. Los pedidos quedan inmediatamente visibles en el módulo de compras de Corabastos (`/ops/compras`) y en la terminal de alistamiento (`/ops/picking`).
+  3. No se permite el lanzamiento si algún pedido seleccionado tiene fecha distinta a mañana.
+
+#### Escenario 17: Impresión Masiva de Rótulos Térmicos de Canastilla con QR
+- **Given** un lote de pedidos seleccionados que viajan a través de `/admin/orders/print-labels?orderIds=...`.
+- **When** la página de etiquetas carga en el navegador.
+- **Then**:
+  1. No arroja error de "sin productos" y reconoce todos los `orderIds` enviados.
+  2. Genera los rótulos de despacho con el Cliente, Sucursal, Bahía de Piso, Peso, ID Amistoso y código QR.
+  3. Al previsualizar la impresión (Ctrl + P), cada etiqueta ocupa exactamente 100mm x 50mm sin expulsar etiquetas en blanco vacías entre páginas.
+
+
 
 
