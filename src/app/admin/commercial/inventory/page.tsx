@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna, Zap } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna, Zap, DollarSign } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
 import InventoryDailyBalanceTab from '@/components/InventoryDailyBalanceTab';
@@ -32,6 +32,8 @@ interface InventoryItem {
         min_inventory_level: number;
         accounting_id?: number | null;
         parent_id?: string | null;
+        web_conversion_factor?: number | null;
+        weight_kg?: number | null;
     };
     warehouses: {
         name: string;
@@ -64,6 +66,8 @@ interface Movement {
         buying_team?: string | null;
         unit_of_measure?: string;
         image_url?: string | null;
+        web_conversion_factor?: number | null;
+        weight_kg?: number | null;
     };
 }
 
@@ -247,6 +251,28 @@ const styles = {
 type StockSortField = 'product' | 'id_contable' | 'min_stock' | 'cost' | 'total_value' | 'uom' | 'quantity' | 'default';
 type SortDirection = 'asc' | 'desc';
 
+export function computeProductWeightKg(
+    qty: number, 
+    product?: { unit_of_measure?: string | null; web_conversion_factor?: number | null; weight_kg?: number | null } | null
+): number {
+    const q = Number(qty) || 0;
+    if (q === 0 || !product) return 0;
+    const uom = (product.unit_of_measure || '').toLowerCase().trim();
+    const factor = Number(product.web_conversion_factor) || 0;
+    const weightKg = Number(product.weight_kg) || 0;
+    if (weightKg > 0) return q * weightKg;
+    if (uom === 'kg' || uom === 'kilo' || uom === 'kilogramos' || uom === 'kilogramo') return q;
+    if (uom === 'g' || uom === 'gr' || uom === 'gramo' || uom === 'gramos') return q / 1000;
+    if (uom === 'lb' || uom === 'libra' || uom === 'libras') return q * 0.5;
+    if (factor > 0 && factor !== 1) return q * factor;
+    return q;
+}
+
+export function computeItemWeightKg(item?: InventoryItem | null): number {
+    if (!item) return 0;
+    return computeProductWeightKg(item.quantity, item.products);
+}
+
 export default function InventoryAdminPage() {
     const [stocks, setStocks] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -257,7 +283,15 @@ export default function InventoryAdminPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; currentStock?: number; uom?: string; accounting_id?: number | null } | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<{ 
+        id: string; 
+        name: string; 
+        currentStock?: number; 
+        uom?: string; 
+        accounting_id?: number | null;
+        web_conversion_factor?: number | null;
+        weight_kg?: number | null;
+    } | null>(null);
     const [adjModalType, setAdjModalType] = useState<'exit' | 'entry' | 'adjustment'>('exit');
     const [adjModalReason, setAdjModalReason] = useState<string>('MERMA_MADURACION');
     const [adjModalQty, setAdjModalQty] = useState<string>('');
@@ -665,7 +699,7 @@ export default function InventoryAdminPage() {
                     let query = supabase
                         .from('products')
                         .select(`
-                            id, name, sku, category, inventory_group, buying_team, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id, parent_id,
+                            id, name, sku, category, inventory_group, buying_team, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id, parent_id, web_conversion_factor, weight_kg,
                             inventory_stocks!product_id (
                                 *,
                                 warehouses (name)
@@ -771,7 +805,7 @@ export default function InventoryAdminPage() {
                     .select(`
                         id, product_id, warehouse_id, quantity, type, reference_type, reference_id,
                         notes, created_at, status_from, status_to, created_by, evidence_url, admin_decision,
-                        products (id, name, sku, accounting_id, parent_id, category, inventory_group, buying_team, unit_of_measure, image_url)
+                        products (id, name, sku, accounting_id, parent_id, category, inventory_group, buying_team, unit_of_measure, image_url, web_conversion_factor, weight_kg)
                     `)
                     .gte('created_at', startDateIso)
                     .lte('created_at', endDateIso)
@@ -1353,6 +1387,7 @@ export default function InventoryAdminPage() {
         children: InventoryItem[];
         totalQuantity: number;
         totalValue: number;
+        totalWeightKg: number;
     }
 
     const matchSearchSegment = (item: InventoryItem, segment: string): boolean => {
@@ -1475,7 +1510,8 @@ export default function InventoryAdminPage() {
                 isParent: hasChildren,
                 children,
                 totalQuantity: 0,
-                totalValue: 0
+                totalValue: 0,
+                totalWeightKg: 0
             });
         });
 
@@ -1492,10 +1528,15 @@ export default function InventoryAdminPage() {
                 const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
                 const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
 
+                const childrenWeight = family.children.reduce((sum, ch) => sum + computeItemWeightKg(ch), 0);
+                const ownWeight = computeItemWeightKg(family.parent);
+                const totalWeightKg = family.isParent ? (childrenWeight + ownWeight) : ownWeight;
+
                 result.push({
                     ...family,
                     totalQuantity,
-                    totalValue
+                    totalValue,
+                    totalWeightKg
                 });
                 return;
             }
@@ -1516,11 +1557,16 @@ export default function InventoryAdminPage() {
                 const ownVal = (avgCosts[family.parent.product_id] || 0) * ownQty;
                 const totalValue = family.isParent ? (childrenVal + ownVal) : ownVal;
 
+                const childrenWeight = activeChildren.reduce((sum, ch) => sum + computeItemWeightKg(ch), 0);
+                const ownWeight = computeItemWeightKg(family.parent);
+                const totalWeightKg = family.isParent ? (childrenWeight + ownWeight) : ownWeight;
+
                 result.push({
                     ...family,
                     children: activeChildren,
                     totalQuantity,
-                    totalValue
+                    totalValue,
+                    totalWeightKg
                 });
             }
         });
@@ -1691,10 +1737,15 @@ export default function InventoryAdminPage() {
         };
     }, [stocks]);
 
+    const totalWeightKg = useMemo(() => {
+        return stocks.reduce((acc, s) => acc + computeItemWeightKg(s), 0);
+    }, [stocks]);
+
     const stats = {
         totalItems: stocks.length, // total monitored
         lowStock: stocks.filter(s => (s.products?.min_inventory_level || 0) > 0 && s.quantity < (s.products?.min_inventory_level || 0)).length,
         totalValue: stocks.reduce((acc, s) => acc + (s.quantity * (avgCosts[s.product_id] || 0)), 0),
+        totalWeightKg,
         pendingTasks: randomTasks.filter(t => t.status !== 'completed').length
     };
 
@@ -1746,29 +1797,44 @@ export default function InventoryAdminPage() {
         let totalEntries = 0;
         let totalExits = 0;
         let totalAdjustments = 0;
+        let totalEntriesKg = 0;
+        let totalExitsKg = 0;
+        let totalAdjustmentsKg = 0;
         const activeProductsSet = new Set<string>();
 
         movements.forEach(m => {
             const qty = Number(m.quantity) || 0;
+            const weight = computeProductWeightKg(qty, m.products);
             if (m.product_id) activeProductsSet.add(m.product_id);
 
             if (m.type === 'entry') {
                 totalEntries += Math.abs(qty);
+                totalEntriesKg += Math.abs(weight);
             } else if (m.type === 'exit') {
                 totalExits += Math.abs(qty);
+                totalExitsKg += Math.abs(weight);
             } else if (m.type === 'adjustment') {
                 totalAdjustments += qty;
+                totalAdjustmentsKg += weight;
             } else if (qty > 0) {
                 totalEntries += qty;
+                totalEntriesKg += weight;
             } else if (qty < 0) {
                 totalExits += Math.abs(qty);
+                totalExitsKg += Math.abs(weight);
             }
         });
+
+        const netBalance = totalEntries - totalExits + totalAdjustments;
+        const netBalanceKg = totalEntriesKg - totalExitsKg + totalAdjustmentsKg;
 
         return {
             totalEntries,
             totalExits,
-            netBalance: totalEntries - totalExits + totalAdjustments,
+            netBalance,
+            totalEntriesKg,
+            totalExitsKg,
+            netBalanceKg,
             activeSkusCount: activeProductsSet.size,
             totalMovements: movements.length
         };
@@ -1827,6 +1893,7 @@ export default function InventoryAdminPage() {
                 adjustments: number;
                 netFlow: number;
                 currentStock: number;
+                currentWeightKg: number;
                 movementsCount: number;
                 transactions: Movement[];
             };
@@ -1848,8 +1915,12 @@ export default function InventoryAdminPage() {
             const exits = isParent ? childrenWithSummary.reduce((acc, c) => acc + c.summary.exits, 0) + ownSummary.exits : ownSummary.exits;
             const adjustments = isParent ? childrenWithSummary.reduce((acc, c) => acc + c.summary.adjustments, 0) + ownSummary.adjustments : ownSummary.adjustments;
             const netFlow = entries - exits + adjustments;
-            const currentStock = isParent ? childrenWithSummary.reduce((acc, c) => acc + c.summary.currentStock, 0) : ownSummary.currentStock;
+            const currentStock = isParent ? childrenWithSummary.reduce((acc, c) => acc + c.summary.currentStock, 0) + ownSummary.currentStock : ownSummary.currentStock;
             const movementsCount = isParent ? childrenWithSummary.reduce((acc, c) => acc + c.summary.movementsCount, 0) + ownSummary.movementsCount : ownSummary.movementsCount;
+
+            const ownWeight = computeItemWeightKg(parentItem);
+            const childrenWeight = childrenWithSummary.reduce((acc, c) => acc + computeItemWeightKg(c.child), 0);
+            const currentWeightKg = isParent ? (childrenWeight + ownWeight) : ownWeight;
 
             const transactions = isParent 
                 ? [
@@ -1864,6 +1935,7 @@ export default function InventoryAdminPage() {
                 adjustments,
                 netFlow,
                 currentStock,
+                currentWeightKg,
                 movementsCount,
                 transactions
             };
@@ -2413,19 +2485,31 @@ export default function InventoryAdminPage() {
                                     title="Total Entradas (+)" 
                                     value={`+${formatNumber(kardexKpis.totalEntries, 1)}`} 
                                     color="#ECFDF5" 
-                                    subtitle="Recepciones en período" 
+                                    subtitle={kardexKpis.totalEntriesKg > 0 
+                                        ? (kardexKpis.totalEntriesKg >= 1000 
+                                            ? `≈ ${(kardexKpis.totalEntriesKg / 1000).toFixed(2)} Ton recepciones` 
+                                            : `≈ ${formatNumber(kardexKpis.totalEntriesKg, 1)} kg recepciones`)
+                                        : "Recepciones en período"} 
                                 />
                                 <KPICard 
                                     title="Total Salidas (-)" 
                                     value={`-${formatNumber(kardexKpis.totalExits, 1)}`} 
                                     color="#FEF2F2" 
-                                    subtitle="Despachos a clientes" 
+                                    subtitle={kardexKpis.totalExitsKg > 0 
+                                        ? (kardexKpis.totalExitsKg >= 1000 
+                                            ? `≈ ${(kardexKpis.totalExitsKg / 1000).toFixed(2)} Ton despachos` 
+                                            : `≈ ${formatNumber(kardexKpis.totalExitsKg, 1)} kg despachos`)
+                                        : "Despachos a clientes"} 
                                 />
                                 <KPICard 
                                     title="Flujo Neto" 
                                     value={`${kardexKpis.netBalance >= 0 ? '+' : ''}${formatNumber(kardexKpis.netBalance, 1)}`} 
                                     color="#EFF6FF" 
-                                    subtitle="Balance del período" 
+                                    subtitle={kardexKpis.netBalanceKg !== 0 
+                                        ? (Math.abs(kardexKpis.netBalanceKg) >= 1000 
+                                            ? `≈ ${kardexKpis.netBalanceKg >= 0 ? '+' : ''}${(kardexKpis.netBalanceKg / 1000).toFixed(2)} Ton balance` 
+                                            : `≈ ${kardexKpis.netBalanceKg >= 0 ? '+' : ''}${formatNumber(kardexKpis.netBalanceKg, 1)} kg balance`)
+                                        : "Balance del período"} 
                                 />
                                 <KPICard 
                                     title="SKUs con Rotación" 
@@ -2434,7 +2518,20 @@ export default function InventoryAdminPage() {
                                     subtitle={`${kardexKpis.totalMovements} transacciones`} 
                                 />
                             </div>
-                        ) : (activeTab === 'stock' || activeTab === 'random_tasks') ? (
+                        ) : activeTab === 'stock' ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                                <HierarchyKPICard stats={hierarchyStats} />
+                                <KPICard title="Alertas de Stock" value={formatNumber(stats.lowStock, 0)} color="#FEE2E2" subtitle="Bajo nivel mínimo" />
+                                <KPICard 
+                                    title="Masa en Bodega" 
+                                    value={stats.totalWeightKg >= 1000 ? `${(stats.totalWeightKg / 1000).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ton` : `${formatNumber(stats.totalWeightKg, 1)} Kg`} 
+                                    color="#E0F2FE" 
+                                    subtitle={`${formatNumber(stats.totalWeightKg, 0)} kg físicos`} 
+                                />
+                                <KPICard title="Valor en Libros" value={formatMoney(stats.totalValue)} color="#DCFCE7" subtitle="Costo base total" />
+                                <KPICard title="Tareas Pendientes" value={formatNumber(stats.pendingTasks, 0)} color="#FEF3C7" subtitle="Auditoría de piso" />
+                            </div>
+                        ) : activeTab === 'random_tasks' ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                                 <HierarchyKPICard stats={hierarchyStats} />
                                 <KPICard title="Alertas de Stock" value={formatNumber(stats.lowStock, 0)} color="#FEE2E2" subtitle="Bajo nivel mínimo" />
@@ -3599,9 +3696,16 @@ export default function InventoryAdminPage() {
                                                                                 <span style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: '800' }} title="Sumatoria de existencias de todas sus variantes">∑</span>
                                                                                 <span>{formatNumber(family.totalQuantity)}</span>
                                                                             </div>
-                                                                            <span style={{ fontSize: '0.62rem', color: '#B45309', fontWeight: '700' }}>
-                                                                                Consolidado Total
-                                                                            </span>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                                <span style={{ fontSize: '0.62rem', color: '#B45309', fontWeight: '700' }}>
+                                                                                    Consolidado Total
+                                                                                </span>
+                                                                                {family.totalWeightKg > 0 && (
+                                                                                    <span style={{ fontSize: '0.66rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                        ≈ {family.totalWeightKg >= 1000 ? `${(family.totalWeightKg / 1000).toFixed(2)} Ton` : `${formatNumber(family.totalWeightKg, 1)} kg`}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'right' as const }}>
@@ -3661,7 +3765,23 @@ export default function InventoryAdminPage() {
                                                                                 <span>Kardex</span>
                                                                             </button>
                                                                             <button 
-                                                                                onClick={() => { setSelectedProduct({id: parent.product_id, name: parent.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                                                onClick={() => { 
+                                                                                    setSelectedProduct({
+                                                                                        id: parent.product_id, 
+                                                                                        name: parent.products?.name || 'Desconocido',
+                                                                                        currentStock: family.totalQuantity,
+                                                                                        uom: parent.products?.unit_of_measure || 'UND',
+                                                                                        accounting_id: parent.products?.accounting_id,
+                                                                                        web_conversion_factor: parent.products?.web_conversion_factor,
+                                                                                        weight_kg: parent.products?.weight_kg
+                                                                                    }); 
+                                                                                    setAdjModalType('exit');
+                                                                                    setAdjModalReason('MERMA_MADURACION');
+                                                                                    setAdjModalQty('');
+                                                                                    setAdjModalNotes('');
+                                                                                    setAdjModalStatus('available');
+                                                                                    setIsMovementModalOpen(true); 
+                                                                                }}
                                                                                 style={{ 
                                                                                     backgroundColor: '#FFFFFF', 
                                                                                     color: '#475569',
@@ -3751,6 +3871,11 @@ export default function InventoryAdminPage() {
                                                                                 <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#334155' }}>
                                                                                     {formatNumber(parent.quantity || 0)}
                                                                                 </div>
+                                                                                {computeItemWeightKg(parent) > 0 && parent.products?.unit_of_measure?.toLowerCase().trim() !== 'kg' && parent.products?.unit_of_measure?.toLowerCase().trim() !== 'kilo' && (
+                                                                                    <span style={{ fontSize: '0.68rem', color: '#0369A1', fontWeight: '600', display: 'block', marginTop: '1px' }}>
+                                                                                        ≈ {formatNumber(computeItemWeightKg(parent), 1)} kg
+                                                                                    </span>
+                                                                                )}
                                                                             </td>
                                                                             <td style={{ ...styles.td, textAlign: 'right' as const }}>
                                                                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
@@ -3785,7 +3910,9 @@ export default function InventoryAdminPage() {
                                                                                                 name: parent.products?.name || 'Desconocido',
                                                                                                 currentStock: parent.quantity || 0,
                                                                                                 uom: parent.products?.unit_of_measure || 'UND',
-                                                                                                accounting_id: parent.products?.accounting_id
+                                                                                                accounting_id: parent.products?.accounting_id,
+                                                                                                web_conversion_factor: parent.products?.web_conversion_factor,
+                                                                                                weight_kg: parent.products?.weight_kg
                                                                                             }); 
                                                                                             setAdjModalType('exit');
                                                                                             setAdjModalReason('MERMA_MADURACION');
@@ -3913,6 +4040,11 @@ export default function InventoryAdminPage() {
                                                                                     }}>
                                                                                         {formatNumber(child.quantity)}
                                                                                     </div>
+                                                                                    {computeItemWeightKg(child) > 0 && child.products?.unit_of_measure?.toLowerCase().trim() !== 'kg' && child.products?.unit_of_measure?.toLowerCase().trim() !== 'kilo' && (
+                                                                                        <span style={{ fontSize: '0.68rem', color: '#0369A1', fontWeight: '600', display: 'block', marginTop: '1px' }}>
+                                                                                            ≈ {formatNumber(computeItemWeightKg(child), 1)} kg
+                                                                                        </span>
+                                                                                    )}
                                                                                 </td>
                                                                                 <td style={{ ...styles.td, textAlign: 'right' as const }}>
                                                                                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
@@ -3971,7 +4103,9 @@ export default function InventoryAdminPage() {
                                                                                                     name: child.products?.name || 'Desconocido',
                                                                                                     currentStock: child.quantity || 0,
                                                                                                     uom: child.products?.unit_of_measure || 'UND',
-                                                                                                    accounting_id: child.products?.accounting_id
+                                                                                                    accounting_id: child.products?.accounting_id,
+                                                                                                    web_conversion_factor: child.products?.web_conversion_factor,
+                                                                                                    weight_kg: child.products?.weight_kg
                                                                                                 }); 
                                                                                                 setAdjModalType('exit');
                                                                                                 setAdjModalReason('MERMA_MADURACION');
@@ -4076,6 +4210,11 @@ export default function InventoryAdminPage() {
                                                                 }}>
                                                                     {formatNumber(parent.quantity)}
                                                                 </div>
+                                                                {computeItemWeightKg(parent) > 0 && parent.products?.unit_of_measure?.toLowerCase().trim() !== 'kg' && parent.products?.unit_of_measure?.toLowerCase().trim() !== 'kilo' && (
+                                                                    <span style={{ fontSize: '0.68rem', color: '#0369A1', fontWeight: '600', display: 'block', marginTop: '1px' }}>
+                                                                        ≈ {formatNumber(computeItemWeightKg(parent), 1)} kg
+                                                                    </span>
+                                                                )}
                                                             </td>
                                                             <td style={{ ...styles.td, textAlign: 'right' as const }}>
                                                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
@@ -4140,7 +4279,9 @@ export default function InventoryAdminPage() {
                                                                                 name: parent.products?.name || 'Desconocido',
                                                                                 currentStock: parent.quantity || 0,
                                                                                 uom: parent.products?.unit_of_measure || 'UND',
-                                                                                accounting_id: parent.products?.accounting_id
+                                                                                accounting_id: parent.products?.accounting_id,
+                                                                                web_conversion_factor: parent.products?.web_conversion_factor,
+                                                                                weight_kg: parent.products?.weight_kg
                                                                             }); 
                                                                             setAdjModalType('exit');
                                                                             setAdjModalReason('MERMA_MADURACION');
@@ -4470,7 +4611,14 @@ export default function InventoryAdminPage() {
                                                                                 <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: '800' }} title="Sumatoria de existencias de todas sus variantes">∑</span>
                                                                                 <span>{formatNumber(kf.summary.currentStock)}</span>
                                                                             </div>
-                                                                            <span style={{ fontSize: '0.62rem', color: '#B45309', fontWeight: '700' }}>Consolidado</span>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                <span style={{ fontSize: '0.62rem', color: '#B45309', fontWeight: '700' }}>Consolidado</span>
+                                                                                {kf.summary.currentWeightKg > 0 && (
+                                                                                    <span style={{ fontSize: '0.64rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '1px 4px', borderRadius: '3px' }}>
+                                                                                        ≈ {kf.summary.currentWeightKg >= 1000 ? `${(kf.summary.currentWeightKg / 1000).toFixed(2)} Ton` : `${formatNumber(kf.summary.currentWeightKg, 1)} kg`}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </td>
                                                                     <td style={{ ...styles.td, textAlign: 'right' as const }}>
@@ -4670,6 +4818,11 @@ export default function InventoryAdminPage() {
                                                                                             <span style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.88rem' }}>
                                                                                                 {formatNumber(ownSummary.currentStock)}
                                                                                             </span>
+                                                                                            {computeProductWeightKg(ownSummary.currentStock, parent.products) > 0 && parent.products?.unit_of_measure?.toLowerCase().trim() !== 'kg' && parent.products?.unit_of_measure?.toLowerCase().trim() !== 'kilo' && (
+                                                                                                <span style={{ fontSize: '0.66rem', color: '#0369A1', fontWeight: '600', display: 'block' }}>
+                                                                                                    ≈ {formatNumber(computeProductWeightKg(ownSummary.currentStock, parent.products), 1)} kg
+                                                                                                </span>
+                                                                                            )}
                                                                                         </td>
                                                                                         <td style={{ ...styles.td, textAlign: 'right' as const }}>
                                                                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
@@ -4803,6 +4956,11 @@ export default function InventoryAdminPage() {
                                                                                             <span style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.88rem' }}>
                                                                                                 {formatNumber(cSummary.currentStock)}
                                                                                             </span>
+                                                                                            {computeProductWeightKg(cSummary.currentStock, child.products) > 0 && child.products?.unit_of_measure?.toLowerCase().trim() !== 'kg' && child.products?.unit_of_measure?.toLowerCase().trim() !== 'kilo' && (
+                                                                                                <span style={{ fontSize: '0.66rem', color: '#0369A1', fontWeight: '600', display: 'block' }}>
+                                                                                                    ≈ {formatNumber(computeProductWeightKg(cSummary.currentStock, child.products), 1)} kg
+                                                                                                </span>
+                                                                                            )}
                                                                                         </td>
                                                                                         <td style={{ ...styles.td, textAlign: 'right' as const }}>
                                                                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', alignItems: 'center' }}>
@@ -6489,9 +6647,16 @@ export default function InventoryAdminPage() {
                             <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>
                                 Saldo Actual en Sistema:
                             </span>
-                            <span style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>
-                                {formatNumber(selectedProduct.currentStock ?? 0)} <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{selectedProduct.uom || 'UND'}</span>
-                            </span>
+                            <div style={{ textAlign: 'right' }}>
+                                <span style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>
+                                    {formatNumber(selectedProduct.currentStock ?? 0)} <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{selectedProduct.uom || 'UND'}</span>
+                                </span>
+                                {computeProductWeightKg(selectedProduct.currentStock ?? 0, selectedProduct) > 0 && selectedProduct.uom?.toLowerCase().trim() !== 'kg' && selectedProduct.uom?.toLowerCase().trim() !== 'kilo' && (
+                                    <div style={{ fontSize: '0.72rem', color: '#0369A1', fontWeight: '600' }}>
+                                        ≈ {formatNumber(computeProductWeightKg(selectedProduct.currentStock ?? 0, selectedProduct), 1)} kg físicos
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -6616,13 +6781,20 @@ export default function InventoryAdminPage() {
                                         CANTIDAD ({selectedProduct.uom || 'UND'})
                                     </label>
                                     {Number(adjModalQty) > 0 && (
-                                        <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '700' }}>
-                                            Proyección: {formatNumber(
-                                                adjModalType === 'exit' 
-                                                    ? Math.max(0, (selectedProduct.currentStock || 0) - Number(adjModalQty))
-                                                    : (selectedProduct.currentStock || 0) + Number(adjModalQty)
-                                            )} {selectedProduct.uom || 'UND'}
-                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ fontSize: '0.72rem', color: '#0D7A57', fontWeight: '700' }}>
+                                                Proyección: {formatNumber(
+                                                    adjModalType === 'exit' 
+                                                        ? Math.max(0, (selectedProduct.currentStock || 0) - Number(adjModalQty))
+                                                        : (selectedProduct.currentStock || 0) + Number(adjModalQty)
+                                                )} {selectedProduct.uom || 'UND'}
+                                            </span>
+                                            {computeProductWeightKg(Number(adjModalQty), selectedProduct) > 0 && selectedProduct.uom?.toLowerCase().trim() !== 'kg' && selectedProduct.uom?.toLowerCase().trim() !== 'kilo' && (
+                                                <span style={{ fontSize: '0.68rem', color: '#0369A1', fontWeight: '600', backgroundColor: '#E0F2FE', padding: '1px 5px', borderRadius: '4px' }}>
+                                                    ≈ {formatNumber(computeProductWeightKg(Number(adjModalQty), selectedProduct), 1)} kg
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 <input 
@@ -6869,10 +7041,14 @@ function KPICard({ title, value, color, subtitle }: { title: string, value: stri
         badgeColor = "#DC2626";
         badgeBg = "#FEE2E2";
         IconComponent = AlertTriangle;
+    } else if (title.toLowerCase().includes("peso") || title.toLowerCase().includes("masa")) {
+        badgeColor = "#0284C7";
+        badgeBg = "#E0F2FE";
+        IconComponent = Scale;
     } else if (title.toLowerCase().includes("valor")) {
         badgeColor = "#059669";
         badgeBg = "#ECFDF5";
-        IconComponent = Scale;
+        IconComponent = DollarSign;
     } else if (title.toLowerCase().includes("tarea")) {
         badgeColor = "#D97706";
         badgeBg = "#FEF3C7";

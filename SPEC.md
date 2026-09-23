@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.5 (Contrato Canónico de Trazabilidad Dual: Unidades Nominales y Peso Logístico en Ciclo de Vida de Pedido)  
+> **Versión:** 1.8.6 (Resolución Contractual Resiliente & Paginación Mandatoria PostgREST en Borradores de Pedidos)  
 > **Fecha:** 23 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, IT/SaaS Infraestructura, Comercial, Operaciones & Gobernanza ERP
@@ -178,6 +178,11 @@ Cuando el sistema consulta el precio de un producto para un cliente o sucursal, 
 
 > **Regla de Inmunidad Contractual de Acuerdos:**  
 > Los precios pactados bajo un Acuerdo Comercial formal representan un contrato vinculante. Por seguridad jurídica y protección del margen, **las Campañas Comerciales NUNCA alteran ni perforan los precios de productos que formen parte de un Acuerdo Comercial activo**. Las campañas solo modulan productos de catálogo o modelos no cobijados por dicho acuerdo.
+
+> **Directiva de Invarianza en Ingesta de Pedidos (Borradores & Mesa de Trabajo):**  
+> 1. **Precedencia Inviolable:** En cualquier módulo de ingesta o edición de pedidos (`EmailDraftsModule`, `orders/create`), la resolución de acuerdos debe buscar en primer lugar la sucursal (`client_id = branchId`) y solo si no existe, la casa matriz (`client_id = parentId`). Queda estrictamente prohibida la inversión de prevalencia `parent_id || id`.  
+> 2. **Paginación Exhaustiva Obligatoria:** Dado el límite estricto de 1.000 filas de Supabase PostgREST, toda consulta masiva de listas de precios contractuales (`quote_items`) o modelos (`pricing_model_prices`) debe paginarse obligatoriamente mediante bloques de rango (`range(p * 1000, ...)`). Jamás se asumirá que una sola llamada REST contiene la totalidad de los SKUs de los clientes institucionales.  
+> 3. **Resiliencia Reactiva Bajo Demanda:** Si un borrador de pedido se asocia a un acuerdo activo cuyos ítems no residan aún en la memoria caché del navegador (o hayan sido editados en tiempo real por el equipo comercial), el sistema debe disparar una consulta directa bajo demanda de los `quote_items` de ese contrato específico para garantizar que ningún SKU aparezca falsamente como `SIN PRECIO` ni asuma precios de catálogo público.
 
 ### 7.3 Contratos Matemáticos Canónicos (Reglas Inmutables)
 
@@ -932,6 +937,71 @@ Todo ítem configurado con unidad dual debe persistir en su payload JSONB:
   1. Aparece el botón `[X]` dentro del campo de texto.
   2. Al pulsar `[X]`, el buscador se limpia inmediatamente mostrando todos los acuerdos sin requerir borrar letra por letra.
   3. Al desplazarse hacia abajo mediante scroll, la barra con el buscador, botones de filtro y los encabezados de las columnas permanecen permanentemente visibles y anclados en la parte superior.
+
+### 11.7 Paginación Mandatoria de Precios Contractuales y Modelos (PostgREST 1000-Row Boundary)
+
+1. **Límite Físico de PostgREST (`max-rows = 1000`):**
+   - Las consultas a Supabase mediante la librería cliente `@supabase/supabase-js` delegan la paginación a la API PostgREST subyacente. Por defecto y diseño de seguridad, PostgREST impone un tope de **1.000 registros por consulta** (`HTTP Range: 0-999`) cuando no se especifica paginación por rangos.
+   - En una base comercial corporativa con múltiples acuerdos activos y modelos de precios, el volumen de filas supera con creces este límite:
+     - `quote_items` para acuerdos activos supera los 2.700 registros.
+     - `pricing_model_prices` supera los 1.200 registros.
+   - Cualquier consulta no paginada como `.from('quote_items').select(...).in('quote_id', quoteIds)` o `.from('pricing_model_prices').select('*')` trunca silenciosamente la data, dejando contratos enteros en el limbo (como el caso del Acuerdo #86 de Colsubsidio con 249 productos).
+
+2. **Protocolo Canónico de Paginación en Bloques (`range(p * 1000, ...)`):**
+   - Todo componente o servicio que requiera indexar en memoria la matriz de precios contractuales o de modelos debe implementar un bucle de barrido secuencial por lotes de 1.000 registros hasta que la respuesta retorne un arreglo de longitud menor a 1.000:
+     ```typescript
+     let allItems: any[] = [];
+     let page = 0;
+     const pageSize = 1000;
+     while (true) {
+       const { data: chunk, error } = await supabase
+         .from('quote_items')
+         .select('quote_id, product_id, unit_price')
+         .in('quote_id', quoteIds)
+         .range(page * pageSize, (page + 1) * pageSize - 1);
+       if (error || !chunk || chunk.length === 0) break;
+       allItems = allItems.concat(chunk);
+       if (chunk.length < pageSize) break;
+       page++;
+     }
+     ```
+
+### 11.8 Resiliencia Contractual Bajo Demanda en Mesa de Trabajo de Borradores (`EmailDraftsModule`)
+
+1. **Doble Capa de Protección (Eager Loading + Lazy Fallback):**
+   - **Capa 1 (Eager):** Carga masiva paginada al inicializar el módulo.
+   - **Capa 2 (Lazy / Bajo Demanda):** Cuando el operador selecciona un borrador de pedido, el efecto reactivo `resolveContract()` evalúa el acuerdo aplicable (Sucursal > Matriz). Si el mapa en memoria de dicho acuerdo (`agreementPrices[activeAgreement.id]`) no existe o se encuentra vacío, el sistema dispara inmediatamente una consulta directa a `quote_items` filtrada por ese `quote_id`, poblando la caché local al vuelo.
+
+2. **Protección de SKUs Exclusivos B2B con Costo Base Cero (`base_price = 0`):**
+   - Existen productos de catálogo institucional (como `Papaya institucional` COD: 1146, o despieces específicos) cuyo `base_price` público es `$0 COP`, ya que se comercializan exclusivamente bajo negociación contractual formal.
+   - Si la consulta contractual falla o trunca los precios, el fallback a `base_price` arroja `$0`, provocando que el borrador muestre la insignia roja `SIN PRECIO` e impidiendo la aprobación del pedido.
+   - Con la doble capa de resolución, los precios negociados se garantizan al 100%, eliminando falsos positivos de bloqueo comercial.
+
+3. **Consistencia Reactiva en Totales y Tarjetas (`draftTotalsMap`):**
+   - El cálculo resumido de totales estimados por borrador (`draftTotalsMap`) debe declarar explícitamente en sus dependencias de `useMemo`: `[drafts, products, aliases, agreements, agreementPrices, pricingModels, allModelPrices, profiles, deliveryDate]`.
+   - Esto asegura que al completarse la carga asíncrona de precios o refrescarse un acuerdo, las tarjetas de la bandeja de entrada actualicen sus montos totales instantáneamente sin requerir recargar la página.
+
+### 11.9 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 7: Resolución de SKU Exclusivo B2B en Sucursal con Acuerdo de Matriz
+- **Given** una sucursal corporativa (`CAJA DE COMPENSACION FAMILIAR COLSUBSIDIO - RESTAURANTE CAFÉ DE LETRAS`) con `parent_id` asignado a su casa matriz.
+- **And** la casa matriz cuenta con un Acuerdo Comercial vigente (`quote_number: 86`, `ACI 0109 0086`) que incluye el SKU `Papaya institucional` (`accounting_id: 1146`) con precio acordado de \$4.500 COP.
+- **And** el SKU `Papaya institucional` tiene `base_price: 0` en el catálogo general de productos.
+- **When** el operador abre el borrador de pedido de dicha sucursal en `EmailDraftsModule`.
+- **Then**:
+  1. El sistema identifica el acuerdo de la matriz mediante la jerarquía canónica de 2 niveles (Sucursal > Matriz).
+  2. Carga la totalidad de los 249 ítems del acuerdo sin truncamiento por el límite de 1.000 filas de PostgREST.
+  3. El SKU `Papaya institucional` muestra su precio acordado de \$4.500/Kg en lugar de la etiqueta roja `SIN PRECIO`.
+  4. Los demás productos del pedido (ej. `Piña golden`, `Pitahaya`, `Cebolla`) muestran sus precios negociados contractuales exactos en lugar de precios de lista pública B2C.
+  5. El total de la orden se calcula sumando los precios acordados y la orden puede ser aprobada sin bloqueos.
+
+#### Escenario 8: Carga Exhaustiva ante Catálogos Masivos de Acuerdos
+- **Given** más de 15 acuerdos comerciales activos en la base de datos con un total consolidado superior a 2.500 renglones en `quote_items`.
+- **When** se inicializa el componente `EmailDraftsModule` o la mesa de trabajo de pedidos.
+- **Then**:
+  1. El sistema ejecuta la paginación secuencial en bloques de 1.000 registros.
+  2. El mapa en memoria de acuerdos `agreementPrices` registra el 100% de los acuerdos sin omisiones.
+  3. Ningún contrato ubicado después de la fila 1.000 queda huérfano de precios en el cliente web.
 
 ---
 

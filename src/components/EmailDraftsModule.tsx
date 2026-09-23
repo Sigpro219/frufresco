@@ -3087,12 +3087,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let b2cFallback = false;
       let loadedPrices: Record<string, number> = {};
 
-      const effectiveClientId = currentProfileForContract?.parent_id || currentProfileForContract?.id;
+      const branchId = currentProfileForContract?.id || null;
+      const parentId = currentProfileForContract?.parent_id || null;
 
-      // 1. Check for Active Agreement Quotes first
-      const activeAgreement = effectiveClientId 
-        ? agreements.find(q => q.client_id === effectiveClientId)
-        : null;
+      // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
+      const activeAgreement = (branchId ? agreements.find(q => q.client_id === branchId) : null)
+        || (parentId ? agreements.find(q => q.client_id === parentId) : null);
 
       if (activeAgreement) {
         resolvedModel = {
@@ -3100,11 +3100,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           name: `Acuerdo ${activeAgreement.quote_number}`,
           is_agreement: true
         };
-
-        const agreementMap = agreementPrices[activeAgreement.id];
-        if (agreementMap) {
-          loadedPrices = { ...agreementMap };
-        }
 
         // Check expiration
         if (deliveryDate) {
@@ -3117,6 +3112,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (end && end < delivery) {
             expired = true;
           }
+        }
+
+        let agreementMap = agreementPrices[activeAgreement.id];
+        // Resiliencia y frescura: si no está cargado o está vacío, consultar directamente quote_items
+        if (!agreementMap || Object.keys(agreementMap).length === 0) {
+          try {
+            let directItems: any[] = [];
+            let p = 0;
+            const limit = 1000;
+            while (true) {
+              const { data: chunk, error: cErr } = await supabase
+                .from('quote_items')
+                .select('product_id, unit_price')
+                .eq('quote_id', activeAgreement.id)
+                .range(p * limit, (p + 1) * limit - 1);
+              if (cErr || !chunk || chunk.length === 0) break;
+              directItems = directItems.concat(chunk);
+              if (chunk.length < limit) break;
+              p++;
+            }
+            if (directItems.length > 0) {
+              agreementMap = {};
+              directItems.forEach((row: any) => {
+                agreementMap[row.product_id] = row.unit_price;
+              });
+              setAgreementPrices(prev => ({ ...prev, [activeAgreement.id]: agreementMap }));
+            }
+          } catch (fetchErr) {
+            console.error('Error fetching agreement items on demand:', fetchErr);
+          }
+        }
+
+        if (agreementMap) {
+          loadedPrices = { ...agreementMap };
         }
       } else {
         // 2. Fetch pricing model if no agreement
@@ -3487,9 +3516,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const { data: models } = await supabase.from('pricing_models').select('*');
       if (models) setPricingModels(models);
 
-      const { data: prices } = await supabase.from('pricing_model_prices').select('*');
+      // Paginar pricing_model_prices para superar límite estricto de 1000 filas de PostgREST
+      let allPrices: any[] = [];
+      let pPage = 0;
+      const pPageSize = 1000;
+      while (true) {
+        const { data: chunk, error } = await supabase
+          .from('pricing_model_prices')
+          .select('model_id, product_id, price')
+          .range(pPage * pPageSize, (pPage + 1) * pPageSize - 1);
+        if (error || !chunk || chunk.length === 0) break;
+        allPrices = allPrices.concat(chunk);
+        if (chunk.length < pPageSize) break;
+        pPage++;
+      }
+
       const map: Record<string, Record<string, number>> = {};
-      prices?.forEach((row: any) => {
+      allPrices.forEach((row: any) => {
         if (!map[row.model_id]) {
           map[row.model_id] = {};
         }
@@ -3506,13 +3549,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       if (quotesData && quotesData.length > 0) {
         setAgreements(quotesData);
         const quoteIds = quotesData.map(q => q.id);
-        const { data: itemsData } = await supabase
-          .from('quote_items')
-          .select('quote_id, product_id, unit_price')
-          .in('quote_id', quoteIds);
+
+        // Paginar quote_items de todos los acuerdos para superar el límite de 1000 filas de PostgREST
+        let allItems: any[] = [];
+        let iPage = 0;
+        const iPageSize = 1000;
+        while (true) {
+          const { data: chunk, error } = await supabase
+            .from('quote_items')
+            .select('quote_id, product_id, unit_price')
+            .in('quote_id', quoteIds)
+            .range(iPage * iPageSize, (iPage + 1) * iPageSize - 1);
+          if (error || !chunk || chunk.length === 0) break;
+          allItems = allItems.concat(chunk);
+          if (chunk.length < iPageSize) break;
+          iPage++;
+        }
 
         const aMap: Record<string, Record<string, number>> = {};
-        itemsData?.forEach((row: any) => {
+        allItems.forEach((row: any) => {
           if (!aMap[row.quote_id]) {
             aMap[row.quote_id] = {};
           }
@@ -5744,7 +5799,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       map.set(draft.id, { total: estTotal, weight: estWeight, count: items.length });
     });
     return map;
-  }, [drafts, products, aliases, agreements, profiles]);
+  }, [drafts, products, aliases, agreements, agreementPrices, pricingModels, allModelPrices, profiles, deliveryDate]);
 
   const activeEditableTotals = useMemo(() => {
     const active = editableItems.filter(itm => !itm.isDeleted);
@@ -10068,7 +10123,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (!item.matched_product_id) return null;
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
-                      const unitPrice = prod ? (contractPrices[prod.id] || prod.base_price || 0) : 0;
+                      const unitPrice = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0)) : 0;
                       const lineTotal = unitPrice * qty;
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
