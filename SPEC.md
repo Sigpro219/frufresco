@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.8.7 (Gobernanza de Catálogo: Normalización Dimensional de SKUs Masivos y Bultos Cerrados)  
+> **Versión:** 1.8.8 (Poka-Yoke Comercial: Detección, Alerta y Auto-Activación de SKUs Inactivos en Acuerdos de Precios)  
 > **Fecha:** 23 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, IT/SaaS Infraestructura, Comercial, Operaciones & Gobernanza ERP
@@ -1384,6 +1384,63 @@ Para que el alistamiento y el despacho físico en bodega sean 100% operativos:
   2. Genera los rótulos de despacho con el Cliente, Sucursal, Bahía de Piso, Peso, ID Amistoso y código QR.
   3. Al previsualizar la impresión (Ctrl + P), cada etiqueta ocupa exactamente 100mm x 50mm sin expulsar etiquetas en blanco vacías entre páginas.
 
+---
 
+## 17. Poka-Yoke Comercial: Detección, Alerta y Auto-Activación de SKUs Inactivos en Acuerdos de Precios
 
+### 17.1 Principio de Integridad Comercial vs Operaciones & Toma de Pedidos
+En la operación B2B institucional de FruFresco, existe una interdependencia crítica entre el catálogo de inventario maestro (`products`) y los acuerdos de precios pactados (`commercial_agreements` y `commercial_agreement_items`):
 
+> **«Si el área comercial pacta contractualmente un precio institucional congelado para un cliente o a través de la plantilla matriz general, pero el SKU correspondiente se encuentra apagado (`is_active = false`) en el maestro de productos, se produce una falla silenciosa de servicio: el acuerdo se guarda formalmente, pero al montar el pedido en `/admin/orders/create` o mediante ingesta automática de correos, el motor omite el producto por estar inactivo. Esto genera fricción comercial inmediata ("¿Por qué pactamos la arepa y no aparece al montar el pedido?"). El sistema debe implementar mecanismos Poka-Yoke proactivos que alerten, identifiquen y permitan la auto-activación inmediata de estos ítems desde el propio módulo comercial.»**
+
+### 17.2 Arquitectura Poka-Yoke Multicapa (`CommercialAgreementsModule.tsx`)
+Para blindar el flujo comercial, se establecen cuatro salvaguardas de gobernanza:
+
+1. **Detección Temprana en Previsualización (Excel Ingestion Engine):**
+   - Durante la lectura y cotejo del archivo Excel (en flujos de creación individual, edición y carga masiva de plantilla matriz), la consulta a base de datos indexa el estado `is_active` de cada producto (`fetchAllProductsMap`).
+   - Si se identifican filas cuyos SKUs coinciden con productos existentes pero apagados (`is_active === false`), el sistema:
+     - Incrementa el contador táctico `inactiveCount`.
+     - Inyecta la bandera booleana `is_inactive: true` en el objeto de previsualización.
+     - Emite de forma inmediata un Toast de Alerta ámbar (`type: 'warning'`) informando la cantidad exacta de productos inactivos detectados.
+     - Despliega una pestaña de filtrado rápido `[Inactivos (N)]` en la barra de segmentación para que el comercial pueda auditar la lista aislada en 1 clic.
+     - Marca cada fila correspondiente en la tabla con un badge visual `[INACTIVO]` en tono ámbar de alta visibilidad (`bg-amber-100 text-amber-800 border-amber-300`).
+
+2. **Bloqueo Suave con Asistente de Auto-Activación al Guardar:**
+   - Al ejecutar el envío del formulario (`handleCreateAgreementSubmit`, `handleEditSubmit` o `handleSaveMasterTemplate`), el sistema escanea todos los ítems válidos para verificar si alguno tiene `is_active === false`.
+   - Si existen SKUs inactivos, el flujo de persistencia se suspende de forma segura y despliega un diálogo de confirmación interactivo Poka-Yoke:
+     - Detalla la cantidad y los primeros nombres de los productos inactivos involucrados.
+     - Plantea la pregunta de control: *«¿Deseas activarlos automáticamente en el catálogo oficial ahora mismo para que queden disponibles para pedidos?»*.
+     - **Si el usuario acepta:** El sistema ejecuta atómicamente un `UPDATE products SET is_active = true WHERE id IN (...)`, notificando el éxito con un toast verde, y procede a registrar el acuerdo comercial garantizando sincronización total con el catálogo activo.
+     - **Si el usuario cancela:** El acuerdo se guarda con los ítems manteniendo su estado actual en base de datos, respetando la potestad del usuario pero habiendo dejado constancia explícita de la advertencia.
+
+3. **Gobernanza Retrospectiva en Drawer de Precios Congelados:**
+   - En la consulta de acuerdos existentes (`handleViewPrices`), la consulta `commercial_agreement_items` recupera `products(name, sku, unit, is_active)`.
+   - Si el acuerdo consultado contiene uno o más SKUs inactivos, el drawer renderiza un banner prominente de alerta superior:
+     - Identifica el número de ítems pactados que están inactivos y por ende no aparecen en la toma de pedidos.
+     - Dispone de un botón de acción directa en 1 clic: `[Reactivar (N) Productos en Catálogo]`.
+     - Al ser accionado, ejecuta la función `handleAutoActivateDrawerInactive`, actualizando en tiempo real la base de datos Supabase y refrescando el estado del drawer sin obligar a recargar la página.
+
+### 17.3 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 18: Detección y Notificación de SKUs Inactivos en Carga de Acuerdo
+- **Given** un archivo Excel de precios institucionales que contiene el producto "Arepa mediana el carriel paquete x 10unds" (ID 1229) cuyo estado en `products` es `is_active = false`.
+- **When** el ejecutivo comercial suelta o selecciona el archivo en el modal de creación o edición de acuerdos.
+- **Then**:
+  1. El sistema mapea exitosamente el SKU pero lo clasifica como `is_inactive = true`.
+  2. Muestra un toast ámbar con el mensaje de advertencia: *"Atención: Se detectaron X productos inactivos en el catálogo. Revisa la pestaña 'Inactivos'..."*.
+  3. Habilita el filtro de pestañas "Inactivos (X)" y muestra el badge ámbar `[INACTIVO]` en la fila de la Arepa.
+
+#### Escenario 19: Auto-Activación Poka-Yoke al Guardar Acuerdo Comercial
+- **Given** una previsualización de acuerdo con productos inactivos.
+- **When** el usuario presiona "Crear Acuerdo" o "Guardar Cambios".
+- **Then**:
+  1. Se interrumpe el guardado inmediato y aparece el diálogo interactivo alertando que los productos no podrán pedirse si permanecen inactivos.
+  2. Al confirmar la activación automática, el sistema actualiza `is_active = true` en la tabla `products` en Supabase.
+  3. El acuerdo se guarda satisfactoriamente y el producto queda inmediatamente disponible para ser seleccionado en `/admin/orders/create` con su precio pactado.
+
+#### Escenario 20: Reactivación en 1 Clic desde el Drawer de Precios Congelados
+- **Given** un acuerdo comercial previamente guardado que posee ítems inactivos.
+- **When** el usuario hace clic en el botón de ojo (Ver Precios Congelados) en la tabla de acuerdos.
+- **Then**:
+  1. El Drawer lateral se abre y muestra en la parte superior el banner ámbar: *"Atención: Este acuerdo contiene X producto(s) inactivos en el catálogo..."*.
+  2. Al pulsar el botón "Reactivar X Productos en Catálogo", el sistema ejecuta la mutación en Supabase, remueve el banner y actualiza los badges a estado activo instantáneamente.

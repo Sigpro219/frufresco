@@ -84,6 +84,7 @@ interface AgreementItem {
     products?: {
         accounting_id?: string;
         unit_of_measure?: string;
+        is_active?: boolean;
     };
 }
 
@@ -302,9 +303,11 @@ export default function CommercialAgreementsModule() {
             cost_basis: number;
             margin_percent: number;
             iva_rate: number;
+            is_inactive?: boolean;
         }>;
         matchedCount: number;
         unmatchedCount: number;
+        inactiveCount?: number;
         avgMargin: number;
         totalSubtotal: number;
     } | null>(null);
@@ -345,14 +348,16 @@ export default function CommercialAgreementsModule() {
             cost_basis: number;
             margin_percent: number;
             iva_rate: number;
+            is_inactive?: boolean;
         }>;
         matchedCount: number;
         unmatchedCount: number;
+        inactiveCount: number;
         avgMargin: number;
         totalSubtotal: number;
     } | null>(null);
     const [excelPreviewSearch, setExcelPreviewSearch] = useState('');
-    const [excelPreviewFilter, setExcelPreviewFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
+    const [excelPreviewFilter, setExcelPreviewFilter] = useState<'all' | 'matched' | 'unmatched' | 'inactive'>('all');
     const [parsedFile, setParsedFile] = useState<File | null>(null);
     const [parsing, setParsing] = useState(false);
     const [savingAgreement, setSavingAgreement] = useState(false);
@@ -375,14 +380,16 @@ export default function CommercialAgreementsModule() {
             cost_basis?: number;
             margin_percent?: number;
             iva_rate?: number;
+            is_inactive?: boolean;
         }>;
         matchedCount: number;
         unmatchedCount: number;
+        inactiveCount: number;
         avgMargin: number;
         totalSubtotal: number;
     } | null>(null);
     const [editExcelPreviewSearch, setEditExcelPreviewSearch] = useState('');
-    const [editExcelPreviewFilter, setEditExcelPreviewFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
+    const [editExcelPreviewFilter, setEditExcelPreviewFilter] = useState<'all' | 'matched' | 'unmatched' | 'inactive'>('all');
     const [editParsedFile, setEditParsedFile] = useState<File | null>(null);
     const [editParsing, setEditParsing] = useState(false);
     const [editSaving, setEditSaving] = useState(false);
@@ -390,12 +397,15 @@ export default function CommercialAgreementsModule() {
     const [editConfirmationChecked, setEditConfirmationChecked] = useState(false);
     const [isEditKpiCollapsed, setIsEditKpiCollapsed] = useState(false);
 
-    // Notification State
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    // Drawer Inactive SKUs Auto-activation State
+    const [activatingDrawerSkus, setActivatingDrawerSkus] = useState(false);
 
-    const showToast = (message: string, type: 'success' | 'error') => {
+    // Notification State
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+
+    const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
         setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
+        setTimeout(() => setToast(null), 4000);
     };
 
     const fetchAgreements = async () => {
@@ -498,7 +508,7 @@ export default function CommercialAgreementsModule() {
             const to = from + pageSize - 1;
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, base_price, accounting_id, iva_rate, unit_of_measure, sku')
+                .select('id, name, base_price, accounting_id, iva_rate, unit_of_measure, sku, is_active')
                 .range(from, to);
 
             if (error) {
@@ -796,6 +806,7 @@ export default function CommercialAgreementsModule() {
             const cost = Number(it.cost_basis) || 0;
             const margin = Number(it.margin_percent) || 0;
             const iva = Number(it.iva_rate) || 0;
+            const isInactive = it.products?.is_active === false;
             subtotal += price;
             totalTax += price * (iva / 100);
             totalMargin += margin;
@@ -807,10 +818,12 @@ export default function CommercialAgreementsModule() {
                 matched_product: it.products || { name: it.product_name, accounting_id: it.products?.accounting_id },
                 cost_basis: cost,
                 margin_percent: margin,
-                iva_rate: iva
+                iva_rate: iva,
+                is_inactive: isInactive
             };
         });
 
+        const inactiveCount = previewItems.filter(it => it.is_inactive).length;
         const avgMargin = previewItems.length > 0 ? Math.round((totalMargin / previewItems.length) * 100) / 100 : 0;
 
         setUploadedItems(mappedUploadedItems);
@@ -818,6 +831,7 @@ export default function CommercialAgreementsModule() {
             items: previewItems,
             matchedCount: previewItems.length,
             unmatchedCount: 0,
+            inactiveCount: inactiveCount,
             avgMargin: avgMargin,
             totalSubtotal: subtotal
         });
@@ -876,6 +890,7 @@ export default function CommercialAgreementsModule() {
                 const previewItems: any[] = [];
                 let matchedCount = 0;
                 let unmatchedCount = 0;
+                let inactiveCount = 0;
                 let totalMargin = 0;
                 let subtotal = 0;
 
@@ -883,6 +898,8 @@ export default function CommercialAgreementsModule() {
                     const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name);
                     if (dbProduct) {
                         matchedCount++;
+                        const isInactive = dbProduct.is_active === false;
+                        if (isInactive) inactiveCount++;
                         const costBasis = dbProduct.base_price || 0;
                         const margin = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
                         const ivaRate = dbProduct.iva_rate || 0;
@@ -897,7 +914,8 @@ export default function CommercialAgreementsModule() {
                             cost_basis: costBasis,
                             margin_percent: margin,
                             iva_rate: ivaRate,
-                            product_id: dbProduct.id
+                            product_id: dbProduct.id,
+                            is_inactive: isInactive
                         });
                     } else {
                         unmatchedCount++;
@@ -920,10 +938,15 @@ export default function CommercialAgreementsModule() {
                     items: previewItems,
                     matchedCount,
                     unmatchedCount,
+                    inactiveCount,
                     avgMargin,
                     totalSubtotal: subtotal
                 });
-                showToast(`Excel procesado: ${matchedCount} productos cruzados con el catálogo`, 'success');
+                if (inactiveCount > 0) {
+                    showToast(`Excel procesado: ${matchedCount} reconocidos (${inactiveCount} inactivos en catálogo)`, 'warning');
+                } else {
+                    showToast(`Excel procesado: ${matchedCount} productos cruzados con el catálogo`, 'success');
+                }
             } catch (err: any) {
                 console.error('Error parsing master excel:', err);
                 showToast(err.message || 'Error al leer Excel', 'error');
@@ -942,6 +965,33 @@ export default function CommercialAgreementsModule() {
 
         setMasterSaving(true);
         try {
+            // Poka-Yoke: Alert and offer auto-activation if inactive SKUs exist
+            const inactiveItems = masterExcelPreviewData.items
+                .filter(it => it.matched_product && it.is_inactive);
+
+            if (inactiveItems.length > 0) {
+                const confirmMsg = `⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveItems.length} producto(s) inactivo(s) en el catálogo en este Modelo General:\n${inactiveItems.slice(0, 5).map(p => `• ${p.product_name}`).join('\n')}${inactiveItems.length > 5 ? `\n... y ${inactiveItems.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y guardar modelo.\n- [Cancelar]: Volver para revisar la lista.`;
+                
+                const shouldActivate = window.confirm(confirmMsg);
+                if (!shouldActivate) {
+                    setMasterSaving(false);
+                    return;
+                }
+
+                const inactiveIds = Array.from(new Set(inactiveItems.map(p => (p as any).product_id || p.matched_product.id)));
+                const { error: actErr } = await supabase
+                    .from('products')
+                    .update({ is_active: true })
+                    .in('id', inactiveIds);
+
+                if (actErr) {
+                    console.error('Error auto-activando productos en master template:', actErr);
+                    showToast('Advertencia: No se pudieron activar algunos productos', 'warning');
+                } else {
+                    showToast(`${inactiveIds.length} producto(s) reactivado(s) exitosamente en catálogo`, 'success');
+                }
+            }
+
             const validItems = masterExcelPreviewData.items
                 .filter(it => it.matched_product && (it as any).product_id)
                 .map(it => ({
@@ -992,7 +1042,7 @@ export default function CommercialAgreementsModule() {
         try {
             const { data, error } = await supabase
                 .from('quote_items')
-                .select('*, products:product_id (accounting_id, unit_of_measure)')
+                .select('*, products:product_id (accounting_id, unit_of_measure, is_active)')
                 .eq('quote_id', agreement.id);
 
             if (error) throw error;
@@ -1003,6 +1053,45 @@ export default function CommercialAgreementsModule() {
             showToast('Error al cargar lista de precios: ' + err.message, 'error');
         } finally {
             setLoadingItems(false);
+        }
+    };
+
+    const handleAutoActivateDrawerInactive = async () => {
+        const inactiveItems = agreementItems.filter(it => it.products?.is_active === false);
+        if (inactiveItems.length === 0) return;
+
+        const confirm = window.confirm(`⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveItems.length} producto(s) inactivo(s) en este acuerdo:\n${inactiveItems.slice(0, 5).map(p => `• ${p.product_name}`).join('\n')}${inactiveItems.length > 5 ? `\n... y ${inactiveItems.length - 5} más` : ''}\n\n¿Deseas REACTIVARLOS en el catálogo maestro para que puedan ser seleccionados en la toma de pedidos?`);
+        if (!confirm) return;
+
+        setActivatingDrawerSkus(true);
+        try {
+            const productIds = Array.from(new Set(inactiveItems.map(it => it.product_id)));
+            const { error } = await supabase
+                .from('products')
+                .update({ is_active: true })
+                .in('id', productIds);
+
+            if (error) throw error;
+
+            showToast(`✅ ${productIds.length} producto(s) reactivado(s) en el catálogo correctamente`, 'success');
+
+            setAgreementItems(prev => prev.map(it => {
+                if (productIds.includes(it.product_id)) {
+                    return {
+                        ...it,
+                        products: {
+                            ...it.products,
+                            is_active: true
+                        }
+                    };
+                }
+                return it;
+            }));
+        } catch (err: any) {
+            console.error('Error reactivando productos:', err);
+            showToast('Error al reactivar productos: ' + err.message, 'error');
+        } finally {
+            setActivatingDrawerSkus(false);
         }
     };
 
@@ -1170,6 +1259,7 @@ export default function CommercialAgreementsModule() {
 
                 let matchCount = 0;
                 let unmatchedCount = 0;
+                let inactiveCount = 0;
                 let totalMarginSum = 0;
                 let totalSubtotal = 0;
 
@@ -1177,6 +1267,10 @@ export default function CommercialAgreementsModule() {
                     const matched = findProductInMap(productMap, item.accounting_id, item.product_name);
                     if (matched) {
                         matchCount++;
+                        const isInactive = matched.is_active === false;
+                        if (isInactive) {
+                            inactiveCount++;
+                        }
                         const costBasis = matched.base_price || 0;
                         const margin = item.unit_price > 0 
                             ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 
@@ -1191,7 +1285,8 @@ export default function CommercialAgreementsModule() {
                             matched_product: matched,
                             cost_basis: costBasis,
                             margin_percent: margin,
-                            iva_rate: matched.iva_rate || 0
+                            iva_rate: matched.iva_rate || 0,
+                            is_inactive: isInactive
                         };
                     } else {
                         unmatchedCount++;
@@ -1214,11 +1309,16 @@ export default function CommercialAgreementsModule() {
                     items: enrichedItems,
                     matchedCount: matchCount,
                     unmatchedCount: unmatchedCount,
+                    inactiveCount: inactiveCount,
                     avgMargin: Math.round(avgMargin * 10) / 10,
                     totalSubtotal
                 });
 
-                showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
+                if (inactiveCount > 0) {
+                    showToast(`Excel procesado: ${matchCount} reconocidos (${inactiveCount} inactivos en catálogo), ${unmatchedCount} no reconocidos`, 'warning');
+                } else {
+                    showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
+                }
             } catch (err: any) {
                 console.error(err);
                 showToast(err.message || 'Error al procesar archivo Excel', 'error');
@@ -1276,14 +1376,18 @@ export default function CommercialAgreementsModule() {
             
             // Calculate negotiated totals dynamically with actual product IVA rates
             const itemsTemplate: any[] = [];
+            const inactiveProducts: any[] = [];
             let matchCount = 0;
             let subtotal = 0;
             let totalTax = 0;
             
             uploadedItems.forEach(item => {
-                const dbProduct = productMap[String(item.accounting_id)];
+                const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
                 if (dbProduct) {
                     matchCount++;
+                    if (dbProduct.is_active === false) {
+                        inactiveProducts.push(dbProduct);
+                    }
                     const basePrice = dbProduct.base_price || 0;
                     const negotiatedPrice = item.unit_price;
                     const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
@@ -1307,6 +1411,30 @@ export default function CommercialAgreementsModule() {
                     });
                 }
             });
+
+            // Poka-Yoke: Alerta y Auto-Activación de SKUs inactivos
+            if (inactiveProducts.length > 0) {
+                const confirmMsg = `⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo para este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y crear acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
+                
+                const shouldActivate = window.confirm(confirmMsg);
+                if (!shouldActivate) {
+                    setSavingAgreement(false);
+                    return;
+                }
+
+                const inactiveIds = Array.from(new Set(inactiveProducts.map(p => p.id)));
+                const { error: actErr } = await supabase
+                    .from('products')
+                    .update({ is_active: true })
+                    .in('id', inactiveIds);
+
+                if (actErr) {
+                    console.error('Error auto-activando productos en creación:', actErr);
+                    showToast('Advertencia: No se pudieron activar algunos productos automáticamente', 'warning');
+                } else {
+                    showToast(`${inactiveIds.length} producto(s) reactivado(s) exitosamente en catálogo`, 'success');
+                }
+            }
             
             const total = subtotal + totalTax;
             const [y, m, d] = startDate.split('-');
@@ -1466,6 +1594,7 @@ export default function CommercialAgreementsModule() {
 
                 let matchCount = 0;
                 let unmatchedCount = 0;
+                let inactiveCount = 0;
                 let totalMarginSum = 0;
                 let totalSubtotal = 0;
 
@@ -1473,6 +1602,8 @@ export default function CommercialAgreementsModule() {
                     const matched = findProductInMap(productMap, item.accounting_id, item.product_name);
                     if (matched) {
                         matchCount++;
+                        const isInactive = matched.is_active === false;
+                        if (isInactive) inactiveCount++;
                         const costBasis = matched.base_price || 0;
                         const marginPercent = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
                         totalMarginSum += marginPercent;
@@ -1485,7 +1616,8 @@ export default function CommercialAgreementsModule() {
                             matched_product: matched,
                             cost_basis: costBasis,
                             margin_percent: marginPercent,
-                            iva_rate: matched.iva_rate || 0
+                            iva_rate: matched.iva_rate || 0,
+                            is_inactive: isInactive
                         };
                     } else {
                         unmatchedCount++;
@@ -1508,11 +1640,16 @@ export default function CommercialAgreementsModule() {
                     items: enrichedItems,
                     matchedCount: matchCount,
                     unmatchedCount: unmatchedCount,
+                    inactiveCount: inactiveCount,
                     avgMargin: Math.round(avgMargin * 10) / 10,
                     totalSubtotal
                 });
 
-                showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
+                if (inactiveCount > 0) {
+                    showToast(`Excel procesado: ${matchCount} reconocidos (${inactiveCount} inactivos en catálogo), ${unmatchedCount} no reconocidos`, 'warning');
+                } else {
+                    showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
+                }
             } catch (err: any) {
                 console.error(err);
                 showToast(err.message || 'Error al leer Excel', 'error');
@@ -1560,6 +1697,38 @@ export default function CommercialAgreementsModule() {
             if (editUploadedItems.length > 0) {
                 // Query full database catalogue with pagination
                 const productMap = await fetchAllProductsMap();
+
+                // Poka-Yoke: Check for inactive SKUs
+                const inactiveProducts: any[] = [];
+                editUploadedItems.forEach(item => {
+                    const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
+                    if (dbProduct && dbProduct.is_active === false) {
+                        inactiveProducts.push(dbProduct);
+                    }
+                });
+
+                if (inactiveProducts.length > 0) {
+                    const confirmMsg = `⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo dentro de este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y actualizar acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
+                    
+                    const shouldActivate = window.confirm(confirmMsg);
+                    if (!shouldActivate) {
+                        setEditSaving(false);
+                        return;
+                    }
+
+                    const inactiveIds = Array.from(new Set(inactiveProducts.map(p => p.id)));
+                    const { error: actErr } = await supabase
+                        .from('products')
+                        .update({ is_active: true })
+                        .in('id', inactiveIds);
+
+                    if (actErr) {
+                        console.error('Error auto-activando productos en edición:', actErr);
+                        showToast('Advertencia: No se pudieron activar algunos productos automáticamente', 'warning');
+                    } else {
+                        showToast(`${inactiveIds.length} producto(s) reactivado(s) exitosamente en catálogo`, 'success');
+                    }
+                }
                 
                 // Delete old items for this specific active agreement being updated
                 const { error: deleteErr } = await supabase
@@ -1576,7 +1745,7 @@ export default function CommercialAgreementsModule() {
                 let totalTax = 0;
                 
                 editUploadedItems.forEach(item => {
-                    const dbProduct = productMap[String(item.accounting_id)];
+                    const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
                     if (dbProduct) {
                         matchCount++;
                         const basePrice = dbProduct.base_price || 0;
@@ -2768,6 +2937,55 @@ export default function CommercialAgreementsModule() {
                             </span>
                         </div>
 
+                        {/* Drawer Inactive SKUs Poka-Yoke Warning */}
+                        {(() => {
+                            const inactiveList = agreementItems.filter(it => it.products?.is_active === false);
+                            if (inactiveList.length === 0) return null;
+                            return (
+                                <div style={{
+                                    margin: '0.75rem 1.5rem 0 1.5rem',
+                                    padding: '0.85rem 1.25rem',
+                                    backgroundColor: '#FFFBEB',
+                                    border: '1.5px solid #FDE68A',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '12px',
+                                    boxShadow: '0 1px 3px rgba(217, 119, 6, 0.08)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0 }} />
+                                        <div style={{ fontSize: '0.82rem', color: '#92400E' }}>
+                                            <strong>Atención Comercial ({inactiveList.length} SKUs inactivos en catálogo):</strong> Estos productos están pactados en este acuerdo pero están desactivados en la tabla maestra de productos, por lo que <em>no se pueden seleccionar</em> al montar pedidos.
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoActivateDrawerInactive}
+                                        disabled={activatingDrawerSkus}
+                                        style={{
+                                            backgroundColor: '#D97706',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '7px 14px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 'bold',
+                                            cursor: activatingDrawerSkus ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.2)'
+                                        }}
+                                    >
+                                        <CheckCircle2 size={14} /> {activatingDrawerSkus ? 'Reactivando...' : 'Reactivar en Catálogo'}
+                                    </button>
+                                </div>
+                            );
+                        })()}
+
                         {/* Drawer List Content */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
                             {loadingItems ? (
@@ -2834,8 +3052,27 @@ export default function CommercialAgreementsModule() {
                                                                 {item.products?.accounting_id || '---'}
                                                             </td>
                                                             <td style={{ padding: '0.75rem 0.5rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                                     <span>{item.product_name}</span>
+                                                                    {item.products?.is_active === false && (
+                                                                        <span 
+                                                                            title="Este producto está INACTIVO en el catálogo maestro y no puede ser seleccionado al montar pedidos."
+                                                                            style={{ 
+                                                                                display: 'inline-flex', 
+                                                                                alignItems: 'center', 
+                                                                                gap: '3px', 
+                                                                                backgroundColor: '#FEF2F2', 
+                                                                                color: '#DC2626', 
+                                                                                border: '1px solid #FECACA', 
+                                                                                padding: '1px 5px', 
+                                                                                borderRadius: '4px', 
+                                                                                fontSize: '0.68rem', 
+                                                                                fontWeight: '700'
+                                                                            }}
+                                                                        >
+                                                                            <AlertTriangle size={11} /> Inactivo en Catálogo
+                                                                        </span>
+                                                                    )}
                                                                     {hasAuditLogs && (
                                                                         <div 
                                                                             style={{ position: 'relative', display: 'inline-flex' }}
@@ -4362,7 +4599,7 @@ export default function CommercialAgreementsModule() {
                                     {/* PREVIEW & PRE-VALIDATION SECTION */}
                                     {excelPreviewData && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '4px' }}>
-                                            {/* Header with Collapsible Toggle */}
+                                             {/* Header with Collapsible Toggle */}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                                     Resumen de Validación y Tarifas
@@ -4393,9 +4630,29 @@ export default function CommercialAgreementsModule() {
                                                 </button>
                                             </div>
 
+                                            {/* Poka-Yoke Alert Banner for Inactive SKUs */}
+                                            {excelPreviewData.inactiveCount > 0 && (
+                                                <div style={{
+                                                    padding: '8px 14px',
+                                                    backgroundColor: '#FFFBEB',
+                                                    border: '1.5px solid #FDE68A',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.78rem',
+                                                    color: '#92400E',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '10px'
+                                                }}>
+                                                    <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0 }} />
+                                                    <div>
+                                                        <strong>Alerta Poka-Yoke ({excelPreviewData.inactiveCount} SKUs inactivos en catálogo):</strong> Estos productos coinciden pero están desactivados en la base de datos. Al guardar, el sistema te solicitará confirmación para <em>reactivarlos automáticamente</em> y así poder usarlos en pedidos.
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* KPI Section: Full Cards OR Compact Summary Strip */}
                                             {!isKpiCollapsed ? (
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: excelPreviewData.inactiveCount > 0 ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '10px' }}>
                                                     <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                                         <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas Excel</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
@@ -4408,6 +4665,14 @@ export default function CommercialAgreementsModule() {
                                                             {excelPreviewData.matchedCount}
                                                         </div>
                                                     </div>
+                                                    {excelPreviewData.inactiveCount > 0 && (
+                                                        <div style={{ backgroundColor: '#FFFBEB', padding: '10px 14px', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                                                            <span style={{ fontSize: '0.68rem', color: '#B45309', fontWeight: 'bold', textTransform: 'uppercase' }}>Inactivos Catálogo</span>
+                                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#D97706', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <AlertTriangle size={15} /> {excelPreviewData.inactiveCount}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     <div style={{ backgroundColor: excelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${excelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
                                                         <span style={{ fontSize: '0.68rem', color: excelPreviewData.unmatchedCount > 0 ? '#991B1B' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Reconocidos</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: excelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', marginTop: '2px' }}>
@@ -4435,6 +4700,11 @@ export default function CommercialAgreementsModule() {
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                                         <span><strong>{excelPreviewData.items.length}</strong> Filas</span>
                                                         <span style={{ color: '#166534', fontWeight: 'bold' }}>{excelPreviewData.matchedCount} En Catálogo</span>
+                                                        {excelPreviewData.inactiveCount > 0 && (
+                                                            <span style={{ color: '#D97706', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <AlertTriangle size={13} color="#D97706" /> {excelPreviewData.inactiveCount} Inactivos
+                                                            </span>
+                                                        )}
                                                         {excelPreviewData.unmatchedCount > 0 ? (
                                                             <span style={{ color: '#DC2626', fontWeight: 'bold' }}><AlertTriangle size={13} color="#DC2626" /> {excelPreviewData.unmatchedCount} No Reconocidos</span>
                                                         ) : (
@@ -4451,27 +4721,31 @@ export default function CommercialAgreementsModule() {
                                             {/* Preview Search & Filter toolbar */}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                                    {(['all', 'matched', 'unmatched'] as const).map(flt => (
-                                                        <button
-                                                            key={flt}
-                                                            type="button"
-                                                            onClick={() => setExcelPreviewFilter(flt)}
-                                                            style={{
-                                                                padding: '4px 10px',
-                                                                borderRadius: '6px',
-                                                                border: 'none',
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 'bold',
-                                                                cursor: 'pointer',
-                                                                backgroundColor: excelPreviewFilter === flt ? THEME.colors.primary : '#E2E8F0',
-                                                                color: excelPreviewFilter === flt ? 'white' : '#475569'
-                                                            }}
-                                                        >
-                                                            {flt === 'all' && `Todos (${excelPreviewData.items.length})`}
-                                                            {flt === 'matched' && `Reconocidos (${excelPreviewData.matchedCount})`}
-                                                            {flt === 'unmatched' && `No Reconocidos (${excelPreviewData.unmatchedCount})`}
-                                                        </button>
-                                                    ))}
+                                                    {(['all', 'matched', 'unmatched', 'inactive'] as const).map(flt => {
+                                                        if (flt === 'inactive' && (!excelPreviewData.inactiveCount || excelPreviewData.inactiveCount === 0)) return null;
+                                                        return (
+                                                            <button
+                                                                key={flt}
+                                                                type="button"
+                                                                onClick={() => setExcelPreviewFilter(flt)}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    borderRadius: '6px',
+                                                                    border: 'none',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 'bold',
+                                                                    cursor: 'pointer',
+                                                                    backgroundColor: excelPreviewFilter === flt ? (flt === 'inactive' ? '#D97706' : THEME.colors.primary) : '#E2E8F0',
+                                                                    color: excelPreviewFilter === flt ? 'white' : '#475569'
+                                                                }}
+                                                            >
+                                                                {flt === 'all' && `Todos (${excelPreviewData.items.length})`}
+                                                                {flt === 'matched' && `Reconocidos (${excelPreviewData.matchedCount})`}
+                                                                {flt === 'unmatched' && `No Reconocidos (${excelPreviewData.unmatchedCount})`}
+                                                                {flt === 'inactive' && `⚠️ Inactivos (${excelPreviewData.inactiveCount})`}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                                 <div style={{ position: 'relative', width: '240px' }}>
                                                     <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
@@ -4518,6 +4792,7 @@ export default function CommercialAgreementsModule() {
                                                             .filter(item => {
                                                                 if (excelPreviewFilter === 'matched' && !item.matched_product) return false;
                                                                 if (excelPreviewFilter === 'unmatched' && item.matched_product) return false;
+                                                                if (excelPreviewFilter === 'inactive' && (!item.matched_product || !item.is_inactive)) return false;
                                                                 if (!excelPreviewSearch.trim()) return true;
                                                                 const q = excelPreviewSearch.toLowerCase().trim();
                                                                 return (
@@ -4527,7 +4802,7 @@ export default function CommercialAgreementsModule() {
                                                                 );
                                                             })
                                                             .map((item, idx) => (
-                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : item.is_inactive ? '#FFFBEB' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
                                                                     <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#334155' }}>
                                                                         {item.accounting_id}
                                                                     </td>
@@ -4548,9 +4823,18 @@ export default function CommercialAgreementsModule() {
                                                                     </td>
                                                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                                                         {item.matched_product ? (
-                                                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
-                                                                                OK
-                                                                            </span>
+                                                                            item.is_inactive ? (
+                                                                                <span 
+                                                                                    title="Producto INACTIVO en catálogo maestro"
+                                                                                    style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEF3C7', color: '#B45309', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                                                >
+                                                                                    <AlertTriangle size={11} /> Inactivo
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
+                                                                                    OK
+                                                                                </span>
+                                                                            )
                                                                         ) : (
                                                                             <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
                                                                                 Omitir
@@ -5094,7 +5378,7 @@ export default function CommercialAgreementsModule() {
                                     {/* PREVIEW & PRE-VALIDATION SECTION (When File Uploaded) */}
                                     {editExcelPreviewData && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '4px' }}>
-                                            {/* Header with Collapsible Toggle */}
+                                             {/* Header with Collapsible Toggle */}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                                     Resumen de Validación y Tarifas
@@ -5125,9 +5409,29 @@ export default function CommercialAgreementsModule() {
                                                 </button>
                                             </div>
 
+                                            {/* Poka-Yoke Alert Banner for Inactive SKUs */}
+                                            {editExcelPreviewData.inactiveCount > 0 && (
+                                                <div style={{
+                                                    padding: '8px 14px',
+                                                    backgroundColor: '#FFFBEB',
+                                                    border: '1.5px solid #FDE68A',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.78rem',
+                                                    color: '#92400E',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '10px'
+                                                }}>
+                                                    <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0 }} />
+                                                    <div>
+                                                        <strong>Alerta Poka-Yoke ({editExcelPreviewData.inactiveCount} SKUs inactivos en catálogo):</strong> Estos productos coinciden pero están desactivados en la base de datos. Al guardar la edición, el sistema te solicitará confirmación para <em>reactivarlos automáticamente</em> y así poder usarlos en pedidos.
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* KPI Section: Full Cards OR Compact Summary Strip */}
                                             {!isEditKpiCollapsed ? (
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: editExcelPreviewData.inactiveCount > 0 ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '10px' }}>
                                                     <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                                         <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas Excel</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
@@ -5140,6 +5444,14 @@ export default function CommercialAgreementsModule() {
                                                             {editExcelPreviewData.matchedCount}
                                                         </div>
                                                     </div>
+                                                    {editExcelPreviewData.inactiveCount > 0 && (
+                                                        <div style={{ backgroundColor: '#FFFBEB', padding: '10px 14px', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                                                            <span style={{ fontSize: '0.68rem', color: '#B45309', fontWeight: 'bold', textTransform: 'uppercase' }}>Inactivos Catálogo</span>
+                                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#D97706', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <AlertTriangle size={15} /> {editExcelPreviewData.inactiveCount}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     <div style={{ backgroundColor: editExcelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${editExcelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
                                                         <span style={{ fontSize: '0.68rem', color: editExcelPreviewData.unmatchedCount > 0 ? '#991B1B' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Reconocidos</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: editExcelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', marginTop: '2px' }}>
@@ -5167,6 +5479,11 @@ export default function CommercialAgreementsModule() {
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                                         <span><strong>{editExcelPreviewData.items.length}</strong> Filas</span>
                                                         <span style={{ color: '#166534', fontWeight: 'bold' }}>{editExcelPreviewData.matchedCount} En Catálogo</span>
+                                                        {editExcelPreviewData.inactiveCount > 0 && (
+                                                            <span style={{ color: '#D97706', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <AlertTriangle size={13} color="#D97706" /> {editExcelPreviewData.inactiveCount} Inactivos
+                                                            </span>
+                                                        )}
                                                         {editExcelPreviewData.unmatchedCount > 0 ? (
                                                             <span style={{ color: '#DC2626', fontWeight: 'bold' }}><AlertTriangle size={13} color="#DC2626" /> {editExcelPreviewData.unmatchedCount} No Reconocidos</span>
                                                         ) : (
@@ -5183,27 +5500,31 @@ export default function CommercialAgreementsModule() {
                                             {/* Preview Search & Filter toolbar */}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                                    {(['all', 'matched', 'unmatched'] as const).map(flt => (
-                                                        <button
-                                                            key={flt}
-                                                            type="button"
-                                                            onClick={() => setEditExcelPreviewFilter(flt)}
-                                                            style={{
-                                                                padding: '4px 10px',
-                                                                borderRadius: '6px',
-                                                                border: 'none',
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 'bold',
-                                                                cursor: 'pointer',
-                                                                backgroundColor: editExcelPreviewFilter === flt ? THEME.colors.primary : '#E2E8F0',
-                                                                color: editExcelPreviewFilter === flt ? 'white' : '#475569'
-                                                            }}
-                                                        >
-                                                            {flt === 'all' && `Todos (${editExcelPreviewData.items.length})`}
-                                                            {flt === 'matched' && `Reconocidos (${editExcelPreviewData.matchedCount})`}
-                                                            {flt === 'unmatched' && `No Reconocidos (${editExcelPreviewData.unmatchedCount})`}
-                                                        </button>
-                                                    ))}
+                                                    {(['all', 'matched', 'unmatched', 'inactive'] as const).map(flt => {
+                                                        if (flt === 'inactive' && (!editExcelPreviewData.inactiveCount || editExcelPreviewData.inactiveCount === 0)) return null;
+                                                        return (
+                                                            <button
+                                                                key={flt}
+                                                                type="button"
+                                                                onClick={() => setEditExcelPreviewFilter(flt)}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    borderRadius: '6px',
+                                                                    border: 'none',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 'bold',
+                                                                    cursor: 'pointer',
+                                                                    backgroundColor: editExcelPreviewFilter === flt ? (flt === 'inactive' ? '#D97706' : THEME.colors.primary) : '#E2E8F0',
+                                                                    color: editExcelPreviewFilter === flt ? 'white' : '#475569'
+                                                                }}
+                                                            >
+                                                                {flt === 'all' && `Todos (${editExcelPreviewData.items.length})`}
+                                                                {flt === 'matched' && `Reconocidos (${editExcelPreviewData.matchedCount})`}
+                                                                {flt === 'unmatched' && `No Reconocidos (${editExcelPreviewData.unmatchedCount})`}
+                                                                {flt === 'inactive' && `⚠️ Inactivos (${editExcelPreviewData.inactiveCount})`}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                                 <div style={{ position: 'relative', width: '240px' }}>
                                                     <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
@@ -5250,6 +5571,7 @@ export default function CommercialAgreementsModule() {
                                                             .filter(item => {
                                                                 if (editExcelPreviewFilter === 'matched' && !item.matched_product) return false;
                                                                 if (editExcelPreviewFilter === 'unmatched' && item.matched_product) return false;
+                                                                if (editExcelPreviewFilter === 'inactive' && (!item.matched_product || !item.is_inactive)) return false;
                                                                 if (!editExcelPreviewSearch.trim()) return true;
                                                                 const q = editExcelPreviewSearch.toLowerCase().trim();
                                                                 return (
@@ -5259,7 +5581,7 @@ export default function CommercialAgreementsModule() {
                                                                 );
                                                             })
                                                             .map((item, idx) => (
-                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : item.is_inactive ? '#FFFBEB' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
                                                                     <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#334155' }}>
                                                                         {item.accounting_id}
                                                                     </td>
@@ -5295,9 +5617,18 @@ export default function CommercialAgreementsModule() {
                                                                     </td>
                                                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                                                         {item.matched_product ? (
-                                                                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold' }}>
-                                                                                OK
-                                                                            </span>
+                                                                            item.is_inactive ? (
+                                                                                <span 
+                                                                                    title="Producto INACTIVO en catálogo maestro"
+                                                                                    style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#FEF3C7', color: '#B45309', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                                                >
+                                                                                    <AlertTriangle size={11} /> Inactivo
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold' }}>
+                                                                                    OK
+                                                                                </span>
+                                                                            )
                                                                         ) : (
                                                                             <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
                                                                                 Falta SKU
@@ -5678,7 +6009,24 @@ export default function CommercialAgreementsModule() {
                             {/* Preview & KPI Stats */}
                             {masterExcelPreviewData && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                    {masterExcelPreviewData.inactiveCount && masterExcelPreviewData.inactiveCount > 0 ? (
+                                        <div style={{
+                                            padding: '8px 14px',
+                                            backgroundColor: '#FFFBEB',
+                                            border: '1.5px solid #FDE68A',
+                                            borderRadius: '8px',
+                                            fontSize: '0.78rem',
+                                            color: '#92400E',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}>
+                                            <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0 }} />
+                                            <span><strong>Atención Comercial ({masterExcelPreviewData.inactiveCount} SKUs inactivos):</strong> Al guardar, el sistema te solicitará confirmación para activarlos automáticamente en el catálogo.</span>
+                                        </div>
+                                    ) : null}
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: (masterExcelPreviewData.inactiveCount && masterExcelPreviewData.inactiveCount > 0) ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '10px' }}>
                                         <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                             <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas</span>
                                             <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
@@ -5691,6 +6039,14 @@ export default function CommercialAgreementsModule() {
                                                 {masterExcelPreviewData.matchedCount}
                                             </div>
                                         </div>
+                                        {masterExcelPreviewData.inactiveCount && masterExcelPreviewData.inactiveCount > 0 ? (
+                                            <div style={{ backgroundColor: '#FFFBEB', padding: '10px 14px', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                                                <span style={{ fontSize: '0.68rem', color: '#B45309', fontWeight: 'bold', textTransform: 'uppercase' }}>Inactivos Catálogo</span>
+                                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#D97706', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <AlertTriangle size={15} /> {masterExcelPreviewData.inactiveCount}
+                                                </div>
+                                            </div>
+                                        ) : null}
                                         <div style={{ backgroundColor: masterExcelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${masterExcelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
                                             <span style={{ fontSize: '0.68rem', color: masterExcelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Coinciden</span>
                                             <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: masterExcelPreviewData.unmatchedCount > 0 ? '#DC2626' : THEME.colors.textMain, marginTop: '2px' }}>
@@ -5719,10 +6075,17 @@ export default function CommercialAgreementsModule() {
                                             </thead>
                                             <tbody>
                                                 {masterExcelPreviewData.items.slice(0, 50).map((it, idx) => (
-                                                    <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                    <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: it.is_inactive ? '#FFFBEB' : 'transparent' }}>
                                                         <td style={{ padding: '6px 12px', fontFamily: 'monospace', color: '#475569' }}>{it.accounting_id}</td>
                                                         <td style={{ padding: '6px 12px', fontWeight: '600', color: it.matched_product ? '#1E293B' : '#DC2626' }}>
-                                                            {it.product_name}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                <span>{it.product_name}</span>
+                                                                {it.is_inactive && (
+                                                                    <span style={{ fontSize: '0.65rem', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#FEF3C7', color: '#B45309', fontWeight: 'bold' }}>
+                                                                        Inactivo
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td style={{ padding: '6px 12px', textAlign: 'right', color: '#64748B' }}>
                                                             {it.matched_product ? formatMoney(it.cost_basis) : '-'}
@@ -5893,7 +6256,7 @@ export default function CommercialAgreementsModule() {
                     position: 'fixed', 
                     bottom: '24px', 
                     right: '24px', 
-                    backgroundColor: toast.type === 'success' ? '#0D7A57' : '#EF4444', 
+                    backgroundColor: toast.type === 'success' ? '#0D7A57' : toast.type === 'warning' ? '#D97706' : '#EF4444', 
                     color: 'white', 
                     padding: '0.75rem 1.5rem', 
                     borderRadius: '8px', 
@@ -5906,7 +6269,7 @@ export default function CommercialAgreementsModule() {
                     fontSize: '0.85rem',
                     animation: 'slideUp 0.2s ease'
                 }}>
-                    {toast.type === 'success' ? <Check size={16} /> : <X size={16} />}
+                    {toast.type === 'success' ? <Check size={16} /> : toast.type === 'warning' ? <AlertTriangle size={16} /> : <X size={16} />}
                     {toast.message}
                 </div>
             )}
