@@ -36,13 +36,23 @@ export default function LoginPage() {
     const [showWorkspaceSelector, setShowWorkspaceSelector] = useState(false);
     const [discoveredProfiles, setDiscoveredProfiles] = useState<any[]>([]);
 
-    // Capturar parámetros de URL (error de desactivación, modo recuperación)
+    // Capturar parámetros de URL (error de desactivación, modo recuperación, errores de enlace expirado)
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
-            if (params.get('error') === 'deactivated') {
+            const errParam = params.get('error');
+            if (errParam === 'deactivated') {
                 setError('⚠️ Tu cuenta de acceso ha sido desactivada. Por favor, contacta al administrador de talento humano.');
+            } else if (errParam) {
+                const desc = params.get('error_description') || errParam;
+                const cleanDesc = decodeURIComponent(desc).replace(/\+/g, ' ');
+                if (cleanDesc.toLowerCase().includes('expired') || params.get('error_code') === 'otp_expired') {
+                    setError('⚠️ El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
+                } else {
+                    setError(`⚠️ ${cleanDesc}`);
+                }
             }
+
             if (params.get('mode') === 'recovery' || window.location.hash.includes('type=recovery')) {
                 setIsRecoveryMode(true);
                 setShowForceChangePassword(true);
@@ -160,7 +170,19 @@ export default function LoginPage() {
         }
 
         try {
-            const redirectUrl = `${window.location.origin}/login?mode=recovery`;
+            // Asegurar que el enlace de recuperación apunte a producción (https://frufresco-liard.vercel.app)
+            // incluso si se solicita desde localhost, para que funcione en teléfonos móviles y clientes de correo externos.
+            const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
+            const isLocal = typeof window !== 'undefined' && 
+                (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+            const baseOrigin = configuredUrl 
+                ? configuredUrl.replace(/\/$/, '') 
+                : (isLocal ? 'https://frufresco-liard.vercel.app' : window.location.origin);
+
+            const redirectUrl = `${baseOrigin}/login?mode=recovery`;
+            console.log('📨 Solicitando recuperación con redirectUrl:', redirectUrl);
+
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
                 redirectTo: redirectUrl,
             });
