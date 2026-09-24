@@ -1845,6 +1845,23 @@ La consolidación de compras para plaza Corabastos debe segregar o sumar requeri
 3. **Consolidación de Ítems Base Sin Especificación:**  
    Los ítems estándar sin opciones ni especificaciones especiales se consolidan sobre la clave base vacía (`product_id + "__" + delivery_date`).
 
+---
 
+### 19.4 Estándar de Densidad y Optimización de Hojas de Alistamiento (`/admin/orders/alistamiento-print`)
+Para optimizar el uso de papel en campo y asegurar que cada célula operativa imprima el mínimo de hojas necesarias sin pérdida de legibilidad en clipboards de patio:
 
-
+1. **Capacidad de Columnas en Formato Oficio Paisaje (Legal Landscape 355.6 mm × 215.9 mm):**
+   - **Estándar por Defecto:** 10 columnas de productos por hoja.
+   - **Densidades Configurables:** Selector reactivo en barra de herramientas con 8 columnas (Expandido), 10 columnas (Estándar) y 12 columnas (Compacto).
+2. **Algoritmo de Partición Balanceada Anti-Huérfanas:**
+   - Se prohíbe la fragmentación desbalanceada que genere hojas residuales con 1 o 2 columnas (ej: partición ingenua de 13 productos en 10 + 3).
+   - El sistema calcula:
+     $$\text{totalChunks} = \left\lceil \frac{\text{totalProductos}}{\text{maxCols}} \right\rceil$$
+     $$\text{productosPorChunk} = \left\lceil \frac{\text{totalProductos}}{\text{totalChunks}} \right\rceil$$
+   - *Ejemplo:* 13 productos se particionan en 2 hojas balanceadas de 7 y 6 productos; 7 productos se agrupan en 1 sola hoja de 7 columnas (ahorro del 50% de papel frente al estándar previo de 6 cols).
+3. **Compactación Geométrica de Columnas Fijas y Altura de Fila:**
+   - `LUGAR`: 38px (centrado, tipografía 8pt).
+   - `SUCURSAL / CLIENTE`: 180px (texto a 7.1pt con elipsis y tooltip).
+   - `TIPO`: 24px (centrado, tipografía 7.2pt).
+   - Altura mínima de fila: 25px (`padding: 2.5px 1px`), permitiendo hasta 22-25 pedidos por hoja sin salto forzado.
+   - Celdas de producto con casillas Lean `[ ]` en esquina superior derecha y cantidades en 7.8pt negrita.

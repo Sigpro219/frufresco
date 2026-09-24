@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare, Download } from 'lucide-react';
+import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow } from '@/components/print';
 
@@ -371,6 +371,7 @@ export default function AlistamientoSabanaPrintPage() {
     });
 
     const [selectedCellFilter, setSelectedCellFilter] = useState<string>('ALL');
+    const [maxColsPerPage, setMaxColsPerPage] = useState<number>(10);
     const [orders, setOrders] = useState<OrderInfo[]>([]);
     const [items, setItems] = useState<OrderItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -631,12 +632,17 @@ export default function AlistamientoSabanaPrintPage() {
             const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
             const allActiveOrders = cellData.activeOrders;
 
-            // En Oficio Landscape caben 6 productos con ancho holgado (o 7 si la célula tiene exactamente 7)
-            const chunkSize = productsList.length === 7 ? 7 : 6;
-            const totalChunks = Math.ceil(productsList.length / chunkSize) || 1;
+            // Capacidad de columnas optimizada para Oficio Landscape (10 por defecto, configurable)
+            const maxCols = maxColsPerPage;
+            const totalChunks = Math.ceil(productsList.length / maxCols) || 1;
+            // Reparto balanceado anti-huérfanas: si son 13 productos reparte como 7 y 6, no 10 y 3
+            const productsPerChunk = Math.ceil(productsList.length / totalChunks);
 
             for (let i = 0; i < totalChunks; i++) {
-                const chunkProducts = productsList.slice(i * chunkSize, (i + 1) * chunkSize);
+                const startIdx = i * productsPerChunk;
+                const endIdx = Math.min((i + 1) * productsPerChunk, productsList.length);
+                const chunkProducts = productsList.slice(startIdx, endIdx);
+                if (chunkProducts.length === 0) continue;
 
                 // FILTRO POKA-YOKE: Eliminar completamente las filas vacías
                 // Solo incluir clientes que tengan pedido > 0 en alguno de los productos de ESTA hoja
@@ -667,7 +673,7 @@ export default function AlistamientoSabanaPrintPage() {
         });
 
         return sheets;
-    }, [filteredCellNames, cellGroups]);
+    }, [filteredCellNames, cellGroups, maxColsPerPage]);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
@@ -789,6 +795,21 @@ export default function AlistamientoSabanaPrintPage() {
                         </select>
                     </div>
 
+                    {/* Selector de Densidad de Columnas (Optimización de Hojas) */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }} title="Ajusta cuántas columnas de producto caben por hoja para optimizar el gasto de papel">
+                        <Columns size={14} color="#0D7A57" />
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Columnas:</span>
+                        <select
+                            value={maxColsPerPage}
+                            onChange={(e) => setMaxColsPerPage(Number(e.target.value))}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '800', color: '#0D7A57', outline: 'none', cursor: 'pointer' }}
+                        >
+                            <option value={8}>8 cols (Expandido)</option>
+                            <option value={10}>10 cols (Estándar)</option>
+                            <option value={12}>12 cols (Compacto)</option>
+                        </select>
+                    </div>
+
                     {/* Botón Descargar PDF Oficio */}
                     <button
                         onClick={() => {
@@ -871,40 +892,40 @@ export default function AlistamientoSabanaPrintPage() {
                                 className="print-sheet page-break"
                                 style={{
                                     backgroundColor: '#FFFFFF',
-                                    padding: '16px 20px',
-                                    marginBottom: '28px',
+                                    padding: '12px 14px',
+                                    marginBottom: '20px',
                                     borderRadius: '6px',
                                     border: '1px solid #CBD5E1',
                                     boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
                                 }}
                             >
-                                {/* Encabezado Institucional de la Hoja (Idéntico a ALISTAMIENTO.pdf) */}
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                {/* Encabezado Institucional de la Hoja (Compactado para ahorrar espacio vertical) */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
                                     {/* Logo a la izquierda */}
-                                    <div style={{ width: '130px', display: 'flex', alignItems: 'center' }}>
+                                    <div style={{ width: '110px', display: 'flex', alignItems: 'center' }}>
                                         <img
                                             src="/logo.png"
                                             alt="FruFresco"
-                                            style={{ height: '42px', width: 'auto', objectFit: 'contain' }}
+                                            style={{ height: '34px', width: 'auto', objectFit: 'contain' }}
                                         />
                                     </div>
 
                                     {/* Título Central */}
                                     <div style={{ textAlign: 'center', flex: 1 }}>
-                                        <div style={{ fontSize: '13.5pt', fontWeight: 900, color: '#0D7A57', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                        <div style={{ fontSize: '11.5pt', fontWeight: 900, color: '#0D7A57', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
                                             INVESTMENTS CORTES SAS
                                         </div>
-                                        <div style={{ fontSize: '6.8pt', color: '#475569', fontWeight: 600, marginTop: '1px' }}>
+                                        <div style={{ fontSize: '6.5pt', color: '#475569', fontWeight: 600, marginTop: '1px' }}>
                                             GENERADO EL: {generationTime}
                                         </div>
-                                        <div style={{ fontSize: '10.5pt', fontWeight: 900, color: '#0D7A57', marginTop: '2px', textTransform: 'uppercase' }}>
+                                        <div style={{ fontSize: '9.2pt', fontWeight: 900, color: '#0D7A57', marginTop: '1px', textTransform: 'uppercase' }}>
                                             FECHA {formatDisplayDate(selectedDate)} - {cellName}. Página: {chunkIdx + 1} de {totalChunksForCell}
                                         </div>
                                     </div>
 
                                     {/* Tag de formato y control a la derecha */}
-                                    <div style={{ width: '130px', textAlign: 'right' }}>
-                                        <span style={{ fontSize: '6.5pt', fontWeight: 800, border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: '4px', color: '#64748B', textTransform: 'uppercase' }}>
+                                    <div style={{ width: '110px', textAlign: 'right' }}>
+                                        <span style={{ fontSize: '6pt', fontWeight: 800, border: '1px solid #CBD5E1', padding: '2px 5px', borderRadius: '4px', color: '#64748B', textTransform: 'uppercase' }}>
                                             FORMATO OFICIO
                                         </span>
                                     </div>
@@ -914,7 +935,7 @@ export default function AlistamientoSabanaPrintPage() {
                                 <table style={{
                                     width: '100%',
                                     borderCollapse: 'collapse',
-                                    fontSize: '7.2pt',
+                                    fontSize: '7pt',
                                     border: '1.5px solid #000000',
                                     backgroundColor: '#FFFFFF',
                                     color: '#000000'
@@ -922,13 +943,13 @@ export default function AlistamientoSabanaPrintPage() {
                                     <thead>
                                         {/* Fila 1: Encabezados de Columna con ACCOUNTING ID Destacado */}
                                         <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #000000' }}>
-                                            <th style={{ width: '55px', padding: '6px 3px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                            <th style={{ width: '38px', padding: '4px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.2pt' }}>
                                                 LUGAR
                                             </th>
-                                            <th style={{ width: '235px', padding: '6px 8px', textAlign: 'left', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                            <th style={{ width: '180px', padding: '4px 6px', textAlign: 'left', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.2pt' }}>
                                                 SUCURSAL / CLIENTE ({activeOrdersInCell.length})
                                             </th>
-                                            <th style={{ width: '38px', padding: '6px 2px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.5pt' }}>
+                                            <th style={{ width: '24px', padding: '4px 1px', textAlign: 'center', fontWeight: 900, border: '1px solid #000000', color: '#000000', fontSize: '7.2pt' }}>
                                                 TIPO
                                             </th>
                                             {chunkProducts.map((prod) => {
@@ -940,13 +961,13 @@ export default function AlistamientoSabanaPrintPage() {
                                                     <th
                                                         key={prod.id}
                                                         style={{
-                                                            padding: '5px 4px',
+                                                            padding: '3px 2px',
                                                             textAlign: 'center',
                                                             fontWeight: 800,
                                                             border: '1px solid #000000',
                                                             color: '#000000',
-                                                            fontSize: '7.2pt',
-                                                            lineHeight: '1.3'
+                                                            fontSize: '6.8pt',
+                                                            lineHeight: '1.2'
                                                         }}
                                                     >
                                                         <span style={{ color: invColor, fontWeight: 900 }}>INV[{invStr}]</span>
@@ -962,21 +983,21 @@ export default function AlistamientoSabanaPrintPage() {
                                             const rowBg = oIdx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
 
                                             return (
-                                                <tr key={ord.id} style={{ backgroundColor: rowBg, minHeight: '32px' }}>
+                                                <tr key={ord.id} style={{ backgroundColor: rowBg, minHeight: '25px' }}>
                                                     {/* Bahía / Lugar en suelo (Numeración clara y centrada) */}
-                                                    <td style={{ textAlign: 'center', padding: '5px 2px', border: '1px solid #94A3B8', fontWeight: 900, fontSize: '8.2pt', color: '#000000' }}>
+                                                    <td style={{ textAlign: 'center', padding: '2.5px 1px', border: '1px solid #94A3B8', fontWeight: 900, fontSize: '8pt', color: '#000000' }}>
                                                         {ord.space_label}
                                                     </td>
 
                                                     {/* Sucursal del Cliente (Estricto: solo nombre de sucursal) */}
-                                                    <td style={{ textAlign: 'left', padding: '5px 8px', border: '1px solid #94A3B8', color: '#000000', maxWidth: '235px' }} title={ord.branch_name}>
-                                                        <div style={{ fontWeight: 800, fontSize: '7.4pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
+                                                    <td style={{ textAlign: 'left', padding: '2.5px 6px', border: '1px solid #94A3B8', color: '#000000', maxWidth: '180px' }} title={ord.branch_name}>
+                                                        <div style={{ fontWeight: 800, fontSize: '7.1pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000000' }}>
                                                             {ord.branch_name}
                                                         </div>
                                                     </td>
 
                                                     {/* Tipo (I = Institucional, H = Hogar) */}
-                                                    <td style={{ textAlign: 'center', padding: '5px 2px', border: '1px solid #94A3B8', fontWeight: 800, fontSize: '7.5pt', color: '#000000' }}>
+                                                    <td style={{ textAlign: 'center', padding: '2.5px 1px', border: '1px solid #94A3B8', fontWeight: 800, fontSize: '7.2pt', color: '#000000' }}>
                                                         {ord.client_type}
                                                     </td>
 
@@ -989,25 +1010,25 @@ export default function AlistamientoSabanaPrintPage() {
                                                                     key={prod.id}
                                                                     style={{
                                                                         textAlign: 'center',
-                                                                        padding: '4px 3px',
+                                                                        padding: '2px 2px',
                                                                         border: '1px solid #94A3B8',
                                                                         color: '#000000',
                                                                         position: 'relative'
                                                                     }}
                                                                 >
                                                                     {/* Casilla de marcación física con bolígrafo para el alistador [ ] */}
-                                                                    <div style={{ position: 'absolute', top: '2px', right: '3px', fontSize: '6pt', color: '#94A3B8', fontWeight: 400 }}>
+                                                                    <div style={{ position: 'absolute', top: '1px', right: '2px', fontSize: '5.5pt', color: '#94A3B8', fontWeight: 400 }}>
                                                                         [  ]
                                                                     </div>
 
                                                                     {/* Cantidad Prominente en KG */}
-                                                                    <div style={{ fontWeight: 900, fontSize: '8.2pt', marginTop: '2px' }}>
+                                                                    <div style={{ fontWeight: 900, fontSize: '7.8pt', marginTop: '1px' }}>
                                                                         {demand.displayQty}{demand.unit}
                                                                     </div>
 
                                                                     {/* Especificación Culinaria/Operativa Limpia */}
                                                                     {demand.note && (
-                                                                        <div style={{ fontSize: '5.8pt', color: '#334155', lineHeight: '1.1', marginTop: '1px', fontWeight: 600 }}>
+                                                                        <div style={{ fontSize: '5.5pt', color: '#334155', lineHeight: '1.05', marginTop: '1px', fontWeight: 600 }}>
                                                                             {demand.note}
                                                                         </div>
                                                                     )}
@@ -1019,7 +1040,7 @@ export default function AlistamientoSabanaPrintPage() {
                                                                 key={prod.id}
                                                                 style={{
                                                                     border: '1px solid #E2E8F0',
-                                                                    padding: '4px 3px',
+                                                                    padding: '2px 2px',
                                                                     textAlign: 'center'
                                                                 }}
                                                             />
@@ -1033,10 +1054,10 @@ export default function AlistamientoSabanaPrintPage() {
                                     {/* Fila de Totales por Producto + GRAN TOTAL DE HOJA POKA-YOKE */}
                                     <tfoot>
                                         <tr style={{ backgroundColor: '#F1F5F9', borderTop: '1.5px solid #000000', fontWeight: 900 }}>
-                                            <td colSpan={3} style={{ textAlign: 'left', padding: '6px 8px', border: '1px solid #000000', fontSize: '7.5pt', color: '#000000', letterSpacing: '0.02em' }}>
+                                            <td colSpan={3} style={{ textAlign: 'left', padding: '3px 6px', border: '1px solid #000000', fontSize: '7.2pt', color: '#000000', letterSpacing: '0.02em' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <span>PRODUCTOS ({chunkProducts.length})</span>
-                                                    <span style={{ fontWeight: 900, color: '#0D7A57', backgroundColor: '#E2E8F0', padding: '2px 6px', borderRadius: '4px' }}>
+                                                    <span style={{ fontWeight: 900, color: '#0D7A57', backgroundColor: '#E2E8F0', padding: '2px 5px', borderRadius: '4px' }}>
                                                         TOTAL HOJA: {sheetTotalKg.toLocaleString('es-CO')} KG
                                                     </span>
                                                 </div>
@@ -1052,9 +1073,9 @@ export default function AlistamientoSabanaPrintPage() {
                                                         key={prod.id}
                                                         style={{
                                                             textAlign: 'center',
-                                                            padding: '6px 2px',
+                                                            padding: '3px 1px',
                                                             border: '1px solid #000000',
-                                                            fontSize: '7.5pt',
+                                                            fontSize: '7.2pt',
                                                             color: '#000000',
                                                             fontWeight: 900
                                                         }}
@@ -1068,7 +1089,7 @@ export default function AlistamientoSabanaPrintPage() {
                                 </table>
 
                                 {/* Pie de Página con Control Relativo por Célula */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', fontSize: '7pt', color: '#475569', fontWeight: '600' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '6.5pt', color: '#475569', fontWeight: '600' }}>
                                     <div>
                                         CÉLULA: <strong style={{ color: '#0F172A' }}>{cellName}</strong> &bull; Hoja {chunkIdx + 1} de {totalChunksForCell}
                                     </div>
