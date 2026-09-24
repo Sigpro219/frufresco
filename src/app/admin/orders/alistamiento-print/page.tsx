@@ -26,6 +26,8 @@ interface OrderItem {
         unit_of_measure?: string;
         buying_team?: string | null;
         category?: string | null;
+        weight_kg?: number | null;
+        parent_id?: string | null;
     };
 }
 
@@ -47,6 +49,7 @@ interface OrderInfo {
 interface ProductInCell {
     id: string;
     name: string;
+    familyKey: string;
     accountingId?: number | string | null;
     unit: string;
     displayName: string;
@@ -71,82 +74,48 @@ const KNOWN_CELLS = [
 ];
 
 /**
- * Normaliza cualquier cantidad y unidad estrictamente a KILOGRAMOS (KG).
- * - Libras (1 lb = 0.5 kg) -> 4 lb = 2KG, 3 lb = 1.5KG
- * - Gramos (1000g = 1 kg, 500g = 0.5 kg, 250g = 0.25 kg)
- * - Mantiene unidades discretas (UN, CJ, DOC) intactas.
+ * Normaliza cualquier cantidad y unidad respetando la Unidad Maestra de Compra/Catálogo:
+ * - Si el SKU se compra por 'Unidad' (o CJ/DOC) -> Fila 1 muestra 'UN' (o CJ/DOC).
+ * - Si el SKU se compra por 'Kg' -> Fila 1 SIEMPRE muestra 'KG'.
+ *   Calcula la masa neta en kg a partir de:
+ *   1) Opciones estructuradas dual-unit (_original_qty * _unit_weight_gr)
+ *   2) Presentación física en texto (ej. "Unidad 7000 gr", "Unidad 10000 gr", "Unidad 2000 gr")
+ *   3) Peso nominal del producto (weight_kg)
+ *   4) Libras (1 lb = 0.5 kg) o paquetes en gramos.
  */
-function normalizeToKg(quantity: number, rawUnit?: string, productUom?: string): { kgQty: number; displayQty: string; unitStr: string; subNote?: string } {
-    const cleanUnit = (rawUnit || productUom || 'KG').trim().toLowerCase();
+function normalizeToKg(
+    quantity: number, 
+    rawUnit?: string, 
+    productUom?: string,
+    selectedOptions?: Record<string, any> | null,
+    variantLabel?: string | null,
+    productWeightKg?: number | null
+): { kgQty: number; displayQty: string; unitStr: string; subNote?: string } {
+    const cleanUom = (productUom || '').trim().toLowerCase();
+    const cleanRaw = (rawUnit || '').trim().toLowerCase();
+    const opts = selectedOptions || {};
+    const presText = (opts['Presentación'] || opts['Presentacion'] || variantLabel || rawUnit || '') as string;
 
-    // 1. Libras (1 lb = 0.5 kg)
-    if (cleanUnit.includes('libra') || cleanUnit === 'lb' || cleanUnit === 'lbs') {
-        const kg = quantity * 0.5;
-        return {
-            kgQty: kg,
-            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG',
-            subNote: `${quantity} lb`
-        };
-    }
+    // 1. REGLA MAESTRA: Si el producto en catálogo se comercializa/compra por 'Unidad', 'Caja' o 'Docena'
+    const isMasterUnidad = cleanUom === 'unidad' || cleanUom === 'un' || cleanUom === 'und';
+    const isMasterCaja = cleanUom.includes('caja') || cleanRaw.includes('caja');
+    const isMasterDocena = cleanUom.includes('docena') || cleanRaw.includes('docena');
 
-    // 2. 1000 Gramos (1000 G = 1 kg)
-    if (/^1000\s*(g|gr|gramos)$/i.test(cleanUnit)) {
-        return {
-            kgQty: quantity,
-            displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG'
-        };
-    }
-
-    // 3. 500 Gramos / Paquete 500 gramos (500 G = 0.5 kg)
-    if (/500\s*(g|gr|gramos)/i.test(cleanUnit)) {
-        const kg = quantity * 0.5;
-        return {
-            kgQty: kg,
-            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG'
-        };
-    }
-
-    // 4. 250 Gramos (250 G = 0.25 kg)
-    if (/250\s*(g|gr|gramos)/i.test(cleanUnit)) {
-        const kg = quantity * 0.25;
-        return {
-            kgQty: kg,
-            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG'
-        };
-    }
-
-    // 5. Gramos genéricos (ej. "200 g")
-    if (/^(\d+)\s*(g|gr|gramos)$/i.test(cleanUnit)) {
-        const match = cleanUnit.match(/^(\d+)\s*(g|gr|gramos)$/i);
-        const grams = parseFloat(match![1]);
-        const kg = (quantity * grams) / 1000;
-        return {
-            kgQty: kg,
-            displayQty: kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(2)).toLocaleString('es-CO'),
-            unitStr: 'KG'
-        };
-    }
-
-    // 6. Unidades discretas (Unidad, Caja, Docena)
-    if (cleanUnit.includes('unidad') || cleanUnit === 'un' || cleanUnit === 'und') {
+    if (isMasterUnidad) {
         return {
             kgQty: quantity,
             displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
             unitStr: 'UN'
         };
     }
-    if (cleanUnit.includes('caja')) {
+    if (isMasterCaja) {
         return {
             kgQty: quantity,
             displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
             unitStr: 'CJ'
         };
     }
-    if (cleanUnit.includes('docena')) {
+    if (isMasterDocena) {
         return {
             kgQty: quantity,
             displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
@@ -154,10 +123,58 @@ function normalizeToKg(quantity: number, rawUnit?: string, productUom?: string):
         };
     }
 
-    // 7. Por defecto: Kilos
+    // 2. PRODUCTO CON UNIDAD DE COMPRA 'KG' (Frutas, verduras, carnes, granel):
+    // La Fila 1 DEBE SER obligatoriamente 'KG'.
+    let effectiveKg = quantity;
+
+    // A. Detectar metadatos canónicos de doble unidad (Dual-Unit Engine)
+    const origQty = opts._original_qty || opts.original_qty;
+    const unitWeightGr = opts._unit_weight_gr || opts.unit_weight_gr;
+
+    if (origQty && unitWeightGr && Number(unitWeightGr) > 0) {
+        const calculatedKg = Number(origQty) * (Number(unitWeightGr) / 1000);
+        effectiveKg = calculatedKg > 0 ? calculatedKg : quantity;
+    } else {
+        // B. Detectar especificación de peso en texto de presentación (ej. "Unidad 7000 gr", "Unidad 10000 gr")
+        const matchGr = typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+        const matchKg = !matchGr && typeof presText === 'string' ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+
+        if (matchGr) {
+            const gr = parseFloat(matchGr[1].replace(',', '.'));
+            const kgPerUnit = gr / 1000;
+            if (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText)) {
+                effectiveKg = quantity * kgPerUnit;
+            }
+        } else if (matchKg) {
+            const kgPerUnit = parseFloat(matchKg[1].replace(',', '.'));
+            if (cleanRaw.includes('unidad') || cleanRaw.includes('und') || /unidad|und/i.test(presText)) {
+                effectiveKg = quantity * kgPerUnit;
+            }
+        } else if ((cleanRaw.includes('unidad') || cleanRaw.includes('und')) && productWeightKg && productWeightKg > 0 && productWeightKg !== 1) {
+            // Fruto entero sin presentación explícita pero con peso estándar en catálogo (ej. Piña golden 2 kg, Tomate 0.2 kg)
+            effectiveKg = quantity * productWeightKg;
+        } else if (cleanRaw.includes('libra') || cleanRaw === 'lb' || cleanRaw === 'lbs') {
+            effectiveKg = quantity * 0.5;
+        } else if (/^1000\s*(g|gr|gramos)$/i.test(cleanRaw)) {
+            effectiveKg = quantity;
+        } else if (/500\s*(g|gr|gramos)/i.test(cleanRaw) || cleanUom.includes('paquete 500')) {
+            effectiveKg = quantity * 0.5;
+        } else if (/250\s*(g|gr|gramos)/i.test(cleanRaw) || cleanUom.includes('paquete 250')) {
+            effectiveKg = quantity * 0.25;
+        } else if (/^(\d+)\s*(g|gr|gramos)$/i.test(cleanRaw)) {
+            const match = cleanRaw.match(/^(\d+)\s*(g|gr|gramos)$/i);
+            const grams = parseFloat(match![1]);
+            effectiveKg = (quantity * grams) / 1000;
+        }
+    }
+
+    const disp = effectiveKg % 1 === 0 
+        ? effectiveKg.toString() 
+        : Number(effectiveKg.toFixed(2)).toLocaleString('es-CO');
+
     return {
-        kgQty: quantity,
-        displayQty: quantity % 1 === 0 ? quantity.toString() : Number(quantity.toFixed(2)).toLocaleString('es-CO'),
+        kgQty: effectiveKg,
+        displayQty: disp,
         unitStr: 'KG'
     };
 }
@@ -377,6 +394,7 @@ export default function AlistamientoSabanaPrintPage() {
     const [loading, setLoading] = useState(true);
     const [generationTime, setGenerationTime] = useState<string>('');
     const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({});
+    const [parentNames, setParentNames] = useState<Record<string, string>>({});
     const printDocRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -403,7 +421,7 @@ export default function AlistamientoSabanaPrintPage() {
                     profiles:profile_id(id, company_name, contact_name, address, role),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label, selected_options,
-                        products(id, name, sku, accounting_id, unit_of_measure, buying_team, category)
+                        products(id, name, sku, accounting_id, unit_of_measure, buying_team, category, weight_kg, parent_id)
                     )
                 `)
                 .neq('status', 'cancelled');
@@ -417,6 +435,28 @@ export default function AlistamientoSabanaPrintPage() {
 
             const { data: rawOrders, error: oErr } = await orderQuery.order('created_at', { ascending: true });
             if (oErr) throw oErr;
+
+            // Recolectar parent_ids únicos para mapear el nombre de la Familia
+            const parentIdSet = new Set<string>();
+            (rawOrders || []).forEach((o: any) => {
+                (o.order_items || []).forEach((it: any) => {
+                    if (it.products?.parent_id) {
+                        parentIdSet.add(it.products.parent_id);
+                    }
+                });
+            });
+
+            const newParentNames: Record<string, string> = {};
+            if (parentIdSet.size > 0) {
+                const { data: parentRows } = await supabase
+                    .from('products')
+                    .select('id, name')
+                    .in('id', Array.from(parentIdSet));
+                (parentRows || []).forEach((pr: { id: string; name: string }) => {
+                    newParentNames[pr.id] = pr.name;
+                });
+            }
+            setParentNames(newParentNames);
 
             const parsedOrders: OrderInfo[] = [];
             const parsedItems: OrderItem[] = [];
@@ -471,7 +511,9 @@ export default function AlistamientoSabanaPrintPage() {
                             accounting_id: it.products.accounting_id,
                             unit_of_measure: it.products.unit_of_measure,
                             buying_team: it.products.buying_team,
-                            category: it.products.category
+                            category: it.products.category,
+                            weight_kg: it.products.weight_kg,
+                            parent_id: it.products.parent_id
                         } : undefined
                     });
                 });
@@ -529,20 +571,34 @@ export default function AlistamientoSabanaPrintPage() {
 
             const pId = it.product_id || it.product?.name || 'misc';
             const pName = it.product?.name || it.nickname || 'Producto';
+            const pParentId = it.product?.parent_id;
+            // Clave de la Familia / Producto Padre (Estiba en bodega)
+            const familyKey = (pParentId && parentNames[pParentId]) ? parentNames[pParentId] : pName;
             
             // displayName = solo nombre limpio; el prefijo INV[kg] se añade al renderizar el <th>
             const displayName = pName;
             
-            // Normalizar a Kilogramos
-            const norm = normalizeToKg(it.quantity, it.unit, it.product?.unit_of_measure);
+            // Normalizar respetando Unidad Maestra de Compra/Catálogo
+            const norm = normalizeToKg(
+                it.quantity, 
+                it.unit, 
+                it.product?.unit_of_measure, 
+                it.selected_options, 
+                it.variant_label, 
+                it.product?.weight_kg
+            );
             // Especificación Culinaria/Operativa Estructurada (e.g. "12 und de 2 kg; Maduro")
-            // Si no está estructurada la característica tipo, DEBE APARECER VACÍO (cero ruido visual)
-            const combinedNote = formatStructuredSpecification(it) || '';
+            // Si no está estructurada o es redundante con el nombre del producto, DEBE APARECER VACÍO (cero ruido visual)
+            const combinedNote = formatStructuredSpecification({
+                ...it,
+                product_name: pName
+            }) || '';
 
             if (!groups[cell].productsMap.has(pId)) {
                 groups[cell].productsMap.set(pId, {
                     id: pId,
                     name: pName,
+                    familyKey,
                     accountingId: it.product?.accounting_id,
                     unit: norm.unitStr,
                     displayName,
@@ -590,7 +646,7 @@ export default function AlistamientoSabanaPrintPage() {
         });
 
         return groups;
-    }, [items, orders, inventoryMap]);
+    }, [items, orders, inventoryMap, parentNames]);
 
     const availableCellNames = useMemo(() => {
         return Object.keys(cellGroups).sort();
@@ -629,7 +685,23 @@ export default function AlistamientoSabanaPrintPage() {
             const cellData = cellGroups[cellName];
             if (!cellData) return;
 
-            const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+            // Ordenar columnas por Familia (Padre) contiguo + Producto Base primero + Variantes alfabéticas
+            const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => {
+                // 1. Criterio Primario: Familia / Producto Padre (Estiba física contigua en bodega)
+                const famA = a.familyKey || a.name;
+                const famB = b.familyKey || b.name;
+                const famCompare = famA.localeCompare(famB);
+                if (famCompare !== 0) return famCompare;
+
+                // 2. Criterio Secundario: El producto base de la familia primero
+                const aIsBase = a.name.toLowerCase() === famA.toLowerCase();
+                const bIsBase = b.name.toLowerCase() === famB.toLowerCase();
+                if (aIsBase && !bIsBase) return -1;
+                if (!aIsBase && bIsBase) return 1;
+
+                // 3. Criterio Terciario: Variantes hijas ordenadas alfabéticamente
+                return a.name.localeCompare(b.name);
+            });
             const allActiveOrders = cellData.activeOrders;
 
             // Capacidad de columnas optimizada para Oficio Landscape (10 por defecto, configurable)
@@ -1021,9 +1093,9 @@ export default function AlistamientoSabanaPrintPage() {
                                                                         [  ]
                                                                     </div>
 
-                                                                    {/* Cantidad Prominente en KG */}
+                                                                    {/* Cantidad Prominente en KG / UN (con espacio tipográfico Lean) */}
                                                                     <div style={{ fontWeight: 900, fontSize: '7.8pt', marginTop: '1px' }}>
-                                                                        {demand.displayQty}{demand.unit}
+                                                                        {demand.displayQty} {demand.unit}
                                                                     </div>
 
                                                                     {/* Especificación Culinaria/Operativa Limpia */}
@@ -1065,7 +1137,7 @@ export default function AlistamientoSabanaPrintPage() {
                                             {chunkProducts.map((prod) => {
                                                 const colSum = activeOrdersInCell.reduce((sum, ord) => sum + (prod.orderDemand[ord.id]?.kgQuantity || 0), 0);
                                                 const sumStr = colSum > 0 
-                                                    ? (colSum % 1 === 0 ? colSum.toString() : Number(colSum.toFixed(2)).toLocaleString('es-CO')) + prod.unit 
+                                                    ? (colSum % 1 === 0 ? colSum.toString() : Number(colSum.toFixed(2)).toLocaleString('es-CO')) + ' ' + prod.unit 
                                                     : '-';
 
                                                 return (

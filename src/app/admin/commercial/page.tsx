@@ -65,6 +65,7 @@ const CampaignsView = dynamic(() => import('./campaigns/page'), {
 export default function CommercialPage() {
     const [activeMainTab, setActiveMainTab] = useState('dashboard');
     const [activeOpSubtab, setActiveOpSubtab] = useState('cost-matrix');
+    const [activeClientTab, setActiveClientTab] = useState<string>('b2b');
     const [pricingSettingsTab, setPricingSettingsTab] = useState<'models' | 'templates'>('models');
 
     useEffect(() => {
@@ -73,8 +74,10 @@ export default function CommercialPage() {
                 const params = new URLSearchParams(window.location.search);
                 const tab = params.get('tab');
                 const subtab = params.get('subtab');
+                const clientTab = params.get('clientTab');
                 if (tab) setActiveMainTab(tab);
                 if (subtab) setActiveOpSubtab(subtab);
+                if (clientTab) setActiveClientTab(clientTab);
             }
         };
 
@@ -120,14 +123,22 @@ export default function CommercialPage() {
 
     const handleNavigateToTab = (tab: string, subtab?: string) => {
         setActiveMainTab(tab);
-        if (subtab) setActiveOpSubtab(subtab);
+        if (subtab) {
+            if (tab === 'operations') setActiveOpSubtab(subtab);
+            if (tab === 'clients') setActiveClientTab(subtab);
+        }
         if (typeof window !== 'undefined') {
             const url = new URL(window.location.href);
             url.searchParams.set('tab', tab);
-            if (subtab) {
+            if (tab === 'operations' && subtab) {
                 url.searchParams.set('subtab', subtab);
-            } else if (tab !== 'operations') {
+                url.searchParams.delete('clientTab');
+            } else if (tab === 'clients' && subtab) {
+                url.searchParams.set('clientTab', subtab);
                 url.searchParams.delete('subtab');
+            } else {
+                url.searchParams.delete('subtab');
+                url.searchParams.delete('clientTab');
             }
             window.history.pushState({}, '', url.toString());
         }
@@ -426,7 +437,7 @@ export default function CommercialPage() {
 
             {activeMainTab === 'clients' && (
                 <div style={{ minHeight: 'calc(100vh - 140px)' }}>
-                    <ClientsModule />
+                    <ClientsModule initialTab={activeClientTab} />
                 </div>
             )}
 

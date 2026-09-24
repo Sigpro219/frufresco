@@ -174,13 +174,42 @@ export const buildDualUnitMetadata = (params: {
  * Examples: "und de 2 kg; Maduro", "und de 2 kg; Pintón", "und de 550 gr", "Maduro".
  * If no structured specification exists, returns "".
  */
-export const getStructuredSpecKey = (item: {
+/**
+ * Helper to determine if an attribute value is redundant with the product name.
+ * e.g., attribute "Maduro" for product "Plátano maduro", or "Verde" for "Plátano verde",
+ * or "Blanca" for "Cebolla cabezona blanca".
+ */
+export const isRedundantAttribute = (attrVal: string, prodName?: string | null): boolean => {
+    if (!prodName || !attrVal) return false;
+    const cleanAttr = attrVal.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const cleanProd = prodName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (!cleanAttr || !cleanProd) return false;
+    
+    // Check if the whole attribute word is already present in the product name
+    const regex = new RegExp(`\\b${cleanAttr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+    return regex.test(cleanProd);
+};
+
+export interface StructuredSpecItemInput {
+    quantity?: number;
+    unit?: string;
     variant_label?: string | null;
     nickname?: string | null;
     selected_options?: Record<string, any> | null;
-}): string => {
+    product?: { name?: string | null; [key: string]: any } | null;
+    product_name?: string | null;
+    productName?: string | null;
+}
+
+/**
+ * Derives the canonical specification variant key for procurement grouping and picking isolation.
+ * Examples: "und de 2 kg; Maduro", "und de 2 kg; Pintón", "und de 550 gr", "Maduro".
+ * If no structured specification exists, returns "".
+ */
+export const getStructuredSpecKey = (item: StructuredSpecItemInput): string => {
     if (!item) return '';
 
+    const prodName = item.product?.name || item.product_name || item.productName || null;
     const opts = item.selected_options || {};
     let unitWeightPart = '';
     const attributeParts: string[] = [];
@@ -209,7 +238,9 @@ export const getStructuredSpecKey = (item: {
         if (opts[k] && typeof opts[k] === 'string' && opts[k].trim()) {
             const val = opts[k].trim();
             if (!/^\d+$/.test(val) && val.toLowerCase() !== 'estandar' && val.toLowerCase() !== 'estándar') {
-                attributeParts.push(val);
+                if (!isRedundantAttribute(val, prodName)) {
+                    attributeParts.push(val);
+                }
             }
         }
     });
@@ -221,7 +252,10 @@ export const getStructuredSpecKey = (item: {
         culinaryKeywords.forEach(kw => {
             const regex = new RegExp(`\\b${kw}\\b`, 'i');
             if (regex.test(raw)) {
-                matched.push(kw.charAt(0).toUpperCase() + kw.slice(1));
+                const capitalized = kw.charAt(0).toUpperCase() + kw.slice(1);
+                if (!isRedundantAttribute(capitalized, prodName)) {
+                    matched.push(capitalized);
+                }
             }
         });
         if (matched.length > 0) {
@@ -240,16 +274,12 @@ export const getStructuredSpecKey = (item: {
  * Formats the clean structured operational specification:
  * e.g. "12 und de 2 kg; Maduro"
  * Returns null if no structured specification exists (avoids noise).
+ * Filters out redundant attributes whose values are already explicit in the product name.
  */
-export const formatStructuredSpecification = (item: {
-    quantity?: number;
-    unit?: string;
-    variant_label?: string | null;
-    nickname?: string | null;
-    selected_options?: Record<string, any> | null;
-}): string | null => {
+export const formatStructuredSpecification = (item: StructuredSpecItemInput): string | null => {
     if (!item) return null;
 
+    const prodName = item.product?.name || item.product_name || item.productName || null;
     const opts = item.selected_options || {};
     let discretePart: string | null = null;
     const attributeParts: string[] = [];
@@ -297,7 +327,9 @@ export const formatStructuredSpecification = (item: {
         if (opts[k] && typeof opts[k] === 'string' && opts[k].trim()) {
             const val = opts[k].trim();
             if (!/^\d+$/.test(val) && val.toLowerCase() !== 'estandar' && val.toLowerCase() !== 'estándar') {
-                attributeParts.push(val);
+                if (!isRedundantAttribute(val, prodName)) {
+                    attributeParts.push(val);
+                }
             }
         }
     });
@@ -309,7 +341,10 @@ export const formatStructuredSpecification = (item: {
         culinaryKeywords.forEach(kw => {
             const regex = new RegExp(`\\b${kw}\\b`, 'i');
             if (regex.test(raw)) {
-                matched.push(kw.charAt(0).toUpperCase() + kw.slice(1));
+                const capitalized = kw.charAt(0).toUpperCase() + kw.slice(1);
+                if (!isRedundantAttribute(capitalized, prodName)) {
+                    matched.push(capitalized);
+                }
             }
         });
         if (matched.length > 0) {

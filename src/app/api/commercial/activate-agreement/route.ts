@@ -48,6 +48,11 @@ export async function POST(req: Request) {
 
       const totalAmount = subtotalAmount + totalTaxAmount;
 
+      const startDateStr = validityStart || new Date().toISOString().split('T')[0];
+      const [y, m, d] = startDateStr.split('-');
+      const formattedDate = `${d}-${m}-${y.slice(-2)}`;
+      const canonicalSnapshotName = `${clientName || 'Cliente'} - ${formattedDate}`;
+
       const { data: newQuote, error: qErr } = await supabaseAdmin
         .from('quotes')
         .insert([{
@@ -58,9 +63,9 @@ export async function POST(req: Request) {
           total_amount: totalAmount,
           status: 'agreement',
           version: 2,
-          start_date: validityStart || new Date().toISOString().split('T')[0],
+          start_date: startDateStr,
           valid_until: validityEnd || null,
-          model_snapshot_name: 'Acuerdo Comercial',
+          model_snapshot_name: canonicalSnapshotName,
         }])
         .select()
         .single();

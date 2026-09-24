@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
-import ClientsModule from '@/components/ClientsModule';
 import Toast from '@/components/Toast';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { 

@@ -1,0 +1,206 @@
+[
+  {
+    "id": "53bb5233-6012-46a5-9f76-3fd4e35c80ef",
+    "sequence_id": 908,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "1b6f24a4-5a81-4d9c-9aa9-f727275448ef",
+    "sequence_id": 890,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "0161206c-b73b-4b4b-a0f6-dc1a1bbc1a96",
+    "sequence_id": 909,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "332a013a-1786-49ec-8ef0-bb2f358808ce",
+    "sequence_id": 910,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "034c0d1e-04c5-448e-9645-5f460a6f7fa6",
+    "sequence_id": 892,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "c0fe0da6-3533-4afd-94e6-fdaff0914b15",
+    "sequence_id": 911,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "2e449694-7f63-4960-903b-5cd3eff8fff7",
+    "sequence_id": 893,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "af2f3c4b-28dc-4e49-9351-74141a60c3f9",
+    "sequence_id": 913,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "99dbd9d6-bcdd-45ce-9c77-d59059060588",
+    "sequence_id": 914,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "b3de5f6e-116c-493a-8af3-f9d3ef29a3ed",
+    "sequence_id": 915,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "dceb5dab-2654-469a-9414-9198b6fe33ee",
+    "sequence_id": 896,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "6bd14414-da47-48b7-adfd-01b9eed4b091",
+    "sequence_id": 916,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "019c3d93-c0c7-4a53-ac87-7dbe5b06fb39",
+    "sequence_id": 900,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "7c45d3f5-ba58-4f84-b677-bb6bd987af03",
+    "sequence_id": 897,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "1f8f86c8-acd0-458a-83a9-a53095ab10a9",
+    "sequence_id": 898,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "e377a53e-caaf-4a0d-8ec9-b6e1b9d60bfc",
+    "sequence_id": 917,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "a984ed4a-f625-4c10-bf87-54f459ba7161",
+    "sequence_id": 918,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "da0cfcb6-4e54-4b9a-bca3-1c40f6e6831e",
+    "sequence_id": 919,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "14f50f82-5a74-458f-be8a-91e119765a9d",
+    "sequence_id": 920,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "ccb557b5-9c56-473c-996d-83381f118b50",
+    "sequence_id": 891,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "fa87cc07-73bd-4d24-8e3c-b2e85e07f2f9",
+    "sequence_id": 912,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "2d495e82-685e-43d9-b6a6-c42a0c023e71",
+    "sequence_id": 903,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "a210f0ba-437a-4aea-9b56-31ae0f0f2148",
+    "sequence_id": 901,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "102ba4d8-e524-443e-8477-5d400f72634e",
+    "sequence_id": 894,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "4b7d1547-8f37-4103-b5ff-1fc1b49c0394",
+    "sequence_id": 885,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "5a75fde9-ab38-4760-9eff-5cda582c8bbe",
+    "sequence_id": 895,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "84f9e0c6-aeec-4b7b-8c2f-97c255a76246",
+    "sequence_id": 906,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "1bebc530-b9b4-46da-b867-12147ce0f8a2",
+    "sequence_id": 907,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "85b793d3-0f01-4da6-9bab-08268b2b7a97",
+    "sequence_id": 902,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "1474cad1-3b2a-408e-8f31-d366461a572b",
+    "sequence_id": 904,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "54771c51-c3eb-46f3-b152-25b79e817879",
+    "sequence_id": 905,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "a089ce49-e369-448c-bbac-f263b982daf4",
+    "sequence_id": 886,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "557799bd-d2dc-4de0-a593-d479edc790ba",
+    "sequence_id": 887,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  },
+  {
+    "id": "1a50d02e-f769-42c6-bf59-6da497364279",
+    "sequence_id": 888,
+    "status": "para_compra",
+    "delivery_date": "2026-09-24"
+  }
+]

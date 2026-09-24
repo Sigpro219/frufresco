@@ -333,13 +333,18 @@ export default function QuoteDetailPage() {
                 }
 
             } else {
-                // Commercial Agreement Flow
+                // Commercial Agreement Flow (SPEC.md Secc. 11.4: Nomenclatura Canónica)
+                const [y, m, d] = new Date().toISOString().split('T')[0].split('-');
+                const formattedDate = `${d}-${m}-${y.slice(-2)}`;
+                const canonicalSnapshotName = quote.model_snapshot_name || `${selectedClient.company_name || selectedClient.contact_name || 'Acuerdo'} - ${formattedDate}`;
+
                 const { error: agreementErr } = await supabase
                     .from('quotes')
                     .update({ 
                         status: 'agreement', 
                         client_id: selectedClient.id, 
                         valid_until: new Date(validUntilDate).toISOString(),
+                        model_snapshot_name: canonicalSnapshotName,
                         notes: (quote.notes || '') + '\n[CONVERTIDO A ACUERDO COMERCIAL]'
                     })
                     .eq('id', quote.id);

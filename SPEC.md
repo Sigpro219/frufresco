@@ -1818,6 +1818,10 @@ $$\mathbf{\text{Línea 2 (Instrucción Física Operativa):}} \quad 12\text{ und 
 1. **Erradicación de Fugas JSON Internas:** Queda terminantemente prohibido imprimir o renderizar serializaciones sucias de `selected_options` (como `2, 24, Unidad, 24 Unidad, 2000, Maduro` o claves privadas prefijadas con guion bajo como `_original_qty`, `_conversion_factor`, `_unit_weight_gr`).
 2. **Generador Canónico Centralizado:** Toda la lógica de extracción de especificaciones opera a través de las funciones puras `formatStructuredSpecification(item)` y `getStructuredSpecKey(item)` en `@/lib/orderUtils`.
 3. **Persistencia Normalizada:** Al crear o importar pedidos (`/admin/orders/create`), el campo `order_items.variant_label` se almacena directamente con la clave canónica estructurada (ej: `und de 2 kg; Maduro`), garantizando congruencia entre base de datos, compras y bodega.
+4. **Prevalencia Inviolable de la Unidad Maestra de Compra/Catálogo en Fila 1 (`/admin/orders/alistamiento-print`):**
+   - Si `product.unit_of_measure` es `Kg` (o gramo/libra), la Fila 1 **SIEMPRE** expresará la magnitud en **`KG`** (ej: `24 KG`, `7 KG`, `20 KG`), calculando la masa neta total en kilos si la orden ingresó por unidades discretas de peso (ej. 12 und de 2 kg $\rightarrow$ `24 KG`, 1 und de 7 kg $\rightarrow$ `7 KG`).
+   - Solo se mostrará **`UN`** (o `CJ`, `DOC`) en la Fila 1 si la unidad maestra en catálogo (`products.unit_of_measure`) es estrictamente `Unidad` (ej. cubetas de huevos, pasta de ajo en galón, panela por caja).
+   - **Espaciado Tipográfico Mandatorio:** Toda cifra en Fila 1 y en los totales de columna del pie de página debe respetar un espacio en blanco entre la cantidad y la unidad de medida (ej: `24 KG`, `41 KG`, `76 KG`, `12 UN`), eliminando concatenaciones pegadas como `24UN` o `41KG`.
 
 ---
 
@@ -1829,6 +1833,10 @@ La sábana física de alistamiento es un instrumento de trabajo de alta velocida
    - Se prohíbe terminantemente inyectar notas libres de clientes, observaciones comerciales o alias no estructurados en la matriz de cantidades, eliminando distracciones visuales que provocan errores de conteo.
 2. **Columna SUCURSAL / CLIENTE Estricta:**  
    En la cabecera de fila de cada pedido, la columna `SUCURSAL / CLIENTE` debe mostrar **exclusivamente el nombre de la sucursal** (`ord.branch_name`). Se suprime la segunda línea con la razón social corporativa del cliente (`ord.client_name`), evitando redundancia visual y truncamiento de texto.
+3. **Filtro Poka-Yoke Anti-Redundancia con el Nombre del Producto (`isRedundantAttribute`):**  
+   Si una opción o atributo estructurado (ej: *Maduro*, *Verde*, *Blanca*) **ya está explícitamente contenido en el nombre del SKU o producto** (ej: `Plátano maduro`, `Plátano verde`, `Cebolla cabezona blanca`), se suprime automáticamente de la Fila 2.
+   - La celda secundaria **DEBE PERMANECER 100% VACÍA**, eliminando el pleonasmo visual (mostrar `Maduro` debajo de la columna `Plátano maduro`).
+   - Solo se renderiza la segunda línea si aporta una especificación física/operativa diferencial no dicha en el nombre del producto (ej: empaque/peso `12 und de 2 kg` o maduración de productos base como `Papaya maradol` $\rightarrow$ `Maduro` o `Mango tommy` $\rightarrow$ `Pintón`).
 
 ---
 
@@ -1865,3 +1873,222 @@ Para optimizar el uso de papel en campo y asegurar que cada célula operativa im
    - `TIPO`: 24px (centrado, tipografía 7.2pt).
    - Altura mínima de fila: 25px (`padding: 2.5px 1px`), permitiendo hasta 22-25 pedidos por hoja sin salto forzado.
    - Celdas de producto con casillas Lean `[ ]` en esquina superior derecha y cantidades en 7.8pt negrita.
+
+---
+
+### 19.5 Regla Canónica de Ordenamiento Contiguo por Familias Gemba (Padre-Hijo) en Sábana de Alistamiento (`/admin/orders/alistamiento-print`)
+En la bodega física de Corabastos, la fruta y verdura no se ubica en orden alfabético abstracto (el cual dispersaría productos de la misma familia, ej: *Apio* en la 'A' y *Tallo de apio* en la 'T', o *Aguacate hass* y *Aguacate papelillo* separados por otras especies), sino agrupada por familias botánicas y operativas contiguas alrededor de una misma estiba o zona de acopio.
+
+#### 1. Principios de Ordenamiento por Familia en Piso:
+1. **Resolución Canónica de la Familia (`familyKey`):**
+   - El sistema consulta y resuelve en base de datos la relación jerárquica de `products.parent_id`.
+   - Para cualquier SKU hijo (ej. `Apio sin hoja`, `Apio en tallo`, `Apio institucional`), su familia se define por el nombre del producto padre (`Apio`).
+   - Si un producto carece de `parent_id` o este coincide con su propio `id`, su familia es su propio nombre.
+2. **Jerarquía Canónica de Ordenamiento en Columnas (3 Niveles):**
+   - **Nivel 1 (Clave de Familia):** Orden alfabético por el nombre de la familia/padre (`familyKey`). Esto garantiza que todos los hijos de la familia queden contiguos en la planilla.
+   - **Nivel 2 (Prioridad de Producto Base):** Si dentro de la familia se demandó el producto base (cuyo nombre coincide con la familia, ej: `Apio`), este se sitúa **primero** en el bloque de columnas.
+   - **Nivel 3 (Orden Alfabético de Variantes Hijas):** Las variantes hijas restantes de la familia se ordenan alfabéticamente entre sí inmediatamente contiguas al producto base.
+3. **Prohibición de Cabeceras Huérfanas o Columnas Fantasma de Padre:**
+   - Queda terminantemente prohibido imprimir una columna o contenedor con el nombre del padre abstracto si dicho padre no fue ordenado por ningún cliente en la tanda, o generar encabezados jerárquicos agrupadores que rompan la matriz 1-columna por SKU demandado.
+   - En la sábana solo se imprimen los SKUs/hijos reales demandados, ubicados uno junto al otro de forma contigua y natural.
+
+---
+
+### 19.6 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 28: Prevalencia de Unidad Maestra 'KG' y Espaciado Tipográfico en Fila 1
+- **Given** un pedido de cliente que solicita "12 unidades de 2 kg; Maduro" del producto "Papaya maradol" cuya unidad maestra de compra en catálogo (`products.unit_of_measure`) es `Kg`.
+- **When** se genera la sábana de alistamiento en `/admin/orders/alistamiento-print`.
+- **Then**:
+  1. La Fila 1 de la celda de pedido calcula y muestra la masa neta obligatoriamente en kilos con un espacio tipográfico: `24 KG`.
+  2. La Fila 2 muestra la especificación operativa estructurada: `12 und de 2 kg; Maduro`.
+  3. Queda prohibido renderizar `24UN`, `24 UN` o `24KG` pegado.
+  4. Los totales de columna en el pie de página respetan el espaciado canónico `X KG` o `X UN`.
+
+#### Escenario 29: Ordenamiento Contiguo de Columnas por Familia Gemba (Padre-Hijo)
+- **Given** una célula operativa con pedidos para los productos: "Apio sin hoja", "Cebolla cabezona blanca", "Apio en tallo", "Apio" (base), y "Cebolla cabezona roja".
+- **And** en la tabla `products`, "Apio sin hoja" y "Apio en tallo" tienen como `parent_id` el registro de "Apio".
+- **When** se ordenan las columnas de la sábana de alistamiento para impresión.
+- **Then**:
+  1. Todos los productos de la familia "Apio" se ubican contiguos en la sábana: primero "Apio" (producto base), seguido por "Apio en tallo" y "Apio sin hoja".
+  2. No se genera ninguna columna vacía ni rótulo abstracto "Familia Apio".
+  3. Los operarios de bodega en Corabastos alistan la estiba completa de Apio en un solo desplazamiento físico antes de pasar a la estiba de Cebolla.
+
+#### Escenario 30: Supresión Anti-Redundancia Poka-Yoke en Celdas de Producto
+- **Given** un pedido de cliente para el producto "Plátano maduro" con `selected_options: { "Maduración": "Maduro" }`.
+- **When** se renderiza la sábana de alistamiento en `/admin/orders/alistamiento-print`.
+- **Then**:
+  1. La Fila 1 muestra la cantidad neta y unidad: `20 KG`.
+  2. La Fila 2 evalúa `isRedundantAttribute('Maduro', 'Plátano maduro')`, detecta que la cualidad ya es inherente al nombre del producto, y omite el texto.
+  3. La celda queda 100% limpia sin ninguna nota secundaria redundante debajo de `20 KG`.
+
+---
+
+### 19.7 Suite Canónica de Documentos Impresos del Proceso Operativo
+Para garantizar la continuidad operativa ante contingencias de red, baterías agotadas en tablets o exigencias de clientes institucionales que exigen soporte físico firmado, FruFresco define la siguiente suite inmutable de documentos físicos de planta:
+
+```mermaid
+flowchart TD
+    subgraph INGESTA["1. Ingesta & Acuerdos"]
+        OC["Órdenes de Compra (B2B / B2C)"] --> DUAL["Motor Dual-Unit & Opciones"]
+    end
+
+    subgraph PLANTA_DOCS["2. Suite Oficial de Documentos Impresos"]
+        DUAL --> P_COMPRAS["Planilla de Compras Plaza Corabastos\n(Consolidado por getStructuredSpecKey)"]
+        DUAL --> P_RECEP["Planilla de Recepción & Báscula\n(Control Kilos vs Calidades)"]
+        DUAL --> SABANA["Sábana de Alistamiento por Células\n(Oficio Landscape / 10 cols / Familias Gemba)"]
+        DUAL --> LABELS["Rótulos Térmicos Autoadhesivos\n(100x50 mm / QR Canónico / Bahías)"]
+        DUAL --> REMISION["Remisiones Duplicadas de Entrega\n(Original Cliente / Copia Contabilidad)"]
+    end
+
+    subgraph PISO_LOGISTICA["3. Ejecución en Gemba"]
+        P_COMPRAS --> PLAZA["Abastecimiento en Corabastos"]
+        P_RECEP --> BASCULA["Báscula de Entrada Patio"]
+        SABANA --> PICKING["Alistamiento en Estibas"]
+        LABELS --> MUELLES["Bahías de Muelle & Canastillas"]
+        REMISION --> RUTA["Transporte & Entrega Certificada"]
+    end
+```
+
+#### 1. Sábana de Alistamiento por Células (`/admin/orders/alistamiento-print`)
+* **Propósito Operativo:** Instrumento de recolección y conteo simultáneo de alta velocidad para alistadores de patio en Corabastos.
+* **Formato Físico:** Formato Oficio Paisaje (*Legal Landscape* 355.6 mm × 215.9 mm).
+* **Jerarquía Visual en Celda de Producto:**
+  - **Fila 1 (Magnitud Canónica):** Masa neta en la unidad de catálogo/compra (`KG` obligatorio con espacio tipográfico, o `UN` si la uom es strictly Unidad). Tipografía 7.8pt negrita.
+  - **Fila 2 (Instrucción Física Operativa Limpia):** Renderiza `formatStructuredSpecification(item)` a 5.5pt (ej: `12 und de 2 kg; Maduro`). Si la especificación no existe o es redundante con el nombre del producto (`isRedundantAttribute`), la Fila 2 **PERMANECE 100% VACÍA**.
+  - **Marcador Lean de Verificación:** Casilla `[ ]` en la esquina superior derecha de cada celda para check manual con bolígrafo del operario.
+* **Estructura Geométrica de Columnas:**
+  - **Ordenamiento Contiguo de Familias Gemba:** Columnas agrupadas por `parent_id` (Familia). El producto base se ubica primero dentro del bloque, seguido por las variantes hijas en orden alfabético. **Prohibido generar columnas o encabezados huérfanos con el nombre abstracto del padre**.
+  - **Densidad Optimizada:** 10 columnas por hoja como estándar predeterminado (conmutables a 8 y 12).
+  - **Partición Balanceada Anti-Huérfanas:** Divide el total de productos en partes iguales entre las hojas necesarias para evitar hojas residuales con 1 o 2 columnas.
+  - **Supresión Total de Filas Vacías:** Una hoja de alistamiento incluye **exclusivamente** a los clientes que tengan demanda $> 0$ en los productos presentes en esa hoja.
+  - **Cabecera de Fila Estricta:** La columna de cliente renderiza únicamente el nombre de la sucursal (`ord.branch_name`), sin razón social redundante.
+
+#### 2. Rótulos Térmicos Autoadhesivos de Canastilla (`/admin/orders/print-labels` y Kit de Contingencia)
+* **Propósito Operativo:** Identificación física unívoca de cada bulto/canastilla que ingresa a la bahía de muelle, se carga al camión y se entrega en el muelle de descarga del cliente.
+* **Formato Físico:** Rollo térmico adhesivo de **100 mm de ancho × 50 mm de alto** para impresoras Zebra o industriales de muelle.
+* **Campos Mandatorios en el Rótulo:**
+  1. **Friendly Order ID:** Código correlativo en formato `DDMM_XXXX` (ej. `2409_0890`) en tipografía destacada de alta legibilidad a 2 metros de distancia.
+  2. **Fecha de Despacho / Entrega:** Formato `DD/MM/YYYY`.
+  3. **Identidad del Cliente:** Razón social institucional y nombre de sucursal de entrega.
+  4. **Bahía de Muelle:** Número de bahía asignada en el suelo (`orders.warehouse_spaces`) formateado como `#08`, `#12`.
+  5. **Numerador Fraccionado de Canastilla:** Etiqueta fraccionada `Canastilla k de N`, calculada a partir del peso total facturable:
+     $$N = \left\lceil \frac{\text{total\_weight\_kg}}{12.5\text{ kg}} \right\rceil$$
+  6. **Código QR Canónico Bidimensional:** Payload estructurado legible por lectores ópticos industriales y por la app del conductor:
+     $$\text{Payload:} \quad \mathbf{\text{FRUFRESCO}|\text{order\_id}|\text{friendly\_id}|\text{client}|\text{date}|k/N|\text{space}}$$
+  7. **Marca de Tiempo:** Fecha y hora exacta de emisión para control de trazabilidad.
+
+#### 3. Remisión Comercial de Entrega en Duplicado (`/admin/orders/contingency-print`)
+* **Propósito Operativo:** Soporte legal y mercantil de entrega física de mercancías al cliente final. Se imprimen 2 ejemplares por pedido:
+  - **Original (Blanco):** Para la mesa de recepción de mercancías / chef del cliente.
+  - **Copia (Amarillo/Archivo):** Firmada con cédula y sello de recibido para el departamento de facturación y cartera de FruFresco.
+* **Contenido Contractual:**
+  - Datos completos del cliente (Razón social, NIT, dirección georreferenciada, franja horaria).
+  - Identificación logística: Vehículo (placa), conductor (nombre/cédula) y número de remisión amigable `DDMM_XXXX`.
+  - Detalle de ítems con doble línea: cantidad neta en unidad de compra y especificación de empaque/calibre.
+  - **Punto de Control de Envases (Canastillas):** Casillas de balance de canastillas:
+    $$\text{Canastillas Entregadas (Préstamo)} \quad - \quad \text{Canastillas Recibidas (Devolución)} \quad = \quad \text{Saldo Neto en Sitio}$$
+    Acompañado de la firma obligatoria del receptor autorizando el asiento contable.
+
+#### 4. Planilla Consolidada de Compras para Plaza Corabastos (`/admin/procurement/purchases-print`, `/ops/compras`)
+* **Propósito Operativo:** Instrumento de abastecimiento mayorista utilizado por el equipo de compras en plaza Corabastos desde las 02:00 AM.
+* **Algoritmo de Consolidación Anti-Fragmentación:**
+  - El sistema agrupa la demanda total de todas las órdenes de la fecha sobre la clave canónica:
+    $$\text{Clave Compra:} \quad \text{product\_id} + \text{"\_"} + \text{getStructuredSpecKey(item)} + \text{"\_"} + \text{delivery\_date}$$
+  - **Regla Anti-Fragmentación Poka-Yoke:** Si un atributo es redundante con el nombre del producto (ej: `Maduro` en `Plátano maduro`), `getStructuredSpecKey` resuelve a cadena vacía `""`, consolidando toda la demanda en una única línea de compra base. Queda prohibido dividir las compras en líneas artificiales por atributos inherentes al producto.
+  - **Segregación de Calidades Diferenciales Reales:** Si la orden solicita una condición física no implícita en el nombre (ej: `Papaya maradol` `Maduro` vs `Pintón`, o `Unidad 2000 gr`), se genera una línea de compra separada para permitir al comprador adquirir bultos con el grado de madurez exacto.
+
+#### 5. Planilla de Recepción y Control de Báscula en Bodega (`/admin/procurement/receiving-print`)
+* **Propósito Operativo:** Instrumento de pesaje en muelle de descargue para auditar camiones de plaza frente a lo ordenado.
+* **Columnas de Cotejo Físico:**
+  - Producto y Especificación Operativa requerida.
+  - Cantidad Total Ordenada (kg o un).
+  - Cantidad Real Recibida en Báscula (kg brutos - tara).
+  - Número de Bultos / Canastillas descargadas.
+  - Mermas / Devoluciones en Patio (kg rechazados por calidad).
+  - Firma del inspector de calidad de recibo.
+
+---
+
+### 19.8 Flujo End-to-End de Datos Operativos en el Ciclo de Vida del Pedido
+La información operativa capturada o deducida debe gobernarse de forma consistente y transversal a lo largo de las 6 etapas del ciclo operativo, garantizando que lo que se negoció comercialmente sea idéntico a lo que se compra, alista, transporta y factura:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Cliente as Cliente B2B / Comercial
+    participant Parser as Ingesta & Parser IA
+    participant DB as Base de Datos (Supabase)
+    participant Compras as Compras Corabastos
+    participant Bodega as Alistamiento (Tablets/Papel)
+    participant Transporte as Torre de Control & Muelles
+    participant Conductor as App Móvil Chofer
+
+    Cliente->>Parser: Envía OC (PDF/Excel/WhatsApp)
+    Parser->>DB: Normaliza Doble Unidad & selected_options limpias
+    DB->>Compras: Agrupa demanda consolidada (getStructuredSpecKey)
+    Compras-->>Bodega: Ingreso de mercancía recibida y pesada
+    DB->>Bodega: Sincroniza alistamiento (tablets o sábana impresa contigua)
+    Bodega->>Transporte: Pedido armado en canastillas
+    Transporte->>Transporte: Asigna bahía (36 c/espacio) y emite Rótulos 100x50mm
+    Transporte->>Conductor: Despacha ruta con paradas y remisiones
+    Conductor->>Cliente: Escaneo QR rótulo térmico + Entrega de remisión física duplicada
+    Conductor->>DB: Asiento automático de canastillas en crates_ledger
+```
+
+#### Reglas de Gobierno de Datos por Etapa:
+1. **Etapa 1: Ingesta y Captura Multicanal (`EmailDraftsModule`, `order-parser-engine`, `/create`):**
+   - **Normalización de Doble Unidad:** Si un producto maneja peso por fruto (ej: `Patilla 7000 gr`, `Papaya 2000 gr`), el parser calcula la masa neta en kilos para facturación y preserva la instrucción discreta (`1 und de 7 kg`) en `selected_options._physical_instruction` y `order_items.variant_label`.
+   - **Prevención de Pleonasmos en Catálogo:** El parser no debe forzar atributos que ya forman parte del nombre del SKU (ej. no marcar `Maduración: Maduro` si el SKU es `Plátano maduro`).
+2. **Etapa 2: Abastecimiento y Compras en Corabastos (`/ops/compras`, `/admin/procurement`):**
+   - El comprador consulta el consolidado de compras sin dispersión. Cada kilo demandado se respalda en la unidad de compra mayorista de plaza (bulto, caja, canastilla, kilo).
+3. **Etapa 3: Recepción y Calidad en Patio:**
+   - La entrada de mercancía valida el inventario físico disponible en tiempo real (`productsMap[pId].inventoryKg`), actualizando las existencias para que la sábana de alistamiento refleje el stock real de patio mediante el badge `INV[X kg]`.
+4. **Etapa 4: Alistamiento / Picking Digital y Físico (`/ops/picking`, `/admin/orders/alistamiento-print`):**
+   - **Equivalencia Estricta Digital vs Físico:** La terminal digital (tablet de alistador) y la sábana de alistamiento impresa en clipboard muestran **la misma información**:
+     - Magnitud neta en Fila 1 (`24 KG`).
+     - Instrucción física en Fila 2 (`12 und de 2 kg; Maduro`).
+     - Supresión total de notas libres no estructuradas.
+   - **Desplazamiento Físico Lean (Gemba Layout):** El operario alista por bloques de familia contiguos sin zigzagueos innecesarios por la bodega.
+5. **Etapa 5: Bahías de Muelle, Cubicaje y Rotulado (`/admin/transport`, `/print-labels`):**
+   - Cada canastilla armada recibe en su frontal el rótulo térmico 100x50 mm con el número de bahía física en el suelo y el conteo fraccionado `Canastilla k de N`.
+   - El despachador audita que la bahía contenga exactamente las $N$ canastillas antes de autorizar el cargue al camión.
+6. **Etapa 6: Transporte y Entrega Certificada (`/ops/driver/route`, `/contingency-print`):**
+   - El conductor carga el camión siguiendo la secuencia LIFO (último en entrar, primero en salir) guiado por los rótulos térmicos.
+   - En punto de cliente, escanea el código QR del rótulo para validar la parada.
+   - El cliente recibe la mercancía junto con la remisión física en duplicado, validando que los kilos facturados coincidan al 100% con la mercancía física descargada.
+
+---
+
+### 19.9 Criterios de Aceptación BDD Adicionales (Gherkin)
+
+#### Escenario 31: Coherencia Transversal entre Alistamiento Físico y Planilla de Compras
+- **Given** tres pedidos que solicitan "Papaya maradol":
+  - Pedido A: 24 kg con especificación "12 und de 2 kg; Maduro".
+  - Pedido B: 10 kg con especificación "5 und de 2 kg; Maduro".
+  - Pedido C: 14 kg con especificación "7 und de 2 kg; Pintón".
+- **When** se generan la Planilla de Compras y la Sábana de Alistamiento.
+- **Then**:
+  1. En la Planilla de Compras, los Pedidos A y B se consolidan en una única línea de compra por 34 kg con especificación `und de 2 kg; Maduro`.
+  2. El Pedido C genera una línea de compra separada por 14 kg con especificación `und de 2 kg; Pintón`.
+  3. En la Sábana de Alistamiento, cada cliente visualiza en Fila 1 sus kilos netos (`24 KG`, `10 KG`, `14 KG`) y en Fila 2 su respectiva instrucción física.
+
+#### Escenario 32: Integridad del Rótulo Térmico de Canastilla 100x50mm con Código QR Canónico
+- **Given** un pedido aprobado para el cliente "Restaurante Monserrate" con fecha de entrega "2026-09-24", peso total facturable de 38 kg y asignado a la bahía de muelle #12.
+- **When** el despachador emite los rótulos de canastilla desde `/admin/orders/print-labels` o desde el Kit de Contingencia.
+- **Then**:
+  1. El sistema calcula $N = \lceil 38 / 12.5 \rceil = 4$ rótulos térmicos en formato 100 mm × 50 mm.
+  2. Cada rótulo imprime el Friendly ID `2409_XXXX`, el número de bahía `#12` y el numerador fraccionado `Canastilla 1 de 4` hasta `Canastilla 4 de 4`.
+  3. El código QR contiene el payload estructurado canónico con el delimitador `|`.
+
+#### Escenario 33: Aislamiento End-to-End de Atributos Redundantes en Toda la Cadena Operativa
+- **Given** un pedido de cliente donde se ordenó el SKU "Plátano maduro" con cantidad 20 kg.
+- **When** la orden viaja a través del ciclo operativo de FruFresco.
+- **Then**:
+  1. En Compras, se consolida como demanda base de `Plátano maduro` sin generar variantes redundantes con la palabra "Maduro".
+  2. En la Sábana de Alistamiento, la celda muestra `20 KG` en Fila 1 y deja la Fila 2 completamente vacía.
+  3. En las tablets de picking digital, el operario ve la demanda de 20 kg sin notas redundantes.
+  4. En la remisión impresa y digital, el ítem se lista limpiamente como "Plátano maduro" por 20 kg.
+
+
+

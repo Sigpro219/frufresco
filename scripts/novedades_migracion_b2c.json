@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-09-24T15:41:27.963Z",
+  "total_insertados": 52,
+  "b2c_hogar": 49,
+  "b2b_comercial": 3,
+  "novedades": [
+    "Fila 4 (ALEJANDRA VERGEL): Trasladado a CLIENTES B2B / COMERCIAL (Pastelería Penny Lane) con lista General Institucional.",
+    "Fila 8 (ANA FURQUE VILLAMIL): Cédula genérica/placeholder (123456789). Requiere actualización de documento real.",
+    "Fila 9: Cédula duplicada 52516513 unificada con Fila 7. Se consolidó en 'ANA MARIA ALVAREZ' con teléfono principal (3008149434) y secundario (3008149433).",
+    "Fila 10 (ANA MARIA BERNAL): El teléfono en el Excel era su misma cédula (52455214). Se dejó teléfono en blanco y se reporta para solicitud comercial.",
+    "Fila 18 (CATALINA FRANCO): Teléfono con longitud no estándar (316837122, 9 dígitos).",
+    "Fila 24 (DIANA BELEÑO): Dos teléfonos en el mismo campo. Se asignó 3125393614 como principal y 317363034 como secundario.",
+    "Fila 31 (FRANK GAITAN): Trasladado a CLIENTES B2B / CORPORATIVO (Oficina Salitre 614/615) con lista General Institucional.",
+    "Fila 39 (LILIANA PACHON): Trasladado a CLIENTES B2B / COMERCIAL (Restaurante Longevity) con lista General Institucional.",
+    "Fila 45: Registro duplicado de Lina Visbal unificado. Cédula consolidada a 53000480 (8 dígitos estándar). Teléfono secundario 3108448753 añadido.",
+    "Fila 46 (MANUELA VERGEL): El teléfono en el Excel era su misma cédula (1019093264). Se dejó teléfono en blanco y se reporta para solicitud comercial.",
+    "Fila 51 (Silvia Schmehlik): Teléfono con longitud no estándar (31448427623, 11 dígitos)."
+  ]
+}

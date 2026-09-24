@@ -107,29 +107,44 @@ export default function BulkOrderPrintLabelsPage() {
 
     useEffect(() => {
         const fetchBulkLabelsData = async () => {
-            // Unify query params: accept both orderIds and ids
+            // Unify query params: accept orderIds, ids or date
             const rawParam = searchParams.get('orderIds') || searchParams.get('ids') || '';
+            const dateParam = searchParams.get('date') || '';
             const ids = rawParam.split(',').map(s => s.trim()).filter(Boolean);
 
-            if (ids.length === 0) {
+            if (ids.length === 0 && !dateParam) {
                 setLoading(false);
                 return;
             }
 
             try {
                 // 1. Fetch orders with client profile
-                const { data: ordersData, error: ordersErr } = await supabase
+                let ordersQuery = supabase
                     .from('orders')
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, total_weight_kg, 
                         shipping_address, warehouse_spaces, profile_id,
                         profiles:profile_id(id, company_name, contact_name, nit, address, phone, contact_phone)
                     `)
-                    .in('id', ids)
                     .order('created_at', { ascending: true });
+
+                if (ids.length > 0) {
+                    ordersQuery = ordersQuery.in('id', ids);
+                } else if (dateParam) {
+                    ordersQuery = ordersQuery.eq('delivery_date', dateParam).neq('status', 'cancelled');
+                }
+
+                const { data: ordersData, error: ordersErr } = await ordersQuery;
 
                 if (ordersErr) {
                     console.error('Error fetching orders for labels:', ordersErr);
+                    setLoading(false);
+                    return;
+                }
+
+                const resolvedIds = (ordersData || []).map((o: any) => o.id);
+                if (resolvedIds.length === 0) {
+                    setOrders([]);
                     setLoading(false);
                     return;
                 }
@@ -143,7 +158,7 @@ export default function BulkOrderPrintLabelsPage() {
                             id, name, sku, requires_label, accounting_id, unit_of_measure
                         )
                     `)
-                    .in('order_id', ids);
+                    .in('order_id', resolvedIds);
 
                 if (itemsErr) {
                     console.error('Error fetching order items for labels:', itemsErr);

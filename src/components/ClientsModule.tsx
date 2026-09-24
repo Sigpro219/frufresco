@@ -191,7 +191,7 @@ function splitContactName(fullName: string): { firstName: string; lastName: stri
     return { firstName: `${parts[0]} ${parts[1]}`, lastName: parts.slice(2).join(' ') };
 }
 
-export default function ClientsModule() {
+export default function ClientsModule({ initialTab }: { initialTab?: string } = {}) {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
 
@@ -205,7 +205,24 @@ export default function ClientsModule() {
                checkUserPermission(profile, 'admin.commercial', roles);
     };
 
-    const [activeTab, setActiveTab] = useState('b2b');
+    const [activeTab, setActiveTab] = useState(initialTab || 'b2b');
+
+    useEffect(() => {
+        if (initialTab && ['b2b', 'leads', 'agreements', 'b2c'].includes(initialTab)) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const ct = params.get('clientTab');
+            if (ct && ['b2b', 'leads', 'agreements', 'b2c'].includes(ct)) {
+                setActiveTab(ct);
+            }
+        }
+    }, []);
+
     const [hoveredTab, setHoveredTab] = useState<string | null>(null);
     const [clientsB2B, setClientsB2B] = useState<Profile[]>([]);
     const [clientsB2C, setClientsB2C] = useState<Profile[]>([]);
@@ -534,11 +551,10 @@ export default function ClientsModule() {
                 .select('*')
                 .order('name', { ascending: true });
 
-            // 4. Clientes B2C (Profiles)
             const { data: b2cData } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('role', 'b2c_client')
+                .in('role', ['b2c_client', 'client'])
                 .order('created_at', { ascending: false });
             
             // 5. Órdenes para ventas
@@ -589,6 +605,7 @@ export default function ClientsModule() {
                 is_active: p.is_active !== false
             });
             setClientsB2B((b2bData || []).map(normalizeProfile));
+            setClientsB2C((b2cData || []).map(normalizeProfile));
             setLeads(leadData || []);
             setPricingModels(pmData || []);
             const b2bIdSet = new Set((b2bData || []).map((c: any) => c.id));
@@ -1802,7 +1819,15 @@ export default function ClientsModule() {
                             return (
                                 <button
                                     key={tab.id}
-                                    onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+                                    onClick={() => { 
+                                        setActiveTab(tab.id); 
+                                        setSearchTerm(''); 
+                                        if (typeof window !== 'undefined') {
+                                            const url = new URL(window.location.href);
+                                            url.searchParams.set('clientTab', tab.id);
+                                            window.history.replaceState({}, '', url.toString());
+                                        }
+                                    }}
                                     onMouseEnter={() => setHoveredTab(tab.id)}
                                     onMouseLeave={() => setHoveredTab(null)}
                                     style={{

@@ -1848,9 +1848,25 @@ export default function CommercialUnifiedDashboard({
                                         <div style={{ fontWeight: '900', fontSize: '1.05rem', color: '#1E40AF' }}>
                                             {loading ? '...' : `${funnelData.leadsCount} Leads`}
                                         </div>
-                                        <Link href="/admin/commercial?tab=clients" style={{ fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '700', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '2px', marginTop: '2px' }}>
+                                        <button 
+                                            type="button"
+                                            onClick={() => onNavigateToTab ? onNavigateToTab('clients', 'leads') : (window.location.href = '/admin/commercial?tab=clients&clientTab=leads')}
+                                            style={{ 
+                                                border: 'none',
+                                                background: 'transparent',
+                                                padding: 0,
+                                                fontSize: '0.7rem', 
+                                                color: THEME.colors.primary, 
+                                                fontWeight: '700', 
+                                                cursor: 'pointer',
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '2px', 
+                                                marginTop: '2px' 
+                                            }}
+                                        >
                                             Ver Base <ExternalLink size={10} />
-                                        </Link>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1870,15 +1886,19 @@ export default function CommercialUnifiedDashboard({
                             </div>
 
                             {/* STEP 2: COTIZACIONES - ANCHO 86% CENTRADO */}
-                            <div style={{ width: '86%', margin: '0 auto', backgroundColor: '#FAF5FF', borderRadius: '10px', borderTop: '3px solid #7E22CE', borderRight: '1px solid #E9D5FF', borderBottom: '1px solid #E9D5FF', borderLeft: '1px solid #E9D5FF', padding: '0.7rem 0.95rem', boxShadow: '0 2px 6px rgba(126, 34, 206, 0.05)' }}>
+                            <div 
+                                onClick={() => onNavigateToTab ? onNavigateToTab('operations', 'quotes') : (window.location.href = '/admin/commercial?tab=operations&subtab=quotes')}
+                                title="Ver Cotizaciones Comerciales"
+                                style={{ width: '86%', margin: '0 auto', backgroundColor: '#FAF5FF', borderRadius: '10px', borderTop: '3px solid #7E22CE', borderRight: '1px solid #E9D5FF', borderBottom: '1px solid #E9D5FF', borderLeft: '1px solid #E9D5FF', padding: '0.7rem 0.95rem', boxShadow: '0 2px 6px rgba(126, 34, 206, 0.05)', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                            >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <div style={{ width: '30px', height: '30px', borderRadius: '8px', backgroundColor: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #D8B4FE' }}>
                                             <FileText size={15} color="#7E22CE" />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: '800', fontSize: '0.82rem', color: THEME.colors.textMain }}>
-                                                2. Cotizaciones Presentadas
+                                            <div style={{ fontWeight: '800', fontSize: '0.82rem', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                2. Cotizaciones Presentadas <ChevronRight size={12} color="#7E22CE" />
                                             </div>
                                             <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary }}>
                                                 Propuestas con matriz y precios base
@@ -1911,15 +1931,19 @@ export default function CommercialUnifiedDashboard({
                             </div>
 
                             {/* STEP 3: ACUERDOS COMERCIALES - ANCHO 72% CENTRADO */}
-                            <div style={{ width: '72%', margin: '0 auto', backgroundColor: '#FFFBEB', borderRadius: '10px', borderTop: '3px solid #D97706', borderRight: '1px solid #FDE68A', borderBottom: '1px solid #FDE68A', borderLeft: '1px solid #FDE68A', padding: '0.7rem 0.9rem', boxShadow: '0 2px 6px rgba(217, 119, 6, 0.05)' }}>
+                            <div 
+                                onClick={() => onNavigateToTab ? onNavigateToTab('clients', 'agreements') : (window.location.href = '/admin/commercial?tab=clients&clientTab=agreements')}
+                                title="Ver Acuerdos Institucionales"
+                                style={{ width: '72%', margin: '0 auto', backgroundColor: '#FFFBEB', borderRadius: '10px', borderTop: '3px solid #D97706', borderRight: '1px solid #FDE68A', borderBottom: '1px solid #FDE68A', borderLeft: '1px solid #FDE68A', padding: '0.7rem 0.9rem', boxShadow: '0 2px 6px rgba(217, 119, 6, 0.05)', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                            >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <div style={{ width: '30px', height: '30px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #FCD34D' }}>
                                             <Award size={15} color="#B45309" />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: '800', fontSize: '0.82rem', color: THEME.colors.textMain }}>
-                                                3. Acuerdos Vigentes
+                                            <div style={{ fontWeight: '800', fontSize: '0.82rem', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                3. Acuerdos Vigentes <ChevronRight size={12} color="#B45309" />
                                             </div>
                                             <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary }}>
                                                 Precios preferenciales vigentes
@@ -1952,15 +1976,19 @@ export default function CommercialUnifiedDashboard({
                             </div>
 
                             {/* STEP 4: CLIENTES FACTURADOS - BASE ESTRECHA 58% CENTRADO */}
-                            <div style={{ width: '58%', margin: '0 auto', backgroundColor: '#F0FDF4', borderRadius: '10px', borderTop: '3.5px solid #15803D', borderRight: '1.5px solid #86EFAC', borderBottom: '1.5px solid #86EFAC', borderLeft: '1.5px solid #86EFAC', padding: '0.7rem 0.85rem', boxShadow: '0 4px 12px rgba(21, 128, 61, 0.12)' }}>
+                            <div 
+                                onClick={() => onNavigateToTab ? onNavigateToTab('clients', 'b2b') : (window.location.href = '/admin/commercial?tab=clients&clientTab=b2b')}
+                                title="Ver Clientes Institucionales B2B"
+                                style={{ width: '58%', margin: '0 auto', backgroundColor: '#F0FDF4', borderRadius: '10px', borderTop: '3.5px solid #15803D', borderRight: '1.5px solid #86EFAC', borderBottom: '1.5px solid #86EFAC', borderLeft: '1.5px solid #86EFAC', padding: '0.7rem 0.85rem', boxShadow: '0 4px 12px rgba(21, 128, 61, 0.12)', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                            >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #86EFAC' }}>
                                             <CheckCircle2 size={15} color="#15803D" />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: '900', fontSize: '0.8rem', color: '#14532D', whiteSpace: 'nowrap' }}>
-                                                4. Compradores Activos
+                                            <div style={{ fontWeight: '900', fontSize: '0.8rem', color: '#14532D', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                4. Compradores Activos <ChevronRight size={12} color="#15803D" />
                                             </div>
                                             <div style={{ fontSize: '0.66rem', color: '#166534', whiteSpace: 'nowrap' }}>
                                                 Despachos facturados
