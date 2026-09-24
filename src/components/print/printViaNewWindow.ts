@@ -89,12 +89,12 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             color: #0F172A;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 7.2pt;
-            line-height: 1.25;
+            font-size: 9pt;
+            line-height: 1.3;
             -webkit-font-smoothing: antialiased;
         }
         
-        /* Limpieza de contenedores para que no arrastren cajas de pantalla */
+        /* Limpieza y posicionamiento del contenedor para expandirse y empujar el footer al fondo */
         .letterhead-container {
             width: 100% !important;
             max-width: 100% !important;
@@ -102,23 +102,70 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            min-height: auto !important;
+            min-height: calc(100vh - 4px) !important;
             height: auto !important;
-            position: static !important;
+            position: relative !important;
             background: transparent !important;
-            display: block !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            box-sizing: border-box !important;
+        }
+
+        .letterhead-container main {
+            flex-grow: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        /* Tipografía legible para el encabezado corporativo */
+        .letterhead-company-name {
+            font-size: 13pt !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.02em !important;
+            line-height: 1.15 !important;
+        }
+
+        .letterhead-company-nit {
+            font-size: 8.5pt !important;
+            font-weight: 700 !important;
+            color: #1E293B !important;
+        }
+
+        .letterhead-company-info {
+            font-size: 8pt !important;
+            color: #475569 !important;
+            line-height: 1.35 !important;
+            text-align: right !important;
+        }
+
+        .letterhead-meta-strip {
+            font-size: 8.5pt !important;
+            padding: 5px 10px !important;
+            margin-bottom: 6px !important;
+        }
+
+        /* Footer nítido y legible al fondo */
+        .letterhead-footer {
+            margin-top: auto !important;
+            border-top: 1px solid #CBD5E1 !important;
+            padding-top: 6px !important;
+            font-size: 8pt !important;
+            color: #334155 !important;
+            text-align: center !important;
+            line-height: 1.35 !important;
         }
 
         .letterhead-top-stripe {
             display: none !important;
         }
 
-        /* Tablas compactas de alta densidad */
+        /* Tablas de alta legibilidad en papel */
         table {
             width: 100% !important;
             border-collapse: collapse !important;
             page-break-inside: auto !important;
-            font-size: 7.2pt !important;
+            font-size: 8.5pt !important;
             margin-bottom: 6px !important;
         }
         thead {
@@ -132,17 +179,17 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             break-inside: avoid !important;
         }
         th {
-            font-size: 6.8pt !important;
+            font-size: 8pt !important;
             font-weight: 800 !important;
-            padding: 2.5px 5px !important;
+            padding: 4px 6px !important;
             vertical-align: middle !important;
             text-transform: uppercase !important;
         }
         td {
-            font-size: 7.2pt !important;
-            padding: 2.5px 5px !important;
+            font-size: 8.5pt !important;
+            padding: 4px 6px !important;
             vertical-align: middle !important;
-            line-height: 1.22 !important;
+            line-height: 1.25 !important;
         }
         td.num-cell, td.text-right, .tabular-nums {
             font-variant-numeric: tabular-nums !important;
@@ -154,6 +201,10 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
         .page-break {
             page-break-after: always !important;
             break-after: page !important;
+        }
+        .page-break:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
         }
         .avoid-break {
             page-break-inside: avoid !important;

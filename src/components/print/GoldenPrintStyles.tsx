@@ -14,13 +14,27 @@ export default function GoldenPrintStyles({
     primaryColor = '#0F172A',
     accentColor = '#0D7A57'
 }: GoldenPrintStylesProps) {
+    const isOficioOrLegal = paperSize === 'oficio' || paperSize === 'legal';
     const pageMargin = paperSize === 'a4' 
         ? '1.2cm 1.4cm 1.4cm 1.4cm' 
+        : isOficioOrLegal
+        ? '0.8cm 1.0cm 1.0cm 1.0cm'
         : '1.1cm 1.3cm 1.3cm 1.3cm';
 
-    const pageSize = paperSize === 'a4' ? 'a4 portrait' : 'letter portrait';
+    const pageSize = paperSize === 'a4' 
+        ? 'a4 portrait' 
+        : isOficioOrLegal
+        ? 'legal portrait'
+        : 'letter portrait';
+
     const previewWidth = paperSize === 'a4' ? '210mm' : '215.9mm';
-    const previewMinHeight = paperSize === 'a4' ? '297mm' : '279.4mm';
+    const previewMinHeight = paperSize === 'a4' 
+        ? '297mm' 
+        : paperSize === 'oficio'
+        ? '330mm'
+        : paperSize === 'legal'
+        ? '355.6mm'
+        : '279.4mm';
 
     return (
         <style dangerouslySetInnerHTML={{ __html: `
@@ -68,6 +82,11 @@ export default function GoldenPrintStyles({
                 justify-content: center;
             }
 
+            /* Si el documento contiene tablas de datos densas, eliminar la marca de agua para evitar efecto cebra y ruido */
+            .letterhead-container:has(table) .letterhead-watermark {
+                display: none !important;
+            }
+
             .letterhead-header {
                 position: relative;
                 z-index: 1;
@@ -98,10 +117,10 @@ export default function GoldenPrintStyles({
             }
 
             .letterhead-company-name {
-                font-size: 1.02rem;
-                font-weight: 850;
+                font-size: 1.15rem;
+                font-weight: 900;
                 color: var(--print-primary);
-                letter-spacing: 0.035em;
+                letter-spacing: 0.025em;
                 text-transform: uppercase;
                 white-space: nowrap;
                 margin-bottom: 2px;
@@ -111,15 +130,15 @@ export default function GoldenPrintStyles({
             .letterhead-company-nit {
                 font-weight: 750;
                 color: #1E293B;
-                font-size: 0.70rem;
+                font-size: 0.78rem;
                 letter-spacing: 0.02em;
                 white-space: nowrap;
-                line-height: 1.2;
+                line-height: 1.25;
             }
 
             .letterhead-company-info {
                 text-align: right;
-                font-size: 0.63rem;
+                font-size: 0.72rem;
                 color: #475569;
                 line-height: 1.35;
                 flex-shrink: 0;
@@ -230,10 +249,10 @@ export default function GoldenPrintStyles({
                 position: relative;
                 z-index: 1;
                 margin-top: auto;
-                border-top: 1px solid #E2E8F0;
-                padding-top: 0.45rem;
-                font-size: 0.58rem;
-                color: #64748B;
+                border-top: 1px solid #CBD5E1;
+                padding-top: 0.55rem;
+                font-size: 0.72rem;
+                color: #475569;
                 text-align: center;
                 line-height: 1.35;
             }
@@ -253,25 +272,73 @@ export default function GoldenPrintStyles({
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                     color: #000 !important;
+                    font-size: 9pt !important;
                 }
                 .no-print {
                     display: none !important;
                 }
                 .letterhead-container {
                     width: 100% !important;
-                    min-height: auto !important;
+                    min-height: calc(100vh - 4px) !important;
                     height: auto !important;
-                    position: static !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    justify-content: space-between !important;
+                    position: relative !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     border: none !important;
                     box-shadow: none !important;
+                    box-sizing: border-box !important;
                     page-break-after: auto !important;
                     break-after: auto !important;
+                }
+                .letterhead-container main {
+                    flex-grow: 1 !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                }
+                .letterhead-company-name {
+                    font-size: 13pt !important;
+                    font-weight: 900 !important;
+                }
+                .letterhead-company-nit {
+                    font-size: 8.5pt !important;
+                    font-weight: 700 !important;
+                }
+                .letterhead-company-info {
+                    font-size: 8pt !important;
+                    line-height: 1.35 !important;
+                }
+                .letterhead-meta-strip {
+                    font-size: 8.5pt !important;
+                }
+                .letterhead-footer {
+                    margin-top: auto !important;
+                    border-top: 1px solid #CBD5E1 !important;
+                    padding-top: 6px !important;
+                    font-size: 8pt !important;
+                    color: #334155 !important;
+                    line-height: 1.35 !important;
+                }
+                .letterhead-container table {
+                    font-size: 8.5pt !important;
+                }
+                .letterhead-container th {
+                    font-size: 8pt !important;
+                    padding: 4px 6px !important;
+                }
+                .letterhead-container td {
+                    font-size: 8.5pt !important;
+                    padding: 4px 6px !important;
                 }
                 .page-break {
                     page-break-after: always !important;
                     break-after: page !important;
+                }
+                .page-break:last-child {
+                    page-break-after: avoid !important;
+                    break-after: avoid !important;
                 }
                 .letterhead-top-stripe {
                     display: none !important;

@@ -7,6 +7,7 @@ import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, ArrowLeft, Tag, Package, Sparkles, Scale, Building2, Calendar, Truck, Clock } from 'lucide-react';
+import { PrintDocumentSwitcher } from '@/components/print';
 
 interface OrderItemData {
     id: string;
@@ -105,18 +106,20 @@ export default function BulkOrderPrintLabelsPage() {
         return `${day}-${month}-${year}`;
     };
 
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const p = searchParams.get('date');
+        if (p) return p;
+        const now = new Date();
+        return now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    });
+
     useEffect(() => {
         const fetchBulkLabelsData = async () => {
             // Unify query params: accept orderIds, ids or date
             const rawParam = searchParams.get('orderIds') || searchParams.get('ids') || '';
-            const dateParam = searchParams.get('date') || '';
             const ids = rawParam.split(',').map(s => s.trim()).filter(Boolean);
 
-            if (ids.length === 0 && !dateParam) {
-                setLoading(false);
-                return;
-            }
-
+            setLoading(true);
             try {
                 // 1. Fetch orders with client profile
                 let ordersQuery = supabase
@@ -129,9 +132,10 @@ export default function BulkOrderPrintLabelsPage() {
                     .order('created_at', { ascending: true });
 
                 if (ids.length > 0) {
-                    ordersQuery = ordersQuery.in('id', ids);
-                } else if (dateParam) {
-                    ordersQuery = ordersQuery.eq('delivery_date', dateParam).neq('status', 'cancelled');
+                    ordersQuery = ordersQuery.in('id', ids).neq('status', 'cancelled');
+                } else {
+                    const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                    ordersQuery = ordersQuery.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
                 }
 
                 const { data: ordersData, error: ordersErr } = await ordersQuery;
@@ -185,7 +189,7 @@ export default function BulkOrderPrintLabelsPage() {
         };
 
         fetchBulkLabelsData();
-    }, [searchParams]);
+    }, [searchParams, selectedDate]);
 
     // Generate Crate Labels (Mode 1: Dispatch & Warehouse Logistics)
     const crateLabels = useMemo<CrateLabelInfo[]>(() => {
@@ -306,28 +310,8 @@ export default function BulkOrderPrintLabelsPage() {
         );
     }
 
-    if (orders.length === 0) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', gap: '1rem', padding: '2rem', textAlign: 'center' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}>
-                    <Tag size={28} />
-                </div>
-                <h2 style={{ margin: 0, color: '#0F172A', fontWeight: '900' }}>No se seleccionaron pedidos para impresión</h2>
-                <p style={{ margin: 0, color: '#64748B', maxWidth: '420px', fontSize: '0.9rem' }}>
-                    Regresa a la mesa de Cargue de Pedidos o al Asistente de Despacho y selecciona al menos un pedido para imprimir sus rótulos.
-                </p>
-                <button 
-                    onClick={() => router.back()} 
-                    style={{ marginTop: '0.5rem', padding: '10px 20px', backgroundColor: '#0F172A', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem' }}
-                >
-                    Volver al Cargue
-                </button>
-            </div>
-        );
-    }
-
     return (
-        <div style={{ backgroundColor: '#0F172A', minHeight: '100vh', padding: '20px 0', boxSizing: 'border-box' }}>
+        <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '0 0 3rem', boxSizing: 'border-box' }}>
             {/* Strict CSS Print Rules Calibrated for Zebra / Xprinter 100mm x 50mm Thermal Continuous Rolls */}
             <style>
                 {`
@@ -374,223 +358,147 @@ export default function BulkOrderPrintLabelsPage() {
                 `}
             </style>
 
-            {/* Non-Printable Configuration & Action Toolbar */}
-            <div className="no-print" style={{ 
-                maxWidth: '920px', 
-                margin: '0 auto 20px', 
-                padding: '16px 20px', 
-                backgroundColor: '#1E293B', 
-                borderRadius: '16px', 
-                border: '1px solid #334155',
-                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                color: 'white'
+            {/* Barra de Control Superior (No Imprimible) - 100% Sticky */}
+            <div className="no-print" style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 9999,
+                backgroundColor: '#FFFFFF',
+                borderBottom: '1px solid #CBD5E1',
+                padding: '0.35rem 1rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <button
-                            onClick={() => router.back()}
-                            style={{ 
-                                padding: '8px 12px', 
-                                backgroundColor: '#334155', 
-                                color: '#CBD5E1', 
-                                border: 'none', 
-                                borderRadius: '8px', 
-                                cursor: 'pointer', 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '6px',
-                                fontWeight: '700',
-                                fontSize: '0.8rem'
-                            }}
-                        >
-                            <ArrowLeft size={14} /> Volver
-                        </button>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', letterSpacing: '-0.01em' }}>
-                                    Impresión Térmica de Rótulos
-                                </h2>
-                                <span style={{ fontSize: '0.7rem', backgroundColor: '#0D7A57', color: '#ECFDF5', padding: '2px 8px', borderRadius: '6px', fontWeight: '900' }}>
-                                    100mm × 50mm
-                                </span>
-                            </div>
-                            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#94A3B8' }}>
-                                {orders.length} pedidos seleccionados &bull; {labelType === 'crate' ? crateLabels.length : productLabels.length} etiquetas listas para imprimir
-                            </p>
-                        </div>
-                    </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                        onClick={() => router.back()}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.74rem',
+                            fontWeight: '700',
+                            color: '#334155'
+                        }}
+                    >
+                        <ArrowLeft size={13} /> Volver
+                    </button>
 
-                    {/* Print Action Button */}
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <button 
-                            onClick={() => window.print()} 
-                            style={{ 
-                                padding: '10px 22px', 
-                                backgroundColor: '#10B981', 
-                                color: '#064E3B', 
-                                border: 'none', 
-                                borderRadius: '10px', 
-                                cursor: 'pointer', 
-                                fontWeight: '900', 
-                                fontSize: '0.92rem', 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '8px',
-                                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
-                            }}
-                        >
-                            <Printer size={18} strokeWidth={2.5} /> 
-                            <span>IMPRIMIR RÓTULOS (Ctrl + P)</span>
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h1 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            <Tag size={16} color="#0D7A57" />
+                            Rótulos Térmicos
+                        </h1>
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+                            {orders.length} ped.
+                        </span>
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '12px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>
+                            100×50mm
+                        </span>
                     </div>
                 </div>
 
-                {/* Sub-toolbar: Mode and Crate Controls */}
-                <div style={{ 
-                    marginTop: '14px', 
-                    paddingTop: '12px', 
-                    borderTop: '1px solid #334155', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between', 
-                    flexWrap: 'wrap', 
-                    gap: '12px' 
-                }}>
-                    {/* Mode Selector */}
-                    <div style={{ display: 'flex', backgroundColor: '#0F172A', padding: '3px', borderRadius: '10px', border: '1px solid #334155' }}>
-                        <button
-                            type="button"
-                            onClick={() => setLabelType('crate')}
-                            style={{
-                                padding: '6px 14px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem',
-                                fontWeight: '800',
-                                backgroundColor: labelType === 'crate' ? '#10B981' : 'transparent',
-                                color: labelType === 'crate' ? '#064E3B' : '#94A3B8',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.15s'
-                            }}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* Selector de Documento Imprimible & Fecha con Persistencia */}
+                    <PrintDocumentSwitcher
+                        currentDoc="labels"
+                        selectedDate={selectedDate}
+                        onDateChange={(newDate) => {
+                            setSelectedDate(newDate);
+                            const params = new URLSearchParams();
+                            params.set('date', newDate);
+                            const rawParam = searchParams.get('orderIds') || searchParams.get('ids') || '';
+                            if (rawParam) params.set('orderIds', rawParam);
+                            router.replace(`/admin/orders/print-labels?${params.toString()}`);
+                        }}
+                        orderIds={searchParams.get('orderIds') || searchParams.get('ids') || undefined}
+                        variant="light"
+                    />
+
+                    {/* Selector de Tipo de Rótulo */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
+                        <select
+                            value={labelType}
+                            onChange={(e) => setLabelType(e.target.value as 'crate' | 'product')}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
-                            <Tag size={13} /> Rótulos de Canastilla / Despacho (con QR)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setLabelType('product')}
-                            style={{
-                                padding: '6px 14px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem',
-                                fontWeight: '800',
-                                backgroundColor: labelType === 'product' ? '#10B981' : 'transparent',
-                                color: labelType === 'product' ? '#064E3B' : '#94A3B8',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <Package size={13} /> Etiquetas de Producto (Bromatológicas)
-                        </button>
+                            <option value="crate">Canastilla / Despacho (QR)</option>
+                            <option value="product">Etiquetas Producto</option>
+                        </select>
                     </div>
 
-                    {/* Multiplier / Filter Options */}
-                    {labelType === 'crate' ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#CBD5E1' }}>
-                            <span style={{ fontWeight: '700' }}>Canastillas por Pedido:</span>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                                <button
-                                    onClick={() => setCratesMode('auto')}
-                                    style={{
-                                        padding: '4px 10px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #334155',
-                                        backgroundColor: cratesMode === 'auto' ? '#0D7A57' : '#1E293B',
-                                        color: cratesMode === 'auto' ? 'white' : '#94A3B8',
-                                        fontWeight: '700',
-                                        fontSize: '0.72rem',
-                                        cursor: 'pointer'
-                                    }}
-                                    title="Calcula automáticamente 1 etiqueta cada 12.5 kg de carga"
-                                >
-                                    Auto (~12.5 kg)
-                                </button>
-                                <button
-                                    onClick={() => setCratesMode('single')}
-                                    style={{
-                                        padding: '4px 10px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #334155',
-                                        backgroundColor: cratesMode === 'single' ? '#0D7A57' : '#1E293B',
-                                        color: cratesMode === 'single' ? 'white' : '#94A3B8',
-                                        fontWeight: '700',
-                                        fontSize: '0.72rem',
-                                        cursor: 'pointer'
-                                    }}
-                                    title="1 solo rótulo por pedido"
-                                >
-                                    1 por Pedido
-                                </button>
-                                <button
-                                    onClick={() => setCratesMode('custom')}
-                                    style={{
-                                        padding: '4px 10px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #334155',
-                                        backgroundColor: cratesMode === 'custom' ? '#0D7A57' : '#1E293B',
-                                        color: cratesMode === 'custom' ? 'white' : '#94A3B8',
-                                        fontWeight: '700',
-                                        fontSize: '0.72rem',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Fijo ({customMultiplier})
-                                </button>
-                            </div>
-                            {cratesMode === 'custom' && (
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="20"
-                                    value={customMultiplier}
-                                    onChange={e => setCustomMultiplier(Math.max(1, parseInt(e.target.value) || 1))}
-                                    style={{ width: '45px', padding: '3px 6px', borderRadius: '4px', border: '1px solid #475569', backgroundColor: '#0F172A', color: 'white', fontSize: '0.75rem', fontWeight: 'bold' }}
-                                />
-                            )}
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#CBD5E1' }}>
-                            <span style={{ fontWeight: '700' }}>Filtro de Productos:</span>
-                            <button
-                                onClick={() => setProductFilterMode(prev => prev === 'all' ? 'requires_label' : 'all')}
-                                style={{
-                                    padding: '4px 10px',
-                                    borderRadius: '6px',
-                                    border: '1px solid #334155',
-                                    backgroundColor: productFilterMode === 'all' ? '#0D7A57' : '#1E293B',
-                                    color: productFilterMode === 'all' ? 'white' : '#94A3B8',
-                                    fontWeight: '700',
-                                    fontSize: '0.72rem',
-                                    cursor: 'pointer'
-                                }}
+                    {/* Modo de Canastillas (solo visible si labelType === 'crate') */}
+                    {labelType === 'crate' && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569' }}>Cálculo:</span>
+                            <select
+                                value={cratesMode}
+                                onChange={(e) => setCratesMode(e.target.value as any)}
+                                style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '800', color: '#0D7A57', outline: 'none', cursor: 'pointer' }}
                             >
-                                {productFilterMode === 'all' ? 'Todos los Productos del Pedido' : 'Solo ítems con Flag "Requiere Etiqueta"'}
-                            </button>
+                                <option value="auto">Auto (~12.5 kg)</option>
+                                <option value="single">1 por Pedido</option>
+                                <option value="custom">Fijo ({customMultiplier} por Ped.)</option>
+                            </select>
                         </div>
                     )}
+
+                    {/* Filtro de Producto (solo visible si labelType === 'product') */}
+                    {labelType === 'product' && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
+                            <select
+                                value={productFilterMode}
+                                onChange={(e) => setProductFilterMode(e.target.value as any)}
+                                style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '800', color: '#0D7A57', outline: 'none', cursor: 'pointer' }}
+                            >
+                                <option value="all">Todos los Productos</option>
+                                <option value="requires_label">Solo "Requiere Etiqueta"</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Botón Imprimir Rótulos */}
+                    <button
+                        onClick={() => window.print()}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '4px 12px',
+                            backgroundColor: '#0D7A57',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.76rem',
+                            fontWeight: '800',
+                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        <Printer size={14} /> Imprimir ({labelType === 'crate' ? crateLabels.length : productLabels.length} Rót.)
+                    </button>
                 </div>
             </div>
 
             {/* Printable Labels Canvas */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                {labelType === 'crate' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0.75rem auto' }}>
+                {orders.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3.5rem 2rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #CBD5E1', maxWidth: '650px', margin: '2rem auto', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                        <Tag size={40} color="#64748B" style={{ margin: '0 auto 1rem' }} />
+                        <h3 style={{ margin: '0 0 0.5rem', fontWeight: '800', fontSize: '1.1rem', color: '#0F172A' }}>No hay pedidos para generar rótulos en esta fecha</h3>
+                        <p style={{ margin: 0, color: '#64748B', fontSize: '0.85rem' }}>Selecciona otra fecha con pedidos operacionales o utiliza el selector de fecha superior.</p>
+                    </div>
+                ) : labelType === 'crate' ? (
                     /* ======================================================== */
                     /* MODE 1: CRATE / DISPATCH LOGISTICS LABELS (100mm x 50mm) */
                     /* ======================================================== */

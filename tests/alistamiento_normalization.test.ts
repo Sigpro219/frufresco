@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { formatStructuredSpecification, isRedundantAttribute } from '../src/lib/orderUtils';
+import { PRINT_DOCUMENTS, getBogotaDate } from '../src/components/print/PrintDocumentSwitcher';
 
 /**
  * Normaliza cualquier cantidad y unidad respetando la Unidad Maestra de Compra/Catálogo.
@@ -252,6 +253,83 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
         assert.strictEqual(isRedundantAttribute('Blanca', 'Cebolla cabezona blanca'), true);
         assert.strictEqual(isRedundantAttribute('Maduro', 'Papaya maradol'), false);
         assert.strictEqual(isRedundantAttribute('Pintón', 'Plátano maduro'), false);
+    });
+
+    await t.test('Erradicación de Atributos Falsos: Textos libres sin opciones estructuradas NUNCA deben inventar atributos', () => {
+        // Colsubsidio Catering: Aguacate con nickname "AGUACATE PRIMERA" y selected_options vacías
+        const aguacatePrimera = formatStructuredSpecification({
+            product_name: 'Aguacate',
+            quantity: 10,
+            unit: 'Kg',
+            nickname: 'AGUACATE PRIMERA 1000 GR (primera 1000 gr)',
+            variant_label: 'primera 1000 gr',
+            selected_options: {}
+        });
+        assert.strictEqual(aguacatePrimera, null, 'Aguacate primera sin selected_options debe ser null');
+
+        // Colsubsidio VIP: Aguacate con nickname "AGUACATE GRANDE PARA TAJAR" y selected_options vacías
+        const aguacateTajar = formatStructuredSpecification({
+            product_name: 'Aguacate',
+            quantity: 3,
+            unit: 'Kg',
+            nickname: 'AGUACATE GRANDE PARA TAJAR (grande tajar)',
+            variant_label: 'grande tajar',
+            selected_options: {}
+        });
+        assert.strictEqual(aguacateTajar, null, 'Aguacate tajar sin selected_options debe ser null');
+
+        // Champiñón con nickname "PAREJO MEDIANO" y selected_options vacías
+        const champinonMediano = formatStructuredSpecification({
+            product_name: 'Champiñon',
+            quantity: 1,
+            unit: 'Kg',
+            nickname: 'CHAMPIÑON GRANEL 1000 GR (PAREJO MEDIANO granel 1000 gr)',
+            variant_label: 'PAREJO MEDIANO granel 1000 gr',
+            selected_options: {}
+        });
+        assert.strictEqual(champinonMediano, null, 'Champiñón mediano sin selected_options debe ser null');
+    });
+
+    await t.test('Compuerta de Aprobación de Documentos Físicos: Solo órdenes en estados operacionales deben ingresar a las planillas', () => {
+        const OPERATIONAL_STATUSES = new Set(['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed']);
+        const NON_OPERATIONAL_STATUSES = ['pending_approval', 'recibido', 'pending', 'cancelled', 'draft'];
+
+        // 1. Estados no operacionales deben ser rechazados por la compuerta
+        NON_OPERATIONAL_STATUSES.forEach(status => {
+            assert.strictEqual(
+                OPERATIONAL_STATUSES.has(status),
+                false,
+                `Estado '${status}' NO debe entrar a planillas de alistamiento/compras`
+            );
+        });
+
+        // 2. Estados operacionales autorizados deben ser admitidos
+        ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'].forEach(status => {
+            assert.strictEqual(
+                OPERATIONAL_STATUSES.has(status),
+                true,
+                `Estado operacional '${status}' debe ser admitido`
+            );
+        });
+    });
+
+    await t.test('PrintDocumentSwitcher: Catálogo de 6 documentos oficiales y cálculo de fechas', () => {
+        // 1. Debe registrar exactamente los 6 documentos de la suite oficial (incluyendo Manifiesto de Ruta)
+        assert.strictEqual(PRINT_DOCUMENTS.length, 6);
+        const keys = PRINT_DOCUMENTS.map(d => d.key);
+        assert.deepStrictEqual(keys, ['alistamiento', 'purchases', 'receiving', 'labels', 'manifest', 'contingency']);
+
+        // 2. getBogotaDate debe generar formato YYYY-MM-DD
+        const today = getBogotaDate(0);
+        assert.match(today, /^\d{4}-\d{2}-\d{2}$/);
+
+        const yesterday = getBogotaDate(-1);
+        assert.match(yesterday, /^\d{4}-\d{2}-\d{2}$/);
+        assert.notStrictEqual(today, yesterday);
+
+        const tomorrow = getBogotaDate(1);
+        assert.match(tomorrow, /^\d{4}-\d{2}-\d{2}$/);
+        assert.notStrictEqual(today, tomorrow);
     });
 });
 

@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Printer, ArrowLeft, Download, Calendar, Filter, ShoppingBag, FileSpreadsheet } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Filter, ShoppingBag, FileSpreadsheet } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import UniversalLetterhead from '@/components/print/UniversalLetterhead';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
-import { printViaNewWindow } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
 import * as XLSX from 'xlsx';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
 
@@ -62,11 +62,12 @@ export default function PurchasesPrintPage() {
 
             // If no procurement_tasks generated yet, fallback directly to active order_items for that date
             if (rawTasks.length === 0) {
+                const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
                 const { data: ordersWithItems, error: oErr } = await supabase
                     .from('orders')
                     .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label, selected_options)')
                     .eq('delivery_date', selectedDate)
-                    .neq('status', 'cancelled');
+                    .in('status', OPERATIONAL_STATUSES);
 
                 if (!oErr && ordersWithItems) {
                     const taskMap: Record<string, any> = {};
@@ -274,68 +275,68 @@ export default function PurchasesPrintPage() {
                 top: 0,
                 zIndex: 50,
                 backgroundColor: '#FFFFFF',
-                borderBottom: '1px solid #E2E8F0',
-                padding: '0.85rem 1.5rem',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                borderBottom: '1px solid #CBD5E1',
+                padding: '0.35rem 1rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: '12px'
+                gap: '8px'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                         onClick={() => router.back()}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 12px',
+                            gap: '4px',
+                            padding: '3px 8px',
                             backgroundColor: '#F8FAFC',
                             border: '1px solid #CBD5E1',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: '600',
+                            fontSize: '0.74rem',
+                            fontWeight: '700',
                             color: '#334155'
                         }}
                     >
-                        <ArrowLeft size={16} /> Volver
+                        <ArrowLeft size={13} /> Volver
                     </button>
 
-                    <div>
-                        <h1 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <ShoppingBag size={20} color="#0D7A57" />
-                            Planillas de Compras por Sublista (Corabastos)
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h1 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            <ShoppingBag size={16} color="#0D7A57" />
+                            Compras Corabastos
                         </h1>
-                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                            {items.length} productos a negociar &bull; Salto de página estricto por Sublista &bull; Formato Golden Print
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+                            {items.length} prod.
                         </span>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {/* Date */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
-                        <Calendar size={14} color="#64748B" />
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Fecha:</span>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', outline: 'none' }}
-                        />
-                    </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* Selector de Documento Imprimible & Fecha con Persistencia */}
+                    <PrintDocumentSwitcher
+                        currentDoc="purchases"
+                        selectedDate={selectedDate}
+                        onDateChange={(newDate) => {
+                            setSelectedDate(newDate);
+                            const params = new URLSearchParams();
+                            params.set('date', newDate);
+                            router.replace(`/admin/procurement/purchases-print?${params.toString()}`);
+                        }}
+                    />
 
                     {/* Sublist Filter */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
-                        <Filter size={14} color="#64748B" />
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
+                        <Filter size={13} color="#64748B" />
                         <select
                             value={selectedSublist}
                             onChange={(e) => setSelectedSublist(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', outline: 'none' }}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
-                            <option value="ALL">Todas las Sublistas ({availableSublists.length})</option>
+                            <option value="ALL">Sublistas ({availableSublists.length})</option>
                             {availableSublists.map(s => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
@@ -348,18 +349,20 @@ export default function PurchasesPrintPage() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '8px 14px',
+                            gap: '4px',
+                            padding: '4px 10px',
                             backgroundColor: '#0F766E',
                             color: '#FFFFFF',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.82rem',
-                            fontWeight: '700'
+                            fontSize: '0.76rem',
+                            fontWeight: '700',
+                            whiteSpace: 'nowrap'
                         }}
+                        title="Descargar consolidado en formato Excel con 11 columnas estándar"
                     >
-                        <FileSpreadsheet size={16} /> Descargar Excel (11 cols)
+                        <FileSpreadsheet size={14} /> Excel (11 cols)
                     </button>
 
                     {/* Print */}
@@ -378,19 +381,20 @@ export default function PurchasesPrintPage() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 18px',
+                            gap: '4px',
+                            padding: '4px 12px',
                             backgroundColor: '#0D7A57',
                             color: '#FFFFFF',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.85rem',
+                            fontSize: '0.76rem',
                             fontWeight: '800',
-                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)'
+                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)',
+                            whiteSpace: 'nowrap'
                         }}
                     >
-                        <Printer size={16} /> Imprimir Planillas
+                        <Printer size={14} /> Imprimir Planillas
                     </button>
                 </div>
             </div>

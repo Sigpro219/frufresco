@@ -1808,6 +1808,23 @@ Como salvaguarda ante zonas sin señal de telefonía celular o teléfonos de con
 
 ## 19. ESTÁNDAR CANÓNICO DE ESPECIFICACIONES OPERATIVAS, AGRUPACIÓN DE VARIANTES Y SUPRESIÓN DE RUIDO VISUAL
 
+### 19.0 Principio Fundacional: La Barrera Canónica de Estandarización (Gateway Pedidos ➔ Gemba)
+Las notas, expresiones y observaciones del cliente en sus órdenes de compra (*"para tajar"*, *"no sobremadurado"*, *"no verde"*, *"fruta seleccionada"*, *"primera"*, *"mpfvfr003"*) son legítimas, valiosas y reflejan su necesidad comercial. Sin embargo, en el piso de operaciones (Gemba) en Corabastos a las 03:00 AM, el lenguaje natural no estructurado es fuente crítica de incertidumbre, demoras y errores de conteo.
+
+Por tanto, se consagra como ley de arquitectura el **Principio de la Barrera Canónica de Estandarización**:
+
+1. **El Módulo de Pedidos es la Aduana de Traducción:**  
+   La misión indelegable del módulo de pedidos (`/admin/orders/create`, `/admin/orders/loading`) y del analista de operaciones es traducir la voz natural del cliente a **lenguaje máquina / industrial operable**:
+   - Asignar el SKU específico del catálogo (`products.id`).
+   - Configurar explícitamente los atributos estructurados autorizados (`selected_options`: presentación, calibre, corte, maduración diferencial).
+   - Parametrizar la magnitud matemática de facturación y empaque (Motor Dual-Unit: masa neta en kg vs unidades discretas).
+   - Si no se asigna una variante especial, la traducción canónica e inequívoca es: *"Entregar el producto base estándar por peso a granel"*.
+
+2. **Aislamiento Total del Gemba Frente al Lenguaje Natural:**  
+   Una vez aprobado el pedido en el módulo de pedidos, **la estandarización es definitiva e inviolable**.
+   - Queda terminantemente prohibido que los documentos de piso (sábana de alistamiento, rótulos térmicos, planillas de compras) reinyecten textos libres, alias o inferencias heurísticas.
+   - Todo lo que no haya sido formalizado como opción estructurada en `selected_options` o empaque matemático de doble unidad es **ruido operativo**, y debe suprimirse de los documentos de piso para preservar la velocidad y concentración del operario.
+
 ### 19.1 Arquitectura del Formato Canónico de Ítems de Pedido
 Toda vista operativa de detalle (`/admin/orders/loading`, `/admin/orders/[id]`) y documento impreso debe respetar estrictamente la jerarquía visual de dos líneas para productos con variantes culinarias o unidades discretas de peso:
 
@@ -1837,6 +1854,10 @@ La sábana física de alistamiento es un instrumento de trabajo de alta velocida
    Si una opción o atributo estructurado (ej: *Maduro*, *Verde*, *Blanca*) **ya está explícitamente contenido en el nombre del SKU o producto** (ej: `Plátano maduro`, `Plátano verde`, `Cebolla cabezona blanca`), se suprime automáticamente de la Fila 2.
    - La celda secundaria **DEBE PERMANECER 100% VACÍA**, eliminando el pleonasmo visual (mostrar `Maduro` debajo de la columna `Plátano maduro`).
    - Solo se renderiza la segunda línea si aporta una especificación física/operativa diferencial no dicha en el nombre del producto (ej: empaque/peso `12 und de 2 kg` o maduración de productos base como `Papaya maradol` $\rightarrow$ `Maduro` o `Mango tommy` $\rightarrow$ `Pintón`).
+4. **Erradicación Absoluta de Inferencia por Palabras Clave sobre Texto Libre:**  
+   Queda terminantemente prohibido escanear alias, nicknames o campos de texto libre (`nickname`, `variant_label`, observaciones comerciales) con listas de palabras clave (*keywords* como `primera`, `tajar`, `mediano`, `delgado`, `limpio`) para intentar "adivinar" especificaciones.
+   - Solo se renderizan especificaciones si provienen de **opciones estructuradas reales (`selected_options`)** montadas explícitamente desde el módulo de pedidos o de especificaciones matemáticas de doble unidad (`_original_qty`, `_unit_weight_gr`).
+   - Si un pedido no contiene opciones estructuradas en `selected_options`, la celda secundaria **PERMANECE 100% VACÍA**, erradicando de raíz la aparición de etiquetas espurias como `Primera` o `Tajar`.
 
 ---
 
@@ -2008,6 +2029,13 @@ flowchart TD
   - Mermas / Devoluciones en Patio (kg rechazados por calidad).
   - Firma del inspector de calidad de recibo.
 
+#### 19.7.1 Centro de Mando de Documentos Imprimibles (`PrintDocumentSwitcher`) con Persistencia Temporal
+Para garantizar fluidez y velocidad en el Gemba, la barra superior de los 5 documentos físicos incorpora el componente de conmutación canónica `PrintDocumentSwitcher`:
+1. **Navegación Cruzada Unificada:** Permite alternar de manera instantánea entre los 5 documentos de la suite sin salir a menús principales.
+2. **Persistencia Temporal Inviolable:** Al cambiar de documento, la fecha seleccionada (`?date=YYYY-MM-DD`) se transfiere y conserva automáticamente en la URL, permitiendo auditar tandas de ayer, hoy, mañana o cualquier fecha histórica sin perder contexto.
+3. **Preservación de Lotes Específicos:** Si la consulta se origina a partir de un subconjunto de pedidos (`?orderIds=...`), dichos identificadores persisten en todos los documentos seleccionados.
+4. **Atajos Rápidos Lean:** Botones directos `[Ayer]`, `[Hoy]` y `[Mañana]` calculados contra el huso horario colombiano (`America/Bogota`) para auditoría y visualización de despachos con un solo clic.
+
 ---
 
 ### 19.8 Flujo End-to-End de Datos Operativos en el Ciclo de Vida del Pedido
@@ -2089,6 +2117,16 @@ sequenceDiagram
   2. En la Sábana de Alistamiento, la celda muestra `20 KG` en Fila 1 y deja la Fila 2 completamente vacía.
   3. En las tablets de picking digital, el operario ve la demanda de 20 kg sin notas redundantes.
   4. En la remisión impresa y digital, el ítem se lista limpiamente como "Plátano maduro" por 20 kg.
+
+#### Escenario 34: Compuerta de Aprobación de Documentos Físicos (Generación SI Y SOLO SI producto de Aprobación)
+- **Given** pedidos en la base de datos para una fecha determinada que se encuentran en estado preliminar `pending_approval`, `recibido` o `pending` (borradores/por procesar comerciales) y sin bahías de muelle asignadas (`warehouse_spaces IS NULL`).
+- **When** el supervisor o despachador ingresa a la vista de impresión de la Sábana de Alistamiento (`/admin/orders/alistamiento-print?date=...`), Planilla de Compras (`purchases-print`) o Kit de Contingencia (`contingency-print`).
+- **Then**:
+  1. Los documentos operativos físicos **NUNCA** deben cargar ni renderizar pedidos que no hayan sido formalmente aprobados o lanzados al proceso logístico.
+  2. La consulta a base de datos exige estrictamente que el estado sea operacional:
+     $$\text{status} \in \{\text{'para\_compra'},\; \text{'approved'},\; \text{'picking'},\; \text{'shipped'},\; \text{'delivered'},\; \text{'completed'}\}$$
+  3. Los pedidos en borrador `pending_approval` quedan 100% aislados en el módulo comercial de pedidos hasta que el operador los apruebe.
+  4. Si para la fecha consultada no existe ninguna operación lanzada, la interfaz muestra limpiamente el estado informativo: *"No hay operación de alistamiento montada para esta fecha (0 pedidos aprobados)"*, sin generar planillas ficticias ni falsear bahías de muelle con números de orden.
 
 
 

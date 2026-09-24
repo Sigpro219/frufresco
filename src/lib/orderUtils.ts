@@ -245,24 +245,6 @@ export const getStructuredSpecKey = (item: StructuredSpecItemInput): string => {
         }
     });
 
-    if (attributeParts.length === 0 && item.variant_label) {
-        const raw = item.variant_label.trim();
-        const culinaryKeywords = ['maduro', 'pinton', 'pintón', 'verde', 'biche', 'tajar', 'tajadas', 'primera', 'segunda', 'grueso', 'mediano', 'delgado', 'limpio', 'lavado'];
-        const matched: string[] = [];
-        culinaryKeywords.forEach(kw => {
-            const regex = new RegExp(`\\b${kw}\\b`, 'i');
-            if (regex.test(raw)) {
-                const capitalized = kw.charAt(0).toUpperCase() + kw.slice(1);
-                if (!isRedundantAttribute(capitalized, prodName)) {
-                    matched.push(capitalized);
-                }
-            }
-        });
-        if (matched.length > 0) {
-            attributeParts.push(...Array.from(new Set(matched)));
-        }
-    }
-
     const attrStr = attributeParts.join(', ');
     if (unitWeightPart && attrStr) return `${unitWeightPart}; ${attrStr}`;
     if (unitWeightPart) return unitWeightPart;
@@ -333,24 +315,6 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
             }
         }
     });
-
-    if (attributeParts.length === 0 && item.variant_label) {
-        const raw = item.variant_label.trim();
-        const culinaryKeywords = ['maduro', 'pinton', 'pintón', 'verde', 'biche', 'tajar', 'tajadas', 'primera', 'segunda', 'grueso', 'mediano', 'delgado', 'limpio', 'lavado'];
-        const matched: string[] = [];
-        culinaryKeywords.forEach(kw => {
-            const regex = new RegExp(`\\b${kw}\\b`, 'i');
-            if (regex.test(raw)) {
-                const capitalized = kw.charAt(0).toUpperCase() + kw.slice(1);
-                if (!isRedundantAttribute(capitalized, prodName)) {
-                    matched.push(capitalized);
-                }
-            }
-        });
-        if (matched.length > 0) {
-            attributeParts.push(...Array.from(new Set(matched)));
-        }
-    }
 
     // 3. Assemble
     const attrStr = attributeParts.join(', ');

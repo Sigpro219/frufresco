@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Printer, ArrowLeft, Calendar, Filter, Truck } from 'lucide-react';
+import { Printer, ArrowLeft, Filter, Truck } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import UniversalLetterhead from '@/components/print/UniversalLetterhead';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
-import { printViaNewWindow } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
 
 interface ReceivingItem {
@@ -54,11 +54,12 @@ export default function ReceivingPrintPage() {
 
             // If empty, fallback to order_items
             if (rawTasks.length === 0) {
+                const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
                 const { data: ordersWithItems } = await supabase
                     .from('orders')
                     .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label, selected_options)')
                     .eq('delivery_date', selectedDate)
-                    .neq('status', 'cancelled');
+                    .in('status', OPERATIONAL_STATUSES);
 
                 if (ordersWithItems) {
                     const map: Record<string, any> = {};
@@ -176,66 +177,67 @@ export default function ReceivingPrintPage() {
                 top: 0,
                 zIndex: 50,
                 backgroundColor: '#FFFFFF',
-                borderBottom: '1px solid #E2E8F0',
-                padding: '0.85rem 1.5rem',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                borderBottom: '1px solid #CBD5E1',
+                padding: '0.35rem 1rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: '12px'
+                gap: '8px'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                         onClick={() => router.back()}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 12px',
+                            gap: '4px',
+                            padding: '3px 8px',
                             backgroundColor: '#F8FAFC',
                             border: '1px solid #CBD5E1',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: '600',
+                            fontSize: '0.74rem',
+                            fontWeight: '700',
                             color: '#334155'
                         }}
                     >
-                        <ArrowLeft size={16} /> Volver
+                        <ArrowLeft size={13} /> Volver
                     </button>
 
-                    <div>
-                        <h1 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Truck size={20} color="#0D7A57" />
-                            Control de Ingreso en Muelle & Pesaje a Ciegas (INGRESO.pdf)
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h1 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            <Truck size={16} color="#0D7A57" />
+                            Recepción en Bodega
                         </h1>
-                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                            Recepción de camiones a las 02:00 AM &bull; Pesaje bruto, tara y neto real &bull; Cero errores
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+                            Control Muelle
                         </span>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
-                        <Calendar size={14} color="#64748B" />
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Fecha:</span>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', outline: 'none' }}
-                        />
-                    </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* Selector de Documento Imprimible & Fecha con Persistencia */}
+                    <PrintDocumentSwitcher
+                        currentDoc="receiving"
+                        selectedDate={selectedDate}
+                        onDateChange={(newDate) => {
+                            setSelectedDate(newDate);
+                            const params = new URLSearchParams();
+                            params.set('date', newDate);
+                            router.replace(`/admin/procurement/receiving-print?${params.toString()}`);
+                        }}
+                    />
 
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
-                        <Filter size={14} color="#64748B" />
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
+                        <Filter size={13} color="#64748B" />
                         <select
                             value={selectedSublist}
                             onChange={(e) => setSelectedSublist(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', outline: 'none' }}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
-                            <option value="ALL">Todas las Sublistas ({availableSublists.length})</option>
+                            <option value="ALL">Sublistas ({availableSublists.length})</option>
                             {availableSublists.map(s => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
@@ -257,19 +259,20 @@ export default function ReceivingPrintPage() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 18px',
+                            gap: '4px',
+                            padding: '4px 12px',
                             backgroundColor: '#0D7A57',
                             color: '#FFFFFF',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.85rem',
+                            fontSize: '0.76rem',
                             fontWeight: '800',
-                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)'
+                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)',
+                            whiteSpace: 'nowrap'
                         }}
                     >
-                        <Printer size={16} /> Imprimir Planillas de Muelle
+                        <Printer size={14} /> Imprimir Planillas Muelle
                     </button>
                 </div>
             </div>

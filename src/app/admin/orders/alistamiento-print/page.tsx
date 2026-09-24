@@ -5,9 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { Printer, ArrowLeft, Filter, Calendar, Layers, CheckSquare, Download, Columns } from 'lucide-react';
+import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import { printViaNewWindow } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
 
 interface OrderItem {
     id: string;
@@ -414,6 +414,9 @@ export default function AlistamientoSabanaPrintPage() {
     const fetchOrdersAndItems = async () => {
         setLoading(true);
         try {
+            // Compuerta Poka-Yoke de Alistamiento: Solo órdenes formalmente aprobadas/lanzadas a operaciones
+            const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+
             let orderQuery = supabase
                 .from('orders')
                 .select(`
@@ -423,14 +426,15 @@ export default function AlistamientoSabanaPrintPage() {
                         id, order_id, product_id, quantity, unit, nickname, variant_label, selected_options,
                         products(id, name, sku, accounting_id, unit_of_measure, buying_team, category, weight_kg, parent_id)
                     )
-                `)
-                .neq('status', 'cancelled');
+                `);
 
             if (paramOrderIds) {
                 const ids = paramOrderIds.split(',').map(s => s.trim()).filter(Boolean);
-                orderQuery = orderQuery.in('id', ids);
+                orderQuery = orderQuery.in('id', ids).neq('status', 'cancelled');
             } else {
-                orderQuery = orderQuery.eq('delivery_date', selectedDate);
+                orderQuery = orderQuery
+                    .eq('delivery_date', selectedDate)
+                    .in('status', OPERATIONAL_STATUSES);
             }
 
             const { data: rawOrders, error: oErr } = await orderQuery.order('created_at', { ascending: true });
@@ -471,11 +475,11 @@ export default function AlistamientoSabanaPrintPage() {
 
                 const spaceLabel = (o.warehouse_spaces && o.warehouse_spaces.length > 0)
                     ? formatSpaceLabel(o.warehouse_spaces)
-                    : (o.sequence_id ? `${o.sequence_id}` : `${idx + 1}`);
+                    : 'S/A';
 
                 const firstSpace = (o.warehouse_spaces && o.warehouse_spaces.length > 0)
                     ? o.warehouse_spaces[0]
-                    : (o.sequence_id ?? 999);
+                    : 999;
 
                 const orderNum = getFriendlyOrderId(o);
 
@@ -799,68 +803,70 @@ export default function AlistamientoSabanaPrintPage() {
                 top: 0,
                 zIndex: 9999,
                 backgroundColor: '#FFFFFF',
-                borderBottom: '1.5px solid #CBD5E1',
-                padding: '0.85rem 1.5rem',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
+                borderBottom: '1px solid #CBD5E1',
+                padding: '0.35rem 1rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: '12px'
+                gap: '8px'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                         onClick={() => router.back()}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 12px',
+                            gap: '4px',
+                            padding: '3px 8px',
                             backgroundColor: '#F8FAFC',
                             border: '1px solid #CBD5E1',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.8rem',
+                            fontSize: '0.74rem',
                             fontWeight: '700',
                             color: '#334155'
                         }}
                     >
-                        <ArrowLeft size={16} /> Volver
+                        <ArrowLeft size={13} /> Volver
                     </button>
 
-                    <div>
-                        <h1 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Layers size={20} color="#0D7A57" />
-                            Sábana Maestra de Alistamiento &bull; Tamaño Oficio (Legal)
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h1 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            <Layers size={16} color="#0D7A57" />
+                            Sábana de Alistamiento
                         </h1>
-                        <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                            {orders.length} pedidos &bull; Matriz Industrial (ID Contable &bull; Normalizado KG &bull; Control Poka-Yoke)
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+                            {orders.length} ped.
                         </span>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {/* Selector de Fecha */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
-                        <Calendar size={14} color="#64748B" />
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Fecha:</span>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', outline: 'none' }}
-                        />
-                    </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* Selector de Documento Imprimible & Fecha con Persistencia */}
+                    <PrintDocumentSwitcher
+                        currentDoc="alistamiento"
+                        selectedDate={selectedDate}
+                        onDateChange={(newDate) => {
+                            setSelectedDate(newDate);
+                            const params = new URLSearchParams();
+                            params.set('date', newDate);
+                            if (paramOrderIds) params.set('orderIds', paramOrderIds);
+                            router.replace(`/admin/orders/alistamiento-print?${params.toString()}`);
+                        }}
+                        orderIds={paramOrderIds || undefined}
+                    />
 
                     {/* Filtro de Célula */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }}>
-                        <Filter size={14} color="#64748B" />
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
+                        <Filter size={13} color="#64748B" />
                         <select
                             value={selectedCellFilter}
                             onChange={(e) => setSelectedCellFilter(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', outline: 'none' }}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
-                            <option value="ALL">Todas las Células ({availableCellNames.length})</option>
+                            <option value="ALL">Células ({availableCellNames.length})</option>
                             {availableCellNames.map(c => (
                                 <option key={c} value={c}>{c}</option>
                             ))}
@@ -868,17 +874,17 @@ export default function AlistamientoSabanaPrintPage() {
                     </div>
 
                     {/* Selector de Densidad de Columnas (Optimización de Hojas) */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '4px 10px' }} title="Ajusta cuántas columnas de producto caben por hoja para optimizar el gasto de papel">
-                        <Columns size={14} color="#0D7A57" />
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Columnas:</span>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }} title="Columnas por hoja">
+                        <Columns size={13} color="#0D7A57" />
+                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569' }}>Cols:</span>
                         <select
                             value={maxColsPerPage}
                             onChange={(e) => setMaxColsPerPage(Number(e.target.value))}
-                            style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', fontWeight: '800', color: '#0D7A57', outline: 'none', cursor: 'pointer' }}
+                            style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '800', color: '#0D7A57', outline: 'none', cursor: 'pointer' }}
                         >
-                            <option value={8}>8 cols (Expandido)</option>
-                            <option value={10}>10 cols (Estándar)</option>
-                            <option value={12}>12 cols (Compacto)</option>
+                            <option value={8}>8 (Exp.)</option>
+                            <option value={10}>10 (Std.)</option>
+                            <option value={12}>12 (Comp.)</option>
                         </select>
                     </div>
 
@@ -896,20 +902,21 @@ export default function AlistamientoSabanaPrintPage() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 18px',
+                            gap: '5px',
+                            padding: '4px 10px',
                             backgroundColor: '#FFFFFF',
                             color: '#0369A1',
-                            border: '1.5px solid #0284C7',
-                            borderRadius: '8px',
+                            border: '1px solid #0284C7',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.85rem',
+                            fontSize: '0.76rem',
                             fontWeight: '800',
-                            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.15)'
+                            boxShadow: '0 1px 3px rgba(2, 132, 199, 0.1)',
+                            whiteSpace: 'nowrap'
                         }}
                         title="Abre la vista limpia oficial para guardar como archivo PDF en formato Oficio"
                     >
-                        <Download size={16} /> Descargar PDF
+                        <Download size={14} /> PDF
                     </button>
 
                     {/* Botón de Impresión en Oficio */}
@@ -926,33 +933,41 @@ export default function AlistamientoSabanaPrintPage() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 20px',
+                            gap: '5px',
+                            padding: '4px 12px',
                             backgroundColor: '#0D7A57',
                             color: '#FFFFFF',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.85rem',
+                            fontSize: '0.76rem',
                             fontWeight: '800',
-                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)'
+                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)',
+                            whiteSpace: 'nowrap'
                         }}
                     >
-                        <Printer size={16} /> Imprimir Sábana Oficio ({printableSheets.length} Pág.)
+                        <Printer size={14} /> Imprimir ({printableSheets.length} Pág.)
                     </button>
                 </div>
             </div>
 
             {/* Contenedor del Documento (Proporción Oficio Landscape: 14in x 8.5in) */}
-            <div ref={printDocRef} style={{ maxWidth: '1350px', margin: '1.5rem auto', padding: '0 1rem' }}>
+            <div ref={printDocRef} style={{ maxWidth: '1350px', margin: '0.75rem auto', padding: '0 1rem' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
                         <p style={{ fontWeight: '700' }}>Cargando matriz de alistamiento nocturno...</p>
                     </div>
                 ) : printableSheets.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                        <p style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>No se encontraron órdenes ni productos para esta fecha.</p>
-                        <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Selecciona otra fecha en el panel superior o verifica que los pedidos estén confirmados.</p>
+                    <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #CBD5E1', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                            <Layers size={24} color="#64748B" />
+                        </div>
+                        <p style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0F172A', margin: '0 0 6px' }}>
+                            No hay operación de alistamiento montada para esta fecha
+                        </p>
+                        <p style={{ fontSize: '0.82rem', color: '#64748B', maxWidth: '540px', margin: '0 auto' }}>
+                            La Sábana de Alistamiento se genera únicamente a partir de pedidos formalmente aprobados y lanzados al proceso logístico (COMPRAS / ALISTAMIENTO). Si existen pedidos por procesar, deben ser aprobados primero desde el módulo de pedidos.
+                        </p>
                     </div>
                 ) : (
                     printableSheets.map((sheet, sheetGlobalIdx) => {

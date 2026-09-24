@@ -208,6 +208,7 @@ export function formatTimeWindow(data?: LogisticsData): string {
   
   if (data.days.length === 7) formattedDays = 'Toda la semana';
   else if (data.days.length === 6 && !data.days.includes(0)) formattedDays = 'Lun-Sáb';
+  else if (data.days.length === 5 && !data.days.includes(0) && !data.days.includes(6)) formattedDays = 'Lun-Vie';
   else formattedDays = data.days.sort((a,b) => (a||7)-(b||7)).map(d => daysMap[d]).join(', ');
 
   const formattedWindows = (data.windows || []).map(w => `${w.startTime} - ${w.endTime}`).join(' / ');
