@@ -7360,7 +7360,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     type="date"
                     className="hide-native-date-picker-indicator"
                     value={deliveryDate}
-                    min={minDeliveryDate}
                     onChange={e => {
                       const newDate = e.target.value;
                       if (newDate) {
@@ -10507,14 +10506,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     type="date" 
                     className="hide-native-date-picker-indicator"
                     value={deliveryDate} 
-                    min={minDeliveryDate}
                     onChange={(e) => {
                       const newDate = e.target.value;
+                      if (!newDate) return;
                       const minDate = getMinDeliveryDate();
                       if (newDate < minDate) {
-                        showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
-                        setDeliveryDate(minDate);
-                        return;
+                        showToast(`ℹ️ Fecha de despacho express / anterior a la ventana estándar (${minDate}).`, 'info');
                       }
                       setDeliveryDate(newDate);
                     }} 

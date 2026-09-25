@@ -3145,7 +3145,7 @@ function CreateOrderContent() {
                         }
                     }
 
-                    if (parsedDelivery && parsedDelivery >= minDeliveryDate) {
+                    if (parsedDelivery) {
                         setDeliveryDate(parsedDelivery);
                         showToast(`📅 Fecha de entrega detectada en el documento: ${parsedDelivery}`, 'success');
                     }
@@ -7983,17 +7983,16 @@ function CreateOrderContent() {
                                         <input
                                             type="date"
                                             value={deliveryDate}
-                                            min={minDeliveryDate}
                                             onChange={e => {
                                                 const newDate = e.target.value;
-                                                if (newDate < minDeliveryDate) {
-                                                    showToast(`La fecha mínima de entrega permitida es ${minDeliveryDate}.`, 'error');
-                                                    setDeliveryDate(minDeliveryDate);
-                                                    return;
+                                                if (newDate) {
+                                                    setDeliveryDate(newDate);
+                                                    if (newDate < minDeliveryDate) {
+                                                        showToast(`ℹ️ Fecha de despacho urgente / anterior a la ventana estándar (${minDeliveryDate}).`, 'info');
+                                                    }
                                                 }
-                                                setDeliveryDate(newDate);
                                             }}
-                                            style={{ width: '100%', height: '36px', padding: '0 0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontSize: '0.82rem', outline: 'none' }}
+                                            style={{ width: '100%', height: '36px', padding: '0 0.5rem', borderRadius: '6px', border: !deliveryRestrictionStatus.isValid ? '1.5px solid #F87171' : '1px solid #CBD5E1', backgroundColor: !deliveryRestrictionStatus.isValid ? '#FEF2F2' : 'white', fontSize: '0.82rem', outline: 'none' }}
                                         />
                                     </div>
                                 </div>

@@ -419,6 +419,65 @@ function OrderLoadingContent() {
     const [tempCity, setTempCity] = useState<string>('Bogotá');
     const [tempGeocodeMsg, setTempGeocodeMsg] = useState<string | null>(null);
 
+    const evaluateDeliveryRestriction = (client: any, deliveryDateStr: string) => {
+        if (!client || !deliveryDateStr) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '', timeWindow: '' };
+
+        const dateOnly = deliveryDateStr.split('T')[0];
+        const parts = dateOnly.split('-');
+        if (parts.length !== 3) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '', timeWindow: '' };
+
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const targetDate = new Date(year, month, day);
+
+        const jsDay = targetDate.getDay();
+        const isoDay = jsDay === 0 ? 7 : jsDay;
+
+        const DAY_NAMES: Record<number, string> = {
+            1: 'Lunes',
+            2: 'Martes',
+            3: 'Miércoles',
+            4: 'Jueves',
+            5: 'Viernes',
+            6: 'Sábado',
+            7: 'Domingo'
+        };
+
+        const targetDayName = DAY_NAMES[isoDay] || 'Día';
+        const logisticsData = client.logistics_data;
+        if (!logisticsData) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName, timeWindow: '' };
+
+        let allowedIsoDays: number[] = [];
+        if (Array.isArray(logisticsData.allowed_days) && logisticsData.allowed_days.length > 0) {
+            allowedIsoDays = logisticsData.allowed_days;
+        } else if (Array.isArray(logisticsData.days) && logisticsData.days.length > 0) {
+            allowedIsoDays = logisticsData.days.map((d: number) => d === 0 ? 7 : d);
+        }
+
+        if (allowedIsoDays.length > 0 && !allowedIsoDays.includes(isoDay)) {
+            const allowedDaysNames = allowedIsoDays.sort().map(d => DAY_NAMES[d] || `Día ${d}`).join(', ');
+            const timeWindow = (logisticsData.start_time && logisticsData.end_time) ? ` (${logisticsData.start_time} - ${logisticsData.end_time})` : '';
+            return {
+                isValid: false,
+                isDayViolation: true,
+                targetDayName,
+                allowedDaysNames,
+                timeWindow,
+                message: `Esta sede solo recibe entregas los ${allowedDaysNames}${timeWindow}. La fecha seleccionada corresponde a un ${targetDayName}.`
+            };
+        }
+
+        return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName, timeWindow: '' };
+    };
+
+    const editDeliveryRestrictionStatus = useMemo(() => {
+        if (!selectedOrder?.profiles || !editDeliveryDate) {
+            return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '', timeWindow: '' };
+        }
+        return evaluateDeliveryRestriction(selectedOrder.profiles, editDeliveryDate);
+    }, [selectedOrder, editDeliveryDate]);
+
     const handleOpenMapPicker = async () => {
         if (!editShippingAddress || editShippingAddress.trim() === '') {
             alert('Por favor ingresa una dirección de entrega válida antes de abrir el mapa.');
@@ -1147,7 +1206,7 @@ function OrderLoadingContent() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data), order_items(id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group))');
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions), order_items(id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group))');
 
 
 
@@ -1991,6 +2050,23 @@ function OrderLoadingContent() {
             return;
         }
 
+        // Check Delivery Day Restriction Warning (Allows exceptional bypass upon user confirmation)
+        const isB2B = selectedOrder.type?.startsWith('b2b') || selectedOrder.profiles?.role === 'b2b_client';
+        let exceptionStamp = '';
+        if (isB2B && !editDeliveryRestrictionStatus.isValid) {
+            const confirmException = window.confirm(
+                `⚠️ ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
+                `Esta sede (${selectedOrder.profiles?.company_name || selectedOrder.customer_name || 'Cliente'}) solo recibe despachos los días:\n` +
+                `🗓️ ${editDeliveryRestrictionStatus.allowedDaysNames}${editDeliveryRestrictionStatus.timeWindow || ''}\n\n` +
+                `Fecha seleccionada: ${editDeliveryDate.split('T')[0]} (${editDeliveryRestrictionStatus.targetDayName}).\n\n` +
+                `¿Deseas autorizar EXCEPCIONALMENTE este despacho fuera de los días habituales?`
+            );
+            if (!confirmException) {
+                return;
+            }
+            exceptionStamp = ` [DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${editDeliveryRestrictionStatus.targetDayName})]`;
+        }
+
         setUpdateLoading(true);
         console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
         
@@ -1999,7 +2075,7 @@ function OrderLoadingContent() {
             const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
             const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
             const auditStamp = ` [Audit ${nowTimeStr}: Edición por ${userTag}]`;
-            const updatedAdminNotes = `${selectedOrder.admin_notes || ''}${auditStamp}`.trim();
+            const updatedAdminNotes = `${selectedOrder.admin_notes || ''}${exceptionStamp}${auditStamp}`.trim();
 
             const { error: orderError } = await supabase
                 .from('orders')
@@ -4653,15 +4729,37 @@ function OrderLoadingContent() {
                                                         width: '100%',
                                                         padding: '10px',
                                                         borderRadius: '8px',
-                                                        border: '1px solid #A7F3D0',
+                                                        border: !editDeliveryRestrictionStatus.isValid ? '1.5px solid #F87171' : '1px solid #A7F3D0',
+                                                        backgroundColor: !editDeliveryRestrictionStatus.isValid ? '#FEF2F2' : '#FFFFFF',
                                                         fontSize: '0.9rem',
                                                         cursor: 'pointer',
                                                         fontWeight: '700'
                                                     }}
                                                 />
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#047857', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Info size={12} /> Mueve el pedido al día seleccionado.
-                                                </p>
+                                                {!editDeliveryRestrictionStatus.isValid ? (
+                                                    <div style={{
+                                                        marginTop: '6px',
+                                                        padding: '0.5rem 0.75rem',
+                                                        backgroundColor: '#FEF2F2',
+                                                        border: '1px solid #FECACA',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.72rem',
+                                                        display: 'flex',
+                                                        alignItems: 'flex-start',
+                                                        gap: '6px'
+                                                    }}>
+                                                        <AlertTriangle size={14} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+                                                        <div>
+                                                            <div style={{ fontWeight: '800', color: '#991B1B' }}>⚠️ Día no habitual de sede:</div>
+                                                            <div style={{ color: '#7F1D1D', fontWeight: '500', marginTop: '2px' }}>{editDeliveryRestrictionStatus.message}</div>
+                                                            <div style={{ color: '#047857', fontWeight: '700', marginTop: '3px' }}>✓ Puedes guardar para autorizar el despacho excepcional.</div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#047857', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <Info size={12} /> Mueve el pedido al día seleccionado.
+                                                    </p>
+                                                )}
                                             </div>
 
                                             {/* Dirección Exclusiva del Pedido y Georreferenciación GPS */}

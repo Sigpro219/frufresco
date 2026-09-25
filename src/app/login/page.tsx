@@ -195,38 +195,53 @@ export default function LoginPage() {
         }
 
         try {
-            // Verificar si hay sesión activa antes de actualizar
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                setError('⚠️ La sesión de recuperación no está activa o el enlace ya expiró. Por favor solicita un nuevo enlace de recuperación.');
-                setLoading(false);
+            // 1. Intentar actualización vía Server API Route con sesión de cookies y admin client
+            const res = await fetch('/api/auth/update-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: newPassword })
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (res.ok && data.success) {
+                console.log('✅ Contraseña restablecida exitosamente vía API de Servidor');
+                setChangeSuccess(true);
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
                 return;
             }
 
-            // 1. Actualizar contraseña en Supabase Auth
-            const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
-            if (authError) throw authError;
-
-            // 2. Si estaba marcado con needs_password_change, desmarcarlo en profiles
-            const targetUserId = session.user?.id || user?.id;
-            if (targetUserId) {
-                await supabase
-                    .from('profiles')
-                    .update({ needs_password_change: false })
-                    .eq('id', targetUserId);
+            // 2. Fallback: Intentar actualización directa vía Supabase Client si hay sesión
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
+                if (!authError) {
+                    if (session.user?.id) {
+                        await supabase
+                            .from('profiles')
+                            .update({ needs_password_change: false })
+                            .eq('id', session.user.id);
+                    }
+                    console.log('✅ Contraseña restablecida con éxito vía Supabase Client');
+                    setChangeSuccess(true);
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                    return;
+                }
             }
 
-            console.log('✅ Contraseña restablecida con éxito');
-            setChangeSuccess(true);
-            
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 2000);
+            // Si ambos fallaron, mostrar el error más informativo
+            const errorMsg = data.error || 'La sesión de recuperación no está activa o el enlace ya expiró. Por favor solicita un nuevo enlace.';
+            setError(`⚠️ ${errorMsg}`);
+            setLoading(false);
 
         } catch (err: any) {
             console.error('❌ Error al actualizar contraseña:', err);
             let msg = err.message || 'Error inesperado al cambiar la contraseña';
-            if (msg.includes('Auth session missing')) {
+            if (msg.includes('Auth session missing') || msg.includes('PKCE code verifier not found')) {
                 msg = '⚠️ La sesión de autenticación no está activa o el enlace expiró. Por favor solicita un nuevo enlace de recuperación.';
             }
             setError(msg);
@@ -249,7 +264,7 @@ export default function LoginPage() {
 
         try {
             // Asegurar que el enlace de recuperación apunte a producción (https://frufresco-liard.vercel.app)
-            // incluso si se solicita desde localhost, para que funcione en teléfonos móviles y clientes de correo externos.
+            // utilizando el handler server-side /auth/callback para canjear el código PKCE automáticamente.
             const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
             const isLocal = typeof window !== 'undefined' && 
                 (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -258,7 +273,7 @@ export default function LoginPage() {
                 ? configuredUrl.replace(/\/$/, '') 
                 : (isLocal ? 'https://frufresco-liard.vercel.app' : window.location.origin);
 
-            const redirectUrl = `${baseOrigin}/login?mode=recovery`;
+            const redirectUrl = `${baseOrigin}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
             console.log('📨 Solicitando recuperación con redirectUrl:', redirectUrl);
 
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
