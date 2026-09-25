@@ -48,7 +48,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         const fetchMaster = async () => {
             const { data } = await supabase
                 .from('product_attributes_master')
-                .select('name, show_on_web');
+                .select('name, show_on_web, show_in_picking');
             if (data) setMasterAttributes(data);
         };
         fetchMaster();
@@ -62,7 +62,12 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         ? product.options_config
             .filter((opt: any) => {
                 const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
-                return master ? master.show_on_web !== false : true;
+                if (master) {
+                    if (master.show_in_picking) return false;
+                    return master.show_on_web === true;
+                }
+                if (opt.show_in_picking) return false;
+                return opt.show_on_web !== false;
             })
             .reduce((acc: any, opt: any) => {
                 let values = opt.values || [];

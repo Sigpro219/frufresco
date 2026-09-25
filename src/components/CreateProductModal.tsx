@@ -88,11 +88,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     console.warn('CreateModal: No master table found, using defaults.');
                     return;
                 }
-                                if (data && data.length > 0) {
+                if (data && data.length > 0) {
                     setMasterAttributes(data.map(attr => ({ 
                         name: attr.name, 
                         values: attr.suggested_values,
-                        show_on_web: attr.show_on_web !== false
+                        show_on_web: attr.show_on_web === true,
+                        show_in_picking: attr.show_in_picking === true
                     })));
                 }
             } catch (err) {
@@ -363,7 +364,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                         return {
                             name: opt.name,
                             values: opt.values,
-                            show_on_web: attr ? attr.show_on_web !== false : true
+                            show_on_web: attr ? attr.show_on_web === true : true,
+                            show_in_picking: attr ? attr.show_in_picking === true : false
                         };
                     }),
                     options: options.reduce((acc: any, opt: any) => {

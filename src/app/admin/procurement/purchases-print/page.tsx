@@ -148,9 +148,8 @@ export default function PurchasesPrintPage() {
             });
 
             const compiled: PurchaseItem[] = compiledNetting.map(row => {
-                // En la planilla de compras, la columna 'Stock INV' refleja la existencia real en bodega del producto matriz (padre)
-                const parentPid = row.parent_id || row.product_id;
-                const parentStock = Number(stockMap[parentPid] ?? stockMap[row.product_id] ?? 0);
+                // En la planilla de compras, la columna 'Stock INV' refleja la existencia real en bodega del SKU correspondiente
+                const productStock = Number(stockMap[row.product_id] || 0);
 
                 return {
                     id: row.key,
@@ -163,7 +162,7 @@ export default function PurchasesPrintPage() {
                     sublist: row.sublist,
                     unit: row.unit,
                     demanda_neta: row.raw_demand_kg,
-                    stock_bodega: parentStock,
+                    stock_bodega: productStock,
                     a_comprar: row.net_to_buy,
                     con_merma: row.suggested_with_merma
                 };
@@ -440,11 +439,10 @@ export default function PurchasesPrintPage() {
                         if (sublistPages.length === 0) sublistPages.push({ items: [], usedUnits: 0 });
 
                         const totalKilosNetos = sublistItems.reduce((s, it) => s + it.demanda_neta, 0);
-                        const seenFamilyKeys = new Set<string>();
+                        const seenProductPids = new Set<string>();
                         const totalStockBodega = sublistItems.reduce((s, it) => {
-                            const familyKey = it.parent_id || it.product_id;
-                            if (!seenFamilyKeys.has(familyKey)) {
-                                seenFamilyKeys.add(familyKey);
+                            if (!seenProductPids.has(it.product_id)) {
+                                seenProductPids.add(it.product_id);
                                 return s + it.stock_bodega;
                             }
                             return s;

@@ -141,10 +141,15 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
         const mappedOptions = options
             .filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0)
             .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
-            .map(opt => ({
-                name: opt.name,
-                values: opt.values
-            }));
+            .map(opt => {
+                const attr = masterAttributes.find(a => (a.name || '').toLowerCase() === (opt.name || '').toLowerCase());
+                return {
+                    name: opt.name,
+                    values: opt.values,
+                    show_on_web: attr ? attr.show_on_web === true : true,
+                    show_in_picking: attr ? attr.show_in_picking === true : false
+                };
+            });
 
         // Garantizar unicidad absoluta de SKUs para evitar violar la restricción unique de base de datos
         const seenSkus = new Set<string>();

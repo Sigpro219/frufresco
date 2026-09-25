@@ -10602,7 +10602,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div>
 
             {/* Options Rendering */}
-            {selectedProductForVariant.options_config?.map((opt: any, index: number) => (
+            {selectedProductForVariant.options_config
+              ?.filter((opt: any) => {
+                const isPres = (opt.name || '').toLowerCase().includes('presentaci') || (opt.name || '').toLowerCase().includes('unidad');
+                if (isPres) return true;
+                if (opt.show_in_picking) return true;
+                if (opt.show_on_web && !opt.show_in_picking) return false;
+                if ((opt.name || '').toLowerCase().includes('tamaño') || (opt.name || '').toLowerCase().includes('tamano')) return false;
+                return true;
+              })
+              .map((opt: any, index: number) => (
               <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   {opt.name}

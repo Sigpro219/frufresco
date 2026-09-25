@@ -253,6 +253,29 @@ export const getStructuredSpecKey = (item: StructuredSpecItemInput): string => {
 };
 
 /**
+ * Normaliza y traduce atributos de tamaño/alistamiento a la nomenclatura operativa oficial de bodega:
+ * - Grande -> Cero
+ * - Mediana / Mediano -> Mediana
+ * - Pequeño / Pequeno / Pequeña / Richy -> Richy
+ * - Mini -> Mini
+ * - Jumbo -> Jumbo
+ */
+export const normalizePickingNote = (val?: string | null): string | null => {
+    if (!val || typeof val !== 'string') return null;
+    const clean = val.trim();
+    if (!clean) return null;
+    const lower = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    if (lower === 'grande' || lower === 'cero') return 'Cero';
+    if (lower === 'mediana' || lower === 'mediano') return 'Mediana';
+    if (lower === 'pequeno' || lower === 'pequena' || lower === 'richy') return 'Richy';
+    if (lower === 'mini') return 'Mini';
+    if (lower === 'jumbo') return 'Jumbo';
+    
+    return clean;
+};
+
+/**
  * Formats the clean structured operational specification:
  * e.g. "12 und de 2 kg; Maduro"
  * Returns null if no structured specification exists (avoids noise).
@@ -315,6 +338,37 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
             }
         }
     });
+
+    // 2.1 Extraer y normalizar Nota de Alistamiento / Tamaño (Mapeo: Grande=Cero, Mediana=Mediana, Pequeño=Richy)
+    const pickingKeys = ['Nota alistamiento', 'Nota de alistamiento', 'nota_alistamiento', 'Tamaño', 'Tamano', 'tamano', 'Size'];
+    let foundPickingNote = false;
+    for (const pk of pickingKeys) {
+        if (opts[pk] && typeof opts[pk] === 'string' && opts[pk].trim()) {
+            const rawVal = opts[pk].trim();
+            const normalized = normalizePickingNote(rawVal);
+            if (normalized && !isRedundantAttribute(normalized, prodName)) {
+                if (!attributeParts.includes(normalized)) {
+                    attributeParts.push(normalized);
+                }
+                foundPickingNote = true;
+                break;
+            }
+        }
+    }
+
+    // 2.2 Fallback: Si no estaba en selected_options, inspeccionar variant_label
+    if (!foundPickingNote) {
+        const vl = item.variant_label || '';
+        if (vl) {
+            const match = vl.match(/\b(cero|grande|mediana|mediano|richy|peque[nñ]o|peque[nñ]a|mini|jumbo)\b/i);
+            if (match) {
+                const normalized = normalizePickingNote(match[1]);
+                if (normalized && !isRedundantAttribute(normalized, prodName) && !attributeParts.includes(normalized)) {
+                    attributeParts.push(normalized);
+                }
+            }
+        }
+    }
 
     // 3. Assemble
     const attrStr = attributeParts.join(', ');

@@ -652,6 +652,7 @@ function CreateOrderContent() {
     const [editingStagedItemIdx, setEditingStagedItemIdx] = useState<number | null>(null);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
+    const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
 
     // Staging Pareto Dropdown States
     const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
@@ -1382,6 +1383,13 @@ function CreateOrderContent() {
 
             if (errorProds) console.error("Error cargando productos:", errorProds);
             if (prods) setProducts(prods);
+
+            // 2.1 Atributos Maestros de Gobernanza (para notas de alistamiento y variantes)
+            const { data: mAttrs } = await supabase
+                .from('product_attributes_master')
+                .select('*')
+                .order('name');
+            if (mAttrs) setMasterAttributes(mAttrs);
 
             // 3. Cargar Borrador de Correo si viene draft_id
             const draftId = searchParams.get('draft_id');
@@ -7770,8 +7778,40 @@ function CreateOrderContent() {
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
                 const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
+                // Normalizar atributos: Excluir los exclusivos de web (ej. Tamaño) e incluir los de alistamiento
+                let baseConfigs: any[] = (selectedProductForModal.options_config || [])
+                    .filter((opt: any) => {
+                        const isPres = (opt.name || '').toLowerCase().includes('presentaci') || (opt.name || '').toLowerCase().includes('unidad');
+                        if (isPres) return true;
+                        
+                        const master = masterAttributes.find(m => (m.name || '').toLowerCase() === (opt.name || '').toLowerCase());
+                        if (master) {
+                            if (master.show_in_picking) return true;
+                            if (master.show_on_web) return false;
+                        }
+                        if (opt.show_in_picking) return true;
+                        if (opt.show_on_web && !opt.show_in_picking) return false;
+                        if ((opt.name || '').toLowerCase().includes('tamaño') || (opt.name || '').toLowerCase().includes('tamano')) return false;
+
+                        return true;
+                    });
+
+                // Inyectar atributos maestros de alistamiento (show_in_picking) si aún no están en el producto
+                const pickingMasters = masterAttributes.filter(m => m.show_in_picking);
+                pickingMasters.forEach(pm => {
+                    const alreadyHas = baseConfigs.some((c: any) => (c.name || '').toLowerCase() === (pm.name || '').toLowerCase());
+                    if (!alreadyHas) {
+                        baseConfigs.push({
+                            name: pm.name,
+                            values: pm.values || pm.suggested_values || [],
+                            show_in_picking: true,
+                            show_on_web: false
+                        });
+                    }
+                });
+
                 // Normalizar y ordenar alfabéticamente los atributos por su nombre (A-Z)
-                const normalizedOptionsConfig = (selectedProductForModal.options_config || [])
+                const normalizedOptionsConfig = baseConfigs
                     .slice()
                     .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
                     .map((opt: any) => {

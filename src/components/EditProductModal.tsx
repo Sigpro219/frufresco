@@ -535,7 +535,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];
     const procurementMethods = ['Compras Generales', 'Contratación Directa', 'Importación', 'Local'];
     const [baseUnits, setBaseUnits] = useState<string[]>(['Kg', 'Unidad', 'Atado', 'Bolsa', 'Caja', 'Bandeja', 'Malla', 'Gramos', 'Libra']);
-    const [masterAttributes, setMasterAttributes] = useState<{ name: string, values: string[], show_on_web?: boolean }[]>([]);
+    const [masterAttributes, setMasterAttributes] = useState<{ name: string, values: string[], show_on_web?: boolean, show_in_picking?: boolean }[]>([]);
 
     useEffect(() => {
         const fetchMaster = async () => {
@@ -549,7 +549,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     setMasterAttributes(data.map(attr => ({ 
                         name: attr.name, 
                         values: sortSuggestedValues(attr.suggested_values || []),
-                        show_on_web: attr.show_on_web !== false
+                        show_on_web: attr.show_on_web === true,
+                        show_in_picking: attr.show_in_picking === true
                     })));
                 }
 
@@ -1121,7 +1122,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         return {
                             name: opt.name,
                             values: opt.values,
-                            show_on_web: attr ? attr.show_on_web !== false : true
+                            show_on_web: attr ? attr.show_on_web === true : true,
+                            show_in_picking: attr ? attr.show_in_picking === true : false
                         };
                     }),
                 options: syncedOptions.reduce((acc: any, opt: any) => {

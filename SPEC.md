@@ -146,6 +146,24 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
   - Ambos botones muestran un badge verde activo cuando el ordenamiento está aplicado; al pulsarlo nuevamente se restaura el orden original del documento.
 - **Criterio de Aceptación:** Cumplido. Paridad total entre modo Manual y modo Email. El orden original del documento siempre es restaurable con un solo clic.
 
+### ✅ DEUDA TÉCNICA 13: Gobernanza de Atributos: Separación Mutuamente Excluyente Web vs Alistamiento & Mapeo Operativo de Bodega
+- **Diagnóstico:** En la Gobernanza de Variantes (Delta Command Center / `ManageAttributesModal`), los atributos solo contaban con el indicador `show_on_web`. El cliente requería distinguir categóricamente entre opciones orientadas al cliente final en la tienda web (ej. «Tamaño»: Grande, Mediano, Pequeño) y notas operativas exclusivas para el montaje interno de pedidos y bodega (ej. «Nota alistamiento»: Cero, Mediana, Richy), asegurando que ambas dimensiones fueran mutuamente excluyentes y que la sábana de alistamiento reflejara la nomenclatura técnica de Corabastos.
+- **Principio de Exclusión Mutua:** Una categoría de atributos puede ser de Tienda Web (`show_on_web`) o de Alistamiento/Montaje de Pedidos (`show_in_picking`), pero **nunca ambas simultáneamente**. Al activar una en la gobernanza, la otra se desactiva de forma automática.
+- **Mapeo Universal de Equivalencia Operativa (Traducción de Bodega):**
+  - `Grande` $\longrightarrow$ **`Cero`**
+  - `Mediana` / `Mediano` $\longrightarrow$ **`Mediana`**
+  - `Pequeño` / `Pequeña` / `Richy` $\longrightarrow$ **`Richy`**
+  - `Mini` $\longrightarrow$ **`Mini`**
+  - `Jumbo` $\longrightarrow$ **`Jumbo`**
+- **Implementación Técnica Full-Stack:**
+  1. **Base de Datos:** Columna `show_in_picking boolean default false` en la tabla maestra `product_attributes_master`.
+  2. **Gobernanza (`ManageAttributesModal.tsx`):** Checkboxes duales con lógica de exclusión mutua reactiva (`handleToggleShowOnWeb` y `handleToggleShowInPicking`) y persistencia en Supabase.
+  3. **Catálogo & Variantes (`EditProductModal.tsx`, `CreateProductModal.tsx`, `VariantModal.tsx`):** Propagación de `show_in_picking` y `show_on_web` hacia `options_config` de los productos.
+  4. **Tienda Web (`ProductDetailClient.tsx`, `QuickViewModal.tsx`):** Filtro que suprime cualquier atributo marcado como `show_in_picking: true`, mostrando exclusivamente opciones web (ej. `Tamaño`).
+  5. **Panel de Montaje de Pedidos (`orders/create/page.tsx` & `EmailDraftsModule.tsx`):** En el modal de producto/variantes, se excluyen atributos web-only (ej. `Tamaño`) y se garantiza la disponibilidad de `Nota alistamiento` con sus valores oficiales.
+  6. **Motor de Alistamiento (`src/lib/orderUtils.ts`):** Función canónica `normalizePickingNote` integrada en `formatStructuredSpecification`. Si un pedido llega desde la web con `Tamaño: Grande` o desde montaje con `Nota alistamiento: Cero`, en la sábana maestra de alistamiento (`alistamiento-print`) y en las hojas de picking (`contingency-print`) se imprime de forma uniforme la nota oficial de bodega: **`Cero`**, **`Mediana`**, **`Richy`**.
+- **Criterio de Aceptación:** Cumplido. Paridad total, exclusión mutua verificada en UI/DB y traducción automática de calibres para el piso de picking en Corabastos.
+
 ---
 
 ## 5. Verificación & Conclusiones
@@ -2250,17 +2268,18 @@ sequenceDiagram
      - Al tener como unidad de compra maestra `KG`, el motor omite el prefijo de peso unitario `und de X gr`, evaluando únicamente el atributo cualitativo de maduración (`Maduro`).
      - Ambos pedidos comparten la misma especificación canónica (`Maduro`) y se consolidan en **una única línea de compra de 47.5 kg**, eliminando duplicidades y permitiendo al comprador negociar precio por volumen en Corabastos.
 
-#### Escenario 40: Resolución del Inventario del Producto Padre en la Planilla de Compras (`Stock INV`) (SDD v1.9.8)
-- **Given** una tanda de compras con productos matrices (padres) y sus productos hijos derivados o presentaciones (e.g. `Mango tommy #264` con 300.00 kg en `inventory_stocks`, y sus derivados como `Mango tommy verde #209` o `Mango tommy en cubos #1323` con 0 kg registrados a nivel de SKU hijo).
+#### Escenario 40: Fidelidad Exacta de Inventario Inicial por SKU Hijo en Planilla de Compras (`Stock INV`) (SDD v1.9.9)
+- **Given** una tanda de compras con productos del catálogo y sus existencias en bodega registradas en la Sábana Oficial de Inventarios (e.g. `Mango tommy (Base / Estándar) #264` con 300,00 KG y `Mango tommy verde #209` con 0 KG / `-`).
 - **When** se compila y renderiza la Planilla de Compras Corabastos (`/admin/procurement/purchases-print`).
 - **Then**:
-  1. **Asignación del Stock de Bodega del Padre (`parent_id`)**:
-     - En la columna `Stock INV`, tanto el producto padre como sus derivados presentan la existencia física real del producto padre (`targetPid = row.parent_id || row.product_id` -> `stockMap[targetPid]`).
-     - Para `Mango tommy #264` y `Mango tommy verde #209`, la celda muestra exactamente **300 kg** (coincidiendo con la Sábana Oficial de Inventarios y el saldo físico en bodega), en lugar de stock individual de hijo (`-`) o stock aplicado de neteo.
+  1. **Fidelidad Estricta de Existencias por SKU (`product_id`)**:
+     - En la columna `Stock INV`, cada SKU muestra estrictamente su saldo físico disponible individual en bodega (`stockMap[row.product_id] || 0`), en lugar de heredar el stock del padre o mostrar stock consumido por neteo.
+     - Para `Mango tommy #264` (filas 37, 38, 39 con sus variaciones estándar, maduro y pintón), la celda agrupada con `rowSpan` muestra exactamente **`300`** KG.
+     - Para `Mango tommy verde #209` (fila 40), la celda muestra **`-`** (0 KG), coincidiendo 1:1 con la Sábana Oficial de Inventarios.
   2. **Ingesta Paginada Resiliente de Inventario (>1000 items)**:
-     - La carga de `inventory_stocks` implementa paginación automática por lotes (bloques `.range(from, from + 999)`) para sobrepasar la cota contractual por defecto de 1,000 registros de PostgREST / Supabase, asegurando que el 100% de los saldos de bodega se carguen en memoria.
-  3. **Deduplicación de Familia en Totales del Banner y Pie de Tabla (`totalStockBodega`)**:
-     - La suma del stock total en bodega (`totalStockBodega`) se deduplica por identificador de familia (`it.parent_id || it.product_id`), garantizando que los 300 kg del producto matriz se computen una única vez en la sumatoria de la sublista, evitando inflar los saldos agregados de bodega.
+     - La carga de `inventory_stocks` implementa paginación automática por lotes (bloques `.range(from, from + 999)`) para sobrepasar la cota contractual por defecto de 1.000 registros de PostgREST / Supabase, asegurando que el 100% de los saldos de bodega (1.346 registros actuales en BD) se carguen en memoria.
+  3. **Totalización en Banner y Pie de Tabla (`totalStockBodega`)**:
+     - La sumatoria del stock en bodega de la sublista (`totalStockBodega`) se deduplica por identificador de producto (`it.product_id`), asegurando que las variaciones cualitativas del mismo SKU (filas 37, 38, 39) computen su existencia física una sola vez.
 
 
 

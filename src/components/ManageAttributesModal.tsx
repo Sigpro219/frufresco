@@ -10,6 +10,7 @@ interface MasterAttribute {
     name: string;
     suggested_values: string[];
     show_on_web?: boolean;
+    show_in_picking?: boolean;
 }
 
 interface ManageAttributesModalProps {
@@ -118,14 +119,37 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             id: `temp-${Math.random().toString(36).substr(2, 9)}`,
             name: newAttrName,
             suggested_values: [],
-            show_on_web: true
+            show_on_web: true,
+            show_in_picking: false
         };
         setLocalAttributes([...localAttributes, newAttr].sort((a, b) => a.name.localeCompare(b.name)));
         setNewAttrName('');
     };
 
     const handleToggleShowOnWeb = (id: string, show: boolean) => {
-        setLocalAttributes(localAttributes.map(a => a.id === id ? { ...a, show_on_web: show } : a));
+        setLocalAttributes(localAttributes.map(a => {
+            if (a.id === id) {
+                return {
+                    ...a,
+                    show_on_web: show,
+                    show_in_picking: show ? false : (a.show_in_picking ?? false)
+                };
+            }
+            return a;
+        }));
+    };
+
+    const handleToggleShowInPicking = (id: string, show: boolean) => {
+        setLocalAttributes(localAttributes.map(a => {
+            if (a.id === id) {
+                return {
+                    ...a,
+                    show_in_picking: show,
+                    show_on_web: show ? false : (a.show_on_web ?? true)
+                };
+            }
+            return a;
+        }));
     };
 
     const handleRenameLocal = (id: string) => {
@@ -208,7 +232,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 const payload: any = { 
                     name: attr.name, 
                     suggested_values: sortedValues,
-                    show_on_web: attr.show_on_web !== false
+                    show_on_web: attr.show_on_web === true,
+                    show_in_picking: attr.show_in_picking === true
                 };
                 
                 if (attr.id.startsWith('temp-')) {
@@ -434,15 +459,61 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 >
                                                     <Edit3 size={14} />
                                                 </button>
-                                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginLeft: '12px', fontSize: '0.8rem', color: '#6B7280', userSelect: 'none' }}>
-                                                    <input 
-                                                        type="checkbox"
-                                                        checked={attr.show_on_web !== false}
-                                                        onChange={(e) => handleToggleShowOnWeb(attr.id, e.target.checked)}
-                                                        style={{ accentColor: '#10B981', cursor: 'pointer' }}
-                                                    />
-                                                    <span>Mostrar en la web</span>
-                                                </label>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
+                                                    <label 
+                                                        title="🌐 Exclusivo Tienda Web: Los clientes ven esta opción al comprar en la página web."
+                                                        style={{ 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '5px', 
+                                                            cursor: 'pointer', 
+                                                            fontSize: '0.74rem', 
+                                                            fontWeight: '700',
+                                                            color: attr.show_on_web ? '#065F46' : '#64748B',
+                                                            backgroundColor: attr.show_on_web ? '#ECFDF5' : '#F8FAFC',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '6px',
+                                                            border: `1px solid ${attr.show_on_web ? '#A7F3D0' : '#E2E8F0'}`,
+                                                            userSelect: 'none',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                    >
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={attr.show_on_web === true}
+                                                            onChange={(e) => handleToggleShowOnWeb(attr.id, e.target.checked)}
+                                                            style={{ accentColor: '#10B981', cursor: 'pointer' }}
+                                                        />
+                                                        <span>🌐 Web</span>
+                                                    </label>
+
+                                                    <label 
+                                                        title="📋 Exclusivo Montaje y Bodega: Opción para el panel de pedidos y sábana de alistamiento (bodega)."
+                                                        style={{ 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '5px', 
+                                                            cursor: 'pointer', 
+                                                            fontSize: '0.74rem', 
+                                                            fontWeight: '700',
+                                                            color: attr.show_in_picking ? '#92400E' : '#64748B',
+                                                            backgroundColor: attr.show_in_picking ? '#FEF3C7' : '#F8FAFC',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '6px',
+                                                            border: `1px solid ${attr.show_in_picking ? '#FDE68A' : '#E2E8F0'}`,
+                                                            userSelect: 'none',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                    >
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={attr.show_in_picking === true}
+                                                            onChange={(e) => handleToggleShowInPicking(attr.id, e.target.checked)}
+                                                            style={{ accentColor: '#D97706', cursor: 'pointer' }}
+                                                        />
+                                                        <span>📋 Nota Alistamiento</span>
+                                                    </label>
+                                                </div>
                                             </div>
                                         )}
                                         
