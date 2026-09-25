@@ -311,13 +311,13 @@ export default function ReceivingPrintPage() {
             </div>
 
             {/* Document Body */}
-            <div ref={printDocRef} style={{ maxWidth: '850px', margin: '1.5rem auto', padding: '0 1rem' }}>
+            <div ref={printDocRef} style={{ maxWidth: '850px', margin: '0.75rem auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
                         <p style={{ fontWeight: '700' }}>Cargando datos de recepción nocturna...</p>
                     </div>
                 ) : filteredSublists.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', maxWidth: '650px', margin: '2rem auto' }}>
                         <p style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>No hay mercancía programada para recepción en esta fecha.</p>
                         <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Selecciona otra fecha de entrega en el panel superior.</p>
                     </div>
@@ -353,30 +353,20 @@ export default function ReceivingPrintPage() {
                         const recRef = `REC-${selectedDate.replace(/-/g, '')}`;
 
                         return (
-                            <div
+                            <UniversalLetterhead
                                 key={`${sublistName}-page-${pageIdx}`}
                                 className="page-break"
-                                style={{
-                                    backgroundColor: '#FFFFFF',
-                                    padding: '14px 18px',
-                                    marginBottom: '20px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #E2E8F0',
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
+                                brand={INVESTMENTS_CORTES_BRAND}
+                                paperSize="letter"
+                                meta={{
+                                    title: 'INGRESO DE MERCANCÍA & CONTROL DE MUELLE (02:00 AM)',
+                                    subtitle: pageSubtitle,
+                                    date: selectedDate,
+                                    reference: recRef,
+                                    badge: sublistName,
+                                    badgeVariant: 'dark'
                                 }}
                             >
-                                <UniversalLetterhead
-                                    brand={INVESTMENTS_CORTES_BRAND}
-                                    paperSize="letter"
-                                    meta={{
-                                        title: 'INGRESO DE MERCANCÍA & CONTROL DE MUELLE (02:00 AM)',
-                                        subtitle: pageSubtitle,
-                                        date: selectedDate,
-                                        reference: recRef,
-                                        badge: sublistName,
-                                        badgeVariant: 'dark'
-                                    }}
-                                >
                                     {/* Protocol & Summary banner */}
                                     <div style={{
                                         display: 'flex',
@@ -511,7 +501,6 @@ export default function ReceivingPrintPage() {
                                         </div>
                                     </div>
                                 </UniversalLetterhead>
-                            </div>
                         );
                     });
                 })}
