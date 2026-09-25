@@ -571,7 +571,7 @@ export default function ContingencyPrintPage() {
                     Generando Kit de Contingencia de Piso...
                 </div>
                 <div style={{ color: '#64748B', fontSize: '0.9rem' }}>
-                    Compilando planillas de báscula, remisiones y manifiestos de despacho.
+                    Compilando remisiones, planilla de compras y manifiesto de ruta.
                 </div>
             </div>
         );
@@ -579,7 +579,6 @@ export default function ContingencyPrintPage() {
 
     const showAll = mode === 'all';
     const showPurchases = showAll || mode === 'purchases';
-    const showPicking = showAll || mode === 'picking';
     const showRemissions = showAll || mode === 'remissions';
     const showDispatch = showAll || mode === 'dispatch';
 
@@ -653,11 +652,6 @@ export default function ContingencyPrintPage() {
                                     <Printer size={16} color="#0D7A57" />
                                     Remisiones de Entrega (Duplicado)
                                 </>
-                            ) : mode === 'picking' ? (
-                                <>
-                                    <ShieldAlert size={16} color="#D97706" />
-                                    Hojas de Báscula & Picking
-                                </>
                             ) : mode === 'purchases' ? (
                                 <>
                                     <ShieldAlert size={16} color="#0F172A" />
@@ -674,7 +668,7 @@ export default function ContingencyPrintPage() {
                             {orders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${orders.length * 2} hojas)` : ''}
                         </span>
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: mode === 'dispatch' ? '#065F46' : mode === 'remissions' ? '#0D7A57' : '#92400E', backgroundColor: mode === 'dispatch' || mode === 'remissions' ? '#ECFDF5' : '#FEF3C7', padding: '1px 6px', borderRadius: '12px', border: mode === 'dispatch' || mode === 'remissions' ? '1px solid #A7F3D0' : '1px solid #FCD34D', whiteSpace: 'nowrap' }}>
-                            {mode === 'dispatch' ? 'Despacho y Ruta' : mode === 'remissions' ? 'Original + Copia' : mode === 'picking' ? 'Báscula' : mode === 'purchases' ? 'Corabastos' : 'Kit Completo'}
+                            {mode === 'dispatch' ? 'Despacho y Ruta' : mode === 'remissions' ? 'Original + Copia' : mode === 'purchases' ? 'Corabastos' : 'Kit Completo'}
                         </span>
                     </div>
 
@@ -683,7 +677,6 @@ export default function ContingencyPrintPage() {
                         {[
                             { key: 'remissions', label: 'Remisiones' },
                             { key: 'dispatch', label: 'Manifiesto' },
-                            { key: 'picking', label: 'Báscula' },
                             { key: 'purchases', label: 'Compras' },
                             { key: 'all', label: 'Todo' }
                         ].map((sub) => {
@@ -740,8 +733,6 @@ export default function ContingencyPrintPage() {
                         onClick={() => {
                             const docName = mode === 'purchases' 
                                 ? `Planilla_Compras_${orders[0]?.delivery_date || selectedDate}`
-                                : mode === 'picking'
-                                ? `Recibo_A_Ciegas_${orders[0]?.delivery_date || selectedDate}`
                                 : mode === 'remissions'
                                 ? `Remisiones_Duplicadas_${orders[0]?.delivery_date || selectedDate}`
                                 : mode === 'dispatch'
@@ -990,122 +981,7 @@ export default function ContingencyPrintPage() {
 
 
                 {/* ========================================================= */}
-                {/* 2. HOJAS DE PICKING DE BODEGA Y PESAJE EN BÁSCULA         */}
-                {/* ========================================================= */}
-                {showPicking && orders.map((order, orderIdx) => {
-                    const { parentName, branchName } = extractParentAndBranch(order);
-                    const orderNum = getFriendlyOrderId(order);
-                    const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
-                        ? formatSpaceLabel(order.warehouse_spaces)
-                        : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
-
-                    return (
-                        <Letterhead
-                            key={`picking-${order.id}`}
-                            title="Hoja de Picking & Pesaje en Báscula"
-                            subtitle={`CLIENTE: ${parentName.toUpperCase()}`}
-                            date={order.delivery_date}
-                            reference={`PEDIDO #${orderNum}`}
-                            espacioNum={espacioNum}
-                            badge="BÁSCULA Y ALISTAMIENTO"
-                            badgeVariant="amber"
-                            className="page-break"
-                            showWatermark={false}
-                        >
-                            {/* Metadata cliente compacta */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', backgroundColor: '#F8FAFC', padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.66rem', marginBottom: '5px' }}>
-                                <div>
-                                    <div><strong>Sucursal:</strong> {branchName}</div>
-                                    <div><strong>Dirección:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
-                                    <div><strong>Contacto:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
-                                </div>
-                                <div>
-                                    <div><strong>Franja Horaria:</strong> {resolveDeliverySlotInfo(order).slot}</div>
-                                    <div><strong>Líneas Solicitadas:</strong> {(order.order_items || []).length} ítems</div>
-                                </div>
-                            </div>
-
-                            {order.admin_notes && (
-                                <div style={{ backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', padding: '3px 8px', borderRadius: '4px', fontSize: '0.64rem', marginBottom: '5px', color: '#92400E' }}>
-                                    <strong>Instrucciones Especiales:</strong> {order.admin_notes}
-                                </div>
-                            )}
-
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th style={{ width: '4%', textAlign: 'center' }}>[✓]</th>
-                                        <th style={{ width: '46%' }}>Producto / Especificación</th>
-                                        <th style={{ width: '12%', textAlign: 'right' }}>Cant. Pedida</th>
-                                        <th style={{ width: '8%', textAlign: 'center' }}>Und</th>
-                                        <th style={{ width: '15%', textAlign: 'center', backgroundColor: '#1E293B' }}>Peso Real Báscula</th>
-                                        <th style={{ width: '15%', textAlign: 'center' }}>Lote / Novedad</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {(order.order_items || []).map((itm, itmIdx) => {
-                                        const pName = itm.products?.name || itm.nickname || 'Producto';
-                                        const accountingId = itm.products?.accounting_id;
-                                        const unit = itm.unit || itm.products?.unit_of_measure || 'Kg';
-                                        return (
-                                            <tr key={itmIdx}>
-                                                <td style={{ textAlign: 'center', fontSize: '0.75rem' }}>&#9633;</td>
-                                                <td>
-                                                    <strong>{pName}</strong>
-                                                    {accountingId !== undefined && accountingId !== null && (
-                                                        <span style={{ fontSize: '0.62rem', color: '#94A3B8', marginLeft: '4px', fontFamily: 'monospace' }}>
-                                                            #{accountingId}
-                                                        </span>
-                                                    )}
-                                                    {(() => {
-                                                        const spec = formatStructuredSpecification({
-                                                            quantity: itm.quantity,
-                                                            unit: itm.unit || itm.products?.unit_of_measure,
-                                                            variant_label: itm.variant_label,
-                                                            selected_options: itm.selected_options,
-                                                            productName: pName
-                                                        });
-                                                        if (!spec) return null;
-                                                        return <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: 600 }}>{spec}</div>;
-                                                    })()}
-                                                </td>
-                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                                                    {Number(itm.quantity || 0).toLocaleString('es-CO')}
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>{unit}</td>
-                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', fontWeight: 'bold', backgroundColor: '#FFFFFF' }}>
-                                                    ______ kg
-                                                </td>
-                                                <td style={{ textAlign: 'center', color: '#64748B' }}>
-                                                    ________________
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-
-                            <div style={{ marginTop: 'auto', borderTop: '1px solid #E2E8F0', paddingTop: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', fontSize: '0.64rem' }}>
-                                <div>
-                                    <div><strong>Alistador / Pesador:</strong></div>
-                                    <div style={{ marginTop: '8px' }}>Firma: ___________________________</div>
-                                </div>
-                                <div>
-                                    <div><strong>Auditor de Calidad:</strong></div>
-                                    <div style={{ marginTop: '8px' }}>Firma: ___________________________</div>
-                                </div>
-                                <div>
-                                    <div><strong>Total Canastillas Usadas:</strong></div>
-                                    <div style={{ marginTop: '8px' }}>[ _____ ] Canastillas Plásticas</div>
-                                </div>
-                            </div>
-                        </Letterhead>
-                    );
-                })}
-
-
-                {/* ========================================================= */}
-                {/* 3. REMISIONES DE ENTREGA FÍSICAS DE CONTINGENCIA          */}
+                {/* 2. REMISIONES DE ENTREGA FÍSICAS DE CONTINGENCIA          */}
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
                 {/* ========================================================= */}
                 {showRemissions && orders.flatMap((order, orderIdx) => {
