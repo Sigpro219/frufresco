@@ -2299,3 +2299,28 @@ sequenceDiagram
   4. **Segregación Estricta de Excepciones Reales**:
      - Las desviaciones operativas reales (`Pintón`, `Verde`, `Biche`, `Sobre-maduro`) permanecen 100% visibles y seleccionables en todos los módulos de pedido y el motor de compras las segrega como líneas diferenciadas de compra en Corabastos (e.g. Piña golden [Pintón] 24 kg).
 
+#### Escenario 42: Homologación Canónica de Planilla de Recepción en Bodega y Control de Muelle (`/admin/procurement/receiving-print`) (SDD v1.9.11)
+- **Given** la operación nocturna de recepción y pesaje en muelle (02:00 AM) donde arriba el camión con el cargamento consolidado desde la Central de Abastos (Corabastos).
+- **When** se compila y genera la Planilla de Recepción en Bodega (`/admin/procurement/receiving-print`).
+- **Then**:
+  1. **Consolidación Canónica SDD vía Netting Engine**:
+     - La planilla de recepción se alimenta directamente de `calculateProcurementNetting`, erradicando la agrupación artesanal por texto libre.
+     - Se suprimen etiquetas informales redundantes (`(Unidad)`, `(mpprav015)`, `(mpabpp131 procesada)`) y desdoblamientos espurios de filas, unificando ítems idénticos en una sola línea de pesaje.
+  2. **Erradicación de SKUs y Sustitución por ID Contable (`accounting_id`)**:
+     - En el banner de sublista, el contador se formula como `X Productos a Recibir` en lugar del término técnico `SKUs`.
+     - Junto a cada nombre comercial se renderiza de manera discreta el identificador contable en tipografía monoespaciada gris tenue (`#{accounting_id}`, `6.8pt`, `#94A3B8`), permitiendo cotejo contable sin ruido visual para el operario de báscula.
+  3. **Unidad Maestra de Compra (`UM`) Estricta**:
+     - La columna `UM` adopta la unidad de compra canónica (`resolvePurchaseUnit`), presentando `KG`, `UN`, `CUBETA`, `ATADO`, `PQ 500G`, etc., coincidiendo 1:1 con la planilla de compras de Corabastos.
+  4. **Estructura Tabular de Muelle en 8 Columnas**:
+     - Se organiza la tabla en el orden operativo:
+       1. `#` (3.5%): Índice consecutivo.
+       2. `Producto / Calibre Especificado` (38%): Nombre del producto + `#{accounting_id}` + badge de especificación canónica si aplica.
+       3. `UM` (6.5%): Unidad de compra maestra.
+       4. `Canastillas` (10%): Campo para conteo físico `[ _____ ]`.
+       5. `Peso Bruto (Kg)` (12%, cabecera `#1E293B`): `[ _____ ]`.
+       6. `Tara (Kg)` (10%, cabecera `#334155`): `[ _____ ]`.
+       7. `Neto Real (Kg)` (10%, cabecera `#0D7A57`): `[ _____ ]`.
+       8. `Calidad` (10%): Casillas de verificación `[ ] Aprob  [ ] Rech`.
+  5. **Paginación Limpia Carta Portrait y Protocolo de Muelle**:
+     - Se preserva el encabezado corporativo `UniversalLetterhead` con banner de protocolo de pesaje (tara 1.8 kg/canastilla) y bloque de firmas tripartito al pie: Conductor Corabastos, Auxiliar de Báscula y Auditor de Calidad Agroindustrial.
+
