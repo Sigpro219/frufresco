@@ -367,16 +367,16 @@ export default function ReceivingPrintPage() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.6pt' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '48%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
-                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
-                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                                    <th style={{ width: '42%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '14%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
+                                                    <th style={{ width: '28%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {page.left.map((it, idx) => (
                                                     <tr key={it.product_id || idx} style={{ height: '20px' }}>
-                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={it.product_name}>
+                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
                                                             <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                             {it.accounting_id && (
                                                                 <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
@@ -396,16 +396,16 @@ export default function ReceivingPrintPage() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.6pt' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '48%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
-                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
-                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                                    <th style={{ width: '42%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '14%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
+                                                    <th style={{ width: '28%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {page.right.map((it, idx) => (
                                                     <tr key={it.product_id || idx} style={{ height: '20px' }}>
-                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={it.product_name}>
+                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
                                                             <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                             {it.accounting_id && (
                                                                 <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
