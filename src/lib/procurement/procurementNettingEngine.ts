@@ -74,7 +74,7 @@ export interface CompiledNettingItem {
 }
 
 export interface NettingEngineOptions {
-    mermaFactor?: number;          // Default 0.05 (+5%)
+    mermaFactor?: number;          // Default 0.0 (Sin merma plana arbitraria; merma dinámica por SKU pendiente en SDD)
     applySafetyStock?: boolean;     // Default true
 }
 
@@ -89,35 +89,46 @@ export function getCanonicalProcurementSpec(item: {
     variant_label?: string | null;
     nickname?: string | null;
     product_name?: string | null;
-    product?: { name?: string | null; [key: string]: any } | null;
+    product?: { name?: string | null; unit_of_measure?: string | null; [key: string]: any } | null;
+    purchase_unit?: string | null;
 }): string {
     if (!item) return '';
 
     const prodName = item.product?.name || item.product_name || null;
+    const rawUom = item.purchase_unit || item.product?.unit_of_measure || '';
+    const isKgPurchase = /^(kg|kilo|kilogramo|kilos)$/i.test(rawUom.trim());
+
     const opts = item.selected_options || {};
     let unitWeightPart = '';
     const attributeParts: string[] = [];
 
     // 1. Extraer calibre o peso de presentación unitaria (SIN la cantidad del pedido)
+    // REGLA MAYORISTA CORABASTOS:
+    // Para compras por KG (ej: Mango tommy, Manzana importada), la porción unitaria del cliente
+    // (ej: "und de 550 gr", "und de 200 gr") es criterio de alistamiento/picking en bodega,
+    // NO de negociación mayorista en Corabastos. En plaza se compra la masa neta total por grado
+    // de maduración (Maduro vs Pintón vs Verde). Por ende, se omiten calibres unitarios de porción cuando la compra es en KG.
     const unitWeightGr = opts._unit_weight_gr || opts.unit_weight_gr;
     const origUnit = (opts._original_unit || opts.original_unit || 'und').toLowerCase();
     const isBandejaOpt = origUnit.includes('bandeja');
 
-    if (unitWeightGr && Number(unitWeightGr) > 0) {
-        const gr = Number(unitWeightGr);
-        const weightStr = gr >= 1000 
-            ? ((gr / 1000) % 1 === 0 ? (gr / 1000).toString() : (gr / 1000).toFixed(1)) + ' kg'
-            : `${gr} gr`;
-        unitWeightPart = `${isBandejaOpt ? 'bandeja' : 'und'} de ${weightStr}`;
-    } else {
-        // Fallback estructurado en texto de presentación (ej. "Unidad 2000 gr", "Bandeja 500 gr")
-        const pres = (opts['Presentación'] || opts['Presentacion'] || '') as string;
-        const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
-        if (matchGr) {
-            const gr = parseFloat(matchGr[1].replace(',', '.'));
-            const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
-            const isBandeja = /bandeja/i.test(pres);
-            unitWeightPart = `${isBandeja ? 'bandeja' : 'und'} de ${weightStr}`;
+    if (!isKgPurchase || isBandejaOpt) {
+        if (unitWeightGr && Number(unitWeightGr) > 0) {
+            const gr = Number(unitWeightGr);
+            const weightStr = gr >= 1000 
+                ? ((gr / 1000) % 1 === 0 ? (gr / 1000).toString() : (gr / 1000).toFixed(1)) + ' kg'
+                : `${gr} gr`;
+            unitWeightPart = `${isBandejaOpt ? 'bandeja' : 'und'} de ${weightStr}`;
+        } else {
+            // Fallback estructurado en texto de presentación (ej. "Unidad 2000 gr", "Bandeja 500 gr")
+            const pres = (opts['Presentación'] || opts['Presentacion'] || '') as string;
+            const matchGr = typeof pres === 'string' ? pres.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i) : null;
+            if (matchGr) {
+                const gr = parseFloat(matchGr[1].replace(',', '.'));
+                const weightStr = gr >= 1000 ? `${gr / 1000} kg` : `${gr} gr`;
+                const isBandeja = /bandeja/i.test(pres);
+                unitWeightPart = `${isBandeja ? 'bandeja' : 'und'} de ${weightStr}`;
+            }
         }
     }
 
@@ -300,7 +311,7 @@ export function calculateProcurementNetting(params: {
     options?: NettingEngineOptions;
 }): CompiledNettingItem[] {
     const { items, stocks, catalogProducts = {}, options = {} } = params;
-    const mermaFactor = options.mermaFactor !== undefined ? options.mermaFactor : 0.05;
+    const mermaFactor = options.mermaFactor !== undefined ? options.mermaFactor : 0.0;
     const applySafetyStock = options.applySafetyStock !== undefined ? options.applySafetyStock : true;
 
     // 1. Agregar demanda por producto y especificación canónica unificada
@@ -327,15 +338,6 @@ export function calculateProcurementNetting(params: {
         const parentId = prodCatalog?.parent_id || null;
         const minInv = prodCatalog?.min_inventory_level ? parseFloat(String(prodCatalog.min_inventory_level)) : 0;
 
-        // Extraer especificación canónica (unifica órdenes con las mismas características)
-        const canonicalSpec = getCanonicalProcurementSpec({
-            selected_options: it.selected_options,
-            variant_label: it.variant_label,
-            nickname: it.nickname,
-            product_name: pName,
-            product: { name: pName }
-        });
-
         const norm = normalizeDemandToKg({
             quantity: Number(it.quantity) || 0,
             rawUnit: it.unit,
@@ -347,6 +349,16 @@ export function calculateProcurementNetting(params: {
 
         // Garantizar que la unidad de compra provenga SI O SI de la unidad de medida maestra del catálogo
         const purchaseUnit = resolvePurchaseUnit(prodCatalog?.unit_of_measure, norm.unitStr);
+
+        // Extraer especificación canónica (unifica órdenes con las mismas características y omite calibre unitario para compras en KG)
+        const canonicalSpec = getCanonicalProcurementSpec({
+            selected_options: it.selected_options,
+            variant_label: it.variant_label,
+            nickname: it.nickname,
+            product_name: pName,
+            product: prodCatalog || { name: pName },
+            purchase_unit: purchaseUnit
+        });
 
         const groupKey = `${pId}__${canonicalSpec}`;
 

@@ -212,7 +212,7 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
             assert.strictEqual(compiled.length, 1, 'Debe generar exactamente UNA línea consolidada');
             const row = compiled[0];
             assert.strictEqual(row.product_name, 'Papaya maradol');
-            assert.strictEqual(row.canonical_spec, 'und de 2 kg; Maduro');
+            assert.strictEqual(row.canonical_spec, 'Maduro');
             assert.strictEqual(row.order_count, 2, 'Debe registrar 2 pedidos consolidados');
             assert.strictEqual(row.raw_demand_kg, 30, 'Demanda debe ser 20 + 10 = 30 kg');
             assert.strictEqual(row.safety_stock, 6, 'Stock de seguridad debe ser 6 kg');
@@ -220,7 +220,47 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
             assert.strictEqual(row.applied_stock, 12, 'Stock aplicado = 12 kg');
             assert.strictEqual(row.remaining_stock, 0, 'Saldo remanente de bodega = 0');
             assert.strictEqual(row.net_to_buy, 24, 'Meta neta = 24 kg');
-            assert.strictEqual(row.suggested_with_merma, 25.2, 'Con 5% de merma = 25.2 kg');
+            assert.strictEqual(row.suggested_with_merma, 24, 'Sin merma plana arbitraria (mermaFactor=0), compra sugerida es exactamente 24 kg');
+        });
+
+        it('unifica pedidos de mango tommy con calibre unitario (und de 550 gr; Maduro) y a granel (Maduro) en una sola línea de compra mayorista', () => {
+            const items: NettingOrderItem[] = [
+                {
+                    product_id: 'prod-mango-1',
+                    quantity: 25.5,
+                    unit: 'kg',
+                    selected_options: { 'Maduración': 'Maduro' },
+                    products: {
+                        id: 'prod-mango-1',
+                        name: 'Mango tommy',
+                        purchase_sublist: 'FRUTAS',
+                        unit_of_measure: 'Kg'
+                    }
+                },
+                {
+                    product_id: 'prod-mango-1',
+                    quantity: 40,
+                    unit: 'und',
+                    selected_options: {
+                        _original_qty: 40,
+                        _unit_weight_gr: 550,
+                        'Maduración': 'Maduro'
+                    },
+                    products: {
+                        id: 'prod-mango-1',
+                        name: 'Mango tommy',
+                        purchase_sublist: 'FRUTAS',
+                        unit_of_measure: 'Kg'
+                    }
+                }
+            ];
+
+            const compiled = calculateProcurementNetting({ items, stocks: {} });
+            assert.strictEqual(compiled.length, 1, 'Debe unificar en UNA sola línea consolidada de compra');
+            assert.strictEqual(compiled[0].product_name, 'Mango tommy');
+            assert.strictEqual(compiled[0].canonical_spec, 'Maduro');
+            assert.strictEqual(compiled[0].raw_demand_kg, 47.5, 'Demanda debe sumar 25.5 + 22.0 = 47.5 kg');
+            assert.strictEqual(compiled[0].net_to_buy, 47.5, 'A comprar debe ser 47.5 kg');
         });
 
         it('segrega líneas cuando las características cualitativas difieren realmente', () => {

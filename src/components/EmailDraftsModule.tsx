@@ -1793,6 +1793,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [tempDeliveryTime, setTempDeliveryTime] = useState('07:30');
   const [tempDeliveryMargin, setTempDeliveryMargin] = useState(30);
   const [showFormulaTooltip, setShowFormulaTooltip] = useState(false);
+  const [sortDraftAlpha, setSortDraftAlpha] = useState(false);
 
   // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 2 (dejando 1 fila de contexto arriba)
   const scrollToDraftRow = (targetIdx: number) => {
@@ -8192,7 +8193,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
                   <thead style={{ position: 'sticky', top: metadata.attachments && metadata.attachments.length > 1 ? '40px' : 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                     <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', width: '33%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', width: '33%', fontSize: '0.74rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>NOMBRE EN DOCUMENTO</span>
+                          <button
+                            type="button"
+                            onClick={() => setSortDraftAlpha(prev => !prev)}
+                            title={sortDraftAlpha ? 'Restaurar orden del documento original' : 'Ordenar alfabéticamente A→Z'}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '2px',
+                              fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.03em',
+                              padding: '2px 6px', borderRadius: '4px', cursor: 'pointer',
+                              border: sortDraftAlpha ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                              backgroundColor: sortDraftAlpha ? '#ECFDF5' : '#F8FAFC',
+                              color: sortDraftAlpha ? '#065F46' : '#64748B',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            A→Z
+                          </button>
+                        </div>
+                      </th>
                       <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'left', width: '39%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
                       <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'center', width: '28%', fontSize: '0.74rem' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
@@ -8262,7 +8283,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </tr>
                   </thead>
                   <tbody>
-                    {editableItems.map((item: any, i: number) => {
+                    {(sortDraftAlpha
+                      ? [...editableItems].sort((a: any, b: any) =>
+                          (a.rawText || a.productName || a.raw_name || '').localeCompare(
+                            b.rawText || b.productName || b.raw_name || '', 'es', { sensitivity: 'base' }
+                          ))
+                      : editableItems
+                    ).map((item: any, i: number) => {
                       if (item.isDeleted || item.isMetadata) return null;
                       if (attachmentFilterIndex !== 'all') {
                         const filterAtt = metadata.attachments?.[attachmentFilterIndex];

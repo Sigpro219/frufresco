@@ -1,8 +1,8 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.3 (Unidad de Compra Estricta del Catálogo, Inclusión de Accounting ID & Neteo Mayorista Corabastos)  
-> **Fecha:** 24 de Septiembre, 2026  
+> **Versión:** 1.9.7 (Agrupación Vertical de Stock & UM por SKU con Columnas Reordenadas)  
+> **Fecha:** 25 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
 
@@ -136,6 +136,15 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 - **Diagnóstico:** Se identificó en `src/components/FinancialAdjustmentModal.tsx` una propiedad de estilo duplicada (`border: 'none'` y `border: '1px solid #E2E8F0'`) provocando el error de compilación `TS1117`, así como un cast estricto de tipo unión para novedades operativas (`handleItemNoveltyTypeChange`).
 - **Implementación:** Se removió la clave redundante y se tipó formalmente el parámetro del select.
 - **Criterio de Aceptación:** Cumplido. Build limpio y cero errores estáticos en el módulo.
+
+### ✅ DEUDA TÉCNICA 12: Botón de Ordenamiento Alfabético A→Z en Interfaces de Entrada de Pedidos
+- **Diagnóstico:** Las interfaces de ingesta manual (`orders/create`) y por correo (`EmailDraftsModule`) no ofrecían ningún mecanismo para reordenar los ítems extraídos del documento del cliente. El operador no podía identificar rápidamente duplicados ni navegar alfabéticamente cuando el listado era extenso.
+- **Principio de Diseño:** El ordenamiento es estrictamente **visual/display-only**: el array subyacente (`stagedItems` / `editableItems`) conserva siempre el orden original del documento para preservar la integridad de índices y la lógica de edición/confirmación. El sort opera exclusivamente sobre una copia efímera en el momento del render.
+- **Implementación:**
+  - `src/app/admin/orders/create/page.tsx`: Estado `sortStagedAlpha` (boolean). Botón toggle **A→Z** verde esmeralda en el `<th>` «NOMBRE EN DOCUMENTO» de la Mesa de Trabajo. El tbody aplica `[...stagedItems].sort()` por `localeCompare('es')` cuando activo.
+  - `src/components/EmailDraftsModule.tsx`: Estado `sortDraftAlpha` (boolean). Mismo botón en la columna «NOMBRE EN DOCUMENTO» del visor de borradores de correo. Idem lógica de sort sobre `editableItems`.
+  - Ambos botones muestran un badge verde activo cuando el ordenamiento está aplicado; al pulsarlo nuevamente se restaura el orden original del documento.
+- **Criterio de Aceptación:** Cumplido. Paridad total entre modo Manual y modo Email. El orden original del documento siempre es restaurable con un solo clic.
 
 ---
 
@@ -2190,8 +2199,9 @@ sequenceDiagram
      $$\text{Stock Aplicado} = \min(12.0,\ 36.0) = 12.0\text{ kg}$$
   4. La **Meta Neta a Comprar** resulta en:
      $$\text{Meta Neta} = \max(0,\ 36.0 - 12.0) = 24.0\text{ kg}$$
-  5. La **Compra Sugerida con Merma (+5%)** para el comprador en Corabastos se fija en:
-     $$\text{Compra Sugerida} = \text{round}(24.0 \times 1.05,\ 1) = 25.2\text{ kg}$$
+  5. La **Meta a Comprar (Neteo Puro, mermaFactor = 0.0)** para el comprador en Corabastos se fija exactamente en la Meta Neta:
+     $$\text{A Comprar} = 24.0\text{ kg}$$
+     Se elimina cualquier recargo plano del 5%, preservando la exactitud del neteo físico.
   6. Ambos submódulos (`/ops/compras` y `/admin/procurement/purchases-print`) exhiben exactamente las mismas cantidades y respetan la misma fuente de verdad.
 
 #### Escenario 37: Respeto Estricto de Unidad Maestra de Compra del Catálogo (`resolvePurchaseUnit`) e Inclusión Discreta de `accounting_id` (SDD v1.9.3)
@@ -2210,3 +2220,47 @@ sequenceDiagram
   2. **Inclusión Discreta de ID Contable (`accounting_id`)**:
      - En la tabla de impresión visual/física, junto al nombre comercial de cada producto se renderiza de manera discreta un identificador en tipografía monoespaciada gris tenue (`#94A3B8`, `6.8pt`, e.g. `#21`, `#1020`, `#24`, `#211`), permitiendo la conciliación contable sin saturar visualmente el texto para el comprador en plaza.
      - En la exportación a Excel (`exportToExcel`), se incluye la columna dedicada `'ID Contable'` inmediatamente después de `'ID Producto'`, con el valor formateado `#<accounting_id>`.
+
+#### Escenario 38: Planilla Canónica de 7 Columnas y Mermas Dinámicas Diferenciadas [PENDIENTE / BACKLOG TÁCTICO] (SDD v1.9.4)
+- **Given** la operación nocturna de negociación en la Central de Abastos (Corabastos) donde el comprador opera con planilla física impresa en mano y requiere máxima ergonomía para registrar anotaciones manuscritas.
+- **When** se renderiza la Planilla de Compras Corabastos (`/admin/procurement/purchases-print`).
+- **Then**:
+  1. **Arquitectura Canónica de 7 Columnas (Supresión de +Merma y Reubicación de Stock INV)**:
+     - Las columnas se disponen en el siguiente orden estricto de izquierda a derecha:
+       1. `#` (3.5%): Índice secuencial por sublista.
+       2. `Stock INV` (10%, Fondo `#1E293B`): Existencias físicas reales de ese SKU en bodega al corte de inventario (e.g. 300 kg para Mango tommy, 28 kg para Mandarina institucional), unificadas verticalmente con `rowSpan` cuando el producto presenta múltiples variantes cualitativas.
+       3. `UM` (6.5%): Unidad de compra maestra del catálogo (`KG`, `UN`, `ATADO`, `PQ 500G`, `CJ`, etc.), unificada verticalmente con `rowSpan` junto al inventario.
+       4. `Producto / Calibre Especificado` (35%): Nombre + `#accounting_id` discreto + badge de especificación canónica, ubicada inmediatamente contigua a la columna de demanda para lectura ergonómica directa.
+       5. `Demanda` (11%, Fondo `#0D7A57`): Demanda total neta consolidada solicitada por clientes institucionales para esa variante específica.
+       6. `Precio $/UM` (10%): Espacio punteado para registrar el precio negociado por unidad de compra en plaza.
+       7. `Puesto / Proveedor` (24%): Espacio ampliado casi al doble del ancho original para escribir cómodamente a mano el número de puesto y nombre del proveedor.
+  2. **Capítulo de Mermas Dinámicas Diferenciadas [PENDIENTE / BACKLOG TÁCTICO]**:
+     - *Justificación técnica del Gemba:* El otorgamiento de un 5% plano generalizado es contractualmente erróneo porque los productos empacados y abarrotes (ej. arroz, salchicha, pasta de ajo) tienen merma física 0%, mientras que perecederos húmedos (tomate, fresa) o frutas con aprovechamiento industrial de pulpa (maracuyá) presentan curvas de merma y rendimiento radicalmente disímiles.
+     - *Estado Contractual:* La merma se fija en `0.0` para la compra operativa actual. Se difiere el cálculo automático de mermas técnicas para cuando se implemente en el catálogo la parametrización individual por SKU (`products.theoretical_shrinkage_pct`).
+
+#### Escenario 39: Unificación Mayorista de Calibres Unitarios de Porción en Compras por Kilo (`getCanonicalProcurementSpec`) (SDD v1.9.5)
+- **Given** una tanda de pedidos consolidados para "Mango tommy" o "Manzana verde importada" con unidad de compra maestra en `KG`:
+  - Pedido A: 25.5 kg de Mango tommy con maduración `Maduro`.
+  - Pedido B: 40 unidades de Mango tommy con `_unit_weight_gr: 550` (22.0 kg normalizados) con maduración `Maduro`.
+- **When** el motor canónico `src/lib/procurement/procurementNettingEngine.ts` evalúa la especificación de compra (`getCanonicalProcurementSpec`).
+- **Then**:
+  1. **Separación Conceptual Mayorista vs Alistamiento**:
+     - La especificación de porción unitaria (`und de 550 gr`, `und de 200 gr`, `und de 180 gr`) constituye una instrucción de picking/empaque en la bodega de FruFresco, pero no altera la negociación en plaza. En Corabastos el producto a granel se compra por masa (kilos) agrupada por lote de maduración o variedad biológica.
+  2. **Fusión en Línea Única de Compra**:
+     - Al tener como unidad de compra maestra `KG`, el motor omite el prefijo de peso unitario `und de X gr`, evaluando únicamente el atributo cualitativo de maduración (`Maduro`).
+     - Ambos pedidos comparten la misma especificación canónica (`Maduro`) y se consolidan en **una única línea de compra de 47.5 kg**, eliminando duplicidades y permitiendo al comprador negociar precio por volumen en Corabastos.
+
+#### Escenario 40: Resolución del Inventario del Producto Padre en la Planilla de Compras (`Stock INV`) (SDD v1.9.8)
+- **Given** una tanda de compras con productos matrices (padres) y sus productos hijos derivados o presentaciones (e.g. `Mango tommy #264` con 300.00 kg en `inventory_stocks`, y sus derivados como `Mango tommy verde #209` o `Mango tommy en cubos #1323` con 0 kg registrados a nivel de SKU hijo).
+- **When** se compila y renderiza la Planilla de Compras Corabastos (`/admin/procurement/purchases-print`).
+- **Then**:
+  1. **Asignación del Stock de Bodega del Padre (`parent_id`)**:
+     - En la columna `Stock INV`, tanto el producto padre como sus derivados presentan la existencia física real del producto padre (`targetPid = row.parent_id || row.product_id` -> `stockMap[targetPid]`).
+     - Para `Mango tommy #264` y `Mango tommy verde #209`, la celda muestra exactamente **300 kg** (coincidiendo con la Sábana Oficial de Inventarios y el saldo físico en bodega), en lugar de stock individual de hijo (`-`) o stock aplicado de neteo.
+  2. **Ingesta Paginada Resiliente de Inventario (>1000 items)**:
+     - La carga de `inventory_stocks` implementa paginación automática por lotes (bloques `.range(from, from + 999)`) para sobrepasar la cota contractual por defecto de 1,000 registros de PostgREST / Supabase, asegurando que el 100% de los saldos de bodega se carguen en memoria.
+  3. **Deduplicación de Familia en Totales del Banner y Pie de Tabla (`totalStockBodega`)**:
+     - La suma del stock total en bodega (`totalStockBodega`) se deduplica por identificador de familia (`it.parent_id || it.product_id`), garantizando que los 300 kg del producto matriz se computen una única vez en la sumatoria de la sublista, evitando inflar los saldos agregados de bodega.
+
+
+

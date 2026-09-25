@@ -54,14 +54,19 @@ export default function PurchasesPrintPage() {
         try {
             const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
 
-            // 1. Fetch active orders and procurement tasks in parallel
-            const [ordersRes, tasksRes, stocksRes] = await Promise.all([
+            // Cargar inventario disponible completo (paginado para superar límite de 1000 de Supabase)
+            let allStocks: Array<{ product_id: string; quantity: number }> = [];
+            let fromStock = 0;
+            const stepStock = 1000;
+            let hasMoreStock = true;
+
+            const [ordersRes, tasksRes] = await Promise.all([
                 supabase
                     .from('orders')
                     .select(`
                         id, delivery_date, status,
                         order_items(
-                            id, product_id, quantity, unit, nickname, variant_label, selected_options,
+                            id, order_id, product_id, quantity, unit, selected_options, variant_label,
                             products(id, name, unit_of_measure, purchase_sublist, weight_kg, parent_id, min_inventory_level, accounting_id)
                         )
                     `)
@@ -70,20 +75,30 @@ export default function PurchasesPrintPage() {
                 supabase
                     .from('procurement_tasks')
                     .select('*')
-                    .eq('delivery_date', selectedDate),
-                supabase
+                    .eq('delivery_date', selectedDate)
+            ]);
+
+            while (hasMoreStock) {
+                const { data, error } = await supabase
                     .from('inventory_stocks')
                     .select('product_id, quantity')
                     .eq('status', 'available')
-            ]);
+                    .range(fromStock, fromStock + stepStock - 1);
+                if (error || !data || data.length === 0) {
+                    hasMoreStock = false;
+                } else {
+                    allStocks = allStocks.concat(data);
+                    if (data.length < stepStock) hasMoreStock = false;
+                    else fromStock += stepStock;
+                }
+            }
 
             const ordersWithItems = ordersRes.data || [];
             const rawTasks = tasksRes.data || [];
-            const stocks = stocksRes.data || [];
 
             // Stock map
             const stockMap: Record<string, number> = {};
-            stocks.forEach((s: any) => {
+            allStocks.forEach((s: any) => {
                 stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (Number(s.quantity) || 0);
             });
 
@@ -125,28 +140,34 @@ export default function PurchasesPrintPage() {
                 }
             }
 
-            // 2. Ejecutar Motor Canónico de Neteo
+            // 2. Ejecutar Motor Canónico de Neteo (Sin merma plana; Meta Neta de Neteo exacta)
             const compiledNetting = calculateProcurementNetting({
                 items: itemsForNetting,
                 stocks: stockMap,
-                options: { mermaFactor: 0.05, applySafetyStock: true }
+                options: { mermaFactor: 0.0, applySafetyStock: true }
             });
 
-            const compiled: PurchaseItem[] = compiledNetting.map(row => ({
-                id: row.key,
-                product_id: row.product_id,
-                accounting_id: row.accounting_id,
-                product_name: row.product_name,
-                variant_label: row.canonical_spec || undefined,
-                parent_id: row.parent_id || undefined,
-                parent_name: row.parent_name,
-                sublist: row.sublist,
-                unit: row.unit,
-                demanda_neta: row.raw_demand_kg,
-                stock_bodega: row.applied_stock,
-                a_comprar: row.net_to_buy,
-                con_merma: row.suggested_with_merma
-            }));
+            const compiled: PurchaseItem[] = compiledNetting.map(row => {
+                // En la planilla de compras, la columna 'Stock INV' refleja la existencia real en bodega del producto matriz (padre)
+                const parentPid = row.parent_id || row.product_id;
+                const parentStock = Number(stockMap[parentPid] ?? stockMap[row.product_id] ?? 0);
+
+                return {
+                    id: row.key,
+                    product_id: row.product_id,
+                    accounting_id: row.accounting_id,
+                    product_name: row.product_name,
+                    variant_label: row.canonical_spec || undefined,
+                    parent_id: row.parent_id || undefined,
+                    parent_name: row.parent_name,
+                    sublist: row.sublist,
+                    unit: row.unit,
+                    demanda_neta: row.raw_demand_kg,
+                    stock_bodega: parentStock,
+                    a_comprar: row.net_to_buy,
+                    con_merma: row.suggested_with_merma
+                };
+            });
 
             setItems(compiled);
 
@@ -174,19 +195,19 @@ export default function PurchasesPrintPage() {
         return availableSublists.filter(s => s === selectedSublist);
     }, [availableSublists, selectedSublist]);
 
-    // Export to Excel (11 Standard Columns - With Accounting ID)
+    // Export to Excel (10 Standard Columns - Stock and UM before Producto)
     const exportToExcel = () => {
         const rows = items.map((it, idx) => ({
             '#': idx + 1,
             'Sublista / Pabellón': it.sublist,
             'ID Producto': it.product_id,
             'ID Contable': it.accounting_id ? `#${it.accounting_id}` : '',
+            'Stock en Bodega (INV)': it.stock_bodega,
+            'Unidad Medida': it.unit,
             'Producto / Calibre': it.product_name + (it.variant_label ? ` (${it.variant_label})` : ''),
             'Producto Matriz (Padre)': it.parent_name,
-            'Unidad Medida': it.unit,
-            'Demanda Neta': it.demanda_neta,
-            'Stock en Bodega (INV)': it.stock_bodega,
-            'A Comprar (+Merma Sugerida)': it.con_merma,
+            'Demanda Total': it.demanda_neta,
+            'Precio Pactado ($/UM)': '',
             'Puesto / Proveedor Abastos': ''
         }));
 
@@ -200,13 +221,13 @@ export default function PurchasesPrintPage() {
             { wch: 22 }, // Sublista
             { wch: 15 }, // ID Producto
             { wch: 12 }, // ID Contable
+            { wch: 16 }, // Stock INV
+            { wch: 8 },  // UM
             { wch: 32 }, // Producto
             { wch: 25 }, // Matriz
-            { wch: 8 },  // UM
             { wch: 16 }, // Demanda
-            { wch: 16 }, // Stock
-            { wch: 20 }, // A comprar
-            { wch: 24 }  // Puesto
+            { wch: 16 }, // Precio
+            { wch: 28 }  // Puesto / Proveedor
         ];
 
         const filename = `compras_${selectedDate}.xlsx`;
@@ -334,9 +355,9 @@ export default function PurchasesPrintPage() {
                             fontWeight: '700',
                             whiteSpace: 'nowrap'
                         }}
-                        title="Descargar consolidado en formato Excel con 11 columnas estándar"
+                        title="Descargar consolidado en formato Excel con 10 columnas estándar"
                     >
-                        <FileSpreadsheet size={14} /> Excel (11 cols)
+                        <FileSpreadsheet size={14} /> Excel (10 cols)
                     </button>
 
                     {/* Print */}
@@ -419,8 +440,16 @@ export default function PurchasesPrintPage() {
                         if (sublistPages.length === 0) sublistPages.push({ items: [], usedUnits: 0 });
 
                         const totalKilosNetos = sublistItems.reduce((s, it) => s + it.demanda_neta, 0);
-                        const totalStockBodega = sublistItems.reduce((s, it) => s + it.stock_bodega, 0);
-                        const totalAComprar = sublistItems.reduce((s, it) => s + it.con_merma, 0);
+                        const seenFamilyKeys = new Set<string>();
+                        const totalStockBodega = sublistItems.reduce((s, it) => {
+                            const familyKey = it.parent_id || it.product_id;
+                            if (!seenFamilyKeys.has(familyKey)) {
+                                seenFamilyKeys.add(familyKey);
+                                return s + it.stock_bodega;
+                            }
+                            return s;
+                        }, 0);
+                        const totalAComprar = sublistItems.reduce((s, it) => s + it.a_comprar, 0);
 
                         return sublistPages.map(({ items: pageItems, usedUnits: pageUsedUnits }, pageIdx) => {
                             const isLastPage = pageIdx === sublistPages.length - 1;
@@ -456,123 +485,181 @@ export default function PurchasesPrintPage() {
                                             <strong style={{ color: '#0F172A' }}>Instrucciones para Plaza:</strong> Negocie precio pactado por kilo/bulto y anote el número de puesto en Corabastos.
                                         </div>
                                         <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '7.2pt' }}>
-                                            {sublistItems.length} Productos &bull; Demanda: {totalKilosNetos.toLocaleString('es-CO')} &bull; Meta +Merma: {totalAComprar.toLocaleString('es-CO')}
+                                            {sublistItems.length} Productos &bull; Stock Bodega: {totalStockBodega.toLocaleString('es-CO')} &bull; Demanda Total: {totalKilosNetos.toLocaleString('es-CO')}
                                         </div>
                                     </div>
 
-                                    {/* Items Table */}
+                                    {/* Items Table (7 Columnas: #, Stock INV, UM, Producto / Calibre, Demanda, Precio, Proveedor) */}
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr>
                                                 <th style={{ width: '3.5%', textAlign: 'center', fontSize: '8.2pt' }}>#</th>
-                                                <th style={{ width: '36%', fontSize: '8.2pt' }}>Producto / Calibre Especificado</th>
+                                                <th style={{ width: '10%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#1E293B' }}>Stock INV</th>
                                                 <th style={{ width: '6.5%', textAlign: 'center', fontSize: '8.2pt' }}>UM</th>
-                                                <th style={{ width: '9%', textAlign: 'right', fontSize: '8.2pt' }}>Demanda</th>
-                                                <th style={{ width: '9%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#1E293B' }}>Stock INV</th>
-                                                <th style={{ width: '11%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0D7A57' }}>+Merma (5%)</th>
-                                                <th style={{ width: '11%', textAlign: 'center', fontSize: '8.2pt' }}>Precio $/Kg</th>
-                                                <th style={{ width: '14%', textAlign: 'center', fontSize: '8.2pt' }}>Puesto / Proveedor</th>
+                                                <th style={{ width: '35%', fontSize: '8.2pt' }}>Producto / Calibre Especificado</th>
+                                                <th style={{ width: '11%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0D7A57' }}>Demanda</th>
+                                                <th style={{ width: '10%', textAlign: 'center', fontSize: '8.2pt' }}>Precio $/UM</th>
+                                                <th style={{ width: '24%', textAlign: 'center', fontSize: '8.2pt' }}>Puesto / Proveedor</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {pageItems.map((it, itemIdx) => {
-                                                const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.items.length, 0);
-                                                const globalIdx = prevPagesCount + itemIdx + 1;
-                                                const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-                                                return (
-                                                    <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.8pt', fontWeight: 'bold', color: '#64748B' }}>
-                                                             {globalIdx}
-                                                        </td>
-                                                        <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
-                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '8.2pt', lineHeight: 1.2 }}>
-                                                                    {it.product_name}
-                                                                </span>
-                                                                {it.accounting_id !== undefined && it.accounting_id !== null && (
-                                                                    <span style={{ 
-                                                                        fontSize: '6.8pt', 
-                                                                        color: '#94A3B8', 
-                                                                        fontWeight: '600', 
-                                                                        fontFamily: 'monospace',
-                                                                        letterSpacing: '0.02em',
-                                                                        userSelect: 'none'
-                                                                    }}>
-                                                                        #{it.accounting_id}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            {it.variant_label && (
-                                                                <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                                    <span style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 5px', fontWeight: '700', color: '#1E293B' }}>
-                                                                        {it.variant_label}
-                                                                    </span>
-                                                                </div>
+                                            {(() => {
+                                                // Calcular agrupación de celdas (rowSpan) para ítems consecutivos del mismo SKU en esta página
+                                                const itemSpans: Array<{ isFirst: boolean; span: number }> = [];
+                                                for (let i = 0; i < pageItems.length; i++) {
+                                                    const currentPid = pageItems[i].product_id;
+                                                    if (i > 0 && pageItems[i - 1].product_id === currentPid) {
+                                                        itemSpans.push({ isFirst: false, span: 0 });
+                                                    } else {
+                                                        let count = 1;
+                                                        while (i + count < pageItems.length && pageItems[i + count].product_id === currentPid) {
+                                                            count++;
+                                                        }
+                                                        itemSpans.push({ isFirst: true, span: count });
+                                                    }
+                                                }
+
+                                                return pageItems.map((it, itemIdx) => {
+                                                    const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.items.length, 0);
+                                                    const globalIdx = prevPagesCount + itemIdx + 1;
+                                                    const spanInfo = itemSpans[itemIdx];
+                                                    const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+
+                                                    return (
+                                                        <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
+                                                            {/* 1. Indice Consecutivo */}
+                                                            <td style={{ textAlign: 'center', fontSize: '7.8pt', fontWeight: 'bold', color: '#64748B' }}>
+                                                                {globalIdx}
+                                                            </td>
+
+                                                            {/* 2 & 3. Stock INV y UM (Unificados verticalmente por SKU cuando hay variantes) */}
+                                                            {spanInfo.isFirst && (
+                                                                <>
+                                                                    <td
+                                                                        rowSpan={spanInfo.span}
+                                                                        style={{
+                                                                            textAlign: 'right',
+                                                                            fontSize: '7.8pt',
+                                                                            fontWeight: '700',
+                                                                            fontVariantNumeric: 'tabular-nums',
+                                                                            color: it.stock_bodega > 0 ? '#0F172A' : '#94A3B8',
+                                                                            backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
+                                                                            verticalAlign: 'middle',
+                                                                            borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
+                                                                            padding: '2px 4px'
+                                                                        }}
+                                                                    >
+                                                                        {it.stock_bodega > 0 ? it.stock_bodega.toLocaleString('es-CO') : '-'}
+                                                                    </td>
+                                                                    <td
+                                                                        rowSpan={spanInfo.span}
+                                                                        style={{
+                                                                            textAlign: 'center',
+                                                                            fontSize: '7.5pt',
+                                                                            fontWeight: '600',
+                                                                            color: '#334155',
+                                                                            backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
+                                                                            verticalAlign: 'middle',
+                                                                            borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
+                                                                            padding: '2px 3px'
+                                                                        }}
+                                                                    >
+                                                                        {it.unit}
+                                                                    </td>
+                                                                </>
                                                             )}
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', fontWeight: '600', color: '#334155' }}>
-                                                            {it.unit}
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', fontSize: '7.8pt', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
-                                                            {it.demanda_neta.toLocaleString('es-CO')}
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', fontSize: '7.8pt', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: it.stock_bodega > 0 ? '#0F172A' : '#94A3B8' }}>
-                                                            {it.stock_bodega > 0 ? it.stock_bodega.toLocaleString('es-CO') : '-'}
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                            <span style={{
-                                                                display: 'inline-block',
-                                                                backgroundColor: '#ECFDF5',
-                                                                border: '1px solid #A7F3D0',
-                                                                borderRadius: '4px',
-                                                                padding: '1px 5px',
-                                                                fontWeight: '900',
-                                                                color: '#065F46',
-                                                                fontSize: '8pt',
-                                                                fontVariantNumeric: 'tabular-nums'
-                                                            }}>
-                                                                {it.con_merma.toLocaleString('es-CO')}
-                                                            </span>
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
-                                                            <div style={{
-                                                                borderBottom: '1px dashed #94A3B8',
-                                                                height: '18px',
-                                                                display: 'flex',
-                                                                alignItems: 'flex-end',
-                                                                justifyContent: 'flex-start',
-                                                                paddingLeft: '3px',
-                                                                fontSize: '6.8pt',
-                                                                color: '#64748B',
-                                                                fontWeight: '600'
-                                                            }}>
-                                                                $
-                                                            </div>
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
-                                                            <div style={{
-                                                                borderBottom: '1px dashed #94A3B8',
-                                                                height: '18px'
-                                                            }}></div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+
+                                                            {/* 4. Producto / Calibre Especificado */}
+                                                            <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                                                                    <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '8.2pt', lineHeight: 1.2 }}>
+                                                                        {it.product_name}
+                                                                    </span>
+                                                                    {it.accounting_id !== undefined && it.accounting_id !== null && (
+                                                                        <span style={{ 
+                                                                            fontSize: '6.8pt', 
+                                                                            color: '#94A3B8', 
+                                                                            fontWeight: '600', 
+                                                                            fontFamily: 'monospace',
+                                                                            letterSpacing: '0.02em',
+                                                                            userSelect: 'none'
+                                                                        }}>
+                                                                            #{it.accounting_id}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {it.variant_label && (
+                                                                    <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                        <span style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 5px', fontWeight: '700', color: '#1E293B' }}>
+                                                                            {it.variant_label}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+
+                                                            {/* 5. Demanda Neta */}
+                                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    backgroundColor: it.demanda_neta > 0 ? '#ECFDF5' : '#F8FAFC',
+                                                                    border: it.demanda_neta > 0 ? '1px solid #A7F3D0' : '1px solid #E2E8F0',
+                                                                    borderRadius: '4px',
+                                                                    padding: '1px 5px',
+                                                                    fontWeight: '900',
+                                                                    color: it.demanda_neta > 0 ? '#065F46' : '#94A3B8',
+                                                                    fontSize: '8pt',
+                                                                    fontVariantNumeric: 'tabular-nums'
+                                                                }}>
+                                                                    {it.demanda_neta > 0 ? it.demanda_neta.toLocaleString('es-CO') : '0'}
+                                                                </span>
+                                                            </td>
+
+                                                            {/* 6. Precio Pactado ($/UM) */}
+                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
+                                                                <div style={{
+                                                                    borderBottom: '1px dashed #94A3B8',
+                                                                    height: '18px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'flex-end',
+                                                                    justifyContent: 'flex-start',
+                                                                    paddingLeft: '3px',
+                                                                    fontSize: '6.8pt',
+                                                                    color: '#64748B',
+                                                                    fontWeight: '600'
+                                                                }}>
+                                                                    $
+                                                                </div>
+                                                            </td>
+
+                                                            {/* 7. Puesto / Proveedor */}
+                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 6px' }}>
+                                                                <div style={{
+                                                                    borderBottom: '1px dashed #94A3B8',
+                                                                    height: '18px'
+                                                                }}></div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                });
+                                            })()}
                                         </tbody>
                                         {isLastPage && (
                                             <tfoot>
                                                 <tr style={{ backgroundColor: '#F1F5F9', fontWeight: '900' }}>
-                                                    <td colSpan={3} style={{ textAlign: 'right', padding: '3px 6px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '8pt' }}>
-                                                        TOTAL {sublistName}:
+                                                    <td style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '7.8pt' }}>
+                                                        &Sigma;
                                                     </td>
-                                                    <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', fontSize: '8pt', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
-                                                        {totalKilosNetos.toLocaleString('es-CO')}
-                                                    </td>
-                                                    <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '8pt', fontVariantNumeric: 'tabular-nums' }}>
+                                                    <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '8pt', fontVariantNumeric: 'tabular-nums' }}>
                                                         {totalStockBodega.toLocaleString('es-CO')}
                                                     </td>
+                                                    <td style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#94A3B8' }}>
+                                                        -
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', padding: '3px 6px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '8pt' }}>
+                                                        TOTAL {sublistName}:
+                                                    </td>
                                                     <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#065F46', fontSize: '8.2pt', fontWeight: '900', fontVariantNumeric: 'tabular-nums' }}>
-                                                        {totalAComprar.toLocaleString('es-CO')}
+                                                        {totalKilosNetos.toLocaleString('es-CO')}
                                                     </td>
                                                     <td colSpan={2} style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#94A3B8' }}>
                                                         -

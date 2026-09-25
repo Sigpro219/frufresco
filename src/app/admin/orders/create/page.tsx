@@ -919,6 +919,7 @@ function CreateOrderContent() {
     // --- STAGING AREA STATE (Mesa de Trabajo) ---
     const [isStaging, setIsStaging] = useState(false);
     const [stagedItems, setStagedItems] = useState<any[]>([]);
+    const [sortStagedAlpha, setSortStagedAlpha] = useState(false);
     const [duplicateStagedMatchConfirm, setDuplicateStagedMatchConfirm] = useState<{
         isOpen: boolean;
         product: any;
@@ -6085,7 +6086,27 @@ function CreateOrderContent() {
                                                                 style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                             />
                                                         </th>
-                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '32%' }}>NOMBRE EN DOCUMENTO</th>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '32%' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span>NOMBRE EN DOCUMENTO</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSortStagedAlpha(prev => !prev)}
+                                                                    title={sortStagedAlpha ? 'Restaurar orden del documento original' : 'Ordenar alfabéticamente A→Z'}
+                                                                    style={{
+                                                                        display: 'inline-flex', alignItems: 'center', gap: '2px',
+                                                                        fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.03em',
+                                                                        padding: '2px 6px', borderRadius: '4px', cursor: 'pointer',
+                                                                        border: sortStagedAlpha ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                        backgroundColor: sortStagedAlpha ? '#ECFDF5' : '#F8FAFC',
+                                                                        color: sortStagedAlpha ? '#065F46' : '#64748B',
+                                                                        transition: 'all 0.15s'
+                                                                    }}
+                                                                >
+                                                                    A→Z
+                                                                </button>
+                                                            </div>
+                                                        </th>
                                                         <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
                                                         <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
@@ -6155,7 +6176,13 @@ function CreateOrderContent() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {stagedItems.map((item, idx) => {
+                                                    {(sortStagedAlpha
+                                                        ? [...stagedItems].sort((a, b) =>
+                                                            (a.rawText || a.productName || '').localeCompare(
+                                                                b.rawText || b.productName || '', 'es', { sensitivity: 'base' }
+                                                            ))
+                                                        : stagedItems
+                                                    ).map((item, idx) => {
                                                         const isConfidenceHigh = item.confidence === 'HIGH' || (item.confidenceScore && item.confidenceScore >= 90);
                                                         const isConfidenceMed = item.confidence === 'MEDIUM' || (item.confidenceScore && item.confidenceScore >= 70 && item.confidenceScore < 90);
                                                         const isActiveRow = activeDropdownRowIndex === idx;

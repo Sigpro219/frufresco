@@ -715,7 +715,7 @@ export default function ProcurementPage() {
         variant_label: item.variant_label,
         nickname: item.nickname,
         product_name: pName,
-        product: { name: pName }
+        product: item.products || { name: pName }
       });
       const norm = normalizeDemandToKg({
         quantity: Number(item.quantity) || 0,
