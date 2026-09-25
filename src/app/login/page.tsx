@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../lib/authContext';
 import { supabase } from '../../lib/supabase';
+import { performOtpPasswordReset, mapRecoveryErrorMessage } from '../../lib/authRecovery';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key, Eye, EyeOff, ArrowLeft, Building2, Briefcase, CheckCircle2 } from 'lucide-react';
@@ -25,12 +26,27 @@ export default function LoginPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [changeSuccess, setChangeSuccess] = useState(false);
 
-    // Forgot password flow states
+    // 6-digit OTP password recovery flow states
     const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [recoveryStep, setRecoveryStep] = useState<'email' | 'otp' | 'success'>('email');
     const [forgotEmail, setForgotEmail] = useState('');
+    const [otpCode, setOtpCode] = useState('');
+    const [recoveryPassword, setRecoveryPassword] = useState('');
+    const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
+    const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+    const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(false);
     const [forgotLoading, setForgotLoading] = useState(false);
-    const [forgotSuccess, setForgotSuccess] = useState(false);
     const [forgotError, setForgotError] = useState('');
+    const [resendCooldown, setResendCooldown] = useState(0);
+
+    // Temporizador de enfriamiento para reenvío de OTP
+    useEffect(() => {
+        if (resendCooldown <= 0) return;
+        const interval = setInterval(() => {
+            setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [resendCooldown]);
 
     // Multi-profile workspace selector
     const [showWorkspaceSelector, setShowWorkspaceSelector] = useState(false);
@@ -48,8 +64,13 @@ export default function LoginPage() {
             } else if (errParam) {
                 const desc = params.get('error_description') || errParam;
                 const cleanDesc = decodeURIComponent(desc).replace(/\+/g, ' ');
-                if (cleanDesc.toLowerCase().includes('expired') || params.get('error_code') === 'otp_expired') {
-                    setError('⚠️ El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
+                const lower = cleanDesc.toLowerCase();
+                if (lower.includes('expired') || params.get('error_code') === 'otp_expired' || cleanDesc === 'invalid_link') {
+                    setError('⚠️ El enlace o código de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
+                } else if (lower.includes('rate limit') || lower.includes('too many requests')) {
+                    setError('⚠️ Has realizado demasiadas solicitudes recientemente. Por favor espera unos minutos antes de reintentar.');
+                } else if (lower.includes('invalid') || lower.includes('token is invalid')) {
+                    setError('⚠️ El enlace o código de acceso no es válido. Por favor solicita uno nuevo.');
                 } else {
                     setError(`⚠️ ${cleanDesc}`);
                 }
@@ -60,6 +81,15 @@ export default function LoginPage() {
             if (code) {
                 console.log('🔄 Redirigiendo código PKCE al manejador de servidor /auth/callback...');
                 window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent('/login?mode=recovery')}`);
+                return;
+            }
+
+            // 1.1. Manejar token_hash si llega directamente en query param
+            const tokenHash = params.get('token_hash');
+            const tokenType = params.get('type');
+            if (tokenHash) {
+                console.log('🔄 Redirigiendo token_hash al manejador de servidor /auth/callback...');
+                window.location.replace(`/auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=${encodeURIComponent(tokenType || 'recovery')}&next=${encodeURIComponent('/login?mode=recovery')}`);
                 return;
             }
 
@@ -114,11 +144,14 @@ export default function LoginPage() {
             if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isRecoveryMode)) {
                 console.log('🔔 Evento de autenticación detectado:', event);
                 setIsRecoveryMode(true);
-                setShowForceChangePassword(true);
+                // Si el usuario ya está completando el flujo de 6 dígitos en pantalla, no sobreescribir la vista
+                if (!showForgotPassword) {
+                    setShowForceChangePassword(true);
+                }
             }
         });
         return () => subscription.unsubscribe();
-    }, [isRecoveryMode]);
+    }, [isRecoveryMode, showForgotPassword]);
 
     // Helper para determinar redirección según el perfil
     const routeUserByProfile = (targetProfile: any) => {
@@ -237,18 +270,15 @@ export default function LoginPage() {
         e.preventDefault();
         setForgotLoading(true);
         setForgotError('');
-        setForgotSuccess(false);
 
         const cleanEmail = forgotEmail.trim().toLowerCase();
         if (!cleanEmail) {
-            setForgotError('Por favor ingresa tu correo electrónico');
+            setForgotError('⚠️ Por favor ingresa tu correo electrónico.');
             setForgotLoading(false);
             return;
         }
 
         try {
-            // Asegurar que el enlace de recuperación apunte a producción (https://frufresco-liard.vercel.app)
-            // utilizando el handler server-side /auth/callback para canjear el código PKCE automáticamente.
             const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
             const isLocal = typeof window !== 'undefined' && 
                 (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -258,7 +288,7 @@ export default function LoginPage() {
                 : (isLocal ? 'https://frufresco-liard.vercel.app' : window.location.origin);
 
             const redirectUrl = `${baseOrigin}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
-            console.log('📨 Solicitando recuperación con redirectUrl:', redirectUrl);
+            console.log('📨 Solicitando código OTP de recuperación con redirectUrl:', redirectUrl);
 
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
                 redirectTo: redirectUrl,
@@ -266,15 +296,93 @@ export default function LoginPage() {
 
             if (resetError) throw resetError;
 
-            setForgotSuccess(true);
+            setRecoveryStep('otp');
+            setResendCooldown(60);
         } catch (err: any) {
             console.error('❌ Error en recuperación de contraseña:', err);
-            let msg = err.message || 'Error al enviar el enlace de recuperación';
-            if (msg.includes('rate limit')) {
-                msg = 'Has solicitado varios enlaces recientemente. Por favor espera unos minutos antes de reintentar.';
-            }
-            setForgotError(msg);
+            setForgotError(mapRecoveryErrorMessage(err));
         } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        if (resendCooldown > 0 || forgotLoading) return;
+        setForgotLoading(true);
+        setForgotError('');
+
+        const cleanEmail = forgotEmail.trim().toLowerCase();
+        if (!cleanEmail) {
+            setForgotError('⚠️ Por favor ingresa tu correo electrónico.');
+            setForgotLoading(false);
+            return;
+        }
+
+        try {
+            const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
+            const isLocal = typeof window !== 'undefined' && 
+                (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+            const baseOrigin = configuredUrl 
+                ? configuredUrl.replace(/\/$/, '') 
+                : (isLocal ? 'https://frufresco-liard.vercel.app' : window.location.origin);
+
+            const redirectUrl = `${baseOrigin}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
+            console.log('📨 Reenviando código OTP de recuperación con redirectUrl:', redirectUrl);
+
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+                redirectTo: redirectUrl,
+            });
+
+            if (resetError) throw resetError;
+
+            setResendCooldown(60);
+        } catch (err: any) {
+            console.error('❌ Error al reenviar código OTP:', err);
+            setForgotError(mapRecoveryErrorMessage(err));
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleVerifyOtpAndResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setForgotLoading(true);
+        setForgotError('');
+
+        try {
+            const result = await performOtpPasswordReset({
+                supabaseClient: supabase,
+                email: forgotEmail,
+                otpCode,
+                newPassword: recoveryPassword,
+                confirmPassword: recoveryConfirmPassword,
+            });
+
+            if (!result.success) {
+                setForgotError(result.error || '⚠️ Error al verificar el código o actualizar la contraseña');
+                setForgotLoading(false);
+                return;
+            }
+
+            // Refuerzo de sesión de cookies en servidor si está disponible
+            try {
+                await fetch('/api/auth/update-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: recoveryPassword.trim() }),
+                });
+            } catch (_) {}
+
+            setForgotLoading(false);
+            setRecoveryStep('success');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2500);
+
+        } catch (err: any) {
+            console.error('❌ Error inesperado en recuperación con OTP:', err);
+            setForgotError(mapRecoveryErrorMessage(err));
             setForgotLoading(false);
         }
     };
@@ -519,44 +627,9 @@ export default function LoginPage() {
                                 </button>
                             </div>
                         ) : showForgotPassword ? (
-                            /* VISTA 2: RECUPERACIÓN AUTÓNOMA DE CONTRASEÑA */
+                            /* VISTA 2: RECUPERACIÓN AUTÓNOMA CON CÓDIGO OTP DE 6 DÍGITOS */
                             <div>
-                                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                                    <div style={{
-                                        width: '50px',
-                                        height: '50px',
-                                        backgroundColor: 'rgba(52, 211, 153, 0.15)',
-                                        borderRadius: '16px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        margin: '0 auto 1rem',
-                                        border: '1px solid rgba(52, 211, 153, 0.3)'
-                                    }}>
-                                        <Mail size={24} color="#34d399" strokeWidth={2.5} />
-                                    </div>
-                                    <h1 style={{ 
-                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                        fontSize: '1.75rem', 
-                                        fontWeight: '900', 
-                                        color: 'white', 
-                                        marginTop: '0',
-                                        letterSpacing: '-0.04em'
-                                    }}>
-                                        Recuperar Clave<span style={{ color: '#34d399' }}>.</span>
-                                    </h1>
-                                    <p style={{ 
-                                        color: 'rgba(255, 255, 255, 0.7)', 
-                                        marginTop: '0.3rem',
-                                        fontSize: '0.88rem',
-                                        lineHeight: '1.4',
-                                        fontWeight: '500'
-                                    }}>
-                                        Ingresa tu correo registrado. Te enviaremos un enlace seguro para que restablezcas tu contraseña sin intermediarios.
-                                    </p>
-                                </div>
-
-                                {forgotSuccess ? (
+                                {recoveryStep === 'success' ? (
                                     <div style={{
                                         padding: '1.5rem',
                                         backgroundColor: 'rgba(16, 185, 129, 0.12)',
@@ -565,19 +638,18 @@ export default function LoginPage() {
                                         textAlign: 'center'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                                            <CheckCircle2 size={38} color="#34d399" />
+                                            <CheckCircle2 size={42} color="#34d399" />
                                         </div>
-                                        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>
-                                            ¡Enlace despachado!
+                                        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontWeight: '800', color: 'white' }}>
+                                            ¡Contraseña Restablecida!
                                         </h3>
-                                        <p style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.8)', margin: '0 0 1.25rem', lineHeight: '1.5' }}>
-                                            Revisa la bandeja de entrada de <strong>{forgotEmail}</strong> (incluyendo correo no deseado o spam) y abre el enlace para establecer tu nueva clave.
+                                        <p style={{ fontSize: '0.88rem', color: 'rgba(255, 255, 255, 0.85)', margin: '0 0 1.25rem', lineHeight: '1.5' }}>
+                                            Tu contraseña ha sido actualizada con éxito mediante verificación de 6 dígitos. Ya puedes ingresar con tu nueva credencial.
                                         </p>
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                setShowForgotPassword(false);
-                                                setForgotSuccess(false);
+                                                window.location.href = '/login';
                                             }}
                                             className="btn-premium"
                                             style={{
@@ -591,98 +663,459 @@ export default function LoginPage() {
                                                 cursor: 'pointer'
                                             }}
                                         >
-                                            Entendido, volver al ingreso
+                                            Ingresar ahora
                                         </button>
                                     </div>
-                                ) : (
-                                    <form onSubmit={handleForgotPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        {forgotError && (
-                                            <div style={{ 
-                                                padding: '0.9rem', 
-                                                backgroundColor: 'rgba(220, 38, 38, 0.15)', 
-                                                color: '#fca5a5', 
-                                                borderRadius: '14px', 
+                                ) : recoveryStep === 'otp' ? (
+                                    <div>
+                                        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+                                            <div style={{
+                                                width: '50px',
+                                                height: '50px',
+                                                backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                                                borderRadius: '16px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                margin: '0 auto 1rem',
+                                                border: '1px solid rgba(52, 211, 153, 0.3)'
+                                            }}>
+                                                <Key size={24} color="#34d399" strokeWidth={2.5} />
+                                            </div>
+                                            <h1 style={{ 
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                fontSize: '1.75rem', 
+                                                fontWeight: '900', 
+                                                color: 'white', 
+                                                marginTop: '0',
+                                                letterSpacing: '-0.04em'
+                                            }}>
+                                                Código de Verificación<span style={{ color: '#34d399' }}>.</span>
+                                            </h1>
+                                            <p style={{ 
+                                                color: 'rgba(255, 255, 255, 0.7)', 
+                                                marginTop: '0.3rem',
                                                 fontSize: '0.88rem',
-                                                border: '1px solid rgba(220, 38, 38, 0.3)',
+                                                lineHeight: '1.4',
                                                 fontWeight: '500'
                                             }}>
-                                                {forgotError}
-                                            </div>
-                                        )}
-
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                Correo Electrónico
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
-                                                    <Mail size={18} />
-                                                </div>
-                                                <input
-                                                    required
-                                                    type="email"
-                                                    value={forgotEmail}
-                                                    onChange={(e) => setForgotEmail(e.target.value)}
-                                                    placeholder="ejemplo@gmail.com"
-                                                    style={{ 
-                                                        width: '100%', 
-                                                        padding: '0.75rem 1rem 0.75rem 2.8rem', 
-                                                        borderRadius: '14px', 
-                                                        border: '1.5px solid #CBD5E1',
-                                                        backgroundColor: '#FFFFFF',
-                                                        color: '#0F172A',
-                                                        fontSize: '1rem',
-                                                        fontWeight: '600',
-                                                        outline: 'none'
+                                                Ingresa el código de 6 dígitos enviado a:<br />
+                                                <strong style={{ color: '#34d399' }}>{forgotEmail}</strong>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setRecoveryStep('email');
+                                                        setForgotError('');
                                                     }}
-                                                    className="login-input"
-                                                />
-                                            </div>
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: 'rgba(255,255,255,0.7)',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        textDecoration: 'underline',
+                                                        marginLeft: '8px'
+                                                    }}
+                                                >
+                                                    (cambiar)
+                                                </button>
+                                            </p>
                                         </div>
 
-                                        <button
-                                            type="submit"
-                                            disabled={forgotLoading}
-                                            className="btn-premium"
-                                            style={{ 
-                                                width: '100%', 
-                                                fontSize: '1rem',
-                                                padding: '0.8rem',
-                                                borderRadius: 'var(--radius-full)',
-                                                fontWeight: '900',
-                                                fontFamily: 'var(--font-outfit), sans-serif',
-                                                backgroundColor: forgotLoading ? 'rgba(255,255,255,0.15)' : '#34d399',
-                                                color: '#0a1a0f',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px'
-                                            }}
-                                        >
-                                            {forgotLoading ? 'Enviando enlace...' : 'Enviar enlace de recuperación'}
-                                        </button>
+                                        <form onSubmit={handleVerifyOtpAndResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                                            {forgotError && (
+                                                <div style={{ 
+                                                    padding: '0.9rem', 
+                                                    backgroundColor: 'rgba(220, 38, 38, 0.15)', 
+                                                    color: '#fca5a5', 
+                                                    borderRadius: '14px', 
+                                                    fontSize: '0.88rem', 
+                                                    border: '1px solid rgba(220, 38, 38, 0.3)',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    {forgotError}
+                                                </div>
+                                            )}
 
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowForgotPassword(false)}
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                color: 'rgba(255, 255, 255, 0.7)',
-                                                fontSize: '0.85rem',
-                                                cursor: 'pointer',
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Código de 6 Dígitos
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        maxLength={6}
+                                                        autoComplete="one-time-code"
+                                                        value={otpCode}
+                                                        onChange={(e) => {
+                                                            setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                                            if (forgotError) setForgotError('');
+                                                        }}
+                                                        placeholder="••••••"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.75rem 1rem', 
+                                                            borderRadius: '14px', 
+                                                            border: '1.5px solid #CBD5E1',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#0F172A',
+                                                            fontSize: '1.5rem',
+                                                            fontWeight: '800',
+                                                            letterSpacing: '0.45em',
+                                                            textAlign: 'center',
+                                                            fontFamily: 'monospace',
+                                                            outline: 'none'
+                                                        }}
+                                                        className="login-input"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Nueva Contraseña
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
+                                                        <Key size={18} />
+                                                    </div>
+                                                    <input
+                                                        required
+                                                        type={showRecoveryPassword ? "text" : "password"}
+                                                        value={recoveryPassword}
+                                                        onChange={(e) => setRecoveryPassword(e.target.value)}
+                                                        placeholder="Mínimo 6 caracteres"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.75rem 3rem 0.75rem 2.8rem', 
+                                                            borderRadius: '14px', 
+                                                            border: '1.5px solid #CBD5E1',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#0F172A',
+                                                            fontSize: '1rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none'
+                                                        }}
+                                                        className="login-input"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowRecoveryPassword(!showRecoveryPassword)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '12px',
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            color: showRecoveryPassword ? '#10B981' : '#475569',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            padding: '0.3rem',
+                                                            zIndex: 5
+                                                        }}
+                                                    >
+                                                        {showRecoveryPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Confirmar Contraseña
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
+                                                        <Key size={18} />
+                                                    </div>
+                                                    <input
+                                                        required
+                                                        type={showRecoveryConfirmPassword ? "text" : "password"}
+                                                        value={recoveryConfirmPassword}
+                                                        onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
+                                                        placeholder="Repite tu nueva contraseña"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.75rem 3rem 0.75rem 2.8rem', 
+                                                            borderRadius: '14px', 
+                                                            border: '1.5px solid #CBD5E1',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#0F172A',
+                                                            fontSize: '1rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none'
+                                                        }}
+                                                        className="login-input"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowRecoveryConfirmPassword(!showRecoveryConfirmPassword)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '12px',
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            color: showRecoveryConfirmPassword ? '#10B981' : '#475569',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            padding: '0.3rem',
+                                                            zIndex: 5
+                                                        }}
+                                                    >
+                                                        {showRecoveryConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={forgotLoading}
+                                                className="btn-premium"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    fontSize: '1rem',
+                                                    padding: '0.8rem',
+                                                    borderRadius: 'var(--radius-full)',
+                                                    fontWeight: '900',
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    backgroundColor: forgotLoading ? 'rgba(255,255,255,0.15)' : '#34d399',
+                                                    color: '#0a1a0f',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '8px',
+                                                    marginTop: '0.5rem'
+                                                }}
+                                            >
+                                                {forgotLoading ? 'Validando y guardando...' : 'Restablecer y Guardar Clave'}
+                                            </button>
+
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleResendOtp}
+                                                    disabled={resendCooldown > 0 || forgotLoading}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: resendCooldown > 0 ? 'rgba(255, 255, 255, 0.4)' : '#34d399',
+                                                        fontSize: '0.82rem',
+                                                        cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer',
+                                                        fontWeight: '600',
+                                                        padding: '0.2rem'
+                                                    }}
+                                                >
+                                                    {resendCooldown > 0 ? `Reenviar código en ${resendCooldown}s` : 'Reenviar código'}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setRecoveryStep('email');
+                                                        setForgotError('');
+                                                    }}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: 'rgba(255, 255, 255, 0.65)',
+                                                        fontSize: '0.82rem',
+                                                        cursor: 'pointer',
+                                                        fontWeight: '600',
+                                                        padding: '0.2rem'
+                                                    }}
+                                                >
+                                                    Cambiar correo
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowForgotPassword(false);
+                                                    setRecoveryStep('email');
+                                                    setForgotError('');
+                                                }}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    color: 'rgba(255, 255, 255, 0.7)',
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '6px',
+                                                    fontWeight: '600',
+                                                    marginTop: '0.25rem'
+                                                }}
+                                            >
+                                                <ArrowLeft size={16} /> Volver a iniciar sesión
+                                            </button>
+                                        </form>
+                                    </div>
+                                ) : (
+                                    /* recoveryStep === 'email' */
+                                    <div>
+                                        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                                            <div style={{
+                                                width: '50px',
+                                                height: '50px',
+                                                backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                                                borderRadius: '16px',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                gap: '6px',
-                                                fontWeight: '600'
-                                            }}
-                                        >
-                                            <ArrowLeft size={16} /> Volver a iniciar sesión
-                                        </button>
-                                    </form>
+                                                margin: '0 auto 1rem',
+                                                border: '1px solid rgba(52, 211, 153, 0.3)'
+                                            }}>
+                                                <Mail size={24} color="#34d399" strokeWidth={2.5} />
+                                            </div>
+                                            <h1 style={{ 
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                fontSize: '1.75rem', 
+                                                fontWeight: '900', 
+                                                color: 'white', 
+                                                marginTop: '0',
+                                                letterSpacing: '-0.04em'
+                                            }}>
+                                                Recuperar Clave<span style={{ color: '#34d399' }}>.</span>
+                                            </h1>
+                                            <p style={{ 
+                                                color: 'rgba(255, 255, 255, 0.7)', 
+                                                marginTop: '0.3rem',
+                                                fontSize: '0.88rem',
+                                                lineHeight: '1.4',
+                                                fontWeight: '500'
+                                            }}>
+                                                Ingresa tu correo registrado. Te enviaremos un código de 6 dígitos para que restablezcas tu contraseña de forma segura.
+                                            </p>
+                                        </div>
+
+                                        <form onSubmit={handleForgotPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                            {forgotError && (
+                                                <div style={{ 
+                                                    padding: '0.9rem', 
+                                                    backgroundColor: 'rgba(220, 38, 38, 0.15)', 
+                                                    color: '#fca5a5', 
+                                                    borderRadius: '14px', 
+                                                    fontSize: '0.88rem', 
+                                                    border: '1px solid rgba(220, 38, 38, 0.3)',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    {forgotError}
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Correo Electrónico
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
+                                                        <Mail size={18} />
+                                                    </div>
+                                                    <input
+                                                        required
+                                                        type="email"
+                                                        value={forgotEmail}
+                                                        onChange={(e) => {
+                                                            setForgotEmail(e.target.value);
+                                                            if (forgotError) setForgotError('');
+                                                        }}
+                                                        placeholder="ejemplo@gmail.com"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.75rem 1rem 0.75rem 2.8rem', 
+                                                            borderRadius: '14px', 
+                                                            border: '1.5px solid #CBD5E1',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#0F172A',
+                                                            fontSize: '1rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none'
+                                                        }}
+                                                        className="login-input"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={forgotLoading}
+                                                className="btn-premium"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    fontSize: '1rem',
+                                                    padding: '0.8rem',
+                                                    borderRadius: 'var(--radius-full)',
+                                                    fontWeight: '900',
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    backgroundColor: forgotLoading ? 'rgba(255,255,255,0.15)' : '#34d399',
+                                                    color: '#0a1a0f',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '8px'
+                                                }}
+                                            >
+                                                {forgotLoading ? 'Enviando código...' : 'Enviar código de recuperación'}
+                                            </button>
+
+                                            <div style={{ textAlign: 'center', marginTop: '-0.25rem' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setRecoveryStep('otp');
+                                                        setForgotError('');
+                                                    }}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: '#34d399',
+                                                        fontSize: '0.82rem',
+                                                        cursor: 'pointer',
+                                                        fontWeight: '600',
+                                                        textDecoration: 'underline'
+                                                    }}
+                                                >
+                                                    ¿Ya recibiste un código de 6 dígitos? Ingresar aquí
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowForgotPassword(false);
+                                                    setForgotError('');
+                                                }}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    color: 'rgba(255, 255, 255, 0.7)',
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '6px',
+                                                    fontWeight: '600'
+                                                }}
+                                            >
+                                                <ArrowLeft size={16} /> Volver a iniciar sesión
+                                            </button>
+                                        </form>
+                                    </div>
                                 )}
                             </div>
                         ) : showForceChangePassword ? (
@@ -977,6 +1410,11 @@ export default function LoginPage() {
                                                 onClick={() => {
                                                     setForgotEmail(email);
                                                     setShowForgotPassword(true);
+                                                    setRecoveryStep('email');
+                                                    setOtpCode('');
+                                                    setRecoveryPassword('');
+                                                    setRecoveryConfirmPassword('');
+                                                    setForgotError('');
                                                     setError('');
                                                 }}
                                                 style={{
