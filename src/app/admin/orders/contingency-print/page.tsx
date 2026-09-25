@@ -435,34 +435,57 @@ export default function ContingencyPrintPage() {
         fetchOrdersData();
     }, [rawOrderIds, selectedDate]);
 
-    // Motor Canónico de Neteo de Compras (Corabastos / Contingencia)
+    // Consolidado de Compras Corabastos (Planilla Maestra de Compras)
     const consolidatedPurchases = useMemo(() => {
-        const itemsForNetting: NettingOrderItem[] = [];
-        orders.forEach((ord: any) => {
-            (ord.order_items || []).forEach((it: any) => {
-                itemsForNetting.push(it);
+        const map = new Map<string, {
+            name: string;
+            accounting_id?: number | string | null;
+            variant_label?: string;
+            unit: string;
+            totalQty: number;
+            withMerma: number;
+            ordersCount: number;
+        }>();
+
+        orders.forEach(order => {
+            (order.order_items || []).forEach(item => {
+                const prodName = item.products?.name || item.nickname || 'Producto Sin Nombre';
+                const accountingId = item.products?.accounting_id;
+                const unit = item.unit || item.products?.unit_of_measure || 'Kg';
+                const qty = Number(item.quantity || 0);
+                const variant = item.variant_label ? (formatStructuredSpecification({
+                    quantity: item.quantity,
+                    unit: item.unit || item.products?.unit_of_measure,
+                    variant_label: item.variant_label,
+                    nickname: item.nickname,
+                    selected_options: item.selected_options
+                }) || cleanPhysicalInstruction(item.variant_label)) : '';
+
+                const key = `${prodName}_${variant}_${unit}`.toLowerCase();
+                if (!map.has(key)) {
+                    map.set(key, {
+                        name: prodName,
+                        accounting_id: accountingId,
+                        variant_label: variant || undefined,
+                        unit,
+                        totalQty: 0,
+                        withMerma: 0,
+                        ordersCount: 0
+                    });
+                }
+                const record = map.get(key)!;
+                record.totalQty += qty;
+                record.ordersCount += 1;
             });
         });
 
-        return calculateProcurementNetting({
-            items: itemsForNetting,
-            stocks,
-            options: { mermaFactor: 0.0, applySafetyStock: true }
-        });
-    }, [orders, stocks]);
+        const list = Array.from(map.values()).map(item => ({
+            ...item,
+            withMerma: Math.round(item.totalQty * 1.05 * 10) / 10
+        }));
 
-    // Agrupación de compras por sublista (FRUTAS, VERDURAS, HIERBAS, etc.)
-    const groupedPurchasesBySublist = useMemo(() => {
-        const map: Record<string, typeof consolidatedPurchases> = {};
-        consolidatedPurchases.forEach(row => {
-            const sub = (row.sublist || 'GENERAL').toUpperCase().trim();
-            if (!map[sub]) map[sub] = [];
-            map[sub].push(row);
-        });
-        return map;
-    }, [consolidatedPurchases]);
-
-    const availablePurchaseSublists = useMemo(() => Object.keys(groupedPurchasesBySublist).sort(), [groupedPurchasesBySublist]);
+        return list.sort((a, b) => b.totalQty - a.totalQty);
+    }, [orders]);
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount || 0);
@@ -584,8 +607,6 @@ export default function ContingencyPrintPage() {
                         orderIds={rawOrderIds || undefined}
                     />
 
-
-
                     {/* Botón Descargar PDF */}
                     <button
                         onClick={() => {
@@ -671,286 +692,171 @@ export default function ContingencyPrintPage() {
                 ) : (
                     <>
                         {/* ========================================================= */}
-                        {/* 1. PLANILLA DE COMPRAS CORABASTOS (FÍSICA DE PISO)        */}
+                        {/* 1. PLANILLA MAESTRA DE COMPRAS CORABASTOS (FÍSICA DE PISO) */}
                         {/* ========================================================= */}
-                        {showPurchases && (
-                            availablePurchaseSublists.length === 0 ? (
-                                <Letterhead
-                                    title="Planilla Maestra de Compras (Corabastos)"
-                                    subtitle="INVESTMENTS CORTES S.A.S. · Central de Abastos Corabastos · Operación de Contingencia"
-                                    date={orders[0]?.delivery_date || selectedDate}
-                                    reference={`PLC-${(orders[0]?.delivery_date || selectedDate).replace(/-/g, '')}`}
-                                    badge="COMPRAS CORABASTOS"
-                                    badgeVariant="dark"
-                                    className="page-break"
-                                    showWatermark={false}
-                                >
-                                    <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}>
-                                        <p style={{ fontWeight: '700' }}>No hay requerimientos de compras netas para los pedidos seleccionados.</p>
-                                    </div>
-                                </Letterhead>
-                            ) : (
-                                availablePurchaseSublists.map(sublistName => {
-                                    const sublistItems = groupedPurchasesBySublist[sublistName] || [];
+                        {showPurchases && (() => {
+                            const CHUNK_SIZE = 26;
+                            const purchasePages: typeof consolidatedPurchases[] = [];
+                            for (let i = 0; i < consolidatedPurchases.length; i += CHUNK_SIZE) {
+                                purchasePages.push(consolidatedPurchases.slice(i, i + CHUNK_SIZE));
+                            }
+                            if (purchasePages.length === 0) purchasePages.push([]);
 
-                                    // Paginación ponderada para hoja de compras
-                                    const MAX_ROW_UNITS = 30;
-                                    const FOOTER_RESERVE = 4;
-                                    const sublistPages: Array<{ items: typeof sublistItems; usedUnits: number }> = [];
-                                    let currentPage: typeof sublistItems = [];
-                                    let currentUnits = 0;
+                            return purchasePages.map((pageItems, pageIdx) => {
+                                const isLastPage = pageIdx === purchasePages.length - 1;
+                                const pageSubtitle = `INVESTMENTS CORTES S.A.S. · Central de Abastos Corabastos · Operación de Contingencia${purchasePages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${purchasePages.length}` : ''}`;
 
-                                    sublistItems.forEach((item, itemGlobalIdx) => {
-                                        const rowWeight = item.canonical_spec ? 1.6 : 1.0;
-                                        const isLastItem = itemGlobalIdx === sublistItems.length - 1;
-                                        const budgetForPage = isLastItem || currentPage.length === 0
-                                            ? MAX_ROW_UNITS - FOOTER_RESERVE
-                                            : MAX_ROW_UNITS;
+                                return (
+                                    <Letterhead
+                                        key={`purchases-page-${pageIdx}`}
+                                        title="Planilla Maestra de Compras (Corabastos)"
+                                        subtitle={pageSubtitle}
+                                        date={orders[0]?.delivery_date || selectedDate}
+                                        reference={`SKUs: ${consolidatedPurchases.length}`}
+                                        badge="COMPRAS CORABASTOS"
+                                        badgeVariant="dark"
+                                        className="page-break"
+                                        showWatermark={false}
+                                    >
+                                        {/* Banner superior con resumen */}
+                                        <div style={{
+                                            backgroundColor: '#F8FAFC',
+                                            padding: '4px 8px',
+                                            border: '1px solid #CBD5E1',
+                                            borderRadius: '4px',
+                                            fontSize: '7pt',
+                                            marginBottom: '6px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}>
+                                            <div>
+                                                <strong style={{ color: '#0F172A' }}>Instrucciones para Plaza:</strong> Registre el precio pactado por kilo/bulto y el puesto o bodega en Corabastos.
+                                            </div>
+                                            <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '7.2pt' }}>
+                                                Pedidos amparados: {orders.length} &bull; Total SKUs: {consolidatedPurchases.length}
+                                            </div>
+                                        </div>
 
-                                        if (currentUnits + rowWeight > budgetForPage && currentPage.length > 0) {
-                                            sublistPages.push({ items: currentPage, usedUnits: currentUnits });
-                                            currentPage = [];
-                                            currentUnits = 0;
-                                        }
-                                        currentPage.push(item);
-                                        currentUnits += rowWeight;
-                                    });
-                                    if (currentPage.length > 0) sublistPages.push({ items: currentPage, usedUnits: currentUnits });
-                                    if (sublistPages.length === 0) sublistPages.push({ items: [], usedUnits: 0 });
+                                        {/* Tabla de Compras con Lógica de Diseño de Manifiesto */}
+                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr>
+                                                    <th style={{ width: '4%', textAlign: 'center', fontSize: '8.2pt' }}>#</th>
+                                                    <th style={{ width: '40%', fontSize: '8.2pt' }}>PRODUCTO / DESCRIPCIÓN</th>
+                                                    <th style={{ width: '8%', textAlign: 'center', fontSize: '8.2pt' }}>UND</th>
+                                                    <th style={{ width: '12%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0F172A', color: '#FFFFFF' }}>DEMANDA NETA</th>
+                                                    <th style={{ width: '12%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0D7A57', color: '#FFFFFF' }}>+MERMA (5%)</th>
+                                                    <th style={{ width: '12%', textAlign: 'center', fontSize: '8.2pt' }}>PRECIO $/UM</th>
+                                                    <th style={{ width: '12%', textAlign: 'center', fontSize: '8.2pt' }}>COMPRADO</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {pageItems.map((p, itemIdx) => {
+                                                    const globalIdx = pageIdx * CHUNK_SIZE + itemIdx + 1;
+                                                    const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
 
-                                    const totalKilosNetos = sublistItems.reduce((s, it) => s + it.raw_demand_kg, 0);
-                                    const seenProductPids = new Set<string>();
-                                    const totalStockBodega = sublistItems.reduce((s, it) => {
-                                        if (!seenProductPids.has(it.product_id)) {
-                                            seenProductPids.add(it.product_id);
-                                            return s + Number(stocks[it.product_id] || 0);
-                                        }
-                                        return s;
-                                    }, 0);
-                                    const totalAComprar = sublistItems.reduce((s, it) => s + it.net_to_buy, 0);
-
-                                    return sublistPages.map(({ items: pageItems }, pageIdx) => {
-                                        const isLastPage = pageIdx === sublistPages.length - 1;
-                                        const pageSubtitle = `NEGOCIACIÓN EN PLAZA · CENTRAL CORABASTOS${sublistPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${sublistPages.length}` : ''} · CONTINGENCIA`;
-                                        const planRef = `PLC-${(orders[0]?.delivery_date || selectedDate).replace(/-/g, '')}`;
-
-                                        return (
-                                            <Letterhead
-                                                key={`purchases-${sublistName}-page-${pageIdx}`}
-                                                title="Planilla de Compras Corabastos"
-                                                subtitle={pageSubtitle}
-                                                date={orders[0]?.delivery_date || selectedDate}
-                                                reference={planRef}
-                                                badge={sublistName}
-                                                badgeVariant="dark"
-                                                className="page-break"
-                                                showWatermark={false}
-                                            >
-                                                {/* Sublist summary banner */}
-                                                <div style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    backgroundColor: '#F8FAFC',
-                                                    padding: '3px 8px',
-                                                    border: '1px solid #CBD5E1',
-                                                    borderRadius: '4px',
-                                                    fontSize: '7pt',
-                                                    marginBottom: '6px'
-                                                }}>
-                                                    <div>
-                                                        <strong style={{ color: '#0F172A' }}>Instrucciones para Plaza:</strong> Negocie precio pactado por kilo/bulto y anote el número de puesto en Corabastos.
-                                                    </div>
-                                                    <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '7.2pt' }}>
-                                                        {sublistItems.length} Productos &bull; Stock Bodega: {totalStockBodega.toLocaleString('es-CO')} &bull; Demanda Total: {totalKilosNetos.toLocaleString('es-CO')}
-                                                    </div>
-                                                </div>
-
-                                                {/* 7 Column Table Standard */}
-                                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                                    <thead>
-                                                        <tr>
-                                                            <th style={{ width: '3.5%', textAlign: 'center', fontSize: '8.2pt' }}>#</th>
-                                                            <th style={{ width: '10%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#1E293B', color: '#FFFFFF' }}>Stock INV</th>
-                                                            <th style={{ width: '6.5%', textAlign: 'center', fontSize: '8.2pt' }}>UM</th>
-                                                            <th style={{ width: '35%', fontSize: '8.2pt', textAlign: 'left' }}>Producto / Calibre Especificado</th>
-                                                            <th style={{ width: '11%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0D7A57', color: '#FFFFFF' }}>Demanda</th>
-                                                            <th style={{ width: '10%', textAlign: 'center', fontSize: '8.2pt' }}>Precio $/UM</th>
-                                                            <th style={{ width: '24%', textAlign: 'center', fontSize: '8.2pt' }}>Puesto / Proveedor</th>
+                                                    return (
+                                                        <tr key={globalIdx} style={{ backgroundColor: bg }}>
+                                                            <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '7.8pt', color: '#64748B' }}>
+                                                                {globalIdx}
+                                                            </td>
+                                                            <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                                                                    <strong style={{ fontSize: '8.2pt', color: '#0F172A', lineHeight: 1.2 }}>
+                                                                        {p.name}
+                                                                    </strong>
+                                                                    {p.accounting_id !== undefined && p.accounting_id !== null && (
+                                                                        <span style={{
+                                                                            fontSize: '6.8pt',
+                                                                            color: '#94A3B8',
+                                                                            fontWeight: '600',
+                                                                            fontFamily: 'monospace',
+                                                                            letterSpacing: '0.02em',
+                                                                            userSelect: 'none'
+                                                                        }}>
+                                                                            #{p.accounting_id}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {p.variant_label && (
+                                                                    <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                        <span style={{
+                                                                            backgroundColor: '#F1F5F9',
+                                                                            border: '1px solid #CBD5E1',
+                                                                            borderRadius: '3px',
+                                                                            padding: '1px 5px',
+                                                                            fontWeight: '700',
+                                                                            color: '#1E293B'
+                                                                        }}>
+                                                                            {p.variant_label}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontSize: '7.6pt', fontWeight: '600', color: '#334155' }}>
+                                                                {p.unit}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 'bold', fontSize: '8pt', color: '#0F172A' }}>
+                                                                {p.totalQty.toLocaleString('es-CO')}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    backgroundColor: '#ECFDF5',
+                                                                    border: '1px solid #A7F3D0',
+                                                                    borderRadius: '4px',
+                                                                    padding: '1px 5px',
+                                                                    fontWeight: '900',
+                                                                    color: '#065F46',
+                                                                    fontSize: '8pt',
+                                                                    fontVariantNumeric: 'tabular-nums'
+                                                                }}>
+                                                                    {p.withMerma.toLocaleString('es-CO')}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
+                                                                <div style={{
+                                                                    borderBottom: '1px dashed #94A3B8',
+                                                                    height: '18px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'flex-end',
+                                                                    justifyContent: 'flex-start',
+                                                                    paddingLeft: '3px',
+                                                                    fontSize: '6.8pt',
+                                                                    color: '#64748B',
+                                                                    fontWeight: '600'
+                                                                }}>
+                                                                    $
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 6px' }}>
+                                                                <div style={{
+                                                                    borderBottom: '1px dashed #94A3B8',
+                                                                    height: '18px'
+                                                                }}></div>
+                                                            </td>
                                                         </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {(() => {
-                                                            const itemSpans: Array<{ isFirst: boolean; span: number }> = [];
-                                                            for (let i = 0; i < pageItems.length; i++) {
-                                                                const currentPid = pageItems[i].product_id;
-                                                                if (i > 0 && pageItems[i - 1].product_id === currentPid) {
-                                                                    itemSpans.push({ isFirst: false, span: 0 });
-                                                                } else {
-                                                                    let count = 1;
-                                                                    while (i + count < pageItems.length && pageItems[i + count].product_id === currentPid) {
-                                                                        count++;
-                                                                    }
-                                                                    itemSpans.push({ isFirst: true, span: count });
-                                                                }
-                                                            }
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
 
-                                                            return pageItems.map((it, itemIdx) => {
-                                                                const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.items.length, 0);
-                                                                const globalIdx = prevPagesCount + itemIdx + 1;
-                                                                const spanInfo = itemSpans[itemIdx];
-                                                                const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-                                                                const prodStock = Number(stocks[it.product_id] || 0);
-
-                                                                return (
-                                                                    <tr key={it.key || itemIdx} style={{ backgroundColor: bg }}>
-                                                                        <td style={{ textAlign: 'center', fontSize: '7.8pt', fontWeight: 'bold', color: '#64748B' }}>
-                                                                            {globalIdx}
-                                                                        </td>
-
-                                                                        {spanInfo.isFirst && (
-                                                                            <>
-                                                                                <td
-                                                                                    rowSpan={spanInfo.span}
-                                                                                    style={{
-                                                                                        textAlign: 'right',
-                                                                                        fontSize: '7.8pt',
-                                                                                        fontWeight: '700',
-                                                                                        fontVariantNumeric: 'tabular-nums',
-                                                                                        color: prodStock > 0 ? '#0F172A' : '#94A3B8',
-                                                                                        backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
-                                                                                        verticalAlign: 'middle',
-                                                                                        borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
-                                                                                        padding: '2px 4px'
-                                                                                    }}
-                                                                                >
-                                                                                    {prodStock > 0 ? prodStock.toLocaleString('es-CO') : '-'}
-                                                                                </td>
-                                                                                <td
-                                                                                    rowSpan={spanInfo.span}
-                                                                                    style={{
-                                                                                        textAlign: 'center',
-                                                                                        fontSize: '7.5pt',
-                                                                                        fontWeight: '600',
-                                                                                        color: '#334155',
-                                                                                        backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
-                                                                                        verticalAlign: 'middle',
-                                                                                        borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
-                                                                                        padding: '2px 3px'
-                                                                                    }}
-                                                                                >
-                                                                                    {it.unit}
-                                                                                </td>
-                                                                            </>
-                                                                        )}
-
-                                                                        <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
-                                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '8.2pt', lineHeight: 1.2 }}>
-                                                                                    {it.product_name}
-                                                                                </span>
-                                                                                {it.accounting_id !== undefined && it.accounting_id !== null && (
-                                                                                    <span style={{ 
-                                                                                        fontSize: '6.8pt', 
-                                                                                        color: '#94A3B8', 
-                                                                                        fontWeight: '600', 
-                                                                                        fontFamily: 'monospace',
-                                                                                        letterSpacing: '0.02em',
-                                                                                        userSelect: 'none'
-                                                                                    }}>
-                                                                                        #{it.accounting_id}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            {it.canonical_spec && (
-                                                                                <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                                                    <span style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 5px', fontWeight: '700', color: '#1E293B' }}>
-                                                                                        {it.canonical_spec}
-                                                                                    </span>
-                                                                                </div>
-                                                                            )}
-                                                                        </td>
-
-                                                                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                                            <span style={{
-                                                                                display: 'inline-block',
-                                                                                backgroundColor: it.raw_demand_kg > 0 ? '#ECFDF5' : '#F8FAFC',
-                                                                                border: it.raw_demand_kg > 0 ? '1px solid #A7F3D0' : '1px solid #E2E8F0',
-                                                                                borderRadius: '4px',
-                                                                                padding: '1px 5px',
-                                                                                fontWeight: '900',
-                                                                                color: it.raw_demand_kg > 0 ? '#065F46' : '#94A3B8',
-                                                                                fontSize: '8pt',
-                                                                                fontVariantNumeric: 'tabular-nums'
-                                                                            }}>
-                                                                                {it.raw_demand_kg > 0 ? it.raw_demand_kg.toLocaleString('es-CO') : '0'}
-                                                                            </span>
-                                                                        </td>
-
-                                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
-                                                                            <div style={{
-                                                                                borderBottom: '1px dashed #94A3B8',
-                                                                                height: '18px',
-                                                                                display: 'flex',
-                                                                                alignItems: 'flex-end',
-                                                                                justifyContent: 'flex-start',
-                                                                                paddingLeft: '3px',
-                                                                                fontSize: '6.8pt',
-                                                                                color: '#64748B',
-                                                                                fontWeight: '600'
-                                                                            }}>
-                                                                                $
-                                                                            </div>
-                                                                        </td>
-
-                                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 6px' }}>
-                                                                            <div style={{
-                                                                                borderBottom: '1px dashed #94A3B8',
-                                                                                height: '18px'
-                                                                            }}></div>
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            });
-                                                        })()}
-                                                    </tbody>
-                                                    {isLastPage && (
-                                                        <tfoot>
-                                                            <tr style={{ backgroundColor: '#F1F5F9', fontWeight: '900' }}>
-                                                                <td style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '7.8pt' }}>
-                                                                    &Sigma;
-                                                                </td>
-                                                                <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '8pt', fontVariantNumeric: 'tabular-nums' }}>
-                                                                    {totalStockBodega > 0 ? totalStockBodega.toLocaleString('es-CO') : '-'}
-                                                                </td>
-                                                                <td style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '7pt' }}>
-                                                                    TOTAL
-                                                                </td>
-                                                                <td style={{ padding: '3px 6px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '7.8pt' }}>
-                                                                    Consolidado {sublistName} ({sublistItems.length} líneas)
-                                                                </td>
-                                                                <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#065F46', fontSize: '8.2pt', fontVariantNumeric: 'tabular-nums' }}>
-                                                                    {totalKilosNetos.toLocaleString('es-CO')}
-                                                                </td>
-                                                                <td colSpan={2} style={{ padding: '3px 6px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '6.8pt', textAlign: 'center' }}>
-                                                                    A Comprar Neto: <strong style={{ color: '#0F172A' }}>{totalAComprar.toLocaleString('es-CO')}</strong>
-                                                                </td>
-                                                            </tr>
-                                                        </tfoot>
-                                                    )}
-                                                </table>
-
-                                                {/* Bottom Signatures */}
-                                                <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-                                                    <div>Firma Comprador en Corabastos: ___________________________</div>
-                                                    <div>Firma Recibido en Bodega Central: ___________________________</div>
-                                                </div>
-                                            </Letterhead>
-                                        );
-                                    });
-                                })
-                            )
-                        )}
+                                        {/* Footer de continuidad entre páginas o bloque de firmas al final */}
+                                        {!isLastPage ? (
+                                            <div style={{ marginTop: 'auto', textAlign: 'right', fontSize: '7pt', fontWeight: '700', color: '#64748B', paddingTop: '6px' }}>
+                                                Continúa en la siguiente página... (Pág. {pageIdx + 1} de {purchasePages.length})
+                                            </div>
+                                        ) : (
+                                            <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
+                                                <div>Firma Comprador en Corabastos: ___________________________</div>
+                                                <div>Firma Recibido en Bodega Central: ___________________________</div>
+                                            </div>
+                                        )}
+                                    </Letterhead>
+                                );
+                            });
+                        })()}
 
 
                 {/* ========================================================= */}
