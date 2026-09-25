@@ -64,11 +64,11 @@ export const PRINT_DOCUMENTS: PrintDocumentOption[] = [
     },
     {
         key: 'contingency',
-        label: 'Kit de Contingencia & Remisiones',
-        shortLabel: 'Kit Contingencia (Carta)',
+        label: 'Remisiones de Entrega en Duplicado',
+        shortLabel: 'Remisiones de Entrega (Carta)',
         paperFormat: 'Carta (Portrait)',
-        path: '/admin/orders/contingency-print',
-        description: 'Juego físico de respaldo ante caídas de red o fallas eléctricas'
+        path: '/admin/orders/contingency-print?mode=remissions',
+        description: 'Remisiones físicas por pedido con Original (Cliente) y Copia (Transportador / Contabilidad)'
     }
 ];
 

@@ -370,7 +370,7 @@ export default function ContingencyPrintPage() {
     const router = useRouter();
     const rawOrderIds = searchParams.get('orderIds') || searchParams.get('ids') || '';
     const paramDate = searchParams.get('date');
-    const mode = searchParams.get('mode') || 'all'; // 'all' | 'picking' | 'remissions' | 'dispatch' | 'purchases'
+    const mode = searchParams.get('mode') || 'remissions'; // 'remissions' (default) | 'dispatch' | 'picking' | 'purchases' | 'all'
 
     const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || getBogotaDate(0));
 
@@ -548,7 +548,7 @@ export default function ContingencyPrintPage() {
                 flexWrap: 'wrap',
                 gap: '8px'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <button
                         onClick={() => router.back()}
                         style={{
@@ -575,19 +575,74 @@ export default function ContingencyPrintPage() {
                                     <Truck size={16} color="#0D7A57" />
                                     Manifiesto de Ruta & Canastillas
                                 </>
+                            ) : mode === 'remissions' ? (
+                                <>
+                                    <Printer size={16} color="#0D7A57" />
+                                    Remisiones de Entrega (Duplicado)
+                                </>
+                            ) : mode === 'picking' ? (
+                                <>
+                                    <ShieldAlert size={16} color="#D97706" />
+                                    Hojas de Báscula & Picking
+                                </>
+                            ) : mode === 'purchases' ? (
+                                <>
+                                    <ShieldAlert size={16} color="#0F172A" />
+                                    Planilla Maestra de Compras
+                                </>
                             ) : (
                                 <>
-                                    <ShieldAlert size={16} color="#0D7A57" />
-                                    Kit de Contingencia
+                                    <ShieldAlert size={16} color="#DC2626" />
+                                    Kit de Contingencia Integral
                                 </>
                             )}
                         </h1>
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                            {orders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'}
+                            {orders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${orders.length * 2} hojas)` : ''}
                         </span>
-                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: mode === 'dispatch' ? '#065F46' : '#92400E', backgroundColor: mode === 'dispatch' ? '#ECFDF5' : '#FEF3C7', padding: '1px 6px', borderRadius: '12px', border: mode === 'dispatch' ? '1px solid #A7F3D0' : '1px solid #FCD34D', whiteSpace: 'nowrap' }}>
-                            {mode === 'dispatch' ? 'Despacho y Ruta' : 'Emergencia'}
+                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: mode === 'dispatch' ? '#065F46' : mode === 'remissions' ? '#0D7A57' : '#92400E', backgroundColor: mode === 'dispatch' || mode === 'remissions' ? '#ECFDF5' : '#FEF3C7', padding: '1px 6px', borderRadius: '12px', border: mode === 'dispatch' || mode === 'remissions' ? '1px solid #A7F3D0' : '1px solid #FCD34D', whiteSpace: 'nowrap' }}>
+                            {mode === 'dispatch' ? 'Despacho y Ruta' : mode === 'remissions' ? 'Original + Copia' : mode === 'picking' ? 'Báscula' : mode === 'purchases' ? 'Corabastos' : 'Kit Completo'}
                         </span>
+                    </div>
+
+                    {/* Selector rápido de sub-modos */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                        {[
+                            { key: 'remissions', label: 'Remisiones' },
+                            { key: 'dispatch', label: 'Manifiesto' },
+                            { key: 'picking', label: 'Báscula' },
+                            { key: 'purchases', label: 'Compras' },
+                            { key: 'all', label: 'Todo' }
+                        ].map((sub) => {
+                            const isActive = mode === sub.key;
+                            return (
+                                <button
+                                    key={sub.key}
+                                    type="button"
+                                    onClick={() => {
+                                        const params = new URLSearchParams();
+                                        if (selectedDate) params.set('date', selectedDate);
+                                        if (rawOrderIds) params.set('orderIds', rawOrderIds);
+                                        params.set('mode', sub.key);
+                                        router.replace(`/admin/orders/contingency-print?${params.toString()}`);
+                                    }}
+                                    style={{
+                                        padding: '2px 7px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: isActive ? '800' : '600',
+                                        backgroundColor: isActive ? '#0D7A57' : 'transparent',
+                                        color: isActive ? '#FFFFFF' : '#475569',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    title={`Ver vista de ${sub.label}`}
+                                >
+                                    {sub.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -600,7 +655,7 @@ export default function ContingencyPrintPage() {
                             setSelectedDate(newDate);
                             const params = new URLSearchParams();
                             params.set('date', newDate);
-                            if (mode && mode !== 'all') params.set('mode', mode);
+                            if (mode && mode !== 'remissions') params.set('mode', mode);
                             if (rawOrderIds) params.set('orderIds', rawOrderIds);
                             router.replace(`/admin/orders/contingency-print?${params.toString()}`);
                         }}
@@ -654,6 +709,8 @@ export default function ContingencyPrintPage() {
                                 element: printDocRef.current,
                                 title: mode === 'dispatch' 
                                     ? `Manifiesto de Ruta - ${orders.length} Paradas`
+                                    : mode === 'remissions'
+                                    ? `Remisiones de Entrega - ${orders.length} Pedidos (${orders.length * 2} Hojas)`
                                     : `Kit de Contingencia - ${orders.length} Pedidos (${mode.toUpperCase()})`,
                                 paperSize: mode === 'dispatch' ? 'oficio' : 'letter',
                                 orientation: 'portrait'
@@ -675,7 +732,7 @@ export default function ContingencyPrintPage() {
                             whiteSpace: 'nowrap'
                         }}
                     >
-                        <Printer size={14} /> Imprimir Kit ({orders.length} Ped.)
+                        <Printer size={14} /> Imprimir {mode === 'remissions' ? `Remisiones (${orders.length})` : mode === 'dispatch' ? 'Manifiesto' : 'Kit'}
                     </button>
                 </div>
             </div>
@@ -1004,42 +1061,53 @@ export default function ContingencyPrintPage() {
                             badgeVariant={copyInfo.isCopy ? 'light' : 'dark'}
                             espacioNum={espacioNum}
                             className="page-break"
+                            paperSize="letter"
                             showWatermark={false}
                         >
                             {/* Poka-Yoke Banner Reposición si aplica */}
                             {isReposicion && (
-                                <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '4px 8px', borderRadius: '4px', marginBottom: '5px', fontSize: '0.64rem', color: '#991B1B', fontWeight: 'bold' }}>
+                                <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '4px 8px', borderRadius: '4px', marginBottom: '6px', fontSize: '7pt', color: '#991B1B', fontWeight: 'bold' }}>
                                     RECUERDE: Los productos en este documento NO TIENEN COBRO (Reposición de Calidad autorizada por Servicio al Cliente).
                                 </div>
                             )}
 
                             {/* Client & Route Micro-Grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', backgroundColor: '#F8FAFC', padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.66rem', marginBottom: '5px' }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1.3fr 1fr',
+                                gap: '8px',
+                                backgroundColor: '#F8FAFC',
+                                padding: '5px 8px',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '4px',
+                                fontSize: '7.2pt',
+                                marginBottom: '6px'
+                            }}>
                                 <div>
-                                    <div><strong>CLIENTE:</strong> {clientName}</div>
-                                    <div><strong>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
-                                    <div><strong>DIRECCIÓN:</strong> {order.shipping_address || order.profiles?.address || 'Bogotá'}</div>
-                                    <div><strong>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>CLIENTE:</strong> {clientName}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
                                 </div>
                                 <div>
-                                    <div><strong>FECHA DESPACHO:</strong> {order.delivery_date}</div>
-                                    <div><strong>FRANJA HORARIA:</strong> {resolveDeliverySlotInfo(order).slot}</div>
-                                    <div><strong>LÍNEAS DE PEDIDO:</strong> {itemsCount} productos solicitados</div>
-                                    {order.special_notes && <div><strong>OBSERVACIÓN:</strong> {order.special_notes}</div>}
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>FECHA DESPACHO:</strong> {order.delivery_date}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>FRANJA HORARIA:</strong> {resolveDeliverySlotInfo(order).slot}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>LÍNEAS DE PEDIDO:</strong> {itemsCount} productos solicitados</div>
+                                    {order.special_notes && <div style={{ lineHeight: 1.35, color: '#0369A1' }}><strong style={{ color: '#0F172A' }}>OBSERVACIÓN:</strong> {order.special_notes}</div>}
                                 </div>
                             </div>
 
                             {/* Products Table con columna KG-UN recibe compacta */}
-                            <table>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '4%', textAlign: 'center' }}>P</th>
-                                        <th style={{ width: '42%' }}>Descripción del Producto</th>
-                                        <th style={{ width: '9%', textAlign: 'right' }}>Cant.</th>
-                                        <th style={{ width: '7%', textAlign: 'center' }}>UM</th>
-                                        <th style={{ width: '12%', textAlign: 'right' }}>Valor/UM</th>
-                                        <th style={{ width: '12%', textAlign: 'right' }}>Total</th>
-                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF' }}>KG-UN recibe</th>
+                                        <th style={{ width: '4%', textAlign: 'center', fontSize: '8.2pt' }}>#</th>
+                                        <th style={{ width: '42%', fontSize: '8.2pt' }}>DESCRIPCIÓN DEL PRODUCTO</th>
+                                        <th style={{ width: '9%', textAlign: 'right', fontSize: '8.2pt' }}>CANT.</th>
+                                        <th style={{ width: '7%', textAlign: 'center', fontSize: '8.2pt' }}>UM</th>
+                                        <th style={{ width: '12%', textAlign: 'right', fontSize: '8.2pt' }}>VALOR/UM</th>
+                                        <th style={{ width: '12%', textAlign: 'right', fontSize: '8.2pt' }}>TOTAL</th>
+                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: '8.2pt' }}>KG-UN RECIBE</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1050,16 +1118,28 @@ export default function ContingencyPrintPage() {
                                         const qty = Number(itm.quantity || 0);
                                         const price = isReposicion ? 0 : Number(itm.unit_price || 0);
                                         const lineTotal = qty * price;
+                                        const bg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
                                         return (
-                                            <tr key={idx}>
-                                                <td style={{ textAlign: 'center', fontSize: '0.75rem' }}>&#9633;</td>
-                                                <td>
-                                                    <strong>{pName}</strong>
-                                                    {accountingId !== undefined && accountingId !== null && (
-                                                        <span style={{ fontSize: '0.62rem', color: '#94A3B8', marginLeft: '4px', fontFamily: 'monospace' }}>
-                                                            #{accountingId}
-                                                        </span>
-                                                    )}
+                                            <tr key={idx} style={{ backgroundColor: bg }}>
+                                                <td style={{ textAlign: 'center', fontSize: '7.8pt', color: '#64748B', fontWeight: 'bold' }}>{idx + 1}</td>
+                                                <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                                                        <strong style={{ fontSize: '8.2pt', color: '#0F172A', lineHeight: 1.2 }}>
+                                                            {pName}
+                                                        </strong>
+                                                        {accountingId !== undefined && accountingId !== null && (
+                                                            <span style={{
+                                                                fontSize: '6.8pt',
+                                                                color: '#94A3B8',
+                                                                fontWeight: '600',
+                                                                fontFamily: 'monospace',
+                                                                letterSpacing: '0.02em',
+                                                                userSelect: 'none'
+                                                            }}>
+                                                                #{accountingId}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {(() => {
                                                         const spec = formatStructuredSpecification({
                                                             quantity: itm.quantity,
@@ -1069,15 +1149,36 @@ export default function ContingencyPrintPage() {
                                                             selected_options: itm.selected_options
                                                         }) || cleanPhysicalInstruction(itm.variant_label);
                                                         if (!spec) return null;
-                                                        return <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: 600 }}>{spec}</div>;
+                                                        return (
+                                                            <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                <span style={{
+                                                                    backgroundColor: '#F1F5F9',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    borderRadius: '3px',
+                                                                    padding: '1px 5px',
+                                                                    fontWeight: '700',
+                                                                    color: '#1E293B'
+                                                                }}>
+                                                                    {spec}
+                                                                </span>
+                                                            </div>
+                                                        );
                                                     })()}
                                                 </td>
-                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{qty.toLocaleString('es-CO')}</td>
-                                                <td style={{ textAlign: 'center' }}>{unit}</td>
-                                                <td style={{ textAlign: 'right' }}>{price > 0 ? formatMoney(price) : '$0'}</td>
-                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{lineTotal > 0 ? formatMoney(lineTotal) : '$0'}</td>
-                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF' }}>
-                                                    __________
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '8pt', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {qty.toLocaleString('es-CO')}
+                                                </td>
+                                                <td style={{ textAlign: 'center', fontSize: '7.6pt', fontWeight: '600', color: '#334155' }}>
+                                                    {unit}
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontSize: '7.8pt', fontVariantNumeric: 'tabular-nums', color: '#334155' }}>
+                                                    {price > 0 ? formatMoney(price) : '$0'}
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '8pt', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
+                                                    {lineTotal > 0 ? formatMoney(lineTotal) : '$0'}
+                                                </td>
+                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '2px 4px' }}>
+                                                    <div style={{ borderBottom: '1px dashed #94A3B8', height: '18px' }}></div>
                                                 </td>
                                             </tr>
                                         );
@@ -1086,45 +1187,47 @@ export default function ContingencyPrintPage() {
                             </table>
 
                             {/* Summary & Canastillas Control Compact */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                                <div style={{ width: '56%', fontSize: '0.64rem', color: '#334155' }}>
-                                    <div style={{ fontWeight: 'bold', color: '#0F172A', marginBottom: '2px' }}>Control de Canastillas Plásticas:</div>
-                                    <div style={{ display: 'flex', gap: '10px', border: '1px dashed #94A3B8', padding: '3px 6px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
-                                        <div>Entregadas: <strong>[ _____ ]</strong></div>
-                                        <div>Recogidas: <strong>[ _____ ]</strong></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: '8px', gap: '12px' }}>
+                                <div style={{ flex: 1, fontSize: '7pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', color: '#0F172A', marginBottom: '3px', fontSize: '7.2pt' }}>Control de Canastillas Plásticas:</div>
+                                        <div style={{ display: 'flex', gap: '12px', border: '1px dashed #94A3B8', padding: '4px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
+                                            <div>Entregadas: <strong style={{ fontSize: '7.8pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                            <div>Recogidas / Devueltas: <strong style={{ fontSize: '7.8pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                        </div>
                                     </div>
-                                    <div style={{ marginTop: '2px', fontSize: '0.56rem', color: '#64748B' }}>
+                                    <div style={{ marginTop: '3px', fontSize: '6.2pt', color: '#64748B', lineHeight: 1.2 }}>
                                         * Activos en comodato propiedad exclusiva de FruFresco. Retorne al conductor igual cantidad recibida.
                                     </div>
                                 </div>
 
-                                <div style={{ width: '38%', backgroundColor: '#F8FAFC', padding: '3px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.68rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                                        <span>Subtotal:</span>
-                                        <span style={{ fontWeight: 'bold' }}>{isReposicion ? '$0' : formatMoney(subtotal)}</span>
+                                <div style={{ width: '220px', backgroundColor: '#F8FAFC', padding: '5px 10px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: '7.2pt' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                        <span style={{ color: '#475569' }}>Subtotal:</span>
+                                        <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isReposicion ? '$0' : formatMoney(subtotal)}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                                        <span>IVA:</span>
-                                        <span>{isReposicion ? '$0' : formatMoney(order.tax || 0)}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                        <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
+                                        <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isReposicion ? '$0' : formatMoney(order.tax || 0)}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '2px', fontSize: '0.82rem', fontWeight: '900' }}>
-                                        <span>TOTAL:</span>
-                                        <span style={{ color: '#0D7A57' }}>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '3px', fontSize: '8.8pt', fontWeight: '900' }}>
+                                        <span style={{ color: '#0F172A' }}>TOTAL:</span>
+                                        <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Signatures Block Compact */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', border: '1px solid #0F172A', padding: '5px 8px', borderRadius: '4px', fontSize: '0.62rem', marginTop: 'auto' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '10px', border: '1px solid #CBD5E1', padding: '6px 10px', borderRadius: '4px', fontSize: '6.8pt', marginTop: 'auto' }}>
                                 <div>
-                                    <div style={{ fontWeight: '900', marginBottom: '2px' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
-                                    <div style={{ marginTop: '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
-                                    <div style={{ marginTop: '2px' }}>Nombre Legible: ____________________________________</div>
-                                    <div style={{ marginTop: '2px' }}>C.C. / Cargo: _______________________________________</div>
+                                    <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '3px', fontSize: '7pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
+                                    <div style={{ marginTop: '16px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
+                                    <div style={{ marginTop: '3px', color: '#334155' }}>Nombre Legible: ____________________________________</div>
+                                    <div style={{ marginTop: '2px', color: '#334155' }}>C.C. / Cargo: _______________________________________</div>
                                 </div>
                                 <div>
-                                    <div style={{ fontWeight: '900', marginBottom: '2px' }}>SELLO / NOVEDADES EN SITIO:</div>
-                                    <div style={{ height: '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: '0.56rem' }}>
+                                    <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '3px', fontSize: '7pt' }}>SELLO / NOVEDADES EN SITIO:</div>
+                                    <div style={{ height: '36px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '3px', color: '#94A3B8', fontSize: '6pt', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                                         Sello húmedo del establecimiento o relación de devoluciones/faltantes firmados.
                                     </div>
                                 </div>
