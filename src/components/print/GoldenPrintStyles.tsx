@@ -218,14 +218,14 @@ export default function GoldenPrintStyles({
             }
 
             .letterhead-container td {
-                padding: 2.5px 5px !important;
+                padding: 1.8px 4px !important;
                 font-size: 7.2pt !important;
                 border-bottom: 1px solid #E2E8F0 !important;
                 border-left: 1px solid #F1F5F9 !important;
                 border-right: 1px solid #F1F5F9 !important;
                 color: #1E293B !important;
                 vertical-align: middle !important;
-                line-height: 1.22 !important;
+                line-height: 1.15 !important;
             }
 
             .letterhead-container tbody tr:nth-child(even) {
