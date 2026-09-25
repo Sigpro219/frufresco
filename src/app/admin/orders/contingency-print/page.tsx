@@ -402,6 +402,42 @@ function resolveDeliverySlotInfo(order: OrderData): DeliverySlotResult {
     };
 }
 
+/**
+ * Paginador inteligente para Remisiones Físicas en tamaño Carta.
+ * - Si el pedido tiene hasta 24 ítems, cabe perfectamente en 1 SOLA HOJA con totales, control de canastillas y firmas.
+ * - Si supera 24 ítems, pagina de forma balanceada aprovechando la altura completa de la hoja Carta.
+ */
+function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
+    const SINGLE_PAGE_MAX = 24;
+    const INTERMEDIATE_PAGE_MAX = 30;
+    const LAST_PAGE_MAX = 22;
+
+    if (!items || items.length === 0) return [[]];
+    if (items.length <= SINGLE_PAGE_MAX) return [items];
+
+    const pages: OrderItem[][] = [];
+    let remaining = [...items];
+
+    while (remaining.length > 0) {
+        if (remaining.length <= LAST_PAGE_MAX) {
+            pages.push(remaining);
+            break;
+        }
+
+        if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
+            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.ceil(remaining.length / 2));
+            pages.push(remaining.slice(0, firstPageCount));
+            pages.push(remaining.slice(firstPageCount));
+            break;
+        }
+
+        pages.push(remaining.slice(0, INTERMEDIATE_PAGE_MAX));
+        remaining = remaining.slice(INTERMEDIATE_PAGE_MAX);
+    }
+
+    return pages.length > 0 ? pages : [[]];
+}
+
 export default function ContingencyPrintPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -1085,13 +1121,8 @@ export default function ContingencyPrintPage() {
                     const itemsCount = items.length;
                     const crateBalance = typeof order.profiles?.crate_balance === 'number' ? order.profiles.crate_balance : 0;
 
-                    // Paginación de Remisión: 17 ítems por página para ajuste perfecto en hoja Carta
-                    const CHUNK_SIZE = 17;
-                    const remissionPages: OrderItem[][] = [];
-                    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-                        remissionPages.push(items.slice(i, i + CHUNK_SIZE));
-                    }
-                    if (remissionPages.length === 0) remissionPages.push([]);
+                    // Paginación inteligente de Remisión en Carta (hasta 24 ítems en 1 página completa)
+                    const remissionPages = paginateRemissionItems(items);
 
                     // Cada pedido genera duplicado consecutivo (Original y Copia), paginado si tiene más de 17 ítems
                     return [
@@ -1165,7 +1196,8 @@ export default function ContingencyPrintPage() {
                                         </thead>
                                         <tbody>
                                             {pageItems.map((itm, itemIdx) => {
-                                                const globalIdx = pageIdx * CHUNK_SIZE + itemIdx + 1;
+                                                const previousPagesOffset = remissionPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
+                                                const globalIdx = previousPagesOffset + itemIdx + 1;
                                                 const pName = itm.products?.name || itm.nickname || 'Producto';
                                                 const rawUom = (itm.products?.unit_of_measure || itm.unit || 'Kg').trim();
                                                 const unit = (() => {
