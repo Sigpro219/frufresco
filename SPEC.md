@@ -2336,3 +2336,23 @@ sequenceDiagram
   5. **Encabezado y Metadatos Institucionales**:
      - Membrete superior con logo FruFresco, `INVESTMENTS CORTES SAS`, título `CONTROL DE LLEGADA DE PRODUCTOS EN KG - FECHA YYYY-MM-DD`, fecha de generación con hora exacta y paginador limpio al pie (`Pág. 1/2`).
 
+#### Escenario 43: Planilla de Compras en Kit de Contingencia con Motor Canónico de Neteo y 7 Columnas Estándar (SDD v1.9.13)
+- **Given** una contingencia operativa de piso o corte de fluido eléctrico donde el equipo de operaciones recurre a la impresión física del Kit de Contingencia (`/admin/orders/contingency-print?mode=purchases` o `mode=all`).
+- **When** se genera la sección de Planilla de Compras Corabastos dentro del kit.
+- **Then**:
+  1. **Integración con Motor Canónico de Neteo (`procurementNettingEngine.ts`)**:
+     - Consume `calculateProcurementNetting` unificando pedidos y descontando el stock disponible real de bodega (`inventory_stocks`).
+     - Se eliminan las mermas planas arbitrarias (5%) en favor de la demanda neta real y especificaciones canónicas limpias.
+  2. **Estructura de 7 Columnas Oficial de Compras**:
+     - `#`: Consecutivo numérico indexado por página.
+     - `Stock INV`: Existencia física en bodega (fondo `#1E293B`).
+     - `UM`: Unidad estándar mayorista de compra (KG, UND, etc.).
+     - `Producto / Calibre Especificado`: Nombre comercial + `#{accounting_id}` en monospace gris + badge de especificación canónica (sin SKUs crudos).
+     - `Demanda`: Kilos o unidades netas requeridas (fondo verde `#0D7A57` en negrita).
+     - `Precio $/UM`: Casilla con símbolo `$` y línea punteada para negociación manual en plaza.
+     - `Puesto / Proveedor`: Casilla punteada para apunte físico de puesto en Corabastos.
+  3. **Segmentación y Paginación por Sublistas (Pabellones Corabastos)**:
+     - Las compras se agrupan automáticamente por sublista (`FRUTAS`, `VERDURAS`, `HIERBAS`, `ABARROTES`, etc.), con encabezado Letterhead independiente, banner de resumen con stock y demanda, totales al pie y firmas de entrega/recepción.
+  4. **Trazabilidad Contable Cruzada (`accounting_id`)**:
+     - Las hojas de Báscula/Picking y Remisiones físicas del kit exhiben de manera uniforme el código `#{accounting_id}` contable junto al nombre del producto.
+
