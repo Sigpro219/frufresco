@@ -30,6 +30,7 @@ interface OrderItem {
         purchase_sublist?: string;
         parent_id?: string;
         min_inventory_level?: number;
+        iva_rate?: number | null;
     };
 }
 
@@ -424,7 +425,7 @@ export default function ContingencyPrintPage() {
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
                         profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, parent:parent_id(id, company_name)),
-                        order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level))
+                        order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level, iva_rate))
                     `);
 
                 if (rawOrderIds) {
@@ -1144,17 +1145,19 @@ export default function ContingencyPrintPage() {
                                         </div>
                                     </div>
 
-                                    {/* Products Table con filas ultra-compactas y sin especificaciones ruidosas */}
+                                    {/* Products Table con todas las columnas (IVA, KG-UN Recibe) y cuadro de check al final */}
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr>
-                                                <th style={{ width: '4%', textAlign: 'center', fontSize: '8pt', padding: '2px 4px' }}>#</th>
-                                                <th style={{ width: '42%', fontSize: '8pt', padding: '2px 6px' }}>DESCRIPCIÓN DEL PRODUCTO</th>
-                                                <th style={{ width: '9%', textAlign: 'right', fontSize: '8pt', padding: '2px 4px' }}>CANT.</th>
-                                                <th style={{ width: '7%', textAlign: 'center', fontSize: '8pt', padding: '2px 4px' }}>UM</th>
-                                                <th style={{ width: '12%', textAlign: 'right', fontSize: '8pt', padding: '2px 4px' }}>VALOR/UM</th>
-                                                <th style={{ width: '12%', textAlign: 'right', fontSize: '8pt', padding: '2px 4px' }}>TOTAL</th>
-                                                <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: '8pt', padding: '2px 4px' }}>KG-UN RECIBE</th>
+                                                <th style={{ width: '3.5%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>#</th>
+                                                <th style={{ width: '31%', fontSize: '7.8pt', padding: '2px 5px' }}>DESCRIPCIÓN DEL PRODUCTO</th>
+                                                <th style={{ width: '7.5%', textAlign: 'right', fontSize: '7.8pt', padding: '2px 3px' }}>CANT.</th>
+                                                <th style={{ width: '6%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>UM</th>
+                                                <th style={{ width: '10%', textAlign: 'right', fontSize: '7.8pt', padding: '2px 3px' }}>VALOR/UM</th>
+                                                <th style={{ width: '10%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>IVA</th>
+                                                <th style={{ width: '11%', textAlign: 'right', fontSize: '7.8pt', padding: '2px 3px' }}>TOTAL</th>
+                                                <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: '7.8pt', padding: '2px 3px' }}>KG-UN RECIBE</th>
+                                                <th style={{ width: '7%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>[✓]</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1176,31 +1179,47 @@ export default function ContingencyPrintPage() {
                                                 })();
                                                 const qty = Number(itm.quantity || 0);
                                                 const price = isReposicion ? 0 : Number(itm.unit_price || 0);
-                                                const lineTotal = qty * price;
+                                                const lineSubtotal = qty * price;
+                                                const ivaPct = isReposicion ? 0 : Number(itm.products?.iva_rate || 0);
+                                                const ivaVal = lineSubtotal * (ivaPct / 100);
+                                                const lineTotal = lineSubtotal + ivaVal;
                                                 const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
 
                                                 return (
                                                     <tr key={globalIdx} style={{ backgroundColor: bg }}>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', color: '#64748B', fontWeight: 'bold', padding: '1.5px 4px' }}>{globalIdx}</td>
-                                                        <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: '1.5px 6px' }}>
+                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', color: '#64748B', fontWeight: 'bold', padding: '1.5px 3px' }}>{globalIdx}</td>
+                                                        <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: '1.5px 5px' }}>
                                                             <strong style={{ fontSize: '8pt', color: '#0F172A', lineHeight: 1.15 }}>
                                                                 {pName}
                                                             </strong>
                                                         </td>
-                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '7.8pt', color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: '1.5px 4px' }}>
+                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '7.8pt', color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: '1.5px 3px' }}>
                                                             {qty.toLocaleString('es-CO')}
                                                         </td>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', fontWeight: '600', color: '#334155', padding: '1.5px 4px' }}>
+                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', fontWeight: '600', color: '#334155', padding: '1.5px 3px' }}>
                                                             {unit}
                                                         </td>
-                                                        <td style={{ textAlign: 'right', fontSize: '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: '1.5px 4px' }}>
+                                                        <td style={{ textAlign: 'right', fontSize: '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: '1.5px 3px' }}>
                                                             {price > 0 ? formatMoney(price) : '$0'}
                                                         </td>
-                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '7.8pt', fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: '1.5px 4px' }}>
+                                                        <td style={{ textAlign: 'center', fontSize: '7.2pt', fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: '1.5px 3px' }}>
+                                                            {ivaPct > 0 ? `${ivaPct}%` : '0%'}
+                                                        </td>
+                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '7.8pt', fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: '1.5px 3px' }}>
                                                             {lineTotal > 0 ? formatMoney(lineTotal) : '$0'}
                                                         </td>
-                                                        <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '1px 4px' }}>
+                                                        <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '1px 3px' }}>
                                                             <div style={{ borderBottom: '1px dashed #94A3B8', height: '14px' }}></div>
+                                                        </td>
+                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '1px 2px' }}>
+                                                            <div style={{
+                                                                width: '12px',
+                                                                height: '12px',
+                                                                border: '1.2px solid #64748B',
+                                                                borderRadius: '2px',
+                                                                margin: '0 auto',
+                                                                backgroundColor: '#FFFFFF'
+                                                            }}></div>
                                                         </td>
                                                     </tr>
                                                 );

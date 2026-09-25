@@ -540,6 +540,7 @@ function CreateOrderContent() {
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [showMapPicker, setShowMapPicker] = useState(false);
     const [lastGeocodedAddress, setLastGeocodedAddress] = useState('');
+    const [editableAddress, setEditableAddress] = useState('');
     const [hasCoverageOverride, setHasCoverageOverride] = useState(false);
     const [coverageOverrideReason, setCoverageOverrideReason] = useState('');
     const [isOverrideMode, setIsOverrideMode] = useState(false);
@@ -3081,19 +3082,46 @@ function CreateOrderContent() {
 
 
 
-            // Resolutor Multicanal de Perfil de Cliente usando el Motor Unificado
+            // Resolutor Multicanal de Perfil de Cliente usando el Motor Unificado (B2B y B2C)
             let autoMatchedProfile: any = null;
             if (clientType === 'B2B' && clients && clients.length > 0) {
                 autoMatchedProfile = resolveClientProfile({
                     nit: data.nitInDocument,
                     name: data.clientInDocument,
-                    address: data.addressInDocument
+                    address: data.addressInDocument,
+                    phone: data.phoneInDocument
                 }, clients);
 
                 if (autoMatchedProfile) {
                     setSelectedClient(autoMatchedProfile.id);
                     setClientSearch(autoMatchedProfile.company_name || autoMatchedProfile.contact_name || '');
-                    showToast(`🎯 Cliente detectado y seleccionado automáticamente: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
+                    showToast(`🎯 Empresa detectada y seleccionada: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
+                }
+            } else if (clientType === 'B2C' && b2cClients && b2cClients.length > 0) {
+                autoMatchedProfile = resolveClientProfile({
+                    nit: data.nitInDocument || data.phoneInDocument,
+                    name: data.clientInDocument,
+                    address: data.addressInDocument,
+                    phone: data.phoneInDocument
+                }, b2cClients);
+
+                if (autoMatchedProfile) {
+                    setB2CMode('search');
+                    setSelectedClientB2C(autoMatchedProfile.id);
+                    setClientSearchB2C(autoMatchedProfile.contact_name || autoMatchedProfile.phone || '');
+                    showToast(`🎯 Cliente Hogar detectado: ${autoMatchedProfile.contact_name || autoMatchedProfile.phone}`, 'success');
+                } else if (data.clientInDocument || data.phoneInDocument || data.addressInDocument) {
+                    setB2CMode('new');
+                    setGuestInfo(prev => ({
+                        ...prev,
+                        name: data.clientInDocument || prev.name,
+                        phone: data.phoneInDocument || prev.phone,
+                        address: data.addressInDocument || prev.address
+                    }));
+                    if (data.addressInDocument) {
+                        setEditableAddress(data.addressInDocument);
+                    }
+                    showToast(`📝 Datos de cliente Hogar extraídos para registro nuevo.`, 'info');
                 }
             }
 
@@ -3425,16 +3453,34 @@ function CreateOrderContent() {
     };
 
     const handleDirectConfirmOrder = async () => {
-        if (!selectedClient) {
+        if (clientType === 'B2B' && !selectedClient) {
             showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar el pedido.', 'error');
             return;
         }
 
-        const clientDetails = clients.find(c => c.id === selectedClient);
+        if (clientType === 'B2C') {
+            if (b2cMode === 'new') {
+                if (!guestInfo.name || !guestInfo.phone) {
+                    showToast('⚠️ Debes ingresar al menos Nombre y Teléfono para cliente Hogar nuevo.', 'error');
+                    return;
+                }
+            } else {
+                if (!selectedClientB2C) {
+                    showToast('⚠️ Debes seleccionar un cliente Hogar existente en el sistema.', 'error');
+                    return;
+                }
+            }
+        }
+
+        const clientDetails = clientType === 'B2B' 
+            ? clients.find(c => c.id === selectedClient)
+            : (b2cMode === 'search' ? b2cClients.find(c => c.id === selectedClientB2C) : { contact_name: guestInfo.name, company_name: guestInfo.name, phone: guestInfo.phone, address: guestInfo.address || editableAddress });
+
+        const effectiveClientDisplayName = clientDetails?.company_name || clientDetails?.contact_name || (clientType === 'B2C' ? guestInfo.name : 'Cliente');
 
         if (!importValidation?.isMatch && importValidation?.clientInDocument) {
             const confirmed = window.confirm(
-                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionada la empresa:\n"${clientDetails?.company_name || 'Cliente'}"\n\n¿Deseas continuar y crear este pedido directamente para ${clientDetails?.company_name || 'Cliente'}?`
+                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionado:\n"${effectiveClientDisplayName}"\n\n¿Deseas continuar y crear este pedido directamente para ${effectiveClientDisplayName}?`
             );
             if (!confirmed) return;
         }
@@ -3483,8 +3529,45 @@ function CreateOrderContent() {
                 }
             }
 
+            // 1.5. Resolver ID de perfil definitivo (Crear perfil B2C si es nuevo)
+            let finalProfileId = clientType === 'B2B' ? selectedClient : (b2cMode === 'search' ? selectedClientB2C : null);
+
+            if (clientType === 'B2C' && b2cMode === 'new') {
+                let newProfileId = createdB2CProfileId;
+                if (!newProfileId) {
+                    newProfileId = crypto.randomUUID();
+                    const { error: profileError } = await supabase
+                        .from('profiles')
+                        .insert({
+                            id: newProfileId,
+                            role: draftClientType === 'b2b_client' ? 'b2b_client' : 'b2c_client',
+                            contact_name: guestInfo.name,
+                            contact_phone: guestInfo.phone,
+                            phone: guestInfo.phone,
+                            address: guestInfo.address || editableAddress || '',
+                            city: guestInfo.city || 'Bogotá',
+                            company_name: guestInfo.name,
+                            latitude: latitude || null,
+                            longitude: longitude || null,
+                            delivery_restrictions: (outOfZone && hasCoverageOverride) ? `EXCEPCIÓN AUTORIZADA: ${coverageOverrideReason}` : null,
+                            geocoding_status: (outOfZone && hasCoverageOverride) ? 'OVERRIDE' : 'VALID',
+                            created_at: new Date().toISOString(),
+                            email: guestInfo.email || null,
+                            nit: guestInfo.nit || null,
+                            is_active: guestInfo.saveToDirectory
+                        });
+
+                    if (profileError) {
+                        console.error('Error creating B2C profile:', profileError);
+                        throw new Error('No se pudo guardar el cliente nuevo.');
+                    }
+                    setCreatedB2CProfileId(newProfileId);
+                }
+                finalProfileId = newProfileId;
+            }
+
             // 2. Persistir memoria de aprendizaje histórica
-            const activeClientId = selectedClient;
+            const activeClientId = finalProfileId;
             if (activeClientId && stagedItems.length > 0) {
                 const learningPromises = stagedItems
                     .filter(item => item.suggestedProduct && item.originalName)
@@ -3507,7 +3590,7 @@ function CreateOrderContent() {
             const itemsDataForInsert = stagedItems.map(item => {
                 const prod = item.suggestedProduct!;
                 const prodId = prod.id;
-                const unitPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                const unitPrice = (clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                     ? contractPrices[prodId]
                     : (item.price || prod.base_price || 0);
 
@@ -3555,10 +3638,13 @@ function CreateOrderContent() {
             const poTokens: string[] = [];
             if (importValidation?.poNumber) poTokens.push(`OC: ${importValidation.poNumber}`);
             if (importValidation?.solpedNumber) poTokens.push(`SOLPED: ${importValidation.solpedNumber}`);
+            if (clientType === 'B2C' && b2cMode === 'new') {
+                poTokens.push(`[CLIENTE HOGAR CREADO] ID: ${finalProfileId} | Nombre: ${guestInfo.name} | Tel: ${guestInfo.phone}`);
+            }
             if (adminNotes) poTokens.push(adminNotes);
             const finalAdminNotes = poTokens.join(' | ');
 
-            let finalDeliverySlot = deliverySlot || 'AM';
+            let finalDeliverySlot = clientType === 'B2C' ? (deliverySlot || 'AM') : (deliverySlot || 'AM');
             let logisticsOverride = null;
             if (isManualDelivery && manualDeliveryTime) {
                 const [h, m] = manualDeliveryTime.split(':').map(Number);
@@ -3585,31 +3671,44 @@ function CreateOrderContent() {
                 };
             }
 
-            // GAP-01: Interbloqueo de Crédito y Cartera
-            const creditCheck = await checkClientCreditStatus(selectedClient, Math.round(total));
-            if (!creditCheck.allowed) {
-                showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
-                return;
+            // GAP-01: Interbloqueo de Crédito y Cartera (Solo para B2B)
+            if (clientType === 'B2B' && finalProfileId) {
+                const creditCheck = await checkClientCreditStatus(finalProfileId, Math.round(total));
+                if (!creditCheck.allowed) {
+                    showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
+                    return;
+                }
+            }
+
+            let finalShippingAddress = 'Dirección Registrada';
+            if (clientType === 'B2B') {
+                finalShippingAddress = clientDetails?.address || 'Dirección Registrada';
+            } else if (clientType === 'B2C') {
+                if (b2cMode === 'new') {
+                    finalShippingAddress = `${guestInfo.address || editableAddress || 'Bogotá'}, ${guestInfo.city || 'Bogotá'}`;
+                } else {
+                    finalShippingAddress = clientDetails?.address || 'Dirección Registrada';
+                }
             }
 
             // 5. Inserción atómica en base de datos
             const { data: newOrder, error: orderErr } = await supabase
                 .from('orders')
                 .insert({
-                    profile_id: selectedClient,
+                    profile_id: finalProfileId,
                     total: Math.round(total),
                     total_weight_kg: parseFloat(totalWeightKg.toFixed(2)),
                     subtotal: Math.round(subtotal),
                     tax: Math.round(tax),
                     status: 'pending_approval',
                     payment_status: 'Pendiente',
-                    payment_method: paymentMethod || 'Crédito B2B',
+                    payment_method: paymentMethod || (clientType === 'B2B' ? 'Crédito B2B' : 'Contra Entrega'),
                     origin: 'Admin Panel',
                     origin_source: 'document_upload',
                     delivery_date: targetDeliveryDate,
                     delivery_slot: finalDeliverySlot,
                     admin_notes: finalAdminNotes,
-                    shipping_address: clientDetails?.address || 'Dirección Registrada',
+                    shipping_address: finalShippingAddress,
                     latitude: clientDetails?.latitude || latitude || null,
                     longitude: clientDetails?.longitude || longitude || null,
                     is_manual_delivery: isManualDelivery,
@@ -4784,6 +4883,15 @@ function CreateOrderContent() {
     // Validación Dinámica de Auditoría: compara en vivo la empresa/sede seleccionada con el cliente detectado en el documento
     const isAuditClientMatch = useMemo(() => {
         if (!importValidation?.clientInDocument) return true;
+        if (clientType === 'B2C') {
+            if (b2cMode === 'new') return true;
+            if (!selectedClientB2C) return false;
+            const b2c = b2cClients.find(c => c.id === selectedClientB2C);
+            const selectedName = (b2c?.contact_name || b2c?.company_name || '').toUpperCase();
+            const detectedName = (importValidation.clientInDocument || '').toUpperCase();
+            if (!selectedName || !detectedName) return false;
+            return selectedName.includes(detectedName.split(' ')[0]) || detectedName.includes(selectedName.split(' ')[0]);
+        }
         if (!selectedClientDetails) return false;
         const selectedName = (selectedClientDetails.company_name || selectedClientDetails.contact_name || '').toUpperCase();
         const detectedName = (importValidation.clientInDocument || '').toUpperCase();
@@ -4799,7 +4907,7 @@ function CreateOrderContent() {
 
         const hasTokenMatch = detectedTokens.some(t => selectedName.includes(t)) || selectedTokens.some(t => detectedName.includes(t));
         return hasTokenMatch || selectedName.includes(detectedName.slice(0, 6)) || detectedName.includes(selectedName.slice(0, 6));
-    }, [importValidation?.clientInDocument, selectedClientDetails]);
+    }, [importValidation?.clientInDocument, selectedClientDetails, clientType, b2cMode, selectedClientB2C, b2cClients]);
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
@@ -4848,36 +4956,79 @@ function CreateOrderContent() {
                         </div>
                     </div>
                     
-                    {/* CLIENT SEGMENTATION (SLIM COMPACT PILL) */}
-                    <div style={{ display: 'flex', gap: '3px', padding: '2px', backgroundColor: '#E2E8F0', borderRadius: '8px', width: '240px' }}>
-                        <button
-                            onClick={() => setClientType('B2B')}
-                            style={{
-                                flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none',
-                                backgroundColor: clientType === 'B2B' ? THEME.colors.primary : 'transparent',
-                                color: clientType === 'B2B' ? '#ffffff' : '#64748B',
-                                fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                                transition: 'all 0.15s', fontSize: '0.75rem',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                            }}
-                        >
-                            <Building2 size={13} strokeWidth={2} />
-                            <span>Institucional</span>
-                        </button>
-                        <button
-                            onClick={() => setClientType('B2C')}
-                            style={{
-                                flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none',
-                                backgroundColor: clientType === 'B2C' ? THEME.colors.primary : 'transparent',
-                                color: clientType === 'B2C' ? '#ffffff' : '#64748B',
-                                fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                                transition: 'all 0.15s', fontSize: '0.75rem',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                            }}
-                        >
-                            <Home size={13} strokeWidth={2} />
-                            <span>Hogar</span>
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* INGESTION MODE (MANUAL VS DIGESTOR IA) */}
+                        <div style={{ display: 'flex', gap: '3px', padding: '2px', backgroundColor: '#E2E8F0', borderRadius: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOriginSource('phone');
+                                    setIsStaging(false);
+                                }}
+                                style={{
+                                    padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: originSource !== 'file_upload' ? '#FFFFFF' : 'transparent',
+                                    color: originSource !== 'file_upload' ? '#0F172A' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer', boxShadow: originSource !== 'file_upload' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <ShoppingCart size={13} strokeWidth={2} />
+                                <span>Captura Manual</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOriginSource('file_upload');
+                                }}
+                                style={{
+                                    padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: originSource === 'file_upload' ? '#2563EB' : 'transparent',
+                                    color: originSource === 'file_upload' ? '#ffffff' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer', boxShadow: originSource === 'file_upload' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <Sparkles size={13} strokeWidth={2} />
+                                <span>Digestor IA (Documento/Foto)</span>
+                            </button>
+                        </div>
+
+                        {/* CLIENT SEGMENTATION (SLIM COMPACT PILL) */}
+                        <div style={{ display: 'flex', gap: '3px', padding: '2px', backgroundColor: '#E2E8F0', borderRadius: '8px', width: '220px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setClientType('B2B')}
+                                style={{
+                                    flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: clientType === 'B2B' ? THEME.colors.primary : 'transparent',
+                                    color: clientType === 'B2B' ? '#ffffff' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <Building2 size={13} strokeWidth={2} />
+                                <span>Institucional</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setClientType('B2C')}
+                                style={{
+                                    flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: clientType === 'B2C' ? THEME.colors.primary : 'transparent',
+                                    color: clientType === 'B2C' ? '#ffffff' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <Home size={13} strokeWidth={2} />
+                                <span>Hogar</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -5809,10 +5960,12 @@ function CreateOrderContent() {
                                         <>
                                             <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }}><UploadCloud size={48} strokeWidth={1.5} /></div>
                                             <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.5rem' }}>
-                                                Mesa de Trabajo Inteligente
+                                                Mesa de Trabajo Inteligente {clientType === 'B2C' ? '(Clientes Hogar)' : '(Institucional)'}
                                             </h3>
-                                            <p style={{ color: '#64748B', fontSize: '0.95rem', maxWidth: '400px', margin: '0 auto' }}>
-                                                Arrastra una <b>Orden de Compra (PDF)</b> o <b>Excel</b> aquí. El sistema la tabulará automáticamente para tu revisión.
+                                            <p style={{ color: '#64748B', fontSize: '0.95rem', maxWidth: '480px', margin: '0 auto' }}>
+                                                {clientType === 'B2C'
+                                                    ? 'Arrastra una Lista de Mercado, PDF, Excel, Imagen o Foto aquí. La IA extraerá los productos y asociará el cliente automáticamente.'
+                                                    : 'Arrastra una Orden de Compra (PDF), Excel o Foto aquí. El sistema la tabulará automáticamente para tu revisión.'}
                                             </p>
                                         </>
                                     )}
@@ -5823,7 +5976,7 @@ function CreateOrderContent() {
                                     borderRadius: '24px', 
                                     border: '1px solid #E2E8F0', 
                                     boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' 
-                                }}>
+                                    }}>
                                     {/* Mesa de Trabajo Header: Client Validation */}
                                     <div style={{ 
                                         padding: '1.25rem 2rem', 
@@ -5849,63 +6002,103 @@ function CreateOrderContent() {
                                                         {importValidation.clientInDocument}
                                                     </span>
                                                 </div>
-                                                {!selectedClient ? (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
-                                                            ⚠️ No has seleccionado la empresa en el sistema.
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setClientSearch(importValidation.clientInDocument)}
-                                                            style={{
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: '800',
-                                                                backgroundColor: '#DC2626',
-                                                                color: '#FFFFFF',
-                                                                padding: '2px 8px',
-                                                                borderRadius: '4px',
-                                                                border: 'none',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            ⚡ Buscar "{importValidation.clientInDocument}"
-                                                        </button>
-                                                    </div>
-                                                ) : !isAuditClientMatch ? (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
-                                                            ⚠️ El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionada la empresa <b>{selectedClientDetails?.company_name}</b>.
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setSelectedClient('');
-                                                                setClientSearch(importValidation.clientInDocument);
-                                                                showToast(`🔍 Buscando cliente: ${importValidation.clientInDocument}`, 'info');
-                                                            }}
-                                                            style={{
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: '800',
-                                                                backgroundColor: '#EA580C',
-                                                                color: '#FFFFFF',
-                                                                padding: '3px 10px',
-                                                                borderRadius: '6px',
-                                                                border: 'none',
-                                                                cursor: 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px',
-                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                                            }}
-                                                        >
-                                                            <Search size={12} />
-                                                            <span>Cambiar a "{importValidation.clientInDocument}"</span>
-                                                        </button>
-                                                    </div>
+                                                {clientType === 'B2B' ? (
+                                                    !selectedClient ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
+                                                                ⚠️ No has seleccionado la empresa en el sistema.
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setClientSearch(importValidation.clientInDocument)}
+                                                                style={{
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '800',
+                                                                    backgroundColor: '#DC2626',
+                                                                    color: '#FFFFFF',
+                                                                    padding: '2px 8px',
+                                                                    borderRadius: '4px',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                ⚡ Buscar "{importValidation.clientInDocument}"
+                                                            </button>
+                                                        </div>
+                                                    ) : !isAuditClientMatch ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
+                                                                ⚠️ El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionada la empresa <b>{selectedClientDetails?.company_name}</b>.
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedClient('');
+                                                                    setClientSearch(importValidation.clientInDocument);
+                                                                    showToast(`🔍 Buscando cliente: ${importValidation.clientInDocument}`, 'info');
+                                                                }}
+                                                                style={{
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '800',
+                                                                    backgroundColor: '#EA580C',
+                                                                    color: '#FFFFFF',
+                                                                    padding: '3px 10px',
+                                                                    borderRadius: '6px',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                                }}
+                                                            >
+                                                                <Search size={12} />
+                                                                <span>Cambiar a "{importValidation.clientInDocument}"</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
+                                                            ✅ Empresa validada correctamente ({selectedClientDetails?.company_name}).
+                                                        </div>
+                                                    )
                                                 ) : (
-                                                    <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
-                                                        ✅ Empresa validada correctamente ({selectedClientDetails?.company_name}).
-                                                    </div>
+                                                    b2cMode === 'new' ? (
+                                                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
+                                                            ✅ Cliente Hogar nuevo: <b>{guestInfo.name || importValidation.clientInDocument || 'Sin registrar'}</b>
+                                                        </div>
+                                                    ) : !selectedClientB2C ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
+                                                                ⚠️ No has seleccionado el cliente Hogar en el sistema.
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setClientSearchB2C(importValidation.clientInDocument)}
+                                                                style={{
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '800',
+                                                                    backgroundColor: '#DC2626',
+                                                                    color: '#FFFFFF',
+                                                                    padding: '2px 8px',
+                                                                    borderRadius: '4px',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                ⚡ Buscar "{importValidation.clientInDocument}"
+                                                            </button>
+                                                        </div>
+                                                    ) : !isAuditClientMatch ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
+                                                                ⚠️ El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionado <b>{getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}</b>.
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
+                                                            ✅ Cliente Hogar validado correctamente ({getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.phone}).
+                                                        </div>
+                                                    )
                                                 )}
                                             </div>
                                         </div>

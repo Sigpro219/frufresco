@@ -2372,8 +2372,17 @@ sequenceDiagram
        - Despliega reactivamente un banner de advertencia visual en rojo (`[⚠️ Restricción Logística de Entrega: Esta sede tiene restringida la entrega para el día (...)]`).
        - Intercepta los flujos de radicación y aprobación de pedidos (`handleCreateOrder`, `handleSendManualReceipt`, `handleConfirmOrderDirectly`), solicitando una confirmación de excepción expresa (`window.confirm`).
        - En caso de ser autorizado por el operador, inyecta automáticamente una etiqueta inmutable en las notas de administración: `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (...)]` para auditoría y trazabilidad operativa.
-  3. **Eliminación Total y Poka-Yoke de Pedidos en Modal de Carga (`/admin/orders/loading`)**:
-     - En el modal de visualización/edición de pedidos de carga (`editMode === true`), se habilita un botón explícito de eliminación permanente `[🗑️ Eliminar Pedido]`.
-     - Exige confirmación Poka-Yoke de doble verificación, y al confirmarse, elimina en cascada los registros asociados en `order_items` y `orders`, dejando registro de auditoría en `order_audit_logs`.
+#### Escenario 45: Digestor Universal de Documentos por IA para Pedidos Institucionales y Hogar (SDD v1.9.16)
+- **Given** la necesidad operativa de procesar listas de mercado, pedidos manuscritos, notas de WhatsApp, PDFs o archivos de Excel tanto para empresas como para personas naturales en `/admin/orders/create`:
+- **When** el operador selecciona la modalidad `Institucional (B2B)` o `Hogar (B2C)` y activa el modo `Digestor IA (Documento/Foto)`:
+- **Then**:
+  1. **Resolución Multicanal de Clientes (B2B & B2C)**:
+     - El motor de extracción por IA (`parseOrderWithAI`) y el comparador unificado (`resolveClientProfile`) identifican tanto empresas (`clients`) como personas naturales (`b2cClients`) utilizando NIT, teléfono/celular, correo, razón social, nombre de contacto y dirección.
+     - En el modo Hogar (`B2C`), si el cliente ya existe en el directorio, el sistema lo enlaza automáticamente (`b2cMode = 'search'`); si no existe, extrae los datos de contacto del documento para pre-diligenciar el formulario de nuevo cliente (`b2cMode = 'new'`).
+  2. **Mesa de Trabajo Inteligente Universal**:
+     - La zona de arrastre (Dropzone) y la pantalla dividida (Split Screen) están plenamente disponibles en ambos segmentos con textos adaptados al contexto operativo.
+     - Los precios de los ítems en Hogar adoptan automáticamente la tarifa base minorista (`Clientes Hogar` / `products.base_price`).
+     - Al confirmar e inyectar o crear el pedido directamente desde la Mesa de Trabajo, se preserva el archivo original en `orders.document_url` y se asocian las coordenadas, dirección y notas de auditoría correspondientes.
+
 
 

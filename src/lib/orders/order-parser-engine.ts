@@ -150,12 +150,13 @@ export async function fetchGeminiExtraction(
  * Capa 1: NIT -> Capa 2: Emails / Aliases -> Capa 3: Razón Social -> Capa 4: Texto de Firma
  */
 export function resolveClientProfile(
-  clientInfo: { nit?: string; email?: string; name?: string; address?: string; signatureText?: string },
+  clientInfo: { nit?: string; email?: string; name?: string; address?: string; signatureText?: string; phone?: string },
   profiles: any[]
 ): any | null {
   if (!profiles || profiles.length === 0) return null;
 
   const cleanNit = (clientInfo.nit || '').replace(/[^0-9]/g, '');
+  const cleanPhone = (clientInfo.phone || '').replace(/[^0-9]/g, '');
   const cleanName = sanitizeDocText(clientInfo.name || '');
   const cleanAddress = sanitizeDocText(clientInfo.address || '');
   const sigText = sanitizeDocText(clientInfo.signatureText || '');
@@ -226,6 +227,20 @@ export function resolveClientProfile(
     }
   }
 
+  // Capa 1.5: Coincidencia por Teléfono / Celular (Especialmente clave para Hogares B2C)
+  if (cleanPhone && cleanPhone.length >= 7) {
+    const phoneCandidates = profiles.filter(p => {
+      const pPhone = (p.phone || p.contact_phone || '').replace(/[^0-9]/g, '');
+      return pPhone && (pPhone.includes(cleanPhone) || cleanPhone.includes(pPhone));
+    });
+    if (phoneCandidates.length === 1) return phoneCandidates[0];
+    if (phoneCandidates.length > 1) {
+      const scored = phoneCandidates.map(p => ({ profile: p, score: scoreCandidateBranch(p) }));
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0].profile;
+    }
+  }
+
   // Capa 2: Coincidencia por Correo Electrónico
   const srcEmail = (clientInfo.email || '').toLowerCase().trim();
   if (srcEmail && srcEmail.includes('@')) {
@@ -244,13 +259,13 @@ export function resolveClientProfile(
     }
   }
 
-  // Capa 3: Coincidencia por Razón Social / Nombre Comercial / Sede Específica
+  // Capa 3: Coincidencia por Razón Social / Nombre Comercial / Sede Específica / Contacto
   if (cleanName && cleanName.length >= 3) {
     const nameCandidates = profiles.filter(p => {
       const compName = sanitizeDocText(p.company_name || '');
       const contactName = sanitizeDocText(p.contact_name || '');
       return (compName && (compName.includes(cleanName) || cleanName.includes(compName.split(' ')[0]))) ||
-             (contactName && contactName.includes(cleanName));
+             (contactName && (contactName.includes(cleanName) || cleanName.includes(contactName.split(' ')[0])));
     });
 
     if (nameCandidates.length === 1) {
