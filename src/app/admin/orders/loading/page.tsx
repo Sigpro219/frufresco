@@ -2134,6 +2134,72 @@ function OrderLoadingContent() {
         }
     };
 
+    const handleDeleteOrder = async () => {
+        if (!selectedOrder) return;
+
+        const friendlyId = getFriendlyOrderId(selectedOrder);
+        const confirmDelete = window.confirm(
+            `🚨 ¿Estás seguro de que deseas ELIMINAR COMPLETAMENTE el pedido ${friendlyId}?\n\n` +
+            `Cliente: ${selectedOrder.customer_name}\n` +
+            `Total: ${formatMoney(selectedOrder.total)}\n\n` +
+            `⚠️ Esta acción es permanente, borrará los productos vinculados y liberará el pedido de la mesa de despacho.`
+        );
+
+        if (!confirmDelete) return;
+
+        setUpdateLoading(true);
+        try {
+            // 1. Registro de auditoría
+            try {
+                const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
+                await supabase.from('order_audit_logs').insert([{
+                    order_id: selectedOrder.id,
+                    changed_by: currentUser?.id || null,
+                    change_type: 'deletion',
+                    reason: `Eliminación completa del pedido por ${userTag} a las ${nowTimeStr}`,
+                    old_data: {
+                        id: selectedOrder.id,
+                        sequence_id: selectedOrder.sequence_id,
+                        customer_name: selectedOrder.customer_name,
+                        total: selectedOrder.total,
+                        delivery_date: selectedOrder.delivery_date,
+                        status: selectedOrder.status
+                    }
+                }]);
+            } catch (auditErr) {
+                console.warn('No se pudo registrar log de eliminación:', auditErr);
+            }
+
+            // 2. Eliminar ítems asociados
+            const { error: itemsErr } = await supabase
+                .from('order_items')
+                .delete()
+                .eq('order_id', selectedOrder.id);
+            if (itemsErr) {
+                console.warn('Error eliminando order_items:', itemsErr);
+            }
+
+            // 3. Eliminar pedido de la tabla orders
+            const { error: orderErr } = await supabase
+                .from('orders')
+                .delete()
+                .eq('id', selectedOrder.id);
+            if (orderErr) throw orderErr;
+
+            // 4. Actualizar estado local y cerrar modal
+            setOrders(prev => prev.filter(o => o.id !== selectedOrder.id));
+            setSelectedOrder(null);
+            setEditMode(false);
+            alert(`🗑️ Pedido ${friendlyId} eliminado completamente.`);
+        } catch (err: any) {
+            console.error('Error eliminando pedido:', err);
+            alert(`❌ Error al eliminar el pedido: ${err.message || 'Error desconocido'}`);
+        } finally {
+            setUpdateLoading(false);
+        }
+    };
+
 
     const isWithinCutoffWindow = () => {
         const bogota = getColombiaTime();
@@ -4396,24 +4462,57 @@ function OrderLoadingContent() {
                                             <Edit2 size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Modificar
                                         </button>
                                     ) : (
-                                        <button 
-                                            onClick={handleUpdateOrder}
-                                            disabled={updateLoading}
-                                            style={{
-                                                backgroundColor: '#059669',
-                                                color: 'white',
-                                                border: 'none',
-                                                padding: '8px 16px',
-                                                borderRadius: '12px',
-                                                fontSize: '0.875rem',
-                                                fontWeight: '700',
-                                                cursor: updateLoading ? 'not-allowed' : 'pointer',
-                                                opacity: updateLoading ? 0.7 : 1,
-                                                boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.4)'
-                                            }}
-                                        >
-                                            {updateLoading ? 'Guardando...' : 'Guardar Cambios'}
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <button 
+                                                type="button"
+                                                onClick={handleDeleteOrder}
+                                                disabled={updateLoading}
+                                                style={{
+                                                    backgroundColor: '#FEF2F2',
+                                                    color: '#DC2626',
+                                                    border: '1.5px solid #FCA5A5',
+                                                    padding: '8px 14px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: '800',
+                                                    cursor: updateLoading ? 'not-allowed' : 'pointer',
+                                                    opacity: updateLoading ? 0.7 : 1,
+                                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.08)',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
+                                                title="Eliminar completamente este pedido y sus ítems vinculados"
+                                            >
+                                                <Trash2 size={15} strokeWidth={2} />
+                                                <span>Eliminar Pedido</span>
+                                            </button>
+                                            <button 
+                                                onClick={handleUpdateOrder}
+                                                disabled={updateLoading}
+                                                style={{
+                                                    backgroundColor: '#059669',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    padding: '8px 16px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: '700',
+                                                    cursor: updateLoading ? 'not-allowed' : 'pointer',
+                                                    opacity: updateLoading ? 0.7 : 1,
+                                                    boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.4)',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}
+                                            >
+                                                <CheckCircle2 size={15} strokeWidth={2} />
+                                                <span>{updateLoading ? 'Guardando...' : 'Guardar Cambios'}</span>
+                                            </button>
+                                        </div>
                                     )}
                                     <button 
                                         onClick={() => setSelectedOrder(null)}
