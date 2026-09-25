@@ -32,6 +32,7 @@ interface PurchaseItem {
 export default function PurchasesPrintPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const rawOrderIds = searchParams.get('orderIds') || searchParams.get('ids') || '';
     const paramDate = searchParams.get('date');
 
     const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -46,32 +47,48 @@ export default function PurchasesPrintPage() {
     const printDocRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (paramDate && paramDate !== selectedDate) {
+            setSelectedDate(paramDate);
+        }
+    }, [paramDate]);
+
+    useEffect(() => {
         fetchPurchasesData();
-    }, [selectedDate]);
+    }, [selectedDate, rawOrderIds]);
 
     const fetchPurchasesData = async () => {
         setLoading(true);
         try {
-            const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
-
             // Cargar inventario disponible completo (paginado para superar límite de 1000 de Supabase)
             let allStocks: Array<{ product_id: string; quantity: number }> = [];
             let fromStock = 0;
             const stepStock = 1000;
             let hasMoreStock = true;
 
+            let ordersQuery = supabase
+                .from('orders')
+                .select(`
+                    id, delivery_date, status,
+                    order_items(
+                        id, order_id, product_id, quantity, unit, selected_options, variant_label,
+                        products(id, name, unit_of_measure, purchase_sublist, weight_kg, parent_id, min_inventory_level, accounting_id)
+                    )
+                `);
+
+            if (rawOrderIds) {
+                const ids = rawOrderIds.split(',').map(id => id.trim()).filter(Boolean);
+                if (ids.length > 0) {
+                    ordersQuery = ordersQuery.in('id', ids).neq('status', 'cancelled');
+                } else {
+                    ordersQuery = ordersQuery.eq('delivery_date', selectedDate).neq('status', 'cancelled');
+                }
+            } else {
+                const OPERATIONAL_STATUSES = ['pending_approval', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                ordersQuery = ordersQuery.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
+            }
+
             const [ordersRes, tasksRes] = await Promise.all([
-                supabase
-                    .from('orders')
-                    .select(`
-                        id, delivery_date, status,
-                        order_items(
-                            id, order_id, product_id, quantity, unit, selected_options, variant_label,
-                            products(id, name, unit_of_measure, purchase_sublist, weight_kg, parent_id, min_inventory_level, accounting_id)
-                        )
-                    `)
-                    .eq('delivery_date', selectedDate)
-                    .in('status', OPERATIONAL_STATUSES),
+                ordersQuery,
                 supabase
                     .from('procurement_tasks')
                     .select('*')
@@ -314,10 +331,12 @@ export default function PurchasesPrintPage() {
                     <PrintDocumentSwitcher
                         currentDoc="purchases"
                         selectedDate={selectedDate}
+                        orderIds={rawOrderIds}
                         onDateChange={(newDate) => {
                             setSelectedDate(newDate);
                             const params = new URLSearchParams();
                             params.set('date', newDate);
+                            if (rawOrderIds) params.set('orderIds', rawOrderIds);
                             router.replace(`/admin/procurement/purchases-print?${params.toString()}`);
                         }}
                     />

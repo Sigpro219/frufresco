@@ -24,7 +24,8 @@ import {
     ArrowLeft, 
     X,
     Layers,
-    Download
+    Download,
+    ClipboardList
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import Link from 'next/link';
@@ -900,7 +901,7 @@ export default function ManualDispatchWizardModal({
                 )}
 
                 {/* ========================================================================= */}
-                {/* PASO 2: ABASTECIMIENTO, COMPRAS CORABASTOS & INGRESO A CIEGAS             */}
+                {/* PASO 2: ABASTECIMIENTO & COMPRAS CORABASTOS                               */}
                 {/* ========================================================================= */}
                 {currentStep === 2 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -909,115 +910,155 @@ export default function ManualDispatchWizardModal({
                                 Cruce de Demanda vs. Inventario en Bodega (Corabastos)
                             </div>
                             <p style={{ margin: 0, fontSize: '0.76rem', color: '#64748B', lineHeight: '1.4' }}>
-                                El sistema cruza la demanda consolidada de los {selectedOrdersList.length} pedidos contra el inventario inicial de bodega (INV). Genera las planillas independientes con salto de página para los compradores de plaza y el formato de control de llegada a ciegas.
+                                El sistema cruza la demanda consolidada de los {selectedOrdersList.length} pedidos contra el inventario inicial de bodega (INV). Genera las planillas independientes con salto de página para los compradores de plaza y el archivo maestro para compras y contabilidad.
                             </p>
                         </div>
 
-                        {/* Tarjetas de Acción de Compras */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                        {/* Tarjetas de Acción de Compras e Inventario */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
                             {/* Card 2A: Planilla por Sublistas */}
-                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #A7F3D0', borderRadius: '14px', padding: '1.2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #A7F3D0', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065F46', fontWeight: '900', fontSize: '0.82rem' }}>
-                                        <FileText size={16} /> Planillas de Plaza
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065F46', fontWeight: '900', fontSize: '0.80rem' }}>
+                                        <FileText size={15} /> Planillas Plaza
                                     </div>
-                                    <div style={{ fontWeight: '900', fontSize: '0.92rem', color: '#0F172A', marginTop: '6px' }}>
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
                                         Compras por Sublista
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', lineHeight: '1.35' }}>
-                                        Hojas individuales para Papa, Plátano, Frutas y Hortalizas con casillas de precio en puesto.
+                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
+                                        Hojas para Papa, Plátano, Frutas y Hortalizas con casillas de precio.
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', gap: '6px', marginTop: '1rem' }}>
+                                <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
                                     <Link
-                                        href={`/admin/orders/contingency-print?mode=purchases&orderIds=${orderIdsParam}`}
+                                        href={`/admin/procurement/purchases-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
                                         target="_blank"
                                         style={{
-                                            flex: 1, padding: '8px 8px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
-                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                            flex: 1, padding: '7px 6px', backgroundColor: '#FFFFFF', color: '#0D7A57', border: '1.5px solid #0D7A57',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
                                         title="Descargar Planillas de Plaza en PDF"
                                     >
-                                        <Download size={13} /> PDF
+                                        <Download size={12} /> PDF
                                     </Link>
                                     <Link
-                                        href={`/admin/orders/contingency-print?mode=purchases&orderIds=${orderIdsParam}`}
+                                        href={`/admin/procurement/purchases-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
                                         target="_blank"
                                         style={{
-                                            flex: 1.4, padding: '8px 10px', backgroundColor: '#0D7A57', color: '#FFFFFF',
-                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                            flex: 1.2, padding: '7px 8px', backgroundColor: '#0D7A57', color: '#FFFFFF',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
                                     >
-                                        <Printer size={13} /> Imprimir <ExternalLink size={10} />
+                                        <Printer size={12} /> Imprimir <ExternalLink size={9} />
                                     </Link>
                                 </div>
                             </div>
 
                             {/* Card 2B: Excel Maestro (11 Cols) */}
-                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #BAE6FD', borderRadius: '14px', padding: '1.2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #BAE6FD', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.82rem' }}>
-                                        <Download size={16} /> Dataset Digital
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.80rem' }}>
+                                        <Download size={15} /> Dataset Digital
                                     </div>
-                                    <div style={{ fontWeight: '900', fontSize: '0.92rem', color: '#0F172A', marginTop: '6px' }}>
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
                                         Excel Maestro (11 Cols)
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', lineHeight: '1.35' }}>
-                                        Archivo oficial para compras, directores y cruce contable con World Office.
+                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
+                                        Archivo oficial para compras, directores y cruce contable World Office.
                                     </div>
                                 </div>
                                 <button
                                     onClick={handleExportMasterPurchasesExcel}
                                     style={{
-                                        marginTop: '1rem', padding: '8px 12px', backgroundColor: '#0284C7', color: '#FFFFFF',
-                                        borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', border: 'none', cursor: 'pointer',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        marginTop: '0.85rem', padding: '7px 10px', backgroundColor: '#0284C7', color: '#FFFFFF',
+                                        borderRadius: '7px', fontSize: '0.72rem', fontWeight: '900', border: 'none', cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
                                         boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)'
                                     }}
-                                    title="Descarga directa del dataset compras_YYYY-MM-DD.xlsx con las 11 columnas maestras"
+                                    title="Descarga directa compras_YYYY-MM-DD.xlsx con 11 columnas"
                                 >
-                                    <Download size={14} /> Exportar Excel (.xlsx)
+                                    <Download size={13} /> Exportar Excel (.xlsx)
                                 </button>
                             </div>
 
-                            {/* Card 2C: Ingreso a Ciegas */}
-                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #FDE68A', borderRadius: '14px', padding: '1.2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                            {/* Card 2C: Control de Llegada (Conteo a Ciegas / Recepción en Bodega) */}
+                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #FDE68A', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.82rem' }}>
-                                        <Layers size={16} /> Muelle de Recibo
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.80rem' }}>
+                                        <Layers size={15} /> Muelle Recibo
                                     </div>
-                                    <div style={{ fontWeight: '900', fontSize: '0.92rem', color: '#0F172A', marginTop: '6px' }}>
-                                        Control de Llegada a Ciegas
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
+                                        Control de Llegada
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', lineHeight: '1.35' }}>
-                                        Planilla con kilos en blanco para que el chequeador de las 2:00 AM pese obligatoriamente en báscula.
+                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
+                                        Planilla en Carta (2 cols A-Z) para cotejo y pesaje en báscula patio.
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', gap: '6px', marginTop: '1rem' }}>
+                                <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
                                     <Link
-                                        href={`/admin/orders/contingency-print?mode=picking&orderIds=${orderIdsParam}`}
+                                        href={`/admin/procurement/receiving-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
                                         target="_blank"
                                         style={{
-                                            flex: 1, padding: '8px 8px', backgroundColor: '#FFFFFF', color: '#D97706', border: '1.5px solid #D97706',
-                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                            flex: 1, padding: '7px 6px', backgroundColor: '#FFFFFF', color: '#D97706', border: '1.5px solid #D97706',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
-                                        title="Descargar Planilla de Recibo a Ciegas en PDF"
+                                        title="Descargar Control de Llegada en PDF"
                                     >
-                                        <Download size={13} /> PDF
+                                        <Download size={12} /> PDF
                                     </Link>
                                     <Link
-                                        href={`/admin/orders/contingency-print?mode=picking&orderIds=${orderIdsParam}`}
+                                        href={`/admin/procurement/receiving-print?date=${deliveryDate}&orderIds=${orderIdsParam}`}
                                         target="_blank"
                                         style={{
-                                            flex: 1.4, padding: '8px 10px', backgroundColor: '#D97706', color: '#FFFFFF',
-                                            borderRadius: '8px', fontSize: '0.73rem', fontWeight: '900', textDecoration: 'none',
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                            flex: 1.2, padding: '7px 8px', backgroundColor: '#D97706', color: '#FFFFFF',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
                                     >
-                                        <Printer size={13} /> Imprimir <ExternalLink size={10} />
+                                        <Printer size={12} /> Imprimir <ExternalLink size={9} />
+                                    </Link>
+                                </div>
+                            </div>
+
+                            {/* Card 2D: Inventario de Bodega (INVENTARIO.pdf / 6 Folios Carta) */}
+                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #DDD6FE', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6D28D9', fontWeight: '900', fontSize: '0.80rem' }}>
+                                        <ClipboardList size={15} /> Inventario Bodega
+                                    </div>
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
+                                        INVENTARIO (6 Folios)
+                                    </div>
+                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
+                                        Toma física por sublistas de bodega (Hortalizas, Frutas, Papas, etc.).
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
+                                    <Link
+                                        href={`/admin/inventory/physical-count-print?date=${deliveryDate}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1, padding: '7px 6px', backgroundColor: '#FFFFFF', color: '#6D28D9', border: '1.5px solid #6D28D9',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
+                                        }}
+                                        title="Descargar INVENTARIO.pdf en PDF"
+                                    >
+                                        <Download size={12} /> PDF
+                                    </Link>
+                                    <Link
+                                        href={`/admin/inventory/physical-count-print?date=${deliveryDate}`}
+                                        target="_blank"
+                                        style={{
+                                            flex: 1.2, padding: '7px 8px', backgroundColor: '#6D28D9', color: '#FFFFFF',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
+                                        }}
+                                    >
+                                        <Printer size={12} /> Imprimir <ExternalLink size={9} />
                                     </Link>
                                 </div>
                             </div>
@@ -1043,7 +1084,7 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep2Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                 />
-                                Planillas de compra y planilla de recibo a ciegas emitidas para Corabastos.
+                                Planillas de compra, recibo y toma de inventario físico emitidas.
                             </label>
 
                             <button

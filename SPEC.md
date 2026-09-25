@@ -2048,17 +2048,21 @@ flowchart TD
     subgraph PLANTA_DOCS["2. Suite Oficial de Documentos Impresos"]
         DUAL --> P_COMPRAS["Planilla de Compras Plaza Corabastos\n(Consolidado por getStructuredSpecKey)"]
         DUAL --> P_RECEP["Planilla de Recepción & Báscula\n(Control Kilos vs Calidades)"]
+        DUAL --> P_INVENTARIO["Planilla de Inventario de Bodega\n(6 Folios Carta / INVENTARIO.pdf)"]
         DUAL --> SABANA["Sábana de Alistamiento por Células\n(Oficio Landscape / 10 cols / Familias Gemba)"]
         DUAL --> LABELS["Rótulos Térmicos Autoadhesivos\n(100x50 mm / QR Canónico / Bahías)"]
         DUAL --> REMISION["Remisiones Duplicadas de Entrega\n(Original Cliente / Copia Contabilidad)"]
+        DUAL --> MANIFIESTO["Manifiesto de Ruta & Canastillas\n(Oficio Portrait / Despacho Portería)"]
     end
 
     subgraph PISO_LOGISTICA["3. Ejecución en Gemba"]
         P_COMPRAS --> PLAZA["Abastecimiento en Corabastos"]
         P_RECEP --> BASCULA["Báscula de Entrada Patio"]
+        P_INVENTARIO --> CONTEO_BODEGA["Toma Física & Cierre de Turno Bodega"]
         SABANA --> PICKING["Alistamiento en Estibas"]
         LABELS --> MUELLES["Bahías de Muelle & Canastillas"]
         REMISION --> RUTA["Transporte & Entrega Certificada"]
+        MANIFIESTO --> PORTERIA["Control de Salida de Vehículos"]
     end
 ```
 
@@ -2099,7 +2103,7 @@ flowchart TD
   - Identificación logística: Vehículo (placa), conductor (nombre/cédula) y número de remisión amigable `DDMM_XXXX`.
   - Detalle de ítems con doble línea: cantidad neta en unidad de compra y especificación de empaque/calibre.
   - **Punto de Control de Envases (Canastillas):** Casillas de balance de canastillas:
-    $$\text{Canastillas Entregadas (Préstamo)} \quad - \quad \text{Canastillas Recibidas (Devolución)} \quad = \quad \text{Saldo Neto en Sitio}$$
+     $$\text{Canastillas Entregadas (Préstamo)} \quad - \quad \text{Canastillas Recibidas (Devolución)} \quad = \quad \text{Saldo Neto en Sitio}$$
     Acompañado de la firma obligatoria del receptor autorizando el asiento contable.
 
 #### 4. Planilla Consolidada de Compras para Plaza Corabastos (`/admin/procurement/purchases-print`, `/ops/compras`)
@@ -2115,6 +2119,7 @@ flowchart TD
 
 #### 5. Planilla de Recepción y Control de Báscula en Bodega (`/admin/procurement/receiving-print`)
 * **Propósito Operativo:** Instrumento de pesaje en muelle de descargue para auditar camiones de plaza frente a lo ordenado.
+* **Formato Físico:** Carta Vertical (*Letter Portrait* 215.9 mm × 279.4 mm), 2 columnas A-Z.
 * **Columnas de Cotejo Físico:**
   - Producto y Especificación Operativa requerida.
   - Cantidad Total Ordenada (kg o un).
@@ -2123,9 +2128,26 @@ flowchart TD
   - Mermas / Devoluciones en Patio (kg rechazados por calidad).
   - Firma del inspector de calidad de recibo.
 
+#### 6. Planilla de Toma Física e Inventario de Bodega por Sublistas (`/admin/inventory/physical-count-print`)
+* **Propósito Operativo:** Conteo físico a ciegas y control de existencias en estibas de bodega tras cierre de turno o para cruce de inventario (`INVENTARIO.pdf`).
+* **Formato Físico:** Formato Carta Vertical (*Letter Portrait* 215.9 mm × 279.4 mm), estructurado en **6 folios independientes** con salto de página estricto:
+  1. `INVENTARIO DE HORTALIZAS`
+  2. `INVENTARIO DE VERDURAS`
+  3. `INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS`
+  4. `INVENTARIO DE FRUTAS Y OTROS`
+  5. `INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES`
+  6. `INVENTARIO DE FRESAS Y MORAS`
+* **Jerarquía Visual y Estándar:**
+  - Membrete superior verde `INVESTMENTS CORTES SAS` con logo FruFresco y barra de metadatos de sublista y fecha (`GENERADO EL: DD/MM/YYYY HH:MM:SS`).
+  - Matriz en 2 columnas balanceadas `[ # - Producto | KG ]` con casilla en blanco para conteo manuscrito de alta velocidad.
+  - Paginador formal `Pág. X/6` en el pie de página.
+* **Selector Dual Poka-Yoke de Existencias:**
+  - **Modo Catálogo Ciego Completo:** Muestra todas las referencias del grupo para conteo general.
+  - **Modo Solo con Existencias:** Filtra exclusivamente los productos con stock $> 0$ o movimientos tras la operación activa.
+
 #### 19.7.1 Centro de Mando de Documentos Imprimibles (`PrintDocumentSwitcher`) con Persistencia Temporal
-Para garantizar fluidez y velocidad en el Gemba, la barra superior de los 5 documentos físicos incorpora el componente de conmutación canónica `PrintDocumentSwitcher`:
-1. **Navegación Cruzada Unificada:** Permite alternar de manera instantánea entre los 5 documentos de la suite sin salir a menús principales.
+Para garantizar fluidez y velocidad en el Gemba, la barra superior de los documentos físicos incorpora el componente de conmutación canónica `PrintDocumentSwitcher`:
+1. **Navegación Cruzada Unificada:** Permite alternar de manera instantánea entre los 7 documentos de la suite sin salir a menús principales.
 2. **Persistencia Temporal Inviolable:** Al cambiar de documento, la fecha seleccionada (`?date=YYYY-MM-DD`) se transfiere y conserva automáticamente en la URL, permitiendo auditar tandas de ayer, hoy, mañana o cualquier fecha histórica sin perder contexto.
 3. **Preservación de Lotes Específicos:** Si la consulta se origina a partir de un subconjunto de pedidos (`?orderIds=...`), dichos identificadores persisten en todos los documentos seleccionados.
 4. **Atajos Rápidos Lean:** Botones directos `[Ayer]`, `[Hoy]` y `[Mañana]` calculados contra el huso horario colombiano (`America/Bogota`) para auditoría y visualización de despachos con un solo clic.
@@ -2400,6 +2422,19 @@ sequenceDiagram
      - La zona de arrastre (Dropzone) y la pantalla dividida (Split Screen) están plenamente disponibles en ambos segmentos con textos adaptados al contexto operativo.
      - Los precios de los ítems en Hogar adoptan automáticamente la tarifa base minorista (`Clientes Hogar` / `products.base_price`).
      - Al confirmar e inyectar o crear el pedido directamente desde la Mesa de Trabajo, se preserva el archivo original en `orders.document_url` y se asocian las coordenadas, dirección y notas de auditoría correspondientes.
+
+#### Escenario 46: Paginación de Alta Densidad y Duplicado Consecutivo en Remisiones Físicas Carta (SDD v1.9.17)
+- **Given** la necesidad de imprimir remisiones de entrega física en tamaño Carta (`contingency-print?mode=remissions`) para pedidos con volúmenes de 1 a 36 ítems (como el pedido `#2509_0938` de 35 productos):
+- **When** se renderiza y pagina la remisión en duplicado consecutivo (Original - Cliente y Copia - Transportador/Contabilidad):
+- **Then**:
+  1. **Capacidad Monofolio de Alta Densidad (Hasta 36 ítems en 1 sola hoja Carta)**:
+     - `SINGLE_PAGE_MAX = 36`: Los pedidos con hasta 36 productos se consolidan estrictamente en **1 sola hoja Carta** (`Pág. 1 de 1`), eliminando particiones intermedias artificiales y espacios vacíos innecesarios.
+     - Ajuste dinámico de densidad (`isDense` cuando `itemsCount > 20`): reduce el padding vertical a `0.8px 3px`, tipografía de producto a `7.4pt` y compacta los bloques de totales, control de canastillas y firmas para garantizar margen de seguridad cero-desborde.
+  2. **Paginación para Pedidos Mayores a 36 Ítems**:
+     - Las páginas intermedias llenan la hoja hasta `INTERMEDIATE_PAGE_MAX = 38` ítems sin bloque de firmas (con aviso `Continúa en la siguiente página...`).
+     - La última página acomoda el remanente hasta `LAST_PAGE_MAX = 30` ítems junto al cuadro de control de canastillas, totales fiscales y firmas reglamentarias.
+  3. **Preservación del Duplicado Consecutivo y Poka-Yoke**:
+     - Cada pedido genera de forma contigua sus ejemplares de Original y Copia manteniendo fidelidad contable y sin alterar las demás vistas del kit de contingencia.
 
 
 

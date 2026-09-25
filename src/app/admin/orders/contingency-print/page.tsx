@@ -404,13 +404,13 @@ function resolveDeliverySlotInfo(order: OrderData): DeliverySlotResult {
 
 /**
  * Paginador inteligente para Remisiones Físicas en tamaño Carta.
- * - Si el pedido tiene hasta 24 ítems, cabe perfectamente en 1 SOLA HOJA con totales, control de canastillas y firmas.
- * - Si supera 24 ítems, pagina de forma balanceada aprovechando la altura completa de la hoja Carta.
+ * - Si el pedido tiene hasta 36 ítems, cabe perfectamente en 1 SOLA HOJA con totales, control de canastillas y firmas.
+ * - Si supera 36 ítems, pagina llenando las hojas intermedias hasta 38 ítems y dejando el remanente en la última hoja con firmas.
  */
 function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
-    const SINGLE_PAGE_MAX = 24;
-    const INTERMEDIATE_PAGE_MAX = 30;
-    const LAST_PAGE_MAX = 22;
+    const SINGLE_PAGE_MAX = 36;
+    const INTERMEDIATE_PAGE_MAX = 38;
+    const LAST_PAGE_MAX = 30;
 
     if (!items || items.length === 0) return [[]];
     if (items.length <= SINGLE_PAGE_MAX) return [items];
@@ -424,15 +424,9 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
             break;
         }
 
-        if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
-            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.ceil(remaining.length / 2));
-            pages.push(remaining.slice(0, firstPageCount));
-            pages.push(remaining.slice(firstPageCount));
-            break;
-        }
-
-        pages.push(remaining.slice(0, INTERMEDIATE_PAGE_MAX));
-        remaining = remaining.slice(INTERMEDIATE_PAGE_MAX);
+        const count = Math.min(INTERMEDIATE_PAGE_MAX, remaining.length);
+        pages.push(remaining.slice(0, count));
+        remaining = remaining.slice(count);
     }
 
     return pages.length > 0 ? pages : [[]];
@@ -1056,159 +1050,173 @@ export default function ContingencyPrintPage() {
                                     </div>
 
                                     {/* Products Table con todas las columnas (IVA, KG-UN Recibe) y cuadro de check al final */}
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr>
-                                                <th style={{ width: '3.5%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>#</th>
-                                                <th style={{ width: '31%', fontSize: '7.8pt', padding: '2px 5px' }}>DESCRIPCIÓN DEL PRODUCTO</th>
-                                                <th style={{ width: '7.5%', textAlign: 'right', fontSize: '7.8pt', padding: '2px 3px' }}>CANT.</th>
-                                                <th style={{ width: '6%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>UM</th>
-                                                <th style={{ width: '10%', textAlign: 'right', fontSize: '7.8pt', padding: '2px 3px' }}>VALOR/UM</th>
-                                                <th style={{ width: '10%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>IVA</th>
-                                                <th style={{ width: '11%', textAlign: 'right', fontSize: '7.8pt', padding: '2px 3px' }}>TOTAL</th>
-                                                <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: '7.8pt', padding: '2px 3px' }}>KG-UN RECIBE</th>
-                                                <th style={{ width: '7%', textAlign: 'center', fontSize: '7.8pt', padding: '2px 3px' }}>[✓]</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {pageItems.map((itm, itemIdx) => {
-                                                const previousPagesOffset = remissionPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
-                                                const globalIdx = previousPagesOffset + itemIdx + 1;
-                                                const pName = itm.products?.name || itm.nickname || 'Producto';
-                                                const rawUom = (itm.products?.unit_of_measure || itm.unit || 'Kg').trim();
-                                                const unit = (() => {
-                                                    const u = rawUom.toLowerCase();
-                                                    if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') return 'Kg';
-                                                    if (u === 'unidad' || u === 'un' || u === 'und' || u === 'unidades') return 'Und';
-                                                    if (u === 'atado' || u === 'atados') return 'Atado';
-                                                    if (u === 'bandeja' || u === 'bandejas') return 'Bandeja';
-                                                    if (u === 'docena' || u === 'docenas' || u === 'doc') return 'Docena';
-                                                    if (u === 'bulto' || u === 'bultos') return 'Bulto';
-                                                    if (u === 'caja' || u === 'cajas' || u === 'cj') return 'Caja';
-                                                    if (u === 'bolsa' || u === 'bolsas') return 'Bolsa';
-                                                    return rawUom;
-                                                })();
-                                                const qty = Number(itm.quantity || 0);
-                                                const price = isReposicion ? 0 : Number(itm.unit_price || 0);
-                                                const lineSubtotal = qty * price;
-                                                const ivaPct = isReposicion ? 0 : Number(itm.products?.iva_rate || 0);
-                                                const ivaVal = lineSubtotal * (ivaPct / 100);
-                                                const lineTotal = lineSubtotal + ivaVal;
-                                                const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+                                    {(() => {
+                                        const isDense = pageItems.length > 20;
+                                        const rowPad = isDense ? '0.8px 3px' : '1.5px 3px';
+                                        const prodPad = isDense ? '0.8px 4px' : '1.5px 5px';
+                                        const prodFontSize = isDense ? '7.4pt' : '8pt';
+                                        const bodyFontSize = isDense ? '7.2pt' : '7.8pt';
+                                        const smallFontSize = isDense ? '6.8pt' : '7.2pt';
 
-                                                return (
-                                                    <tr key={globalIdx} style={{ backgroundColor: bg }}>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', color: '#64748B', fontWeight: 'bold', padding: '1.5px 3px' }}>{globalIdx}</td>
-                                                        <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: '1.5px 5px' }}>
-                                                            <strong style={{ fontSize: '8pt', color: '#0F172A', lineHeight: 1.15 }}>
-                                                                {pName}
-                                                            </strong>
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '7.8pt', color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: '1.5px 3px' }}>
-                                                            {qty.toLocaleString('es-CO')}
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', fontWeight: '600', color: '#334155', padding: '1.5px 3px' }}>
-                                                            {unit}
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', fontSize: '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: '1.5px 3px' }}>
-                                                            {price > 0 ? formatMoney(price) : '$0'}
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', fontSize: '7.2pt', fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: '1.5px 3px' }}>
-                                                            {ivaPct > 0 ? `${ivaPct}%` : '0%'}
-                                                        </td>
-                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '7.8pt', fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: '1.5px 3px' }}>
-                                                            {lineTotal > 0 ? formatMoney(lineTotal) : '$0'}
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '1px 3px' }}>
-                                                            <div style={{ borderBottom: '1px dashed #94A3B8', height: '14px' }}></div>
-                                                        </td>
-                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '1px 2px' }}>
-                                                            <div style={{
-                                                                width: '12px',
-                                                                height: '12px',
-                                                                border: '1.2px solid #64748B',
-                                                                borderRadius: '2px',
-                                                                margin: '0 auto',
-                                                                backgroundColor: '#FFFFFF'
-                                                            }}></div>
-                                                        </td>
+                                        return (
+                                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ width: '3.5%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>#</th>
+                                                        <th style={{ width: '31%', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 4px' : '2px 5px' }}>DESCRIPCIÓN DEL PRODUCTO</th>
+                                                        <th style={{ width: '7.5%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>CANT.</th>
+                                                        <th style={{ width: '6%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>UM</th>
+                                                        <th style={{ width: '10%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>VALOR/UM</th>
+                                                        <th style={{ width: '10%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>IVA</th>
+                                                        <th style={{ width: '11%', textAlign: 'right', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>TOTAL</th>
+                                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>KG-UN RECIBE</th>
+                                                        <th style={{ width: '7%', textAlign: 'center', fontSize: isDense ? '7.2pt' : '7.8pt', padding: isDense ? '1.5px 2px' : '2px 3px' }}>[✓]</th>
                                                     </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                                </thead>
+                                                <tbody>
+                                                    {pageItems.map((itm, itemIdx) => {
+                                                        const previousPagesOffset = remissionPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
+                                                        const globalIdx = previousPagesOffset + itemIdx + 1;
+                                                        const pName = itm.products?.name || itm.nickname || 'Producto';
+                                                        const rawUom = (itm.products?.unit_of_measure || itm.unit || 'Kg').trim();
+                                                        const unit = (() => {
+                                                            const u = rawUom.toLowerCase();
+                                                            if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') return 'Kg';
+                                                            if (u === 'unidad' || u === 'un' || u === 'und' || u === 'unidades') return 'Und';
+                                                            if (u === 'atado' || u === 'atados') return 'Atado';
+                                                            if (u === 'bandeja' || u === 'bandejas') return 'Bandeja';
+                                                            if (u === 'docena' || u === 'docenas' || u === 'doc') return 'Docena';
+                                                            if (u === 'bulto' || u === 'bultos') return 'Bulto';
+                                                            if (u === 'caja' || u === 'cajas' || u === 'cj') return 'Caja';
+                                                            if (u === 'bolsa' || u === 'bolsas') return 'Bolsa';
+                                                            return rawUom;
+                                                        })();
+                                                        const qty = Number(itm.quantity || 0);
+                                                        const price = isReposicion ? 0 : Number(itm.unit_price || 0);
+                                                        const lineSubtotal = qty * price;
+                                                        const ivaPct = isReposicion ? 0 : Number(itm.products?.iva_rate || 0);
+                                                        const ivaVal = lineSubtotal * (ivaPct / 100);
+                                                        const lineTotal = lineSubtotal + ivaVal;
+                                                        const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+
+                                                        return (
+                                                            <tr key={globalIdx} style={{ backgroundColor: bg }}>
+                                                                <td style={{ textAlign: 'center', fontSize: isDense ? '7pt' : '7.5pt', color: '#64748B', fontWeight: 'bold', padding: rowPad }}>{globalIdx}</td>
+                                                                <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: prodPad }}>
+                                                                    <strong style={{ fontSize: prodFontSize, color: '#0F172A', lineHeight: 1.15 }}>
+                                                                        {pName}
+                                                                    </strong>
+                                                                </td>
+                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: rowPad }}>
+                                                                    {qty.toLocaleString('es-CO')}
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', fontSize: isDense ? '7pt' : '7.5pt', fontWeight: '600', color: '#334155', padding: rowPad }}>
+                                                                    {unit}
+                                                                </td>
+                                                                <td style={{ textAlign: 'right', fontSize: isDense ? '7.1pt' : '7.6pt', fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad }}>
+                                                                    {price > 0 ? formatMoney(price) : '$0'}
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad }}>
+                                                                    {ivaPct > 0 ? `${ivaPct}%` : '0%'}
+                                                                </td>
+                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: rowPad }}>
+                                                                    {lineTotal > 0 ? formatMoney(lineTotal) : '$0'}
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: '1px 3px' }}>
+                                                                    <div style={{ borderBottom: '1px dashed #94A3B8', height: isDense ? '12px' : '14px' }}></div>
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '1px 2px' }}>
+                                                                    <div style={{
+                                                                        width: isDense ? '10px' : '12px',
+                                                                        height: isDense ? '10px' : '12px',
+                                                                        border: '1.2px solid #64748B',
+                                                                        borderRadius: '2px',
+                                                                        margin: '0 auto',
+                                                                        backgroundColor: '#FFFFFF'
+                                                                    }}></div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        );
+                                    })()}
 
                                     {/* Subfooter de continuidad o bloque de totales y firmas al final */}
                                     {!isLastPage ? (
                                         <div style={{ marginTop: 'auto', textAlign: 'right', fontSize: '7pt', fontWeight: '700', color: '#64748B', paddingTop: '6px' }}>
                                             Continúa en la siguiente página... (Pág. {pageIdx + 1} de {remissionPages.length})
                                         </div>
-                                    ) : (
-                                        <>
-                                            {/* Summary & Canastillas Control Compact */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: '5px', gap: '10px', marginTop: '6px' }}>
-                                                <div style={{ flex: 1, fontSize: '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    ) : (() => {
+                                        const isDense = pageItems.length > 20;
+                                        return (
+                                            <>
+                                                {/* Summary & Canastillas Control Compact */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: isDense ? '3px' : '5px', gap: '8px', marginTop: isDense ? '3px' : '6px' }}>
+                                                    <div style={{ flex: 1, fontSize: isDense ? '6.4pt' : '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1px', gap: '6px', flexWrap: 'wrap' }}>
+                                                                <div style={{ fontWeight: 'bold', color: '#0F172A', fontSize: isDense ? '6.6pt' : '7pt' }}>Control de Canastillas Plásticas:</div>
+                                                                {crateBalance > 0 && (
+                                                                    <div style={{
+                                                                        fontSize: isDense ? '6.2pt' : '6.5pt',
+                                                                        color: '#0369A1',
+                                                                        fontWeight: '700',
+                                                                        backgroundColor: '#F0F9FF',
+                                                                        border: '1px solid #BAE6FD',
+                                                                        borderRadius: '3px',
+                                                                        padding: '1px 5px',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        Tienes en este momento <strong style={{ color: '#0284C7', fontSize: isDense ? '6.8pt' : '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '10px', border: '1px dashed #94A3B8', padding: isDense ? '2px 6px' : '3px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
+                                                                <div>Entregadas: <strong style={{ fontSize: isDense ? '7.2pt' : '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                                                <div>Recogidas / Devueltas: <strong style={{ fontSize: isDense ? '7.2pt' : '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ marginTop: '1px', fontSize: isDense ? '5.4pt' : '5.8pt', color: '#64748B', lineHeight: 1.1 }}>
+                                                            * Activos en comodato propiedad exclusiva de FruFresco. Retorne al conductor igual cantidad recibida.
+                                                        </div>
+                                                    </div>
+
+                                                    <div style={{ width: isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isDense ? '6.6pt' : '7pt' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                                                            <span style={{ color: '#475569' }}>Subtotal:</span>
+                                                            <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isReposicion ? '$0' : formatMoney(subtotal)}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                                                            <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
+                                                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isReposicion ? '$0' : formatMoney(order.tax || 0)}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '1px', fontSize: isDense ? '7.8pt' : '8.4pt', fontWeight: '900' }}>
+                                                            <span style={{ color: '#0F172A' }}>TOTAL:</span>
+                                                            <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Signatures Block Compact at Bottom */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', border: '1px solid #CBD5E1', padding: isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isDense ? '6.2pt' : '6.6pt', marginTop: 'auto' }}>
                                                     <div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', gap: '6px', flexWrap: 'wrap' }}>
-                                                            <div style={{ fontWeight: 'bold', color: '#0F172A', fontSize: '7pt' }}>Control de Canastillas Plásticas:</div>
-                                                            {crateBalance > 0 && (
-                                                                <div style={{
-                                                                    fontSize: '6.5pt',
-                                                                    color: '#0369A1',
-                                                                    fontWeight: '700',
-                                                                    backgroundColor: '#F0F9FF',
-                                                                    border: '1px solid #BAE6FD',
-                                                                    borderRadius: '3px',
-                                                                    padding: '1px 6px',
-                                                                    whiteSpace: 'nowrap'
-                                                                }}>
-                                                                    Tienes en este momento <strong style={{ color: '#0284C7', fontSize: '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: '12px', border: '1px dashed #94A3B8', padding: '3px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
-                                                            <div>Entregadas: <strong style={{ fontSize: '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
-                                                            <div>Recogidas / Devueltas: <strong style={{ fontSize: '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
+                                                        <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
+                                                        <div style={{ marginTop: isDense ? '8px' : '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
+                                                        <div style={{ marginTop: '2px', color: '#334155' }}>Nombre Legible: ____________________________________</div>
+                                                        <div style={{ marginTop: '1px', color: '#334155' }}>C.C. / Cargo: _______________________________________</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>SELLO / NOVEDADES EN SITIO:</div>
+                                                        <div style={{ height: isDense ? '26px' : '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: isDense ? '5.4pt' : '5.8pt', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                                                            Sello húmedo del establecimiento o relación de devoluciones/faltantes firmados.
                                                         </div>
                                                     </div>
-                                                    <div style={{ marginTop: '2px', fontSize: '5.8pt', color: '#64748B', lineHeight: 1.15 }}>
-                                                        * Activos en comodato propiedad exclusiva de FruFresco. Retorne al conductor igual cantidad recibida.
-                                                    </div>
                                                 </div>
-
-                                                <div style={{ width: '220px', backgroundColor: '#F8FAFC', padding: '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: '7pt' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                                                        <span style={{ color: '#475569' }}>Subtotal:</span>
-                                                        <span style={{ fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>{isReposicion ? '$0' : formatMoney(subtotal)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                                                        <span style={{ color: '#475569' }}>IVA (0% / Excluido):</span>
-                                                        <span style={{ fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{isReposicion ? '$0' : formatMoney(order.tax || 0)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F172A', paddingTop: '2px', fontSize: '8.4pt', fontWeight: '900' }}>
-                                                        <span style={{ color: '#0F172A' }}>TOTAL:</span>
-                                                        <span style={{ color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>{isReposicion ? '$0' : formatMoney(order.total || subtotal)}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Signatures Block Compact at Bottom */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', border: '1px solid #CBD5E1', padding: '4px 8px', borderRadius: '4px', fontSize: '6.6pt', marginTop: 'auto' }}>
-                                                <div>
-                                                    <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '2px', fontSize: '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
-                                                    <div style={{ marginTop: '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
-                                                    <div style={{ marginTop: '2px', color: '#334155' }}>Nombre Legible: ____________________________________</div>
-                                                    <div style={{ marginTop: '1px', color: '#334155' }}>C.C. / Cargo: _______________________________________</div>
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '2px', fontSize: '6.8pt' }}>SELLO / NOVEDADES EN SITIO:</div>
-                                                    <div style={{ height: '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: '5.8pt', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                                                        Sello húmedo del establecimiento o relación de devoluciones/faltantes firmados.
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
+                                            </>
+                                        );
+                                    })()}
                                 </Letterhead>
                             );
                         })

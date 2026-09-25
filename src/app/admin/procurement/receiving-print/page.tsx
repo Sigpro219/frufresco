@@ -18,6 +18,7 @@ interface ProductEntry {
 export default function ReceivingPrintPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const rawOrderIds = searchParams.get('orderIds') || searchParams.get('ids') || '';
     const paramDate = searchParams.get('date');
     const printDocRef = useRef<HTMLDivElement>(null);
 
@@ -40,38 +41,54 @@ export default function ReceivingPrintPage() {
     }, [selectedDate]);
 
     useEffect(() => {
+        if (paramDate && paramDate !== selectedDate) {
+            setSelectedDate(paramDate);
+        }
+    }, [paramDate]);
+
+    useEffect(() => {
         fetchReceivingData();
-    }, [selectedDate]);
+    }, [selectedDate, rawOrderIds]);
 
     const fetchReceivingData = async () => {
         setLoading(true);
         try {
-            const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+            let ordersQuery = supabase
+                .from('orders')
+                .select(`
+                    id,
+                    delivery_date,
+                    status,
+                    order_items (
+                        id,
+                        product_id,
+                        quantity,
+                        unit,
+                        products (
+                            id,
+                            name,
+                            unit_of_measure,
+                            purchase_sublist,
+                            weight_kg,
+                            accounting_id
+                        )
+                    )
+                `);
+
+            if (rawOrderIds) {
+                const ids = rawOrderIds.split(',').map(id => id.trim()).filter(Boolean);
+                if (ids.length > 0) {
+                    ordersQuery = ordersQuery.in('id', ids).neq('status', 'cancelled');
+                } else {
+                    ordersQuery = ordersQuery.eq('delivery_date', selectedDate).neq('status', 'cancelled');
+                }
+            } else {
+                const OPERATIONAL_STATUSES = ['pending_approval', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                ordersQuery = ordersQuery.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
+            }
 
             const [ordersRes, tasksRes] = await Promise.all([
-                supabase
-                    .from('orders')
-                    .select(`
-                        id,
-                        delivery_date,
-                        status,
-                        order_items (
-                            id,
-                            product_id,
-                            quantity,
-                            unit,
-                            products (
-                                id,
-                                name,
-                                unit_of_measure,
-                                purchase_sublist,
-                                weight_kg,
-                                accounting_id
-                            )
-                        )
-                    `)
-                    .eq('delivery_date', selectedDate)
-                    .in('status', OPERATIONAL_STATUSES),
+                ordersQuery,
                 supabase
                     .from('procurement_tasks')
                     .select('*')
@@ -241,10 +258,12 @@ export default function ReceivingPrintPage() {
                     <PrintDocumentSwitcher
                         currentDoc="receiving"
                         selectedDate={selectedDate}
+                        orderIds={rawOrderIds}
                         onDateChange={(newDate) => {
                             setSelectedDate(newDate);
                             const params = new URLSearchParams();
                             params.set('date', newDate);
+                            if (rawOrderIds) params.set('orderIds', rawOrderIds);
                             router.replace(`/admin/procurement/receiving-print?${params.toString()}`);
                         }}
                     />
@@ -334,13 +353,16 @@ export default function ReceivingPrintPage() {
                                 {/* Header Section emulating INGRESO.pdf */}
                                 <div style={{ width: '100%', boxSizing: 'border-box' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', width: '100%' }}>
-                                        <div style={{ width: '80px', flexShrink: 0 }}>
+                                        <div style={{ width: '100px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                                             <img
-                                                src="/images/frufresco-logo.png"
-                                                alt="FruFresco"
-                                                style={{ height: '28px', objectFit: 'contain' }}
+                                                src="/logo.png"
+                                                alt="FruFresco Logo"
+                                                style={{ height: '30px', maxWidth: '95px', objectFit: 'contain', display: 'block' }}
                                                 onError={(e) => {
-                                                    (e.target as HTMLElement).style.display = 'none';
+                                                    const target = e.target as HTMLImageElement;
+                                                    if (target.src.indexOf('/logosimbolo.png') === -1) {
+                                                        target.src = '/logosimbolo.png';
+                                                    }
                                                 }}
                                             />
                                         </div>
@@ -349,7 +371,7 @@ export default function ReceivingPrintPage() {
                                                 INVESTMENTS CORTES SAS
                                             </h2>
                                         </div>
-                                        <div style={{ width: '80px', flexShrink: 0 }} />
+                                        <div style={{ width: '100px', flexShrink: 0 }} />
                                     </div>
 
                                     {/* Document Subtitle & Meta Bar */}

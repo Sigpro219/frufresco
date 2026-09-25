@@ -8,8 +8,9 @@ export type PrintDocumentKey =
     | 'alistamiento' 
     | 'purchases' 
     | 'receiving' 
+    | 'inventory'
     | 'labels' 
-    | 'manifest'
+    | 'manifest' 
     | 'contingency';
 
 export interface PrintDocumentOption {
@@ -45,6 +46,14 @@ export const PRINT_DOCUMENTS: PrintDocumentOption[] = [
         paperFormat: 'Carta (Portrait)',
         path: '/admin/procurement/receiving-print',
         description: 'Control de pesaje y cotejo de mercancía recibida en muelle'
+    },
+    {
+        key: 'inventory',
+        label: 'Toma Física de Inventario por Sublistas',
+        shortLabel: 'Inventario Bodega (Carta)',
+        paperFormat: 'Carta (Portrait)',
+        path: '/admin/inventory/physical-count-print',
+        description: '6 Folios de conteo ciego y existencias agrupados por sublistas de bodega (INVENTARIO.pdf)'
     },
     {
         key: 'labels',
