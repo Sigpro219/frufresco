@@ -17,16 +17,13 @@ export const INVESTMENTS_CORTES_BRAND: CorporateBrandConfig = {
     primaryColor: '#0F172A',
     accentColor: '#0D7A57',
     headquarters: {
-        label: 'Sede Central • Bogotá D.C., Colombia',
-        address: 'CL 12 B # 71 D - 31 Torre 4 Ap 101',
-        city: 'Bogotá D.C. • Colombia',
-        pbx: 'PBX: (601) 745 1400',
-        mobile: 'Cel: 310 556 4160',
-        email: 'contacto@investmentscortes.com',
+        label: 'Contáctanos',
+        mobile: '30154217612',
+        email: 'pedidos@frufresco.com',
         website: 'www.frufresco.com'
     },
     footerLegalNotice: 'Documento Oficial de Operación y Control Logístico • Sistema Integrado FruFresco',
-    footerContactLine: 'Gestión Pedidos: 310 556 4160 • Servicio al Cliente: 301 542 1761 • info@frufresco.com • www.frufresco.com'
+    footerContactLine: 'Gestión Pedidos: 30154217612 • pedidos@frufresco.com • www.frufresco.com'
 };
 
 /**

@@ -113,18 +113,14 @@ export default function UniversalLetterhead({
                     {brand.headquarters && (
                         <div className="letterhead-company-info" suppressHydrationWarning>
                             {brand.headquarters.label && (
-                                <div style={{ fontWeight: 700, color: '#1E293B' }}>{brand.headquarters.label}</div>
+                                <div style={{ fontWeight: 800, color: '#1E293B' }}>{brand.headquarters.label}</div>
                             )}
                             {brand.headquarters.address && <div>{brand.headquarters.address}</div>}
-                            {(brand.headquarters.pbx || brand.headquarters.mobile) && (
-                                <div>
-                                    {brand.headquarters.pbx} {brand.headquarters.mobile ? `• ${brand.headquarters.mobile}` : ''}
-                                </div>
-                            )}
-                            {(brand.headquarters.email || brand.headquarters.website) && (
-                                <div style={{ color: accentColor, fontWeight: 600 }}>
-                                    {brand.headquarters.email} {brand.headquarters.website ? `• ${brand.headquarters.website}` : ''}
-                                </div>
+                            {brand.headquarters.pbx && <div>{brand.headquarters.pbx}</div>}
+                            {brand.headquarters.mobile && <div>{brand.headquarters.mobile}</div>}
+                            {brand.headquarters.email && <div>{brand.headquarters.email}</div>}
+                            {brand.headquarters.website && (
+                                <div style={{ color: accentColor, fontWeight: 700 }}>{brand.headquarters.website}</div>
                             )}
                         </div>
                     )}

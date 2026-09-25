@@ -708,10 +708,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             </div>
                             <div style="text-align: right; font-size: 0.8rem; color: #4b5563; line-height: 1.4;">
                                 <div style="font-weight: 800; color: #111827; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 0.25rem;">Investments Cortes S.A.S</div>
-                                <div>NIT: 901.393.217</div>
-                                <div>CL 12 B # 71 D - 31 TO 4 AP 101</div>
-                                <div>Bogotá D.C., Colombia</div>
-                                <div>contacto@investmentscortes.com</div>
+                                <div>NIT: 901.393.217-5</div>
+                                <div style="font-weight: 700; color: #1E293B;">Contáctanos</div>
+                                <div>30154217612</div>
+                                <div>pedidos@frufresco.com</div>
+                                <div style="color: #0D7A57; font-weight: 600;">www.frufresco.com</div>
                             </div>
                         </header>
 
