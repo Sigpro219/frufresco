@@ -1146,8 +1146,19 @@ export default function ContingencyPrintPage() {
                                 <tbody>
                                     {(order.order_items || []).map((itm, idx) => {
                                         const pName = itm.products?.name || itm.nickname || 'Producto';
-                                        const accountingId = itm.products?.accounting_id;
-                                        const unit = itm.unit || itm.products?.unit_of_measure || 'KG';
+                                        const rawUom = (itm.products?.unit_of_measure || itm.unit || 'Kg').trim();
+                                        const unit = (() => {
+                                            const u = rawUom.toLowerCase();
+                                            if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') return 'Kg';
+                                            if (u === 'unidad' || u === 'un' || u === 'und' || u === 'unidades') return 'Und';
+                                            if (u === 'atado' || u === 'atados') return 'Atado';
+                                            if (u === 'bandeja' || u === 'bandejas') return 'Bandeja';
+                                            if (u === 'docena' || u === 'docenas' || u === 'doc') return 'Docena';
+                                            if (u === 'bulto' || u === 'bultos') return 'Bulto';
+                                            if (u === 'caja' || u === 'cajas' || u === 'cj') return 'Caja';
+                                            if (u === 'bolsa' || u === 'bolsas') return 'Bolsa';
+                                            return rawUom;
+                                        })();
                                         const qty = Number(itm.quantity || 0);
                                         const price = isReposicion ? 0 : Number(itm.unit_price || 0);
                                         const lineTotal = qty * price;
@@ -1156,27 +1167,15 @@ export default function ContingencyPrintPage() {
                                             <tr key={idx} style={{ backgroundColor: bg }}>
                                                 <td style={{ textAlign: 'center', fontSize: '7.8pt', color: '#64748B', fontWeight: 'bold' }}>{idx + 1}</td>
                                                 <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                                                    <div>
                                                         <strong style={{ fontSize: '8.2pt', color: '#0F172A', lineHeight: 1.2 }}>
                                                             {pName}
                                                         </strong>
-                                                        {accountingId !== undefined && accountingId !== null && (
-                                                            <span style={{
-                                                                fontSize: '6.8pt',
-                                                                color: '#94A3B8',
-                                                                fontWeight: '600',
-                                                                fontFamily: 'monospace',
-                                                                letterSpacing: '0.02em',
-                                                                userSelect: 'none'
-                                                            }}>
-                                                                #{accountingId}
-                                                            </span>
-                                                        )}
                                                     </div>
                                                     {(() => {
                                                         const spec = formatStructuredSpecification({
                                                             quantity: itm.quantity,
-                                                            unit: itm.unit || itm.products?.unit_of_measure,
+                                                            unit: unit,
                                                             variant_label: itm.variant_label,
                                                             selected_options: itm.selected_options,
                                                             productName: pName
