@@ -3,26 +3,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Printer, ArrowLeft, Filter, Truck } from 'lucide-react';
+import { Printer, ArrowLeft, Truck, Calendar } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import UniversalLetterhead from '@/components/print/UniversalLetterhead';
-import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
-import { calculateProcurementNetting, NettingOrderItem, resolvePurchaseUnit } from '@/lib/procurement/procurementNettingEngine';
 
-interface ReceivingItem {
-    id: string;
+interface ProductEntry {
     product_id: string;
-    accounting_id?: number | string | null;
     product_name: string;
-    variant_label?: string;
-    sublist: string;
+    accounting_id?: number | string | null;
     unit: string;
-    ordered_qty: number;
+    sublist: string;
 }
-
-const MAX_ROW_UNITS = 36;
-const FOOTER_RESERVE = 0;
 
 export default function ReceivingPrintPage() {
     const searchParams = useSearchParams();
@@ -36,9 +27,17 @@ export default function ReceivingPrintPage() {
         return now.toISOString().split('T')[0];
     });
 
-    const [selectedSublist, setSelectedSublist] = useState<string>('ALL');
+    const [paperFormat, setPaperFormat] = useState<'oficio' | 'letter'>('oficio');
     const [loading, setLoading] = useState(true);
-    const [items, setItems] = useState<ReceivingItem[]>([]);
+    const [products, setProducts] = useState<ProductEntry[]>([]);
+    const [generatedAt, setGeneratedAt] = useState<string>('');
+
+    useEffect(() => {
+        const now = new Date();
+        const datePart = now.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timePart = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        setGeneratedAt(`${datePart} ${timePart}`);
+    }, [selectedDate]);
 
     useEffect(() => {
         fetchReceivingData();
@@ -61,17 +60,12 @@ export default function ReceivingPrintPage() {
                             product_id,
                             quantity,
                             unit,
-                            nickname,
-                            variant_label,
-                            selected_options,
                             products (
                                 id,
                                 name,
                                 unit_of_measure,
                                 purchase_sublist,
                                 weight_kg,
-                                parent_id,
-                                min_inventory_level,
                                 accounting_id
                             )
                         )
@@ -87,76 +81,55 @@ export default function ReceivingPrintPage() {
             const ordersWithItems = ordersRes.data || [];
             const rawTasks = tasksRes.data || [];
 
-            // Recopilar items para el motor canónico de neteo
-            const itemsForNetting: NettingOrderItem[] = [];
+            const productMap = new Map<string, ProductEntry>();
+
             ordersWithItems.forEach((ord: any) => {
                 (ord.order_items || []).forEach((it: any) => {
-                    itemsForNetting.push(it);
+                    const prod = it.products;
+                    if (!prod || !prod.name) return;
+                    const pId = prod.id || it.product_id;
+                    if (!productMap.has(pId)) {
+                        productMap.set(pId, {
+                            product_id: pId,
+                            product_name: prod.name.trim(),
+                            accounting_id: prod.accounting_id,
+                            unit: prod.unit_of_measure || it.unit || 'KG',
+                            sublist: (prod.purchase_sublist || 'GENERAL').toUpperCase().trim()
+                        });
+                    }
                 });
             });
 
-            // Tareas huérfanas en procurement_tasks (si las hubiera sin order_items directos)
+            // Tareas huérfanas en procurement_tasks si las hubiera
             if (rawTasks.length > 0) {
-                const seenPids = new Set(itemsForNetting.map(i => i.product_id));
-                const orphanTasks = rawTasks.filter((t: any) => !seenPids.has(t.product_id));
-
+                const orphanTasks = rawTasks.filter((t: any) => t.product_id && !productMap.has(t.product_id));
                 if (orphanTasks.length > 0) {
                     const orphanIds = Array.from(new Set(orphanTasks.map((t: any) => t.product_id).filter(Boolean)));
                     const { data: orphanProds } = await supabase
                         .from('products')
-                        .select('id, name, unit_of_measure, purchase_sublist, parent_id, weight_kg, min_inventory_level, accounting_id')
+                        .select('id, name, unit_of_measure, purchase_sublist, accounting_id')
                         .in('id', orphanIds);
 
-                    const orphanProdMap: Record<string, any> = {};
-                    (orphanProds || []).forEach((p: any) => { orphanProdMap[p.id] = p; });
-
-                    orphanTasks.forEach((t: any) => {
-                        const p = orphanProdMap[t.product_id];
-                        itemsForNetting.push({
-                            product_id: t.product_id,
-                            product_name: p?.name,
-                            quantity: Number(t.total_requested) || 0,
-                            unit: t.unit,
-                            variant_label: t.variant_label,
-                            accounting_id: p?.accounting_id,
-                            products: p
-                        });
+                    (orphanProds || []).forEach((prod: any) => {
+                        if (prod && prod.name && !productMap.has(prod.id)) {
+                            productMap.set(prod.id, {
+                                product_id: prod.id,
+                                product_name: prod.name.trim(),
+                                accounting_id: prod.accounting_id,
+                                unit: prod.unit_of_measure || 'KG',
+                                sublist: (prod.purchase_sublist || 'GENERAL').toUpperCase().trim()
+                            });
+                        }
                     });
                 }
             }
 
-            if (itemsForNetting.length === 0) {
-                setItems([]);
-                setLoading(false);
-                return;
-            }
+            // Ordenamiento estrictamente alfabético de la A a la Z para conteo a ciegas
+            const sorted = Array.from(productMap.values()).sort((a, b) =>
+                a.product_name.localeCompare(b.product_name, 'es', { sensitivity: 'base' })
+            );
 
-            // Ejecutar Motor Canónico de Neteo SDD (Consolidación pura de compra)
-            const compiledNetting = calculateProcurementNetting({
-                items: itemsForNetting,
-                stocks: {},
-                options: { mermaFactor: 0.0, applySafetyStock: false }
-            });
-
-            const parsed: ReceivingItem[] = compiledNetting.map(row => {
-                return {
-                    id: row.key,
-                    product_id: row.product_id,
-                    accounting_id: row.accounting_id,
-                    product_name: row.product_name,
-                    variant_label: row.canonical_spec || undefined,
-                    sublist: (row.sublist || 'GENERAL CORABASTOS').toUpperCase().trim(),
-                    unit: row.unit || 'KG',
-                    ordered_qty: row.raw_demand_kg
-                };
-            });
-
-            parsed.sort((a, b) => {
-                if (a.sublist !== b.sublist) return a.sublist.localeCompare(b.sublist);
-                return a.product_name.localeCompare(b.product_name);
-            });
-
-            setItems(parsed);
+            setProducts(sorted);
         } catch (err) {
             console.error('Error cargando datos de ingreso a muelle:', err);
         } finally {
@@ -164,32 +137,34 @@ export default function ReceivingPrintPage() {
         }
     };
 
-    // Group by sublist
-    const grouped = useMemo(() => {
-        const map: Record<string, ReceivingItem[]> = {};
-        items.forEach(it => {
-            if (!map[it.sublist]) map[it.sublist] = [];
-            map[it.sublist].push(it);
-        });
-        return map;
-    }, [items]);
+    // Paginación a 2 Columnas:
+    // En Oficio Portrait (330mm) caben ~38 filas por columna (76 productos por hoja).
+    // En Carta Portrait (279mm) caben ~31 filas por columna (62 productos por hoja).
+    const rowsPerColumn = paperFormat === 'oficio' ? 38 : 31;
+    const itemsPerPage = rowsPerColumn * 2;
 
-    const availableSublists = useMemo(() => Object.keys(grouped).sort(), [grouped]);
+    const pages = useMemo(() => {
+        if (products.length === 0) return [];
+        const result: Array<{ left: ProductEntry[]; right: ProductEntry[] }> = [];
 
-    const filteredSublists = useMemo(() => {
-        if (selectedSublist === 'ALL') return availableSublists;
-        return availableSublists.filter(s => s === selectedSublist);
-    }, [availableSublists, selectedSublist]);
+        for (let i = 0; i < products.length; i += itemsPerPage) {
+            const pageChunk = products.slice(i, i + itemsPerPage);
+            const left = pageChunk.slice(0, rowsPerColumn);
+            const right = pageChunk.slice(rowsPerColumn, rowsPerColumn * 2);
+            result.push({ left, right });
+        }
+        return result;
+    }, [products, itemsPerPage, rowsPerColumn]);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
-            <GoldenPrintStyles paperSize="oficio" />
+            <GoldenPrintStyles paperSize={paperFormat} />
 
             <style jsx global>{`
                 @media print {
                     @page {
-                        size: legal portrait !important;
-                        margin: 0.8cm !important;
+                        size: ${paperFormat === 'oficio' ? 'legal portrait' : 'letter portrait'} !important;
+                        margin: 0.8cm 0.9cm !important;
                     }
                     body {
                         background-color: #FFFFFF !important;
@@ -242,15 +217,15 @@ export default function ReceivingPrintPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <h1 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
                             <Truck size={16} color="#0D7A57" />
-                            Recepción en Bodega
+                            Control de Llegada (Conteo a Ciegas)
                         </h1>
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                            Control Muelle
+                            2 Columnas A-Z
                         </span>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {/* Selector de Documento Imprimible & Fecha con Persistencia */}
                     <PrintDocumentSwitcher
                         currentDoc="receiving"
@@ -263,17 +238,16 @@ export default function ReceivingPrintPage() {
                         }}
                     />
 
+                    {/* Selector de Tamaño de Papel */}
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px 8px' }}>
-                        <Filter size={13} color="#64748B" />
+                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B' }}>Formato:</span>
                         <select
-                            value={selectedSublist}
-                            onChange={(e) => setSelectedSublist(e.target.value)}
+                            value={paperFormat}
+                            onChange={(e) => setPaperFormat(e.target.value as any)}
                             style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
-                            <option value="ALL">Sublistas ({availableSublists.length})</option>
-                            {availableSublists.map(s => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
+                            <option value="oficio">Oficio (Legal)</option>
+                            <option value="letter">Carta (Letter)</option>
                         </select>
                     </div>
 
@@ -282,10 +256,10 @@ export default function ReceivingPrintPage() {
                             if (printDocRef.current) {
                                 printViaNewWindow({
                                     element: printDocRef.current,
-                                    title: `Ingreso_Muelle_${selectedDate}`,
-                                    paperSize: 'oficio',
+                                    title: `Control_Llegada_${selectedDate}`,
+                                    paperSize: paperFormat,
                                     orientation: 'portrait',
-                                    margin: '0.8cm 1.0cm'
+                                    margin: '0.8cm 0.9cm'
                                 });
                             }
                         }}
@@ -305,7 +279,7 @@ export default function ReceivingPrintPage() {
                             whiteSpace: 'nowrap'
                         }}
                     >
-                        <Printer size={14} /> Imprimir Planillas Muelle
+                        <Printer size={14} /> Imprimir Control de Llegada
                     </button>
                 </div>
             </div>
@@ -314,172 +288,158 @@ export default function ReceivingPrintPage() {
             <div ref={printDocRef} style={{ maxWidth: '850px', margin: '0.75rem auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
-                        <p style={{ fontWeight: '700' }}>Cargando datos de recepción nocturna...</p>
+                        <p style={{ fontWeight: '700' }}>Cargando listado de productos para recepción...</p>
                     </div>
-                ) : filteredSublists.length === 0 ? (
+                ) : products.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', maxWidth: '650px', margin: '2rem auto' }}>
-                        <p style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>No hay mercancía programada para recepción en esta fecha.</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>No hay productos programados para ingreso en esta fecha.</p>
                         <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Selecciona otra fecha de entrega en el panel superior.</p>
                     </div>
-                ) : filteredSublists.map((sublistName) => {
-                    const sublistItems = grouped[sublistName] || [];
-
-                    // Paginación limpia por sublista
-                    const sublistPages: Array<{ items: ReceivingItem[]; usedUnits: number }> = [];
-                    let currentPage: ReceivingItem[] = [];
-                    let currentUnits = 0;
-
-                    sublistItems.forEach((item, itemGlobalIdx) => {
-                        const rowWeight = item.variant_label ? 1.4 : 1.0;
-                        const isLastItem = itemGlobalIdx === sublistItems.length - 1;
-                        const budgetForPage = isLastItem || currentPage.length === 0
-                            ? MAX_ROW_UNITS - FOOTER_RESERVE
-                            : MAX_ROW_UNITS;
-
-                        if (currentUnits + rowWeight > budgetForPage && currentPage.length > 0) {
-                            sublistPages.push({ items: currentPage, usedUnits: currentUnits });
-                            currentPage = [];
-                            currentUnits = 0;
-                        }
-                        currentPage.push(item);
-                        currentUnits += rowWeight;
-                    });
-                    if (currentPage.length > 0) sublistPages.push({ items: currentPage, usedUnits: currentUnits });
-                    if (sublistPages.length === 0) sublistPages.push({ items: [], usedUnits: 0 });
-
-                    return sublistPages.map(({ items: pageItems }, pageIdx) => {
-                        const isLastPage = pageIdx === sublistPages.length - 1;
-                        const pageSubtitle = `CONTROL DE PESAJE Y COTEJO EN PLATAFORMA DE MUELLE${sublistPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${sublistPages.length}` : ''}`;
-                        const recRef = `REC-${selectedDate.replace(/-/g, '')}`;
+                ) : (
+                    pages.map((page, pageIdx) => {
+                        const totalPages = pages.length;
 
                         return (
-                            <UniversalLetterhead
-                                key={`${sublistName}-page-${pageIdx}`}
+                            <div
+                                key={`page-${pageIdx}`}
                                 className="page-break"
-                                brand={INVESTMENTS_CORTES_BRAND}
-                                paperSize="oficio"
-                                meta={{
-                                    title: 'INGRESO DE MERCANCÍA & CONTROL DE MUELLE (02:00 AM)',
-                                    subtitle: pageSubtitle,
-                                    date: selectedDate,
-                                    reference: recRef,
-                                    badge: sublistName,
-                                    badgeVariant: 'dark'
+                                style={{
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#000000',
+                                    fontFamily: 'Arial, Helvetica, sans-serif',
+                                    width: paperFormat === 'oficio' ? '215.9mm' : '215.9mm',
+                                    minHeight: paperFormat === 'oficio' ? '330mm' : '279.4mm',
+                                    margin: '0 auto',
+                                    padding: '0.8cm 0.9cm',
+                                    boxSizing: 'border-box',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
+                                    border: '1px solid #CBD5E1'
                                 }}
                             >
-                                    {/* Protocol & Summary banner */}
+                                {/* Header Section emulating INGRESO.pdf */}
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                        <div style={{ width: '90px' }}>
+                                            <img
+                                                src="/images/frufresco-logo.png"
+                                                alt="FruFresco"
+                                                style={{ height: '36px', objectFit: 'contain' }}
+                                                onError={(e) => {
+                                                    // Fallback si la imagen no carga
+                                                    (e.target as HTMLElement).style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                        <div style={{ textAlign: 'center', flex: 1 }}>
+                                            <h2 style={{ margin: 0, fontSize: '12pt', fontWeight: '900', color: '#0D7A57', letterSpacing: '0.05em' }}>
+                                                INVESTMENTS CORTES SAS
+                                            </h2>
+                                        </div>
+                                        <div style={{ width: '90px' }} />
+                                    </div>
+
+                                    {/* Document Subtitle & Meta Bar */}
                                     <div style={{
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        backgroundColor: '#F8FAFC',
-                                        padding: '4px 8px',
-                                        border: '1px solid #E2E8F0',
-                                        borderRadius: '4px',
-                                        fontSize: '0.66rem',
-                                        marginBottom: '6px'
+                                        alignItems: 'baseline',
+                                        borderBottom: '1.5px solid #000000',
+                                        paddingBottom: '3px',
+                                        marginBottom: '6px',
+                                        fontSize: '7.2pt',
+                                        fontWeight: 'bold',
+                                        color: '#000000'
                                     }}>
                                         <div>
-                                            <strong style={{ color: '#0F172A' }}>Protocolo de Muelle:</strong> Pese camión o estibas por separado. Reste la tara de canastillas plásticas (1.8 kg c/u) y empaques. Verifique madurez y temperatura.
+                                            CONTROL DE LLEGADA DE PRODUCTOS EN KG - FECHA {selectedDate}
                                         </div>
-                                        <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '0.68rem' }}>
-                                            {sublistItems.length} Productos a Recibir
+                                        <div style={{ fontSize: '6.5pt', fontWeight: 'normal', color: '#334155' }}>
+                                            GENERADO EL: {generatedAt}
                                         </div>
                                     </div>
 
-                                    {/* Table (8 Columnas Canónicas: #, Producto / Calibre, UM, Canastillas, Peso Bruto, Tara, Neto Real, Calidad) */}
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.66rem' }}>
-                                        <thead>
-                                            <tr style={{ backgroundColor: '#0F172A', color: '#FFFFFF' }}>
-                                                <th style={{ width: '3.5%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A' }}>#</th>
-                                                <th style={{ width: '38%', textAlign: 'left', padding: '3.5px 6px', border: '1px solid #0F172A' }}>Producto / Calibre Especificado</th>
-                                                <th style={{ width: '6.5%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A' }}>UM</th>
-                                                <th style={{ width: '10%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A' }}>Canastillas</th>
-                                                <th style={{ width: '12%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A', backgroundColor: '#1E293B' }}>Peso Bruto (Kg)</th>
-                                                <th style={{ width: '10%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A', backgroundColor: '#334155' }}>Tara (Kg)</th>
-                                                <th style={{ width: '10%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A', backgroundColor: '#0D7A57' }}>Neto Real (Kg)</th>
-                                                <th style={{ width: '10%', textAlign: 'center', padding: '3.5px 2px', border: '1px solid #0F172A' }}>Calidad</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {pageItems.map((it, itemIdx) => {
-                                                const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.items.length, 0);
-                                                const globalIdx = prevPagesCount + itemIdx + 1;
-                                                const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-
-                                                return (
-                                                    <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
-                                                        {/* 1. Indice Consecutivo */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #E2E8F0', fontWeight: '700', color: '#64748B' }}>
-                                                            {globalIdx}
-                                                        </td>
-
-                                                        {/* 2. Producto / Calibre Especificado + Accounting ID Discreto */}
-                                                        <td style={{ textAlign: 'left', padding: '3px 6px', border: '1px solid #E2E8F0' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
-                                                                <strong style={{ color: '#0F172A', fontSize: '0.68rem', lineHeight: 1.2 }}>
-                                                                    {it.product_name}
-                                                                </strong>
-                                                                {it.accounting_id !== undefined && it.accounting_id !== null && (
-                                                                    <span style={{ 
-                                                                        fontSize: '0.58rem', 
-                                                                        color: '#94A3B8', 
-                                                                        fontWeight: '600', 
-                                                                        fontFamily: 'monospace',
-                                                                        letterSpacing: '0.02em',
-                                                                        userSelect: 'none'
-                                                                    }}>
-                                                                        #{it.accounting_id}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            {it.variant_label && (
-                                                                <div style={{ fontSize: '0.58rem', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                                    <span style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 4px', fontWeight: '700', color: '#1E293B' }}>
-                                                                        {it.variant_label}
-                                                                    </span>
-                                                                </div>
+                                    {/* Two-Column Side-by-Side Tables */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', alignItems: 'start' }}>
+                                        {/* Left Table Block */}
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.6pt' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
+                                                    <th style={{ width: '48%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
+                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {page.left.map((it, idx) => (
+                                                    <tr key={it.product_id || idx} style={{ height: '20px' }}>
+                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={it.product_name}>
+                                                            <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
+                                                            {it.accounting_id && (
+                                                                <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
+                                                                    #{it.accounting_id}
+                                                                </span>
                                                             )}
                                                         </td>
-
-                                                        {/* 3. Unidad Maestra de Compra (UM) */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #E2E8F0', fontWeight: '600', color: '#334155' }}>
-                                                            {it.unit}
-                                                        </td>
-
-                                                        {/* 4. Canastillas */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', borderBottom: '1px dashed #94A3B8', color: '#94A3B8' }}>
-                                                            [ _____ ]
-                                                        </td>
-
-                                                        {/* 5. Peso Bruto (Kg) */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', borderBottom: '1px dashed #94A3B8', color: '#94A3B8' }}>
-                                                            [ _____ ]
-                                                        </td>
-
-                                                        {/* 6. Tara (Kg) */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', borderBottom: '1px dashed #94A3B8', color: '#94A3B8' }}>
-                                                            [ _____ ]
-                                                        </td>
-
-                                                        {/* 7. Neto Real (Kg) */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', borderBottom: '1px dashed #94A3B8', fontWeight: 'bold', color: '#0F172A' }}>
-                                                            [ _____ ]
-                                                        </td>
-
-                                                        {/* 8. Calidad */}
-                                                        <td style={{ textAlign: 'center', padding: '3px 2px', border: '1px solid #E2E8F0', fontSize: '0.58rem', color: '#475569' }}>
-                                                            [ ] Aprob&nbsp;&nbsp;[ ] Rech
-                                                        </td>
+                                                        <td style={{ border: '1px solid #000000' }}></td>
+                                                        <td style={{ border: '1px solid #000000' }}></td>
+                                                        <td style={{ border: '1px solid #000000' }}></td>
                                                     </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </UniversalLetterhead>
+                                                ))}
+                                            </tbody>
+                                        </table>
+
+                                        {/* Right Table Block */}
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.6pt' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
+                                                    <th style={{ width: '48%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
+                                                    <th style={{ width: '18%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {page.right.map((it, idx) => (
+                                                    <tr key={it.product_id || idx} style={{ height: '20px' }}>
+                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={it.product_name}>
+                                                            <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
+                                                            {it.accounting_id && (
+                                                                <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
+                                                                    #{it.accounting_id}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td style={{ border: '1px solid #000000' }}></td>
+                                                        <td style={{ border: '1px solid #000000' }}></td>
+                                                        <td style={{ border: '1px solid #000000' }}></td>
+                                                    </tr>
+                                                ))}
+                                                {/* Rellenar filas vacías en la columna derecha si es más corta que la izquierda */}
+                                                {Array.from({ length: Math.max(0, page.left.length - page.right.length) }).map((_, emptyIdx) => (
+                                                    <tr key={`empty-${emptyIdx}`} style={{ height: '20px' }}>
+                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
+                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
+                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
+                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Clean Bottom Page Number */}
+                                <div style={{ textAlign: 'center', fontSize: '6.5pt', color: '#64748B', paddingTop: '6px' }}>
+                                    Pág. {pageIdx + 1}/{totalPages}
+                                </div>
+                            </div>
                         );
-                    });
-                })}
+                    })
+                )}
             </div>
         </div>
     );
