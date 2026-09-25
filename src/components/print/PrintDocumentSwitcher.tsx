@@ -41,8 +41,8 @@ export const PRINT_DOCUMENTS: PrintDocumentOption[] = [
     {
         key: 'receiving',
         label: 'Planilla de Recepción en Bodega',
-        shortLabel: 'Recepción Bodega (Oficio)',
-        paperFormat: 'Oficio (Portrait)',
+        shortLabel: 'Recepción Bodega (Carta)',
+        paperFormat: 'Carta (Portrait)',
         path: '/admin/procurement/receiving-print',
         description: 'Control de pesaje y cotejo de mercancía recibida en muelle'
     },

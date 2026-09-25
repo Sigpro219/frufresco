@@ -27,7 +27,7 @@ export default function ReceivingPrintPage() {
         return now.toISOString().split('T')[0];
     });
 
-    const [paperFormat, setPaperFormat] = useState<'oficio' | 'letter'>('oficio');
+    const [paperFormat, setPaperFormat] = useState<'oficio' | 'letter'>('letter');
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<ProductEntry[]>([]);
     const [generatedAt, setGeneratedAt] = useState<string>('');
@@ -138,9 +138,9 @@ export default function ReceivingPrintPage() {
     };
 
     // Paginación a 2 Columnas para Conteo a Ciegas:
-    // En Oficio Portrait (330mm) caben 54 filas por columna (108 productos por hoja, idéntico a INGRESO.pdf).
-    // En Carta Portrait (279mm) caben 42 filas por columna (84 productos por hoja).
-    const rowsPerColumn = paperFormat === 'oficio' ? 54 : 42;
+    // En Carta Portrait (279.4mm) caben 45 filas por columna (90 productos por hoja).
+    // En Oficio Portrait (330mm) caben 54 filas por columna (108 productos por hoja).
+    const rowsPerColumn = paperFormat === 'oficio' ? 54 : 45;
     const itemsPerPage = rowsPerColumn * 2;
 
     const pages = useMemo(() => {
@@ -375,7 +375,7 @@ export default function ReceivingPrintPage() {
                                             </thead>
                                             <tbody>
                                                 {page.left.map((it, idx) => (
-                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '19px' }}>
+                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '17px' }}>
                                                         <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
                                                             <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                             {it.accounting_id && (
@@ -404,7 +404,7 @@ export default function ReceivingPrintPage() {
                                             </thead>
                                             <tbody>
                                                 {page.right.map((it, idx) => (
-                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '19px' }}>
+                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '17px' }}>
                                                         <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
                                                             <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                             {it.accounting_id && (
@@ -420,7 +420,7 @@ export default function ReceivingPrintPage() {
                                                 ))}
                                                 {/* Rellenar filas vacías en la columna derecha si es más corta que la izquierda */}
                                                 {Array.from({ length: Math.max(0, page.left.length - page.right.length) }).map((_, emptyIdx) => (
-                                                    <tr key={`empty-${emptyIdx}`} style={{ height: paperFormat === 'oficio' ? '17.5px' : '19px' }}>
+                                                    <tr key={`empty-${emptyIdx}`} style={{ height: paperFormat === 'oficio' ? '17.5px' : '17px' }}>
                                                         <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
                                                         <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
                                                         <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
