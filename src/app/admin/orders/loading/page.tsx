@@ -1961,6 +1961,13 @@ function OrderLoadingContent() {
         setOrderItems(newOrderItems);
     };
 
+    const updateItemPrice = (idx: number, newPrice: number) => {
+        if (newPrice < 0) return;
+        const newOrderItems = [...orderItems];
+        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: newPrice, isModified: true };
+        setOrderItems(newOrderItems);
+    };
+
     const removeItemFromOrder = (idx: number) => {
         const newOrderItems = [...orderItems];
         newOrderItems.splice(idx, 1);
@@ -2220,9 +2227,16 @@ function OrderLoadingContent() {
         // 1. Validate Delivery Date: ONLY orders scheduled for tomorrow can be dispatched to logistics
         const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
         if (invalidDateOrders.length > 0) {
+            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
             const distinctInvalidDates = Array.from(new Set(invalidDateOrders.map(o => o.delivery_date || 'Sin Fecha'))).join(', ');
-            alert(`⚠️ RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para mañana (${tomorrowStr}).`);
-            return;
+            
+            if (!isSuperAdmin) {
+                alert(`⚠️ RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para mañana (${tomorrowStr}).`);
+                return;
+            } else {
+                const forceDate = confirm(`⚠️ RESTRICCIÓN DE FECHA OPERATIVA:\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fecha diferente a mañana (${distinctInvalidDates}).\n\n¿Deseas forzar el lanzamiento de todos modos con permisos de Administrador?`);
+                if (!forceDate) return;
+            }
         }
 
         // 2. Validate Cutoff Window: ONLY between 10:00 AM and 23:50 PM (Hora Colombia)
@@ -2230,8 +2244,15 @@ function OrderLoadingContent() {
             const bogota = getColombiaTime();
             const currentH = String(bogota.getHours()).padStart(2, '0');
             const currentM = String(bogota.getMinutes()).padStart(2, '0');
-            alert(`⏰ FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
-            return;
+            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
+
+            if (!isSuperAdmin) {
+                alert(`⏰ FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
+                return;
+            } else {
+                const forceTime = confirm(`⏰ FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nHora actual: ${currentH}:${currentM} (Ventana estándar: 10:00 AM - 23:50 PM).\n\n¿Deseas autorizar el lanzamiento logístico como Administrador?`);
+                if (!forceTime) return;
+            }
         }
 
         setTargetStatusToConfirm('para_compra');
@@ -2245,11 +2266,13 @@ function OrderLoadingContent() {
             const tomorrowStr = getTomorrowDateStr();
             const selectedList = orders.filter(o => selectedOrders.has(o.id));
             const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
-            if (invalidDateOrders.length > 0) {
+            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
+
+            if (invalidDateOrders.length > 0 && !isSuperAdmin) {
                 alert(`⚠️ No se puede proceder: Hay pedidos seleccionados con fecha diferente a mañana (${tomorrowStr}).`);
                 return;
             }
-            if (!isWithinCutoffWindow()) {
+            if (!isWithinCutoffWindow() && !isSuperAdmin) {
                 alert(`⏰ No se puede proceder: Fuera de la ventana de corte operativo (10:00 AM a 23:50 PM).`);
                 return;
             }
@@ -2261,7 +2284,6 @@ function OrderLoadingContent() {
         
         if (!skipNativeConfirm && !confirm(confirmMsg)) return;
 
-
         setUpdateLoading(true);
         try {
             const { error } = await supabase
@@ -2269,12 +2291,13 @@ function OrderLoadingContent() {
                 .update({ status: targetStatus }) 
                 .in('id', Array.from(selectedOrders));
 
+            if (error) throw error;
+
             const launchedIds = new Set(selectedOrders);
             setSelectedOrders(new Set());
             setOrders(prev => prev.map(o => launchedIds.has(o.id) ? { ...o, status: targetStatus } : o));
             setRefreshTrigger(prev => prev + 1); // Trigger refresh
             alert('✅ Pedidos enviados a Proceso Logístico correctamente');
-
 
         } catch (err: any) {
             console.error('Error in bulk update:', err);
@@ -5009,7 +5032,34 @@ function OrderLoadingContent() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#1E293B', fontWeight: '800', fontSize: '0.95rem' }}>
-                                                        {formatMoney(item.unit_price || 0)}
+                                                        {editMode ? (
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>$</span>
+                                                                <input 
+                                                                    type="number"
+                                                                    step="any"
+                                                                    value={item.unit_price === 0 ? '' : item.unit_price}
+                                                                    placeholder="0"
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
+                                                                        updateItemPrice(idx, val);
+                                                                    }}
+                                                                    style={{ 
+                                                                        width: '95px', 
+                                                                        textAlign: 'right', 
+                                                                        padding: '6px 8px', 
+                                                                        borderRadius: '8px', 
+                                                                        border: (!item.unit_price || item.unit_price <= 0) ? '2px solid #EF4444' : '1px solid #CBD5E1', 
+                                                                        fontWeight: '800', 
+                                                                        backgroundColor: (!item.unit_price || item.unit_price <= 0) ? '#FEF2F2' : 'white',
+                                                                        color: '#0F172A'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            formatMoney(item.unit_price || 0)
+                                                        )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
                                                         {formatMoney((item.unit_price || 0) * item.quantity)}
