@@ -74,6 +74,8 @@ interface OrderData {
         nit?: string;
         role?: string;
         parent_id?: string | null;
+        needs_crates?: boolean;
+        crate_balance?: number;
         parent?: {
             id?: string;
             company_name?: string;
@@ -424,7 +426,7 @@ export default function ContingencyPrintPage() {
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
-                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, parent:parent_id(id, company_name)),
+                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, needs_crates, crate_balance, parent:parent_id(id, company_name)),
                         order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level, iva_rate))
                     `);
 
@@ -1081,6 +1083,7 @@ export default function ContingencyPrintPage() {
                         : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
                     const items = order.order_items || [];
                     const itemsCount = items.length;
+                    const crateBalance = typeof order.profiles?.crate_balance === 'number' ? order.profiles.crate_balance : 0;
 
                     // Paginación de Remisión: 17 ítems por página para ajuste perfecto en hoja Carta
                     const CHUNK_SIZE = 17;
@@ -1235,16 +1238,30 @@ export default function ContingencyPrintPage() {
                                     ) : (
                                         <>
                                             {/* Summary & Canastillas Control Compact */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: '6px', gap: '12px', marginTop: 'auto' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: '5px', gap: '10px', marginTop: '6px' }}>
                                                 <div style={{ flex: 1, fontSize: '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                                     <div>
-                                                        <div style={{ fontWeight: 'bold', color: '#0F172A', marginBottom: '2px', fontSize: '7pt' }}>Control de Canastillas Plásticas:</div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <div style={{ fontWeight: 'bold', color: '#0F172A', fontSize: '7pt' }}>Control de Canastillas Plásticas:</div>
+                                                            <div style={{
+                                                                fontSize: '6.5pt',
+                                                                color: '#0369A1',
+                                                                fontWeight: '700',
+                                                                backgroundColor: '#F0F9FF',
+                                                                border: '1px solid #BAE6FD',
+                                                                borderRadius: '3px',
+                                                                padding: '1px 6px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                Tienes en este momento <strong style={{ color: '#0284C7', fontSize: '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
+                                                            </div>
+                                                        </div>
                                                         <div style={{ display: 'flex', gap: '12px', border: '1px dashed #94A3B8', padding: '3px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
                                                             <div>Entregadas: <strong style={{ fontSize: '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
                                                             <div>Recogidas / Devueltas: <strong style={{ fontSize: '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
                                                         </div>
                                                     </div>
-                                                    <div style={{ marginTop: '2px', fontSize: '6pt', color: '#64748B', lineHeight: 1.15 }}>
+                                                    <div style={{ marginTop: '2px', fontSize: '5.8pt', color: '#64748B', lineHeight: 1.15 }}>
                                                         * Activos en comodato propiedad exclusiva de FruFresco. Retorne al conductor igual cantidad recibida.
                                                     </div>
                                                 </div>
