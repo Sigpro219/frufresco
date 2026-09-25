@@ -119,30 +119,41 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
         }
 
         /* Tipografía legible para el encabezado corporativo */
+        .letterhead-header {
+            width: 100% !important;
+            box-sizing: border-box !important;
+            padding-bottom: 4px !important;
+            margin-bottom: 5px !important;
+        }
+
         .letterhead-company-name {
-            font-size: 13pt !important;
+            font-size: 11pt !important;
             font-weight: 900 !important;
             letter-spacing: 0.02em !important;
             line-height: 1.15 !important;
         }
 
         .letterhead-company-nit {
-            font-size: 8.5pt !important;
+            font-size: 7.5pt !important;
             font-weight: 700 !important;
             color: #1E293B !important;
         }
 
         .letterhead-company-info {
-            font-size: 8pt !important;
+            font-size: 7pt !important;
             color: #475569 !important;
-            line-height: 1.35 !important;
+            line-height: 1.25 !important;
             text-align: right !important;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
         }
 
         .letterhead-meta-strip {
-            font-size: 8.5pt !important;
-            padding: 5px 10px !important;
-            margin-bottom: 6px !important;
+            font-size: 7.5pt !important;
+            padding: 3px 6px !important;
+            margin-bottom: 5px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
         }
 
         /* Footer nítido y legible al fondo */

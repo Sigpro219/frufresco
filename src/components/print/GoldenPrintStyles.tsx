@@ -59,6 +59,7 @@ export default function GoldenPrintStyles({
                 box-sizing: border-box;
                 page-break-inside: avoid;
                 break-inside: avoid;
+                overflow: hidden;
             }
 
             .letterhead-top-stripe {
@@ -91,12 +92,14 @@ export default function GoldenPrintStyles({
                 position: relative;
                 z-index: 1;
                 border-bottom: 2px solid var(--print-primary);
-                padding-bottom: 0.65rem;
-                margin-bottom: 0.75rem;
+                padding-bottom: 0.5rem;
+                margin-bottom: 0.6rem;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                gap: 16px;
+                gap: 12px;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .letterhead-header::after {
@@ -112,36 +115,37 @@ export default function GoldenPrintStyles({
             .letterhead-logo-wrap {
                 display: flex;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
                 flex-shrink: 0;
             }
 
             .letterhead-company-name {
-                font-size: 1.15rem;
+                font-size: 1.05rem;
                 font-weight: 900;
                 color: var(--print-primary);
-                letter-spacing: 0.025em;
+                letter-spacing: 0.02em;
                 text-transform: uppercase;
                 white-space: nowrap;
-                margin-bottom: 2px;
+                margin-bottom: 1px;
                 line-height: 1.15;
             }
 
             .letterhead-company-nit {
                 font-weight: 750;
                 color: #1E293B;
-                font-size: 0.78rem;
-                letter-spacing: 0.02em;
+                font-size: 0.72rem;
+                letter-spacing: 0.01em;
                 white-space: nowrap;
-                line-height: 1.25;
+                line-height: 1.2;
             }
 
             .letterhead-company-info {
                 text-align: right;
-                font-size: 0.72rem;
+                font-size: 0.68rem;
                 color: #475569;
-                line-height: 1.35;
+                line-height: 1.3;
                 flex-shrink: 0;
+                white-space: nowrap;
             }
 
             .letterhead-meta-strip {
@@ -154,9 +158,11 @@ export default function GoldenPrintStyles({
                 border: 1px solid #E2E8F0;
                 border-left: 3.5px solid var(--print-accent);
                 border-radius: 4px;
-                padding: 5px 10px;
-                margin-bottom: 0.65rem;
-                font-size: 0.72rem;
+                padding: 4px 8px;
+                margin-bottom: 0.55rem;
+                font-size: 0.70rem;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             /* ========================================================= */
@@ -298,20 +304,31 @@ export default function GoldenPrintStyles({
                     display: flex !important;
                     flex-direction: column !important;
                 }
+                .letterhead-header {
+                    width: 100% !important;
+                    box-sizing: border-box !important;
+                    padding-bottom: 4px !important;
+                    margin-bottom: 5px !important;
+                }
                 .letterhead-company-name {
-                    font-size: 13pt !important;
+                    font-size: 11pt !important;
                     font-weight: 900 !important;
                 }
                 .letterhead-company-nit {
-                    font-size: 8.5pt !important;
+                    font-size: 7.5pt !important;
                     font-weight: 700 !important;
                 }
                 .letterhead-company-info {
-                    font-size: 8pt !important;
-                    line-height: 1.35 !important;
+                    font-size: 7pt !important;
+                    line-height: 1.25 !important;
+                    white-space: nowrap !important;
                 }
                 .letterhead-meta-strip {
-                    font-size: 8.5pt !important;
+                    font-size: 7.5pt !important;
+                    padding: 3px 6px !important;
+                    margin-bottom: 5px !important;
+                    width: 100% !important;
+                    box-sizing: border-box !important;
                 }
                 .letterhead-footer {
                     margin-top: auto !important;

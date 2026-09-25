@@ -133,21 +133,28 @@ export default function UniversalLetterhead({
 
             {/* Document Title / Meta Strip */}
             {(meta?.title || meta?.subtitle || meta?.date || meta?.reference || meta?.badge) && (
-                <div className="letterhead-meta-strip">
-                    <div>
+                <div className="letterhead-meta-strip" style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '10px',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                }}>
+                    <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
                         {meta.title && (
-                            <div style={{ fontSize: '0.90rem', fontWeight: 900, color: primaryColor, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+                            <div style={{ fontSize: '0.86rem', fontWeight: 900, color: primaryColor, textTransform: 'uppercase', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {meta.title}
                             </div>
                         )}
                         {meta.subtitle && (
-                            <div style={{ fontSize: '0.64rem', color: '#64748B', marginTop: '1px', fontWeight: 600 }}>
+                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {meta.subtitle}
                             </div>
                         )}
                     </div>
 
-                    <div style={{ textAlign: 'right', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
                         {meta.badge && (
                             <span style={{
                                 fontSize: '0.60rem',
@@ -157,22 +164,24 @@ export default function UniversalLetterhead({
                                 backgroundColor: badgeStyle.bg,
                                 color: badgeStyle.color,
                                 border: `1px solid ${badgeStyle.border}`,
-                                letterSpacing: '0.05em',
-                                textTransform: 'uppercase'
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0
                             }}>
                                 {meta.badge}
                             </span>
                         )}
                         {meta.date && (
-                            <div>
-                                <span style={{ color: '#64748B', fontSize: '0.64rem', textTransform: 'uppercase', fontWeight: 700 }}>Fecha: </span>
-                                <strong style={{ color: primaryColor }}>{meta.date}</strong>
+                            <div style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                <span style={{ color: '#64748B', fontSize: '0.62rem', textTransform: 'uppercase', fontWeight: 700 }}>Fecha: </span>
+                                <strong style={{ color: primaryColor, fontSize: '0.72rem' }}>{meta.date}</strong>
                             </div>
                         )}
                         {meta.reference && (
-                            <div>
-                                <span style={{ color: '#64748B', fontSize: '0.64rem', textTransform: 'uppercase', fontWeight: 700 }}>Ref: </span>
-                                <strong style={{ color: accentColor, fontFamily: 'monospace', fontSize: '0.74rem' }}>{meta.reference}</strong>
+                            <div style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                <span style={{ color: '#64748B', fontSize: '0.62rem', textTransform: 'uppercase', fontWeight: 700 }}>Ref: </span>
+                                <strong style={{ color: accentColor, fontFamily: 'monospace', fontSize: '0.72rem' }}>{meta.reference}</strong>
                             </div>
                         )}
                     </div>
