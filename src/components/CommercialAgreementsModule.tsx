@@ -282,6 +282,15 @@ export default function CommercialAgreementsModule() {
     const [latestAgreementLog, setLatestAgreementLog] = useState<any | null>(null);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
+    // In-Drawer Add Product Modal State
+    const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+    const [addProductSearch, setAddProductSearch] = useState('');
+    const [addProductResults, setAddProductResults] = useState<any[]>([]);
+    const [selectedAddProduct, setSelectedAddProduct] = useState<any>(null);
+    const [newProductPrice, setNewProductPrice] = useState('');
+    const [isSavingNewProduct, setIsSavingNewProduct] = useState(false);
+    const [isSearchingProductsToAdd, setIsSearchingProductsToAdd] = useState(false);
+
     // Master Institutional Template State
     const [masterTemplate, setMasterTemplate] = useState<{
         id: string;
@@ -1203,6 +1212,215 @@ export default function CommercialAgreementsModule() {
             showToast('Error al actualizar precio: ' + err.message, 'error');
         } finally {
             setSavingPriceItemId(null);
+        }
+    };
+
+    const handleOpenAddProductModal = () => {
+        setSelectedAddProduct(null);
+        setAddProductSearch('');
+        setAddProductResults([]);
+        setNewProductPrice('');
+        setIsAddProductModalOpen(true);
+    };
+
+    const handleSearchProductsToAdd = async (query: string) => {
+        setAddProductSearch(query);
+        if (!query || query.trim().length < 2) {
+            setAddProductResults([]);
+            return;
+        }
+        setIsSearchingProductsToAdd(true);
+        try {
+            const cleanQ = query.trim();
+            const isNumeric = /^\d+$/.test(cleanQ);
+
+            let dbQuery = supabase
+                .from('products')
+                .select('id, name, sku, accounting_id, unit_of_measure, base_price, iva_rate, is_active')
+                .limit(25);
+
+            if (isNumeric) {
+                dbQuery = dbQuery.or(`name.ilike.%${cleanQ}%,accounting_id.eq.${cleanQ}`);
+            } else {
+                dbQuery = dbQuery.ilike('name', `%${cleanQ}%`);
+            }
+
+            const { data, error } = await dbQuery;
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                const productIds = data.map(p => p.id);
+                const { data: costs } = await supabase
+                    .from('commercial_cost_matrix')
+                    .select('product_id, manual_cost')
+                    .in('product_id', productIds)
+                    .eq('is_active', true);
+
+                const costMap: Record<string, number> = {};
+                (costs || []).forEach(c => {
+                    if (c.manual_cost && Number(c.manual_cost) > 0) {
+                        costMap[c.product_id] = Number(c.manual_cost);
+                    }
+                });
+
+                const enriched = data.map(p => ({
+                    ...p,
+                    cost_basis: costMap[p.id] || Number(p.base_price) || 0
+                }));
+                setAddProductResults(enriched);
+            } else {
+                setAddProductResults([]);
+            }
+        } catch (err: any) {
+            console.error('Error searching products to add:', err);
+        } finally {
+            setIsSearchingProductsToAdd(false);
+        }
+    };
+
+    const handleSelectProductToAdd = (product: any) => {
+        setSelectedAddProduct(product);
+        const existing = agreementItems.find(it => it.product_id === product.id);
+        if (existing) {
+            setNewProductPrice(String(existing.unit_price || ''));
+        } else {
+            const suggested = Number(product.base_price) || Number(product.cost_basis) || '';
+            setNewProductPrice(suggested ? String(suggested) : '');
+        }
+    };
+
+    const handleSaveProductToAgreement = async () => {
+        if (!selectedAddProduct || !selectedAgreement) return;
+        const priceNum = Number(newProductPrice);
+        if (!priceNum || isNaN(priceNum) || priceNum <= 0) {
+            showToast('El precio acordado debe ser mayor a $0', 'error');
+            return;
+        }
+
+        setIsSavingNewProduct(true);
+        try {
+            const costBasis = Number(selectedAddProduct.cost_basis) || Number(selectedAddProduct.base_price) || 0;
+            const marginPercent = priceNum > 0 ? Math.round(((priceNum - costBasis) / priceNum) * 10000) / 100 : 0;
+            const ivaRate = Number(selectedAddProduct.iva_rate) || 0;
+            const ivaAmount = priceNum * (ivaRate / 100);
+            const totalPrice = priceNum + ivaAmount;
+
+            const existingItem = agreementItems.find(it => it.product_id === selectedAddProduct.id);
+
+            if (existingItem) {
+                const { error: updErr } = await supabase
+                    .from('quote_items')
+                    .update({
+                        unit_price: priceNum,
+                        cost_basis: costBasis,
+                        margin_percent: marginPercent,
+                        iva_rate: ivaRate,
+                        iva_amount: ivaAmount,
+                        total_price: totalPrice
+                    })
+                    .eq('id', existingItem.id);
+
+                if (updErr) throw updErr;
+
+                setAgreementItems(prev => prev.map(it => it.id === existingItem.id ? {
+                    ...it,
+                    unit_price: priceNum,
+                    cost_basis: costBasis,
+                    margin_percent: marginPercent,
+                    iva_rate: ivaRate,
+                    iva_amount: ivaAmount,
+                    total_price: totalPrice
+                } : it));
+
+                showToast(`✅ Precio actualizado para "${selectedAddProduct.name}" en el acuerdo`, 'success');
+            } else {
+                const { data: inserted, error: insErr } = await supabase
+                    .from('quote_items')
+                    .insert({
+                        quote_id: selectedAgreement.id,
+                        product_id: selectedAddProduct.id,
+                        product_name: selectedAddProduct.name,
+                        quantity: 1,
+                        cost_basis: costBasis,
+                        margin_percent: marginPercent,
+                        unit_price: priceNum,
+                        iva_rate: ivaRate,
+                        iva_amount: ivaAmount,
+                        total_price: totalPrice
+                    })
+                    .select('*, products:product_id (accounting_id, unit_of_measure, is_active)')
+                    .single();
+
+                if (insErr) throw insErr;
+
+                if (inserted) {
+                    setAgreementItems(prev => [inserted, ...prev]);
+                }
+
+                showToast(`✅ "${selectedAddProduct.name}" agregado al acuerdo comercial con éxito`, 'success');
+            }
+
+            // Recalculate quote totals
+            const { data: allItems } = await supabase
+                .from('quote_items')
+                .select('unit_price, iva_amount, total_price')
+                .eq('quote_id', selectedAgreement.id);
+
+            const newSubtotal = (allItems || []).reduce((acc, it) => acc + (Number(it.unit_price) || 0), 0);
+            const newTotalTax = (allItems || []).reduce((acc, it) => acc + (Number(it.iva_amount) || 0), 0);
+            const newTotal = newSubtotal + newTotalTax;
+
+            await supabase
+                .from('quotes')
+                .update({
+                    subtotal_amount: newSubtotal,
+                    total_tax_amount: newTotalTax,
+                    total_amount: newTotal
+                })
+                .eq('id', selectedAgreement.id);
+
+            setSelectedAgreement(prev => prev ? {
+                ...prev,
+                subtotal_amount: newSubtotal,
+                total_tax_amount: newTotalTax,
+                total_amount: newTotal
+            } : null);
+
+            fetchAgreements();
+            fetchAgreementAuditLogs(selectedAgreement.id);
+
+            // Audit log
+            const collaboratorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
+            const collaboratorId = user?.id || null;
+            try {
+                await supabase.from('audit_logs').insert({
+                    action: existingItem ? 'UPDATE_quote_item_price' : 'INSERT_quote_item',
+                    module: 'COMMERCIAL',
+                    collaborator_id: collaboratorId,
+                    collaborator_name: collaboratorName,
+                    details: {
+                        quote_id: selectedAgreement.id,
+                        product_id: selectedAddProduct.id,
+                        product_name: selectedAddProduct.name,
+                        unit_price: priceNum,
+                        cost_basis: costBasis,
+                        margin_percent: marginPercent
+                    }
+                });
+            } catch (aErr) {
+                console.warn('Audit error:', aErr);
+            }
+
+            setIsAddProductModalOpen(false);
+            setSelectedAddProduct(null);
+            setAddProductSearch('');
+            setAddProductResults([]);
+            setNewProductPrice('');
+        } catch (err: any) {
+            console.error('Error adding product to agreement:', err);
+            showToast('Error al agregar producto al acuerdo: ' + err.message, 'error');
+        } finally {
+            setIsSavingNewProduct(false);
         }
     };
 
@@ -2926,6 +3144,29 @@ export default function CommercialAgreementsModule() {
                                 <Printer size={15} color="#475569" />
                                 Vista Imprimible
                             </button>
+                            <button
+                                type="button"
+                                onClick={handleOpenAddProductModal}
+                                style={{
+                                    padding: '0.55rem 0.95rem',
+                                    borderRadius: '8px',
+                                    backgroundColor: THEME.colors.primary,
+                                    color: 'white',
+                                    border: 'none',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                }}
+                                title="Agregar un nuevo producto al acuerdo comercial"
+                            >
+                                <Plus size={15} />
+                                Agregar Producto
+                            </button>
                             <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                 {agreementItems.filter(item => {
                                     if (!drawerSearchTerm.trim()) return true;
@@ -2987,7 +3228,7 @@ export default function CommercialAgreementsModule() {
                         })()}
 
                         {/* Drawer List Content */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0 1.5rem 1.5rem 1.5rem' }}>
                             {loadingItems ? (
                                 <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 'bold' }}>Cargando lista de precios...</div>
                             ) : agreementItems.length === 0 ? (
@@ -3016,16 +3257,16 @@ export default function CommercialAgreementsModule() {
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Cod. Contable</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Producto</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>U.M.</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Costo Base</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Precio Acordado</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>IVA</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Margen</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Fecha / Hora</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Usuario</th>
-                                                    <th style={{ padding: '0.6rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Acciones</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Cod. Contable</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Producto</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>U.M.</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Costo Base</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Precio Acordado</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>IVA</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Margen</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Fecha / Hora</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Usuario</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -3311,21 +3552,331 @@ export default function CommercialAgreementsModule() {
                         </div>
 
                         {/* Drawer Footer */}
-                        <div style={{ padding: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', backgroundColor: '#F9FAFB' }}>
-                            <button 
-                                onClick={() => setIsDrawerOpen(false)}
+                        <div style={{ padding: '1rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                                Total productos configurados: <strong style={{ color: '#0F172A' }}>{agreementItems.length}</strong>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleOpenAddProductModal}
+                                    style={{
+                                        padding: '0.65rem 1.25rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: 'none',
+                                        backgroundColor: THEME.colors.primary,
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.85rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.3)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                >
+                                    <Plus size={16} />
+                                    Agregar Producto al Acuerdo
+                                </button>
+                                <button 
+                                    onClick={() => setIsDrawerOpen(false)}
+                                    style={{
+                                        padding: '0.65rem 1.25rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: `1px solid ${THEME.colors.borderActive}`,
+                                        backgroundColor: 'white',
+                                        color: THEME.colors.textSecondary,
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.85rem',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                >
+                                    Cerrar Lista
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL PARA AGREGAR PRODUCTO AL ACUERDO COMERCIAL */}
+            {isAddProductModalOpen && selectedAgreement && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(3px)',
+                    zIndex: 2600,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '560px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        border: '1px solid #E2E8F0',
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '1.2rem 1.5rem',
+                            borderBottom: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Plus size={20} color={THEME.colors.primary} />
+                                    Agregar Producto al Acuerdo
+                                </h3>
+                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748B' }}>
+                                    {selectedAgreement.client_name || selectedAgreement.model_snapshot_name || 'Acuerdo Comercial'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsAddProductModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            {/* Search Product */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                                    1. Buscar Producto en Catálogo
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Escribe nombre o código contable del producto..."
+                                        value={addProductSearch}
+                                        onChange={(e) => handleSearchProductsToAdd(e.target.value)}
+                                        autoFocus
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.65rem 2rem 0.65rem 2.2rem',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.85rem',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                    {isSearchingProductsToAdd && (
+                                        <RefreshCw size={14} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.primary }} />
+                                    )}
+                                </div>
+
+                                {/* Results Dropdown / List */}
+                                {addProductResults.length > 0 && !selectedAddProduct && (
+                                    <div style={{
+                                        marginTop: '6px',
+                                        maxHeight: '180px',
+                                        overflowY: 'auto',
+                                        backgroundColor: 'white',
+                                        border: '1.5px solid #E2E8F0',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                                    }}>
+                                        {addProductResults.map(p => {
+                                            const alreadyInAgreement = agreementItems.some(it => it.product_id === p.id);
+                                            return (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => handleSelectProductToAdd(p)}
+                                                    style={{
+                                                        padding: '8px 12px',
+                                                        borderBottom: '1px solid #F1F5F9',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        backgroundColor: 'white',
+                                                        transition: 'background-color 0.1s'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                >
+                                                    <div>
+                                                        <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#0F172A' }}>
+                                                            {p.name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                            Cód: {p.accounting_id || 'S/C'} • U.M: {p.unit_of_measure || 'Kg'} • Costo Base: ${formatNumber(p.cost_basis || p.base_price || 0)}
+                                                        </div>
+                                                    </div>
+                                                    {alreadyInAgreement && (
+                                                        <span style={{ fontSize: '0.68rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                            En acuerdo
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Selected Product Card */}
+                            {selectedAddProduct && (
+                                <div style={{
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1.5px solid #CBD5E1',
+                                    borderRadius: '10px',
+                                    padding: '1rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.8rem'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px' }}>
+                                                PRODUCTO SELECCIONADO
+                                            </span>
+                                            <h4 style={{ margin: '4px 0 2px', fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>
+                                                {selectedAddProduct.name}
+                                            </h4>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                                Cód. Contable: <strong>{selectedAddProduct.accounting_id || 'S/C'}</strong> • U.M: <strong>{selectedAddProduct.unit_of_measure || 'Kg'}</strong>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedAddProduct(null)}
+                                            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', textDecoration: 'underline' }}
+                                        >
+                                            Cambiar
+                                        </button>
+                                    </div>
+
+                                    {/* Price & Margin Calculation Grid */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '4px' }}>
+                                        <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>Costo Base Referencia</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#334155', marginTop: '2px' }}>
+                                                ${formatNumber(selectedAddProduct.cost_basis || selectedAddProduct.base_price || 0)}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1.5px solid #0D7A57' }}>
+                                            <label style={{ display: 'block', fontSize: '0.72rem', color: THEME.colors.primary, fontWeight: '800' }}>
+                                                * Precio Acordado ($)
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                                                <span style={{ fontWeight: '800', color: '#64748B' }}>$</span>
+                                                <input
+                                                    type="number"
+                                                    step="any"
+                                                    placeholder="Ej: 4500"
+                                                    value={newProductPrice}
+                                                    onChange={(e) => setNewProductPrice(e.target.value)}
+                                                    autoFocus
+                                                    style={{
+                                                        width: '100%',
+                                                        border: 'none',
+                                                        outline: 'none',
+                                                        fontSize: '1.1rem',
+                                                        fontWeight: '900',
+                                                        color: '#0F172A'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Margin Live Indicator */}
+                                    {(() => {
+                                        const cost = Number(selectedAddProduct.cost_basis) || Number(selectedAddProduct.base_price) || 0;
+                                        const price = Number(newProductPrice) || 0;
+                                        if (price <= 0) return null;
+                                        const margin = Math.round(((price - cost) / price) * 1000) / 10;
+                                        const isNeg = margin < 0;
+                                        const isLow = margin >= 0 && margin < 10;
+                                        return (
+                                            <div style={{
+                                                padding: '6px 10px',
+                                                borderRadius: '6px',
+                                                backgroundColor: isNeg ? '#FEE2E2' : isLow ? '#FEF3C7' : '#DCFCE7',
+                                                color: isNeg ? '#991B1B' : isLow ? '#92400E' : '#166534',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center'
+                                            }}>
+                                                <span>Margen Estimado:</span>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: '900' }}>{margin}%</span>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            borderTop: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '10px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsAddProductModalOpen(false)}
                                 style={{
-                                    padding: '0.65rem 1.5rem',
-                                    borderRadius: THEME.radius.md,
-                                    border: `1px solid ${THEME.colors.borderActive}`,
+                                    padding: '0.6rem 1.2rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
                                     backgroundColor: 'white',
-                                    color: THEME.colors.textSecondary,
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    fontSize: '0.85rem'
+                                    color: '#475569',
+                                    fontWeight: '700',
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer'
                                 }}
                             >
-                                Cerrar Lista
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!selectedAddProduct || !newProductPrice || Number(newProductPrice) <= 0 || isSavingNewProduct}
+                                onClick={handleSaveProductToAgreement}
+                                style={{
+                                    padding: '0.6rem 1.4rem',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: (!selectedAddProduct || !newProductPrice || Number(newProductPrice) <= 0 || isSavingNewProduct) ? '#94A3B8' : THEME.colors.primary,
+                                    color: 'white',
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: (!selectedAddProduct || !newProductPrice || Number(newProductPrice) <= 0 || isSavingNewProduct) ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 6px rgba(13, 122, 87, 0.3)'
+                                }}
+                            >
+                                {isSavingNewProduct ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                                Guardar en Acuerdo
                             </button>
                         </div>
                     </div>
