@@ -356,19 +356,7 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
         }
     }
 
-    // 2.2 Fallback: Si no estaba en selected_options, inspeccionar variant_label
-    if (!foundPickingNote) {
-        const vl = item.variant_label || '';
-        if (vl) {
-            const match = vl.match(/\b(cero|grande|mediana|mediano|richy|peque[nñ]o|peque[nñ]a|mini|jumbo)\b/i);
-            if (match) {
-                const normalized = normalizePickingNote(match[1]);
-                if (normalized && !isRedundantAttribute(normalized, prodName) && !attributeParts.includes(normalized)) {
-                    attributeParts.push(normalized);
-                }
-            }
-        }
-    }
+
 
     // 3. Assemble
     const attrStr = attributeParts.join(', ');
