@@ -389,13 +389,14 @@ export default function PurchasesPrintPage() {
                         const sublistItems = groupedBySublist[sublistName] || [];
 
                         // Paginación dinámica ponderada por altura visual:
-                        // - Fila simple (sin variant_label): 1.0 unidad
-                        // - Fila con variant_label (tag de calibre, 2 líneas): 1.6 unidades
-                        // Hoja oficio útil tras encabezado+banner ≈ 257 mm → caben ~26 unidades.
-                        // Última página siempre reserva espacio extra para el tfoot + firmas (~3 u).
-                        const MAX_ROW_UNITS = 26;
-                        const FOOTER_RESERVE = 3; // unidades reservadas para tfoot + firmas en última página
-                        const sublistPages: PurchaseItem[][] = [];
+                        // - Fila simple (sin variant_label): 1.0 unidad (~6 mm por fila a 8.5pt)
+                        // - Fila con variant_label (tag de calibre, 2 líneas): 1.6 unidades (~9.6 mm)
+                        // Hoja oficio: 330 mm – márgenes (18 mm) – encabezado+banner (~55 mm) – pie (~15 mm)
+                        //   → área útil ≈ 242 mm → ~38 filas simples por página.
+                        // Última página reserva espacio para tfoot + firmas (~4 u).
+                        const MAX_ROW_UNITS = 38;
+                        const FOOTER_RESERVE = 4; // unidades reservadas para tfoot + firmas en última página
+                        const sublistPages: Array<{ items: PurchaseItem[]; usedUnits: number }> = [];
                         let currentPage: PurchaseItem[] = [];
                         let currentUnits = 0;
 
@@ -407,21 +408,21 @@ export default function PurchasesPrintPage() {
                                 : MAX_ROW_UNITS;
 
                             if (currentUnits + rowWeight > budgetForPage && currentPage.length > 0) {
-                                sublistPages.push(currentPage);
+                                sublistPages.push({ items: currentPage, usedUnits: currentUnits });
                                 currentPage = [];
                                 currentUnits = 0;
                             }
                             currentPage.push(item);
                             currentUnits += rowWeight;
                         });
-                        if (currentPage.length > 0) sublistPages.push(currentPage);
-                        if (sublistPages.length === 0) sublistPages.push([]);
+                        if (currentPage.length > 0) sublistPages.push({ items: currentPage, usedUnits: currentUnits });
+                        if (sublistPages.length === 0) sublistPages.push({ items: [], usedUnits: 0 });
 
                         const totalKilosNetos = sublistItems.reduce((s, it) => s + it.demanda_neta, 0);
                         const totalStockBodega = sublistItems.reduce((s, it) => s + it.stock_bodega, 0);
                         const totalAComprar = sublistItems.reduce((s, it) => s + it.con_merma, 0);
 
-                        return sublistPages.map((pageItems, pageIdx) => {
+                        return sublistPages.map(({ items: pageItems, usedUnits: pageUsedUnits }, pageIdx) => {
                             const isLastPage = pageIdx === sublistPages.length - 1;
                             const pageSubtitle = `NEGOCIACIÓN EN PLAZA · CENTRAL CORABASTOS${sublistPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${sublistPages.length}` : ''}`;
                             const planRef = `PLC-${selectedDate.replace(/-/g, '')}`;
@@ -475,7 +476,7 @@ export default function PurchasesPrintPage() {
                                         </thead>
                                         <tbody>
                                             {pageItems.map((it, itemIdx) => {
-                                                const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.length, 0);
+                                                const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.items.length, 0);
                                                 const globalIdx = prevPagesCount + itemIdx + 1;
                                                 const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
                                                 return (
