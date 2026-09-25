@@ -164,10 +164,21 @@ export default function ReceivingPrintPage() {
                 @media print {
                     @page {
                         size: ${paperFormat === 'oficio' ? 'legal portrait' : 'letter portrait'} !important;
-                        margin: 0.6cm 0.8cm !important;
+                        margin: 0.5cm 0.6cm !important;
                     }
                     body {
                         background-color: #FFFFFF !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                    .letterhead-container {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        min-height: calc(100vh - 4px) !important;
                     }
                     .no-print {
                         display: none !important;
@@ -246,8 +257,8 @@ export default function ReceivingPrintPage() {
                             onChange={(e) => setPaperFormat(e.target.value as any)}
                             style={{ border: 'none', background: 'transparent', fontSize: '0.76rem', fontWeight: '700', color: '#0F172A', outline: 'none', cursor: 'pointer' }}
                         >
-                            <option value="oficio">Oficio (Legal)</option>
                             <option value="letter">Carta (Letter)</option>
+                            <option value="oficio">Oficio (Legal)</option>
                         </select>
                     </div>
 
@@ -259,7 +270,7 @@ export default function ReceivingPrintPage() {
                                     title: `Control_Llegada_${selectedDate}`,
                                     paperSize: paperFormat,
                                     orientation: 'portrait',
-                                    margin: '0.6cm 0.8cm'
+                                    margin: '0.5cm 0.6cm'
                                 });
                             }
                         }}
@@ -302,15 +313,16 @@ export default function ReceivingPrintPage() {
                         return (
                             <div
                                 key={`page-${pageIdx}`}
-                                className="page-break"
+                                className="letterhead-container page-break"
                                 style={{
                                     backgroundColor: '#FFFFFF',
                                     color: '#000000',
                                     fontFamily: 'Arial, Helvetica, sans-serif',
-                                    width: paperFormat === 'oficio' ? '215.9mm' : '215.9mm',
+                                    width: '100%',
+                                    maxWidth: '215.9mm',
                                     minHeight: paperFormat === 'oficio' ? '330mm' : '279.4mm',
                                     margin: '0 auto',
-                                    padding: '0.6cm 0.8cm',
+                                    padding: '0.5cm 0.6cm',
                                     boxSizing: 'border-box',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -320,43 +332,44 @@ export default function ReceivingPrintPage() {
                                 }}
                             >
                                 {/* Header Section emulating INGRESO.pdf */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                        <div style={{ width: '90px' }}>
+                                <div style={{ width: '100%', boxSizing: 'border-box' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', width: '100%' }}>
+                                        <div style={{ width: '80px', flexShrink: 0 }}>
                                             <img
                                                 src="/images/frufresco-logo.png"
                                                 alt="FruFresco"
-                                                style={{ height: '32px', objectFit: 'contain' }}
+                                                style={{ height: '28px', objectFit: 'contain' }}
                                                 onError={(e) => {
-                                                    // Fallback si la imagen no carga
                                                     (e.target as HTMLElement).style.display = 'none';
                                                 }}
                                             />
                                         </div>
-                                        <div style={{ textAlign: 'center', flex: 1 }}>
-                                            <h2 style={{ margin: 0, fontSize: '11.5pt', fontWeight: '900', color: '#0D7A57', letterSpacing: '0.05em' }}>
+                                        <div style={{ textAlign: 'center', flex: 1, minWidth: 0, padding: '0 4px' }}>
+                                            <h2 style={{ margin: 0, fontSize: '11pt', fontWeight: '900', color: '#0D7A57', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
                                                 INVESTMENTS CORTES SAS
                                             </h2>
                                         </div>
-                                        <div style={{ width: '90px' }} />
+                                        <div style={{ width: '80px', flexShrink: 0 }} />
                                     </div>
 
                                     {/* Document Subtitle & Meta Bar */}
                                     <div style={{
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'baseline',
+                                        alignItems: 'center',
                                         borderBottom: '1.5px solid #000000',
                                         paddingBottom: '2px',
                                         marginBottom: '4px',
-                                        fontSize: '7pt',
+                                        fontSize: '6.8pt',
                                         fontWeight: 'bold',
-                                        color: '#000000'
+                                        color: '#000000',
+                                        width: '100%',
+                                        boxSizing: 'border-box'
                                     }}>
-                                        <div>
+                                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             CONTROL DE LLEGADA DE PRODUCTOS EN KG - FECHA {selectedDate}
                                         </div>
-                                        <div style={{ fontSize: '6.5pt', fontWeight: 'normal', color: '#334155' }}>
+                                        <div style={{ fontSize: '6.2pt', fontWeight: 'normal', color: '#334155', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                             GENERADO EL: {generatedAt}
                                         </div>
                                     </div>
