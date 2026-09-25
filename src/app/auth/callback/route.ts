@@ -2,13 +2,16 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
+import { isSafeRedirectPath } from '@/lib/authRecovery'
 
 export async function GET(request: Request) {
     const url = new URL(request.url)
     const rawHost = request.headers.get('x-forwarded-host')
     const rawProto = request.headers.get('x-forwarded-proto')
     const forwardedHost = rawHost ? rawHost.split(',')[0].trim() : null
-    const forwardedProto = rawProto ? rawProto.split(',')[0].trim() : 'https'
+    const defaultProto = url.protocol ? url.protocol.replace(':', '') : 'https'
+    const candidateProto = rawProto ? rawProto.split(',')[0].trim().toLowerCase() : defaultProto
+    const forwardedProto = (candidateProto === 'http' || candidateProto === 'https') ? candidateProto : defaultProto
     const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : url.origin
     const { searchParams } = url
 
@@ -16,7 +19,7 @@ export async function GET(request: Request) {
     const token_hash = searchParams.get('token_hash')
     const type = (searchParams.get('type') || 'recovery') as EmailOtpType
     const rawNext = searchParams.get('next') || '/login?mode=recovery'
-    const next = (rawNext.startsWith('/') && !rawNext.startsWith('//')) ? rawNext : '/login?mode=recovery'
+    const next = isSafeRedirectPath(rawNext) ? rawNext : '/login?mode=recovery'
     const errorParam = searchParams.get('error')
     const errorDescription = searchParams.get('error_description')
 
@@ -98,10 +101,19 @@ export async function GET(request: Request) {
             token_hash,
         })
 
-        // Fallback si type fue 'recovery' pero el enlace se generó con 'email'
+        // Fallback bidireccional si el enlace se generó con recovery/email intercambiados
         if (error && type === 'recovery') {
             const fallbackRes = await supabase.auth.verifyOtp({
                 type: 'email' as EmailOtpType,
+                token_hash,
+            })
+            if (!fallbackRes.error && (fallbackRes.data?.session || fallbackRes.data?.user)) {
+                data = fallbackRes.data
+                error = null
+            }
+        } else if (error && (type as string) === 'email') {
+            const fallbackRes = await supabase.auth.verifyOtp({
+                type: 'recovery' as EmailOtpType,
                 token_hash,
             })
             if (!fallbackRes.error && (fallbackRes.data?.session || fallbackRes.data?.user)) {
@@ -115,8 +127,9 @@ export async function GET(request: Request) {
             console.log('✅ Sesión canjeada con éxito en servidor vía token_hash para:', userEmail)
             return response
         } else if (error) {
-            console.error('❌ Error canjeando token_hash en servidor:', error.message)
-            return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`)
+            const errMsg = error?.message || 'Error al canjear el enlace de acceso'
+            console.error('❌ Error canjeando token_hash en servidor:', errMsg)
+            return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errMsg)}`)
         }
     }
 

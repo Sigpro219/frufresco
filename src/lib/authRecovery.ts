@@ -21,7 +21,7 @@ export function validateRecoveryInput(
     newPassword: string,
     confirmPassword: string
 ): RecoveryValidationResult {
-    const rawOtp = (otpCode || '').trim();
+    const rawOtp = String(otpCode ?? '').trim();
     if (/[^\d\s-]/.test(rawOtp)) {
         return {
             isValid: false,
@@ -30,8 +30,8 @@ export function validateRecoveryInput(
     }
 
     const cleanOtp = rawOtp.replace(/\D/g, '');
-    const cleanPassword = (newPassword || '').trim();
-    const cleanConfirm = (confirmPassword || '').trim();
+    const cleanPassword = String(newPassword ?? '').trim();
+    const cleanConfirm = String(confirmPassword ?? '').trim();
 
     if (cleanOtp.length !== 6) {
         return {
@@ -58,6 +58,22 @@ export function validateRecoveryInput(
 }
 
 /**
+ * Validates whether a redirect path is a safe relative path.
+ * Prevents open redirects, protocol manipulation, backslash normalization attacks and CRLF injection.
+ */
+export function isSafeRedirectPath(rawPath: string | null | undefined): boolean {
+    if (!rawPath || typeof rawPath !== 'string') return false;
+    return (
+        rawPath.startsWith('/') &&
+        !rawPath.startsWith('//') &&
+        !rawPath.includes('\\') &&
+        !rawPath.includes('\r') &&
+        !rawPath.includes('\n') &&
+        !rawPath.includes('://')
+    );
+}
+
+/**
  * Translates raw Supabase/auth errors into user-friendly, descriptive Spanish messages.
  */
 export function mapRecoveryErrorMessage(rawError: any): string {
@@ -66,21 +82,47 @@ export function mapRecoveryErrorMessage(rawError: any): string {
     const rawMsg = typeof rawError === 'string'
         ? rawError
         : (rawError.message || rawError.error_description || rawError.error || '');
-    const code = typeof rawError === 'object' ? (rawError.code || rawError.error_code || '') : '';
-    const lower = (rawMsg + ' ' + (code || '')).toLowerCase();
+    const code = typeof rawError === 'object' ? String(rawError.code || rawError.error_code || '') : '';
+    const status = typeof rawError === 'object' ? String(rawError.status || '') : '';
+    const lower = (rawMsg + ' ' + code + ' ' + status).toLowerCase();
 
-    if (lower.includes('expired') || code === 'otp_expired' || lower.includes('expirado') || lower.includes('invalid_link')) {
+    if (
+        lower.includes('expired') ||
+        code === 'otp_expired' ||
+        lower.includes('expirado') ||
+        lower.includes('invalid_link') ||
+        lower.includes('token expired')
+    ) {
         return '⚠️ El código de verificación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.';
     }
 
-    if (lower.includes('email_address_invalid') || lower.includes('invalid email') || lower.includes('email format')) {
+    if (
+        (lower.includes('email') && lower.includes('invalid')) ||
+        lower.includes('email_address_invalid') ||
+        lower.includes('invalid email') ||
+        lower.includes('email format') ||
+        lower.includes('formato de correo')
+    ) {
         return '⚠️ El formato de correo electrónico ingresado no es válido.';
     }
 
     if (
+        lower.includes('email not confirmed') ||
+        lower.includes('email_not_confirmed') ||
+        lower.includes('no confirmado')
+    ) {
+        return '⚠️ Tu correo electrónico no ha sido confirmado. Revisa tu bandeja de entrada.';
+    }
+
+    if (
         lower.includes('rate limit') ||
+        lower.includes('rate_limit') ||
         lower.includes('too many requests') ||
-        lower.includes('over_email_send_rate_limit')
+        lower.includes('too_many_requests') ||
+        lower.includes('over_email_send_rate_limit') ||
+        lower.includes('over_request_rate_limit') ||
+        code === '429' ||
+        status === '429'
     ) {
         return '⚠️ Has solicitado varios códigos recientemente o alcanzado el límite de intentos. Por favor espera unos minutos antes de reintentar.';
     }
@@ -88,6 +130,7 @@ export function mapRecoveryErrorMessage(rawError: any): string {
     if (
         lower.includes('session missing') ||
         lower.includes('session_missing') ||
+        lower.includes('session_not_found') ||
         lower.includes('pkce') ||
         lower.includes('not authenticated')
     ) {
@@ -104,12 +147,21 @@ export function mapRecoveryErrorMessage(rawError: any): string {
 
     if (
         lower.includes('user not found') ||
+        lower.includes('user_not_found') ||
         lower.includes('signups not allowed')
     ) {
         return '⚠️ No se encontró una cuenta asociada a este correo electrónico.';
     }
 
-    if (lower.includes('network') || lower.includes('fetch failed') || lower.includes('failed to fetch')) {
+    if (
+        lower.includes('network') ||
+        lower.includes('fetch failed') ||
+        lower.includes('failed to fetch') ||
+        lower.includes('networkerror') ||
+        lower.includes('econnrefused') ||
+        lower.includes('etimedout') ||
+        lower.includes('abort')
+    ) {
         return '⚠️ Error de conexión de red. Por favor verifica tu conexión a internet e intenta nuevamente.';
     }
 
@@ -122,7 +174,9 @@ export function mapRecoveryErrorMessage(rawError: any): string {
         return '⚠️ El código de 6 dígitos ingresado es incorrecto o inválido. Por favor verifica tu correo.';
     }
 
-    return rawMsg ? `⚠️ ${rawMsg}` : '⚠️ Error al procesar la solicitud.';
+    const cleanMsg = rawMsg.trim();
+    if (!cleanMsg) return '⚠️ Error al procesar la solicitud.';
+    return cleanMsg.startsWith('⚠️') ? cleanMsg : `⚠️ ${cleanMsg}`;
 }
 
 export interface PerformOtpPasswordResetParams {
@@ -153,11 +207,18 @@ export async function performOtpPasswordReset({
     newPassword,
     confirmPassword,
 }: PerformOtpPasswordResetParams): Promise<PerformOtpPasswordResetResult> {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanPassword = (newPassword || '').trim();
-    const cleanConfirm = (confirmPassword || '').trim();
+    if (!supabaseClient?.auth?.verifyOtp || !supabaseClient?.auth?.updateUser) {
+        return {
+            success: false,
+            error: '⚠️ Error de configuración: cliente de autenticación no disponible.',
+        };
+    }
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    const cleanEmail = String(email ?? '').trim().toLowerCase();
+    const cleanPassword = String(newPassword ?? '').trim();
+    const cleanConfirm = String(confirmPassword ?? '').trim();
+
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
         return {
             success: false,
             error: '⚠️ Por favor ingresa un correo electrónico válido.',
@@ -172,29 +233,30 @@ export async function performOtpPasswordReset({
         };
     }
 
-    const cleanOtp = (otpCode || '').trim().replace(/\D/g, '');
+    const cleanOtp = String(otpCode ?? '').trim().replace(/\D/g, '');
 
     try {
-        // 1. Verificar OTP con type: 'recovery' (con fallback a type: 'email')
+        // 1. Verificar OTP con type: 'recovery' (con fallback a type: 'email' si recovery falla)
         let verifyRes = await supabaseClient.auth.verifyOtp({
             email: cleanEmail,
             token: cleanOtp,
             type: 'recovery',
         });
 
-        if (verifyRes.error) {
-            console.warn('⚠️ verifyOtp con type: recovery falló, intentando fallback type: email...', verifyRes.error.message);
+        if (!verifyRes || verifyRes.error) {
+            console.warn('⚠️ verifyOtp con type: recovery falló, intentando fallback type: email...', verifyRes?.error?.message);
             const fallbackRes = await supabaseClient.auth.verifyOtp({
                 email: cleanEmail,
                 token: cleanOtp,
                 type: 'email',
             });
 
-            if (!fallbackRes.error && (fallbackRes.data?.session || fallbackRes.data?.user)) {
+            if (fallbackRes && !fallbackRes.error) {
                 console.log('✅ Fallback type: email verificado con éxito');
                 verifyRes = fallbackRes;
             } else {
-                throw verifyRes.error;
+                const finalErr = verifyRes?.error || fallbackRes?.error || new Error('No se pudo autenticar la sesión de recuperación con el código ingresado.');
+                throw finalErr;
             }
         }
 
@@ -207,7 +269,7 @@ export async function performOtpPasswordReset({
             throw updateError;
         }
 
-        let userId = verifyRes.data?.user?.id || verifyRes.data?.session?.user?.id || updateData?.user?.id;
+        let userId = verifyRes?.data?.user?.id || verifyRes?.data?.session?.user?.id || updateData?.user?.id;
         if (!userId && typeof supabaseClient?.auth?.getUser === 'function') {
             try {
                 const { data: userData } = await supabaseClient.auth.getUser();
@@ -216,7 +278,7 @@ export async function performOtpPasswordReset({
         }
 
         // 3. Limpiar needs_password_change en tabla profiles
-        if (userId) {
+        if (userId && typeof supabaseClient?.from === 'function') {
             try {
                 const { error: profErr } = await supabaseClient
                     .from('profiles')

@@ -4,6 +4,7 @@ import {
     validateRecoveryInput,
     mapRecoveryErrorMessage,
     performOtpPasswordReset,
+    isSafeRedirectPath,
 } from '../src/lib/authRecovery';
 
 test('validateRecoveryInput: validaciones estrictas de OTP de 6 dígitos y contraseña', () => {
@@ -463,3 +464,160 @@ test('mapRecoveryErrorMessage: soporta objetos con error_description y error_cod
         /formato de correo electrónico/i
     );
 });
+
+// =========================================================================
+// PRUEBAS ADVERSARIALES ROUND 3: SEGURIDAD, REDIRECTS, ERRORES DE RED Y CLIENTE
+// =========================================================================
+
+test('isSafeRedirectPath: mitiga vectores de open redirect, evasión de backslash y CRLF', () => {
+    // Rutas relativas válidas
+    assert.equal(isSafeRedirectPath('/dashboard'), true);
+    assert.equal(isSafeRedirectPath('/login?mode=recovery'), true);
+    assert.equal(isSafeRedirectPath('/perfil/editar?tab=seguridad'), true);
+
+    // Intentos de redirección abierta (Open Redirect)
+    assert.equal(isSafeRedirectPath('https://evil.com'), false);
+    assert.equal(isSafeRedirectPath('http://malicious.org/phish'), false);
+    assert.equal(isSafeRedirectPath('//evil.com'), false);
+    assert.equal(isSafeRedirectPath('///evil.com'), false);
+    assert.equal(isSafeRedirectPath('/\\evil.com'), false);
+    assert.equal(isSafeRedirectPath('/path\\evil.com'), false);
+    assert.equal(isSafeRedirectPath('javascript:alert(1)'), false);
+    assert.equal(isSafeRedirectPath('data:text/html,<script>alert(1)</script>'), false);
+
+    // CRLF Injection (inyección de cabeceras HTTP)
+    assert.equal(isSafeRedirectPath('/login\r\nLocation: https://evil.com'), false);
+    assert.equal(isSafeRedirectPath('/login\nSet-Cookie: session=pwned'), false);
+
+    // Entradas nulas, vacías o de tipo incorrecto
+    assert.equal(isSafeRedirectPath(''), false);
+    assert.equal(isSafeRedirectPath(null), false);
+    assert.equal(isSafeRedirectPath(undefined), false);
+    assert.equal(isSafeRedirectPath(123 as any), false);
+});
+
+test('mapRecoveryErrorMessage: traduce estados HTTP 429 y variedad de fallos de red', () => {
+    // HTTP status 429
+    assert.match(mapRecoveryErrorMessage({ status: 429 }), /límite de intentos|solicitado varios códigos/i);
+    assert.match(mapRecoveryErrorMessage({ status: '429' }), /límite de intentos|solicitado varios códigos/i);
+
+    // Variaciones de error de red
+    assert.match(mapRecoveryErrorMessage(new TypeError('fetch failed')), /conexión de red/i);
+    assert.match(mapRecoveryErrorMessage({ message: 'ECONNREFUSED' }), /conexión de red/i);
+    assert.match(mapRecoveryErrorMessage({ message: 'ETIMEDOUT' }), /conexión de red/i);
+    assert.match(mapRecoveryErrorMessage({ message: 'The user aborted a request.' }), /conexión de red/i);
+
+    // Mensaje de usuario que ya tiene emoji de advertencia (evita duplicación de emojis)
+    const formatted = mapRecoveryErrorMessage('⚠️ Clave no válida');
+    assert.equal(formatted, '⚠️ Clave no válida');
+});
+
+test('performOtpPasswordReset: maneja cliente Supabase no configurado o corrupto', async () => {
+    // Cliente nulo
+    const resNull = await performOtpPasswordReset({
+        supabaseClient: null,
+        email: 'test@frufresco.com',
+        otpCode: '123456',
+        newPassword: 'NuevaPassword1',
+        confirmPassword: 'NuevaPassword1',
+    });
+    assert.equal(resNull.success, false);
+    assert.match(resNull.error || '', /cliente de autenticación no disponible/i);
+
+    // Cliente sin métodos auth requeridos
+    const resCorrupt = await performOtpPasswordReset({
+        supabaseClient: { auth: {} },
+        email: 'test@frufresco.com',
+        otpCode: '123456',
+        newPassword: 'NuevaPassword1',
+        confirmPassword: 'NuevaPassword1',
+    });
+    assert.equal(resCorrupt.success, false);
+    assert.match(resCorrupt.error || '', /cliente de autenticación no disponible/i);
+});
+
+test('performOtpPasswordReset: maneja excepción de red lanzada por verifyOtp', async () => {
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => {
+                throw new TypeError('fetch failed');
+            },
+            updateUser: async () => ({ data: { user: null }, error: null }),
+        },
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'network-err@frufresco.com',
+        otpCode: '654321',
+        newPassword: 'ClaveNetwork1',
+        confirmPassword: 'ClaveNetwork1',
+    });
+
+    assert.equal(result.success, false);
+    assert.match(result.error || '', /conexión de red/i);
+});
+
+test('performOtpPasswordReset: procesa código OTP con guiones y correo con espacios y mayúsculas', async () => {
+    let capturedParams: any = null;
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async (params: any) => {
+                capturedParams = params;
+                return {
+                    data: { user: { id: 'usr-hyphen-clean' } },
+                    error: null,
+                };
+            },
+            updateUser: async () => ({
+                data: { user: { id: 'usr-hyphen-clean' } },
+                error: null,
+            }),
+        },
+        from: () => ({
+            update: () => ({
+                eq: async () => ({ error: null }),
+            }),
+        }),
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: '   USUARIO.LIMPIO@FRUFRESCO.COM   ',
+        otpCode: '  456-789  ',
+        newPassword: 'ClaveSegura2026',
+        confirmPassword: 'ClaveSegura2026',
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(capturedParams.email, 'usuario.limpio@frufresco.com');
+    assert.equal(capturedParams.token, '456789');
+});
+
+test('performOtpPasswordReset: tiene éxito incluso si el cliente carece de método .from() (auth-only)', async () => {
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => ({
+                data: { user: { id: 'usr-auth-only' } },
+                error: null,
+            }),
+            updateUser: async () => ({
+                data: { user: { id: 'usr-auth-only' } },
+                error: null,
+            }),
+        },
+        // from() NO existe en este cliente auth-only
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'authonly@frufresco.com',
+        otpCode: '123456',
+        newPassword: 'ClaveAuthOnly1',
+        confirmPassword: 'ClaveAuthOnly1',
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.userId, 'usr-auth-only');
+});
+
