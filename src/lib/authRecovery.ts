@@ -63,21 +63,18 @@ export function validateRecoveryInput(
 export function mapRecoveryErrorMessage(rawError: any): string {
     if (!rawError) return '⚠️ Ocurrió un error inesperado. Por favor intenta nuevamente.';
 
-    const rawMsg = typeof rawError === 'string' ? rawError : (rawError.message || '');
-    const code = typeof rawError === 'object' ? rawError.code : '';
+    const rawMsg = typeof rawError === 'string'
+        ? rawError
+        : (rawError.message || rawError.error_description || rawError.error || '');
+    const code = typeof rawError === 'object' ? (rawError.code || rawError.error_code || '') : '';
     const lower = (rawMsg + ' ' + (code || '')).toLowerCase();
 
     if (lower.includes('expired') || code === 'otp_expired' || lower.includes('expirado') || lower.includes('invalid_link')) {
         return '⚠️ El código de verificación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.';
     }
 
-    if (
-        lower.includes('invalid') ||
-        lower.includes('token is invalid') ||
-        lower.includes('token has expired or is invalid') ||
-        lower.includes('incorrecto')
-    ) {
-        return '⚠️ El código de 6 dígitos ingresado es incorrecto o inválido. Por favor verifica tu correo.';
+    if (lower.includes('email_address_invalid') || lower.includes('invalid email') || lower.includes('email format')) {
+        return '⚠️ El formato de correo electrónico ingresado no es válido.';
     }
 
     if (
@@ -116,8 +113,13 @@ export function mapRecoveryErrorMessage(rawError: any): string {
         return '⚠️ Error de conexión de red. Por favor verifica tu conexión a internet e intenta nuevamente.';
     }
 
-    if (lower.includes('email_address_invalid') || lower.includes('invalid email')) {
-        return '⚠️ El formato de correo electrónico ingresado no es válido.';
+    if (
+        lower.includes('invalid') ||
+        lower.includes('token is invalid') ||
+        lower.includes('token has expired or is invalid') ||
+        lower.includes('incorrecto')
+    ) {
+        return '⚠️ El código de 6 dígitos ingresado es incorrecto o inválido. Por favor verifica tu correo.';
     }
 
     return rawMsg ? `⚠️ ${rawMsg}` : '⚠️ Error al procesar la solicitud.';
@@ -152,23 +154,25 @@ export async function performOtpPasswordReset({
     confirmPassword,
 }: PerformOtpPasswordResetParams): Promise<PerformOtpPasswordResetResult> {
     const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanOtp = (otpCode || '').trim().replace(/\D/g, '');
     const cleanPassword = (newPassword || '').trim();
+    const cleanConfirm = (confirmPassword || '').trim();
 
-    if (!cleanEmail) {
+    if (!cleanEmail || !cleanEmail.includes('@')) {
         return {
             success: false,
-            error: '⚠️ Por favor ingresa tu correo electrónico.',
+            error: '⚠️ Por favor ingresa un correo electrónico válido.',
         };
     }
 
-    const validation = validateRecoveryInput(cleanOtp, cleanPassword, confirmPassword);
+    const validation = validateRecoveryInput(otpCode, cleanPassword, cleanConfirm);
     if (!validation.isValid) {
         return {
             success: false,
             error: validation.error,
         };
     }
+
+    const cleanOtp = (otpCode || '').trim().replace(/\D/g, '');
 
     try {
         // 1. Verificar OTP con type: 'recovery' (con fallback a type: 'email')
@@ -203,7 +207,13 @@ export async function performOtpPasswordReset({
             throw updateError;
         }
 
-        const userId = verifyRes.data?.user?.id || updateData?.user?.id;
+        let userId = verifyRes.data?.user?.id || verifyRes.data?.session?.user?.id || updateData?.user?.id;
+        if (!userId && typeof supabaseClient?.auth?.getUser === 'function') {
+            try {
+                const { data: userData } = await supabaseClient.auth.getUser();
+                userId = userData?.user?.id;
+            } catch (_) {}
+        }
 
         // 3. Limpiar needs_password_change en tabla profiles
         if (userId) {

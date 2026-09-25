@@ -310,3 +310,156 @@ test('performOtpPasswordReset: mantiene éxito de recuperación si profiles.upda
         console.warn = originalWarn;
     }
 });
+
+test('performOtpPasswordReset: rechaza código con caracteres alfanuméricos sin llamar a verifyOtp', async () => {
+    let verifyOtpCalled = false;
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => {
+                verifyOtpCalled = true;
+                return { data: { user: null }, error: null };
+            },
+            updateUser: async () => ({ data: { user: null }, error: null }),
+        },
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'test@frufresco.com',
+        otpCode: '123456a',
+        newPassword: 'NuevaPassword1',
+        confirmPassword: 'NuevaPassword1',
+    });
+
+    assert.equal(result.success, false);
+    assert.match(result.error || '', /solo debe contener números/i);
+    assert.equal(verifyOtpCalled, false, 'verifyOtp no debe ser invocado si el código contiene letras');
+});
+
+test('performOtpPasswordReset: valida formato de correo con arroba', async () => {
+    let verifyOtpCalled = false;
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => {
+                verifyOtpCalled = true;
+                return { data: { user: null }, error: null };
+            },
+            updateUser: async () => ({ data: { user: null }, error: null }),
+        },
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'correo_sin_arroba.com',
+        otpCode: '123456',
+        newPassword: 'NuevaPassword1',
+        confirmPassword: 'NuevaPassword1',
+    });
+
+    assert.equal(result.success, false);
+    assert.match(result.error || '', /correo electrónico válido/i);
+    assert.equal(verifyOtpCalled, false, 'verifyOtp no debe ser invocado si el correo no tiene formato válido');
+});
+
+test('performOtpPasswordReset: extrae userId desde session.user cuando data.user es nulo', async () => {
+    let profileUpdateId: string | null = null;
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => ({
+                data: {
+                    user: null,
+                    session: { access_token: 'jwt', user: { id: 'usr-nested-session' } },
+                },
+                error: null,
+            }),
+            updateUser: async () => ({
+                data: { user: null },
+                error: null,
+            }),
+        },
+        from: (table: string) => {
+            assert.equal(table, 'profiles');
+            return {
+                update: () => ({
+                    eq: async (_field: string, val: any) => {
+                        profileUpdateId = val;
+                        return { error: null };
+                    },
+                }),
+            };
+        },
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'nested@frufresco.com',
+        otpCode: '654321',
+        newPassword: 'ClaveNested123',
+        confirmPassword: 'ClaveNested123',
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.userId, 'usr-nested-session');
+    assert.equal(profileUpdateId, 'usr-nested-session');
+});
+
+test('performOtpPasswordReset: resuelve userId mediante fallback a getUser si ni verifyOtp ni updateUser lo entregan', async () => {
+    let getUserCalled = false;
+    let profileUpdateId: string | null = null;
+
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => ({
+                data: { user: null, session: null },
+                error: null,
+            }),
+            updateUser: async () => ({
+                data: { user: null },
+                error: null,
+            }),
+            getUser: async () => {
+                getUserCalled = true;
+                return {
+                    data: { user: { id: 'usr-from-get-user' } },
+                    error: null,
+                };
+            },
+        },
+        from: () => ({
+            update: () => ({
+                eq: async (_f: string, val: any) => {
+                    profileUpdateId = val;
+                    return { error: null };
+                },
+            }),
+        }),
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'fallback-getuser@frufresco.com',
+        otpCode: '999888',
+        newPassword: 'ClaveGetUser1',
+        confirmPassword: 'ClaveGetUser1',
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(getUserCalled, true);
+    assert.equal(result.userId, 'usr-from-get-user');
+    assert.equal(profileUpdateId, 'usr-from-get-user');
+});
+
+test('mapRecoveryErrorMessage: soporta objetos con error_description y error_code', () => {
+    assert.match(
+        mapRecoveryErrorMessage({ error_description: 'Token has expired or is invalid' }),
+        /expirado/i
+    );
+    assert.match(
+        mapRecoveryErrorMessage({ error_code: 'otp_expired' }),
+        /expirado/i
+    );
+    assert.match(
+        mapRecoveryErrorMessage({ error: 'invalid email format' }),
+        /formato de correo electrónico/i
+    );
+});

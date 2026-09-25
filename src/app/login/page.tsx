@@ -37,6 +37,7 @@ export default function LoginPage() {
     const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(false);
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotError, setForgotError] = useState('');
+    const [forgotSuccess, setForgotSuccess] = useState('');
     const [resendCooldown, setResendCooldown] = useState(0);
 
     // Temporizador de enfriamiento para reenvío de OTP
@@ -261,10 +262,17 @@ export default function LoginPage() {
         e.preventDefault();
         setForgotLoading(true);
         setForgotError('');
+        setForgotSuccess('');
 
         const cleanEmail = forgotEmail.trim().toLowerCase();
         if (!cleanEmail) {
             setForgotError('⚠️ Por favor ingresa tu correo electrónico.');
+            setForgotLoading(false);
+            return;
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            setForgotError('⚠️ Por favor ingresa un correo electrónico válido.');
             setForgotLoading(false);
             return;
         }
@@ -302,10 +310,17 @@ export default function LoginPage() {
         if (resendCooldown > 0 || forgotLoading) return;
         setForgotLoading(true);
         setForgotError('');
+        setForgotSuccess('');
 
         const cleanEmail = forgotEmail.trim().toLowerCase();
         if (!cleanEmail) {
             setForgotError('⚠️ Por favor ingresa tu correo electrónico.');
+            setForgotLoading(false);
+            return;
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            setForgotError('⚠️ Por favor ingresa un correo electrónico válido.');
             setForgotLoading(false);
             return;
         }
@@ -329,6 +344,7 @@ export default function LoginPage() {
             if (resetError) throw resetError;
 
             setResendCooldown(60);
+            setForgotSuccess('✅ Se ha enviado un nuevo código de 6 dígitos a tu correo.');
         } catch (err: any) {
             console.error('❌ Error al reenviar código OTP:', err);
             setForgotError(mapRecoveryErrorMessage(err));
@@ -341,6 +357,7 @@ export default function LoginPage() {
         e.preventDefault();
         setForgotLoading(true);
         setForgotError('');
+        setForgotSuccess('');
 
         try {
             const result = await performOtpPasswordReset({
@@ -715,6 +732,21 @@ export default function LoginPage() {
                                         </div>
 
                                         <form onSubmit={handleVerifyOtpAndResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                                            {forgotSuccess && (
+                                                <div style={{ 
+                                                    padding: '0.9rem', 
+                                                    backgroundColor: 'rgba(16, 185, 129, 0.15)', 
+                                                    color: '#34d399', 
+                                                    borderRadius: '14px', 
+                                                    fontSize: '0.88rem', 
+                                                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                                                    fontWeight: '600',
+                                                    textAlign: 'center'
+                                                }}>
+                                                    {forgotSuccess}
+                                                </div>
+                                            )}
+
                                             {forgotError && (
                                                 <div style={{ 
                                                     padding: '0.9rem', 
@@ -745,6 +777,7 @@ export default function LoginPage() {
                                                         onChange={(e) => {
                                                             setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
                                                             if (forgotError) setForgotError('');
+                                                            if (forgotSuccess) setForgotSuccess('');
                                                         }}
                                                         placeholder="••••••"
                                                         style={{ 
@@ -1073,9 +1106,14 @@ export default function LoginPage() {
                                                             setForgotError('⚠️ Ingresa primero tu correo electrónico para verificar el código.');
                                                             return;
                                                         }
+                                                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+                                                            setForgotError('⚠️ Por favor ingresa un correo electrónico válido.');
+                                                            return;
+                                                        }
                                                         setForgotEmail(cleanEmail);
                                                         setRecoveryStep('otp');
                                                         setForgotError('');
+                                                        setForgotSuccess('');
                                                     }}
                                                     style={{
                                                         background: 'transparent',
@@ -1413,6 +1451,7 @@ export default function LoginPage() {
                                                     setRecoveryPassword('');
                                                     setRecoveryConfirmPassword('');
                                                     setForgotError('');
+                                                    setForgotSuccess('');
                                                     setError('');
                                                 }}
                                                 style={{
