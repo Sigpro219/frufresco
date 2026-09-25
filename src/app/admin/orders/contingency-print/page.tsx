@@ -1056,7 +1056,6 @@ export default function ContingencyPrintPage() {
                             title={`${remissionPrefix} #${orderNum}`}
                             subtitle={`CLIENTE: ${clientName.toUpperCase()}`}
                             date={order.delivery_date}
-                            reference={`ORDEN: ${orderNum}`}
                             badge={copyInfo.copyType}
                             badgeVariant={copyInfo.isCopy ? 'light' : 'dark'}
                             espacioNum={espacioNum}
