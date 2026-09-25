@@ -4689,11 +4689,31 @@ function CreateOrderContent() {
         return map;
     }, [clients]);
 
-    const normalizeClientSearchText = (str: string) => (str || '')
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim();
+    const normalizeClientSearchText = (val: any): string => {
+        if (!val && val !== 0) return '';
+        if (typeof val === 'string') {
+            return val
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim();
+        }
+        if (Array.isArray(val)) {
+            return val.map(item => normalizeClientSearchText(item)).filter(Boolean).join(' ');
+        }
+        if (typeof val === 'object') {
+            try {
+                return Object.values(val).map(item => normalizeClientSearchText(item)).filter(Boolean).join(' ');
+            } catch (e) {
+                return '';
+            }
+        }
+        return String(val)
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+    };
 
     const evaluateDeliveryRestriction = (client: any, deliveryDateStr: string) => {
         if (!client || !deliveryDateStr) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
