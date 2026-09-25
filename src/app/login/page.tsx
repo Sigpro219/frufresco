@@ -55,28 +55,12 @@ export default function LoginPage() {
                 }
             }
 
-            // 1. Manejar PKCE code exchange (?code=xxxx)
+            // 1. Manejar PKCE code exchange (?code=xxxx) enviándolo al servidor para canje con @supabase/ssr
             const code = params.get('code');
             if (code) {
-                try {
-                    console.log('🔄 Canjeando código PKCE por sesión activa de recuperación...');
-                    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-                    if (exchangeError) {
-                        console.warn('⚠️ Error al canjear código de sesión:', exchangeError.message);
-                        if (exchangeError.message.toLowerCase().includes('expired') || exchangeError.message.toLowerCase().includes('invalid')) {
-                            setError('⚠️ El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
-                        } else {
-                            setError(`⚠️ ${exchangeError.message}`);
-                        }
-                    } else if (data.session) {
-                        console.log('✅ Sesión establecida exitosamente vía PKCE code para:', data.session.user.email);
-                        setIsRecoveryMode(true);
-                        setShowForceChangePassword(true);
-                        return;
-                    }
-                } catch (e: any) {
-                    console.error('Error exchanging code for session:', e);
-                }
+                console.log('🔄 Redirigiendo código PKCE al manejador de servidor /auth/callback...');
+                window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent('/login?mode=recovery')}`);
+                return;
             }
 
             // 2. Manejar Implicit flow tokens en hash (#access_token=...&refresh_token=...)
