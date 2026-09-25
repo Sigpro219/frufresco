@@ -1243,18 +1243,20 @@ export default function ContingencyPrintPage() {
                                                     <div>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', gap: '6px', flexWrap: 'wrap' }}>
                                                             <div style={{ fontWeight: 'bold', color: '#0F172A', fontSize: '7pt' }}>Control de Canastillas Plásticas:</div>
-                                                            <div style={{
-                                                                fontSize: '6.5pt',
-                                                                color: '#0369A1',
-                                                                fontWeight: '700',
-                                                                backgroundColor: '#F0F9FF',
-                                                                border: '1px solid #BAE6FD',
-                                                                borderRadius: '3px',
-                                                                padding: '1px 6px',
-                                                                whiteSpace: 'nowrap'
-                                                            }}>
-                                                                Tienes en este momento <strong style={{ color: '#0284C7', fontSize: '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
-                                                            </div>
+                                                            {crateBalance > 0 && (
+                                                                <div style={{
+                                                                    fontSize: '6.5pt',
+                                                                    color: '#0369A1',
+                                                                    fontWeight: '700',
+                                                                    backgroundColor: '#F0F9FF',
+                                                                    border: '1px solid #BAE6FD',
+                                                                    borderRadius: '3px',
+                                                                    padding: '1px 6px',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}>
+                                                                    Tienes en este momento <strong style={{ color: '#0284C7', fontSize: '7.2pt' }}>{crateBalance}</strong> canastillas de FruFresco
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div style={{ display: 'flex', gap: '12px', border: '1px dashed #94A3B8', padding: '3px 8px', borderRadius: '4px', backgroundColor: '#F8FAFC' }}>
                                                             <div>Entregadas: <strong style={{ fontSize: '7.6pt', color: '#0F172A' }}>[ _____ ]</strong></div>
@@ -1282,8 +1284,8 @@ export default function ContingencyPrintPage() {
                                                 </div>
                                             </div>
 
-                                            {/* Signatures Block Compact */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', border: '1px solid #CBD5E1', padding: '4px 8px', borderRadius: '4px', fontSize: '6.6pt' }}>
+                                            {/* Signatures Block Compact at Bottom */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', border: '1px solid #CBD5E1', padding: '4px 8px', borderRadius: '4px', fontSize: '6.6pt', marginTop: 'auto' }}>
                                                 <div>
                                                     <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '2px', fontSize: '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
                                                     <div style={{ marginTop: '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
