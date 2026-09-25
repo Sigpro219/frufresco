@@ -453,13 +453,13 @@ export default function ContingencyPrintPage() {
                 const accountingId = item.products?.accounting_id;
                 const unit = item.unit || item.products?.unit_of_measure || 'Kg';
                 const qty = Number(item.quantity || 0);
-                const variant = item.variant_label ? (formatStructuredSpecification({
+                const variant = formatStructuredSpecification({
                     quantity: item.quantity,
                     unit: item.unit || item.products?.unit_of_measure,
                     variant_label: item.variant_label,
-                    nickname: item.nickname,
-                    selected_options: item.selected_options
-                }) || cleanPhysicalInstruction(item.variant_label)) : '';
+                    selected_options: item.selected_options,
+                    productName: prodName
+                }) || '';
 
                 const key = `${prodName}_${variant}_${unit}`.toLowerCase();
                 if (!map.has(key)) {
@@ -970,7 +970,7 @@ export default function ContingencyPrintPage() {
                                 </thead>
                                 <tbody>
                                     {(order.order_items || []).map((itm, itmIdx) => {
-                                        const pName = itm.nickname || itm.products?.name || 'Producto';
+                                        const pName = itm.products?.name || itm.nickname || 'Producto';
                                         const accountingId = itm.products?.accounting_id;
                                         const unit = itm.unit || itm.products?.unit_of_measure || 'Kg';
                                         return (
@@ -988,9 +988,9 @@ export default function ContingencyPrintPage() {
                                                             quantity: itm.quantity,
                                                             unit: itm.unit || itm.products?.unit_of_measure,
                                                             variant_label: itm.variant_label,
-                                                            nickname: itm.nickname,
-                                                            selected_options: itm.selected_options
-                                                        }) || cleanPhysicalInstruction(itm.variant_label);
+                                                            selected_options: itm.selected_options,
+                                                            productName: pName
+                                                        });
                                                         if (!spec) return null;
                                                         return <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: 600 }}>{spec}</div>;
                                                     })()}
@@ -1111,7 +1111,7 @@ export default function ContingencyPrintPage() {
                                 </thead>
                                 <tbody>
                                     {(order.order_items || []).map((itm, idx) => {
-                                        const pName = itm.nickname || itm.products?.name || 'Producto';
+                                        const pName = itm.products?.name || itm.nickname || 'Producto';
                                         const accountingId = itm.products?.accounting_id;
                                         const unit = itm.unit || itm.products?.unit_of_measure || 'KG';
                                         const qty = Number(itm.quantity || 0);
@@ -1144,9 +1144,9 @@ export default function ContingencyPrintPage() {
                                                             quantity: itm.quantity,
                                                             unit: itm.unit || itm.products?.unit_of_measure,
                                                             variant_label: itm.variant_label,
-                                                            nickname: itm.nickname,
-                                                            selected_options: itm.selected_options
-                                                        }) || cleanPhysicalInstruction(itm.variant_label);
+                                                            selected_options: itm.selected_options,
+                                                            productName: pName
+                                                        });
                                                         if (!spec) return null;
                                                         return (
                                                             <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>

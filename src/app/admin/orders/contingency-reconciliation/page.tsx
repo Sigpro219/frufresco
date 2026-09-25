@@ -166,7 +166,7 @@ export default function ContingencyReconciliationPage() {
     const selectOrder = (order: OrderRecord) => {
         setSelectedOrderId(order.id);
         const rows: OrderItemRow[] = (order.order_items || []).map((it: any) => {
-            const pName = it.nickname || it.products?.name || 'Producto';
+            const pName = it.products?.name || it.nickname || 'Producto';
             const sku = it.products?.sku || '';
             const unit = it.unit || it.products?.unit_of_measure || 'KG';
             const qty = Number(it.quantity) || 0;

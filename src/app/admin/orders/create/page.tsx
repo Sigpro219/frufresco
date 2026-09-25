@@ -4156,6 +4156,20 @@ function CreateOrderContent() {
             return showToast('Si activas entrega manual, debes especificar la Hora.');
         }
 
+        // Validación Poka-Yoke de Días Permitidos de Entrega
+        if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
+            const confirmException = window.confirm(
+                `⚠️ ALERTA LOGÍSTICA DE ENTREGA:\n\n` +
+                `Esta sede (${selectedClientDetails.company_name}) solo recibe despachos los días:\n` +
+                `👉 ${deliveryRestrictionStatus.allowedDaysNames}${deliveryRestrictionStatus.timeWindow}\n\n` +
+                `Fecha seleccionada: ${deliveryDate.split('T')[0]} (${deliveryRestrictionStatus.targetDayName}).\n\n` +
+                `¿Deseas autorizar EXCEPCIONALMENTE este despacho fuera de los días habituales?`
+            );
+            if (!confirmException) {
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             // Upload document to order-attachments bucket if present
@@ -4188,6 +4202,10 @@ function CreateOrderContent() {
             let finalProfileId = clientType === 'B2B' ? selectedClient : (b2cMode === 'search' ? selectedClientB2C : null);
             let finalAdminNotes = adminNotes;
             
+            if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
+                finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.targetDayName})]\n${finalAdminNotes}`.trim();
+            }
+
             // Append Payment Method to Admin Notes if B2C
             if (clientType === 'B2C') {
                 const methodLabel = paymentMethod === 'contra_entrega' ? 'Contra Entrega' 
@@ -4572,58 +4590,144 @@ function CreateOrderContent() {
         return map;
     }, [clients]);
 
-    const filteredClients = useMemo(() => {
-        if (clientSearch.length < 2) return [];
-        const query = clientSearch.toLowerCase().trim();
+    const normalizeClientSearchText = (str: string) => (str || '')
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
 
-        // 1. Identify which Parent Matrices match the search query (e.g. "CLUB DEL COMERCIO DE BOGOTA", "COLSUBSIDIO")
+    const evaluateDeliveryRestriction = (client: any, deliveryDateStr: string) => {
+        if (!client || !deliveryDateStr) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
+
+        const dateOnly = deliveryDateStr.split('T')[0];
+        const parts = dateOnly.split('-');
+        if (parts.length !== 3) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
+
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const targetDate = new Date(year, month, day);
+
+        const jsDay = targetDate.getDay();
+        const isoDay = jsDay === 0 ? 7 : jsDay;
+
+        const DAY_NAMES: Record<number, string> = {
+            1: 'Lunes',
+            2: 'Martes',
+            3: 'Miércoles',
+            4: 'Jueves',
+            5: 'Viernes',
+            6: 'Sábado',
+            7: 'Domingo'
+        };
+
+        const targetDayName = DAY_NAMES[isoDay] || 'Día';
+        const logisticsData = client.logistics_data;
+        if (!logisticsData) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName };
+
+        let allowedIsoDays: number[] = [];
+        if (Array.isArray(logisticsData.allowed_days) && logisticsData.allowed_days.length > 0) {
+            allowedIsoDays = logisticsData.allowed_days;
+        } else if (Array.isArray(logisticsData.days) && logisticsData.days.length > 0) {
+            allowedIsoDays = logisticsData.days.map((d: number) => d === 0 ? 7 : d);
+        }
+
+        if (allowedIsoDays.length > 0 && !allowedIsoDays.includes(isoDay)) {
+            const allowedDaysNames = allowedIsoDays.sort().map(d => DAY_NAMES[d] || `Día ${d}`).join(', ');
+            const timeWindow = (logisticsData.start_time && logisticsData.end_time) ? ` (${logisticsData.start_time} - ${logisticsData.end_time})` : '';
+            return {
+                isValid: false,
+                isDayViolation: true,
+                targetDayName,
+                allowedDaysNames,
+                timeWindow,
+                message: `Esta sede solo recibe entregas los ${allowedDaysNames}${timeWindow}. La fecha seleccionada corresponde a un ${targetDayName}.`
+            };
+        }
+
+        return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName };
+    };
+
+    const filteredClients = useMemo(() => {
+        if (!clientSearch || clientSearch.trim().length < 2) return [];
+        const cleanQuery = normalizeClientSearchText(clientSearch);
+        const queryTokens = cleanQuery.split(/\s+/).filter(Boolean);
+
+        // 1. Identificar matrices que coincidan con la búsqueda
         const matchedParentMatrixIds = new Set<string>();
         clients.forEach(c => {
             if (parentMatrixIds.has(c.id)) {
-                const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
-                const nitMatch = (c.nit?.toString() || '').includes(query);
-                if (nameMatch || nitMatch) {
+                const normName = normalizeClientSearchText(c.company_name);
+                const normNit = normalizeClientSearchText(c.nit?.toString() || '');
+                const matchesTokens = queryTokens.every(t => normName.includes(t) || normNit.includes(t));
+                if (matchesTokens || normName.includes(cleanQuery) || normNit.includes(cleanQuery)) {
                     matchedParentMatrixIds.add(c.id);
                 }
             }
         });
 
-        // 2. Filter out pure Casa Matriz (profiles that have child branches and are not deliverable points)
+        // 2. Filtrar clientes entregables (excluir matrices corporativas puras)
         const deliverableClients = clients.filter(c => !parentMatrixIds.has(c.id));
-
-        // Group A: Direct Sucursales belonging to the searched matrix (MUST show [Sucursal] badge and appear at top)
-        const directSearchedBranches: any[] = [];
-        // Group B: Other matching deliverable clients (independent companies or branches of other matrices) -> NO badge
-        const otherMatches: any[] = [];
+        const scoredResults: { client: any; score: number }[] = [];
 
         deliverableClients.forEach(c => {
+            const parentMatrix = c.parent_id ? matrixClientsMap.get(c.parent_id) : null;
             const isDirectBranch = Boolean(c.parent_id && matchedParentMatrixIds.has(c.parent_id));
 
-            const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
-            const nitMatch = (c.nit?.toString() || '').includes(query);
-            const contactMatch = (c.contact_name?.toLowerCase() || '').includes(query);
-            const addressMatch = (c.address?.toLowerCase() || '').includes(query);
-            const phoneMatch = (c.contact_phone?.toString() || '').includes(query);
+            const normName = normalizeClientSearchText(c.company_name);
+            const normParentName = normalizeClientSearchText(parentMatrix?.company_name || '');
+            const normNit = normalizeClientSearchText(c.nit?.toString() || '');
+            const normContact = normalizeClientSearchText(c.contact_name);
+            const normAddress = normalizeClientSearchText(c.address);
+            const normPhone = normalizeClientSearchText(c.contact_phone?.toString() || c.phone?.toString() || '');
+            const normCity = normalizeClientSearchText(c.city || c.municipality || '');
+            const normEmail = normalizeClientSearchText(c.email);
+            const normRestrictions = normalizeClientSearchText(c.delivery_restrictions || '');
 
-            if (isDirectBranch) {
-                directSearchedBranches.push({ ...c, isDirectSearchedBranch: true });
-            } else if (nameMatch || nitMatch || contactMatch || addressMatch || phoneMatch) {
-                otherMatches.push({ ...c, isDirectSearchedBranch: false });
+            const combinedSearchBag = `${normName} ${normParentName} ${normNit} ${normContact} ${normAddress} ${normPhone} ${normCity} ${normEmail} ${normRestrictions}`;
+
+            const allTokensMatch = queryTokens.length > 0 && queryTokens.every(tok => combinedSearchBag.includes(tok));
+            const exactSubstringMatch = combinedSearchBag.includes(cleanQuery);
+
+            if (!allTokensMatch && !exactSubstringMatch && !isDirectBranch) {
+                return;
             }
+
+            let score = 0;
+
+            if (normNit && cleanQuery === normNit) score += 10000;
+            if (normPhone && cleanQuery === normPhone) score += 9000;
+            if (normName === cleanQuery) score += 8000;
+            if (normName.startsWith(cleanQuery)) score += 4000;
+            if (isDirectBranch) score += 3000;
+
+            const tokensInName = queryTokens.filter(t => normName.includes(t)).length;
+            score += tokensInName * 500;
+
+            if (exactSubstringMatch) score += 1000;
+            if (allTokensMatch) score += 800;
+
+            scoredResults.push({
+                client: { ...c, isDirectSearchedBranch: isDirectBranch },
+                score
+            });
         });
 
-        // Sort direct branches alphabetically
-        directSearchedBranches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
+        scoredResults.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return (a.client.company_name || '').localeCompare(b.client.company_name || '', 'es', { sensitivity: 'base' });
+        });
 
-        // Sort other matches alphabetically
-        otherMatches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
-
-        return [...directSearchedBranches, ...otherMatches].slice(0, 10);
-    }, [clients, clientSearch, parentMatrixIds]);
+        return scoredResults.map(r => r.client).slice(0, 15);
+    }, [clients, clientSearch, parentMatrixIds, matrixClientsMap]);
 
     const selectedClientDetails = useMemo(() => {
         return clients.find(c => c.id === selectedClient);
     }, [clients, selectedClient]);
+
+    const deliveryRestrictionStatus = useMemo(() => {
+        return evaluateDeliveryRestriction(selectedClientDetails, deliveryDate);
+    }, [selectedClientDetails, deliveryDate]);
 
     const getSelectedClientDetails = () => selectedClientDetails;
 
@@ -4874,6 +4978,30 @@ function CreateOrderContent() {
                                                     <span>Buscar Otra Empresa</span>
                                                 </button>
                                             </div>
+
+                                            {/* ALERTA REACTIVA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA */}
+                                            {!deliveryRestrictionStatus.isValid && (
+                                                <div style={{
+                                                    padding: '0.65rem 0.95rem',
+                                                    backgroundColor: '#FEF2F2',
+                                                    border: '1.5px solid #FCA5A5',
+                                                    borderRadius: '8px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '10px',
+                                                    color: '#991B1B',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: '700'
+                                                }}>
+                                                    <AlertTriangle size={18} style={{ color: '#DC2626', flexShrink: 0 }} />
+                                                    <div>
+                                                        <span style={{ fontWeight: '900', color: '#991B1B' }}>⚠️ Restricción Logística de Entrega: </span>
+                                                        <span style={{ fontWeight: '600', color: '#7F1D1D' }}>
+                                                            {deliveryRestrictionStatus.message}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* BUSCADOR INTERACTIVO DE OTRAS SEDES DE LA MISMA EMPRESA */}
                                             {siblingBranches.length > 0 && (

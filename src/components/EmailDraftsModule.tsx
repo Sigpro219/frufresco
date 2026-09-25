@@ -919,39 +919,74 @@ const ClientSearchCombobox = React.memo(function ClientSearchCombobox({
     if (!query || query.trim().length < 2) {
       return profiles.filter(c => !parentMatrixIds.has(c.id)).slice(0, 15);
     }
-    const q = query.toLowerCase().trim();
+    const cleanQuery = (query || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const queryTokens = cleanQuery.split(/\s+/).filter(Boolean);
 
     const matchedParentMatrixIds = new Set<string>();
     profiles.forEach(c => {
       if (parentMatrixIds.has(c.id)) {
-        const nameMatch = (c.company_name?.toLowerCase() || '').includes(q);
-        const nitMatch = (c.nit?.toString() || '').includes(q);
-        if (nameMatch || nitMatch) matchedParentMatrixIds.add(c.id);
+        const normName = (c.company_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const normNit = (c.nit?.toString() || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const matchesTokens = queryTokens.every(t => normName.includes(t) || normNit.includes(t));
+        if (matchesTokens || normName.includes(cleanQuery) || normNit.includes(cleanQuery)) {
+          matchedParentMatrixIds.add(c.id);
+        }
       }
     });
 
     const deliverableClients = profiles.filter(c => !parentMatrixIds.has(c.id));
-
-    const groupA: any[] = [];
-    const groupB: any[] = [];
+    const scoredResults: { client: any; score: number }[] = [];
 
     deliverableClients.forEach(c => {
-      const isDirectMatch = (c.company_name?.toLowerCase() || '').includes(q) ||
-                            (c.contact_name?.toLowerCase() || '').includes(q) ||
-                            (c.nit?.toString() || '').includes(q) ||
-                            (c.address?.toLowerCase() || '').includes(q) ||
-                            (c.phone?.toString() || '').includes(q) ||
-                            (c.contact_phone?.toString() || '').includes(q);
+      const parentMatrix = c.parent_id ? matrixClientsMap.get(c.parent_id) : null;
+      const isDirectBranch = Boolean(c.parent_id && matchedParentMatrixIds.has(c.parent_id));
 
-      if (c.parent_id && matchedParentMatrixIds.has(c.parent_id)) {
-        groupA.push({ ...c, isDirectSearchedBranch: isDirectMatch });
-      } else if (isDirectMatch) {
-        groupB.push(c);
+      const normName = (c.company_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normParentName = (parentMatrix?.company_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normNit = (c.nit?.toString() || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normContact = (c.contact_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normAddress = (c.address || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normPhone = (c.contact_phone?.toString() || c.phone?.toString() || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normCity = (c.city || c.municipality || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normEmail = (c.email || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normRestrictions = (c.delivery_restrictions || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+      const combinedSearchBag = `${normName} ${normParentName} ${normNit} ${normContact} ${normAddress} ${normPhone} ${normCity} ${normEmail} ${normRestrictions}`;
+
+      const allTokensMatch = queryTokens.length > 0 && queryTokens.every(tok => combinedSearchBag.includes(tok));
+      const exactSubstringMatch = combinedSearchBag.includes(cleanQuery);
+
+      if (!allTokensMatch && !exactSubstringMatch && !isDirectBranch) {
+        return;
       }
+
+      let score = 0;
+
+      if (normNit && cleanQuery === normNit) score += 10000;
+      if (normPhone && cleanQuery === normPhone) score += 9000;
+      if (normName === cleanQuery) score += 8000;
+      if (normName.startsWith(cleanQuery)) score += 4000;
+      if (isDirectBranch) score += 3000;
+
+      const tokensInName = queryTokens.filter(t => normName.includes(t)).length;
+      score += tokensInName * 500;
+
+      if (exactSubstringMatch) score += 1000;
+      if (allTokensMatch) score += 800;
+
+      scoredResults.push({
+        client: { ...c, isDirectSearchedBranch: isDirectBranch },
+        score
+      });
     });
 
-    return [...groupA, ...groupB].slice(0, 25);
-  }, [profiles, query, parentMatrixIds]);
+    scoredResults.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (a.client.company_name || '').localeCompare(b.client.company_name || '', 'es', { sensitivity: 'base' });
+    });
+
+    return scoredResults.map(r => r.client).slice(0, 25);
+  }, [profiles, query, parentMatrixIds, matrixClientsMap]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (filteredClients.length === 0) {
@@ -1776,6 +1811,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
     return map;
   }, [profiles]);
+
+  const evaluateDeliveryRestriction = (client: any, deliveryDateStr: string) => {
+    if (!client || !deliveryDateStr) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
+
+    const dateOnly = deliveryDateStr.split('T')[0];
+    const parts = dateOnly.split('-');
+    if (parts.length !== 3) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName: '' };
+
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const targetDate = new Date(year, month, day);
+
+    const jsDay = targetDate.getDay();
+    const isoDay = jsDay === 0 ? 7 : jsDay;
+
+    const DAY_NAMES: Record<number, string> = {
+      1: 'Lunes',
+      2: 'Martes',
+      3: 'Miércoles',
+      4: 'Jueves',
+      5: 'Viernes',
+      6: 'Sábado',
+      7: 'Domingo'
+    };
+
+    const targetDayName = DAY_NAMES[isoDay] || 'Día';
+    const logisticsData = client.logistics_data;
+    if (!logisticsData) return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName };
+
+    let allowedIsoDays: number[] = [];
+    if (Array.isArray(logisticsData.allowed_days) && logisticsData.allowed_days.length > 0) {
+      allowedIsoDays = logisticsData.allowed_days;
+    } else if (Array.isArray(logisticsData.days) && logisticsData.days.length > 0) {
+      allowedIsoDays = logisticsData.days.map((d: number) => d === 0 ? 7 : d);
+    }
+
+    if (allowedIsoDays.length > 0 && !allowedIsoDays.includes(isoDay)) {
+      const allowedDaysNames = allowedIsoDays.sort().map(d => DAY_NAMES[d] || `Día ${d}`).join(', ');
+      const timeWindow = (logisticsData.start_time && logisticsData.end_time) ? ` (${logisticsData.start_time} - ${logisticsData.end_time})` : '';
+      return {
+        isValid: false,
+        isDayViolation: true,
+        targetDayName,
+        allowedDaysNames,
+        timeWindow,
+        message: `Esta sede solo recibe entregas los ${allowedDaysNames}${timeWindow}. La fecha seleccionada corresponde a un ${targetDayName}.`
+      };
+    }
+
+    return { isValid: true, message: null, allowedDaysNames: '', isDayViolation: false, targetDayName };
+  };
+
+  const deliveryRestrictionStatus = useMemo(() => {
+    return evaluateDeliveryRestriction(matchedProfile, deliveryDate);
+  }, [matchedProfile, deliveryDate]);
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const quantityInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const firstModalSelectRef = useRef<HTMLSelectElement | null>(null);
