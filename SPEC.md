@@ -345,6 +345,23 @@ Para asegurar que todo acuerdo comercial cuente con una identidad explícita e i
    - **Ficha del Cliente (`ClientsModule`):** Indicador de `Modelo Base: [Nombre del Acuerdo]` con vigencia.
    - **Portal B2B del Cliente (`/b2b/dashboard`):** Título de la tarjeta de convenio vigente en la pestaña de Acuerdos cuando el cliente accede a realizar sus pedidos.
 
+#### 7.5.2 Trazabilidad Canónica de Orden de Compra y Pedido del Cliente (OC / SOLPED / No. Pedido Cliente)
+Para garantizar la conciliación fiscal, contable y operativa con los clientes B2B (Restaurantes, Colegios, Hoteles, Empresas de Alimentos y Estado):
+1. **Identificadores del Cliente Soportados:**
+   - **Orden de Compra (OC):** Número oficial emitido por el ERP o departamento de compras del cliente (ej. `OC: 12455`, `OC: 45000123`).
+   - **Solicitud de Pedido (SOLPED):** Identificador interno de requisición del cliente (ej. `SOLPED: 89012`).
+2. **Puntos de Captura y Carga en la Plataforma:**
+   - **A. Ingesta Automática por Correo (`EmailDraftsModule` / `/api/orders/email-ingest`):** El motor multimodal extrae automáticamente `poNumber` y `solpedNumber` del PDF/Excel adjunto y los previsualiza en el borrador (`order_drafts`).
+   - **B. Carga Institucional con Digestor (`/admin/orders/create` - Staging Area):** El motor de procesamiento de documentos extrae y rellena los campos editables `[# Orden de Compra (OC)]` y `[# Solicitud / SOLPED]`, permitiendo corrección manual previa a la confirmación.
+   - **C. Creación Manual por Catálogo (`/admin/orders/create`):** El operador comercial ingresa la referencia en el campo de observaciones operativas (`admin_notes`).
+3. **Persistencia en Base de Datos:**
+   - **`orders.admin_notes`:** Se consolida con formato canónico indexado: `OC: [Número] | SOLPED: [Número] | [Observaciones]`.
+   - **`orders.document_url`:** Almacena la URL permanente en Supabase Storage (`order-attachments`) del documento digital original para consulta visual en 1 clic.
+4. **Visualización y Búsqueda Operativa:**
+   - **Superbuscador de Pedidos (`/admin/orders/loading`):** Indexa `admin_notes` para que escribir el número de OC (ej. `12455`) ubique instantáneamente el pedido.
+   - **Control Tower & Detalle:** Muestra el botón interactivo `[📄 Ver Anexo / OC]` enlazado a `document_url`.
+   - **Remisiones y Hojas de Picking:** Se estampa en el encabezado del documento oficial de entrega para que el receptor en la sede del cliente concilie el pedido contra su propia orden de compra.
+
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
