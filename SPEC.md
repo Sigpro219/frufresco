@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.1 (Gobernanza Central de Modelos IA, Centinela de Obsolescencia & Torre de Control de Transporte)  
-> **Fecha:** 23 de Septiembre, 2026  
+> **Versión:** 1.9.3 (Unidad de Compra Estricta del Catálogo, Inclusión de Accounting ID & Neteo Mayorista Corabastos)  
+> **Fecha:** 24 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección General, IT/SaaS Infraestructura, Operaciones & Logística Terrestre
+> **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
 
 ---
 
@@ -620,15 +620,27 @@ El Módulo de Operaciones (`src/app/ops/`) es el ejecutor físico y el brazo log
 
 ### 9.3 Contratos Matemáticos & Algoritmos de Operación
 
-#### 1. Algoritmo Canónico de Neteo en Compras (Cross-Docking / JIT)
-FruFresco primero vende y de inmediato compra en Corabastos para garantizar frescura de campo, deduciendo el inventario disponible y garantizando amortiguadores de seguridad:
+#### 1. Motor Canónico de Neteo en Compras (Cross-Docking / JIT - SDD v1.9.2)
+FruFresco primero vende y consolida a la hora de corte (17:00 / 18:00) para comprar en Corabastos a las 02:00 AM, deduciendo el inventario disponible en bodega y aplicando el stock de seguridad del catálogo a través del motor centralizado `src/lib/procurement/procurementNettingEngine.ts`:
 
-1. **Agrupación Familiar:** Agrupa las tareas por familia padre (`parent_id || product_id`).
-2. **Prioridad:** Ordena primero el producto base (sin etiqueta de variante) y luego variantes en orden alfabético.
-3. **Amortiguador Asimétrico:** El stock de seguridad (`products.min_inventory_level`) solo se aplica al primer ítem del grupo familiar (`idx === 0`).
-4. **Ecuación Canónica:**
-   $$\text{Stock Aplicado} = \min\Big(\text{Stock Disponible Bodega},\ \text{Demanda Pedidos} + \text{Stock de Seguridad}\Big)$$
-   $$\mathbf{Meta\ de\ Compra\ (meta\_neteo)} = \max\Big(0,\ \text{Demanda Pedidos} - \text{Stock Aplicado} + \text{Stock de Seguridad}\Big)$$
+1. **Unificación Estricta de Características (`getCanonicalProcurementSpec`):**
+   - Agrupa la demanda agregada de todas las órdenes por la clave canónica:
+     $$\text{Clave Compra:} \quad \text{product\_id} + \text{"\_\_"} + \text{canonical\_spec}$$
+   - **Regla Poka-Yoke Anti-Fragmentación:** No incluye cantidades individuales de pedidos de clientes (`"10 und"`) ni textos libres informales (`"bananos"`, `"1000 gr"`). Solo extrae calibres unitarios (`und de 2 kg`, `und de 160 gr`, `bandeja de 500 gr`) y atributos operativos reales (`Maduración`, `Corte`, `Punto`). Si no existen atributos estructurados, o si el atributo es redundante con el nombre (ej. `Maduro` en `Plátano maduro`), resuelve a `""` (Línea Estándar Base).
+   - Las órdenes con idénticas características unifican su demanda sumando sus kilogramos netos (`normalizeDemandToKg`).
+
+2. **Deducción Secuencial de Stock Físico por Familia Padre (`parent_id || product_id`):**
+   - El stock disponible en bodega (`inventory_stocks`) se imputa secuencialmente: primero a la línea estándar base (`canonical_spec === ''`), y cualquier remanente a las variantes especializadas.
+
+3. **Ecuación Canónica de Neteo & Stock de Seguridad:**
+   - El stock de seguridad (`products.min_inventory_level`) es un amortiguador del producto base, aplicándose exclusivamente a la primera línea del grupo (`idx === 0`).
+   $$\mathbf{Necesidad\ Bruta} = \sum \text{Demanda Pedidos (Kg)} + \text{Stock de Seguridad}$$
+   $$\mathbf{Stock\ Aplicado} = \min\Big(\text{Stock Disponible en Bodega (Corte)},\ \mathbf{Necesidad\ Bruta}\Big)$$
+   $$\mathbf{Meta\ de\ Compra\ Neta\ (a\_comprar)} = \max\Big(0,\ \mathbf{Necesidad\ Bruta} - \mathbf{Stock\ Disponible}\Big)$$
+   $$\mathbf{Compra\ Sugerida\ con\ Merma\ (con\_merma)} = \text{round}\Big(\mathbf{Meta\ de\ Compra\ Neta} \times 1.05,\ 1\Big)$$
+
+4. **Sincronización Total Módulo Operaciones vs Planilla de Impresión:**
+   - La pantalla operativa `/ops/compras`, el generador de tareas `procurement_tasks` y la planilla física para plaza Corabastos `/admin/procurement/purchases-print` consumen la misma ecuación e idénticos números sin discrepancias.
 
 #### 2. Algoritmo de Asignación Temporal de 150 Espacios Físicos (Bahías de Muelle)
 La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y dinámica según la hora de salida del vehículo:
@@ -1854,25 +1866,43 @@ La sábana física de alistamiento es un instrumento de trabajo de alta velocida
    Si una opción o atributo estructurado (ej: *Maduro*, *Verde*, *Blanca*) **ya está explícitamente contenido en el nombre del SKU o producto** (ej: `Plátano maduro`, `Plátano verde`, `Cebolla cabezona blanca`), se suprime automáticamente de la Fila 2.
    - La celda secundaria **DEBE PERMANECER 100% VACÍA**, eliminando el pleonasmo visual (mostrar `Maduro` debajo de la columna `Plátano maduro`).
    - Solo se renderiza la segunda línea si aporta una especificación física/operativa diferencial no dicha en el nombre del producto (ej: empaque/peso `12 und de 2 kg` o maduración de productos base como `Papaya maradol` $\rightarrow$ `Maduro` o `Mango tommy` $\rightarrow$ `Pintón`).
-4. **Erradicación Absoluta de Inferencia por Palabras Clave sobre Texto Libre:**  
-   Queda terminantemente prohibido escanear alias, nicknames o campos de texto libre (`nickname`, `variant_label`, observaciones comerciales) con listas de palabras clave (*keywords* como `primera`, `tajar`, `mediano`, `delgado`, `limpio`) para intentar "adivinar" especificaciones.
-   - Solo se renderizan especificaciones si provienen de **opciones estructuradas reales (`selected_options`)** montadas explícitamente desde el módulo de pedidos o de especificaciones matemáticas de doble unidad (`_original_qty`, `_unit_weight_gr`).
-   - Si un pedido no contiene opciones estructuradas en `selected_options`, la celda secundaria **PERMANECE 100% VACÍA**, erradicando de raíz la aparición de etiquetas espurias como `Primera` o `Tajar`.
+4. **Erradicación Absoluta de Inferencia por Palabras Clave o Fallbacks de Texto Libre:**  
+   Queda terminantemente prohibido escanear alias, nicknames o campos de texto libre (`nickname`, `variant_label`, observaciones comerciales) con listas de palabras clave (*keywords* como `primera`, `tajar`, `mediano`, `delgado`, `limpio`, `"bananos"`, `"paquete x 1 kilo"`, `"1000 gr"`, etc.) para intentar adivinar o inventar variantes no estructuradas.
+   - **Prevalencia Estricta de la Estructura Canónica de Origen:** Solo se respetan notas y características que nacieron con estructura formal en el pedido a través de **`selected_options`** (motor dual-unit: `_original_qty`, `_unit_weight_gr`, o atributos culinarios normalizados: `Maduración`, `Corte`, `Calibre`, `Punto`).
+   - Si un pedido no contiene opciones estructuradas en `selected_options`, `formatStructuredSpecification(item)` retorna `null`. La celda secundaria en la sábana **PERMANECE 100% VACÍA**, y el ítem se clasifica irrefutablemente como producto estándar a granel, erradicando de raíz la aparición de etiquetas espurias.
 
 ---
 
 ### 19.3 Regla Algorítmica de Agrupación de Variantes en Compras y Consolidación (`/ops/compras`, `/admin/procurement/purchases-print`)
-La consolidación de compras para plaza Corabastos debe segregar o sumar requerimientos de acuerdo a su condición física real:
+La consolidación de compras para plaza Corabastos debe segregar o sumar requerimientos de acuerdo a su condición física real, bajo el dogma inviolable de **"Solo se respetan notas estructuradas (`formatStructuredSpecification`), prohibición absoluta de texto libre o heurísticas sucias"**:
 
-1. **Suma de Ítems con Idénticas Condiciones:**  
-   Si dos o más pedidos solicitan el mismo producto con exactamente las mismas condiciones canónicas (ej: `Papaya maradol` con `und de 2 kg; Maduro` en Pedido A por 24 kg y en Pedido B por 10 kg), el motor de compras consolida ambas demandas en **un único requerimiento sumado**:
-   $$\text{Clave de Agrupación:} \quad \text{product\_id} + \text{"\_und de 2 kg; Maduro\_"} + \text{delivery\_date} \quad \longrightarrow \quad \text{Total: } 34\text{ kg}$$
-2. **Segregación Estricta de Variantes Diferentes:**  
-   Si otro pedido solicita una condición culinaria o de calibre diferente (ej: `und de 2 kg; Pintón` por 14 kg):
-   $$\text{Clave de Agrupación:} \quad \text{product\_id} + \text{"\_und de 2 kg; Pintón\_"} + \text{delivery\_date} \quad \longrightarrow \quad \text{Línea Separada: } 14\text{ kg}$$
-   El sistema lo tratará como un ítem de compra independiente en la planilla física de compras y en el panel digital de compras, permitiendo al comprador negociar específicamente bultos de fruta pintona sin mezclarla con la madura.
-3. **Consolidación de Ítems Base Sin Especificación:**  
-   Los ítems estándar sin opciones ni especificaciones especiales se consolidan sobre la clave base vacía (`product_id + "__" + delivery_date`).
+1. **Principio Canónico de Agrupación:**  
+   La clave canónica de consolidación para cualquier línea de compra es:
+   $$\text{groupKey} = \text{product\_id} + \text{"\_\_"} + (\text{formatStructuredSpecification(item)} \parallel \text{""}) + \text{"\_\_"} + \text{delivery\_date}$$
+   - **Resolución a Base Estándar:** Si `formatStructuredSpecification(item)` retorna `null` o cadena vacía `""`, la clave de especificación es estrictamente vacía. Todos los pedidos del producto que carezcan de especificaciones estructuradas coalescen de forma obligatoria en la **única fila base estándar**.
+   - **Tolerancia CERO a Fallbacks de Texto No Estructurado:** Queda terminantemente prohibido tomar campos crudos como `variant_label`, `nickname`, notas informales de empaque (`"paquete x 1 kilo"`, `"1000 gr"`), plurales informales (`"bananos"`, `"arandanos"`), colores genéricos (`"amarillo"`), códigos de proveedor o textos libres para bifurcar o inventar variantes de compra. Si un ítem no nació con `selected_options` estructuradas válidas al crearse el pedido, es por definición un producto estándar a granel y debe sumarse a la línea base.
+
+2. **Suma de Ítems con Idénticas Condiciones Canónicas:**  
+   Si dos o más pedidos solicitan el mismo producto con exactamente las mismas condiciones canónicas (ej: `Papaya maradol` con `und de 2 kg; Maduro` en Pedido A por 24 kg y en Pedido B por 10 kg):
+   $$\text{groupKey:} \quad \text{product\_id} + \text{"\_\_und de 2 kg; Maduro\_\_"} + \text{delivery\_date} \quad \longrightarrow \quad \text{Total Consolidado: } 34\text{ kg}$$
+
+3. **Segregación Estricta de Variantes Diferenciales Reales:**  
+   Solo las líneas que nacieron con atributos operativos estructurados diferenciales generan filas separadas (ej: `Banano criollo` base 11 kg vs `Banano criollo [10 und de 160 gr; Pintón]` 1.6 kg; o `Papaya maradol [und de 2 kg; Pintón]` 14 kg):
+   $$\text{groupKey:} \quad \text{product\_id} + \text{"\_\_und de 2 kg; Pintón\_\_"} + \text{delivery\_date} \quad \longrightarrow \quad \text{Línea Separada: } 14\text{ kg}$$
+   Esto permite al comprador de plaza negociar específicamente bultos de fruta con el calibre o grado de madurez exacto sin mezclarla con el producto estándar a granel.
+
+4. **Erradicación Absoluta del SKU en Documentos de Compra:**  
+   FruFresco no utiliza códigos SKU en la gestión de compras en Corabastos ni en la planilla física `purchases-print`.
+   - Queda eliminada la columna `SKU` tanto en la tabla HTML/CSS de impresión como en las descargas de Excel.
+   - Queda prohibido renderizar badges o etiquetas `[SKU]` junto al nombre del producto.
+   - Los contadores de sublista y resumen operacional contabilizan productos reales (`X Productos`), nunca códigos de barra abstractos o SKUs.
+
+5. **Netting Secuencial de Inventario de Bodega:**  
+   Para cada producto con existencias disponibles en bodega (`inventory_stocks`), el stock físico se deduce de forma secuencial sobre la demanda agregada de sus líneas (comenzando por la línea estándar o primera variante demandada):
+   $$\text{stock\_a\_aplicar} = \min(\text{stock\_disponible}, \text{demanda\_neta})$$
+   $$\text{a\_comprar} = \max(0, \text{demanda\_neta} - \text{stock\_a\_aplicar})$$
+   $$\text{con\_merma} = \text{round}(\text{a\_comprar} \times 1.05, 1)$$
+   El comprador en Corabastos recibe así la cifra neta exacta a adquirir en plaza tras consumir las existencias de bodega, con el margen de seguridad del +5% de merma aplicado únicamente sobre lo que realmente se debe comprar.
 
 ---
 
@@ -2013,11 +2043,14 @@ flowchart TD
 
 #### 4. Planilla Consolidada de Compras para Plaza Corabastos (`/admin/procurement/purchases-print`, `/ops/compras`)
 * **Propósito Operativo:** Instrumento de abastecimiento mayorista utilizado por el equipo de compras en plaza Corabastos desde las 02:00 AM.
-* **Algoritmo de Consolidación Anti-Fragmentación:**
-  - El sistema agrupa la demanda total de todas las órdenes de la fecha sobre la clave canónica:
-    $$\text{Clave Compra:} \quad \text{product\_id} + \text{"\_"} + \text{getStructuredSpecKey(item)} + \text{"\_"} + \text{delivery\_date}$$
-  - **Regla Anti-Fragmentación Poka-Yoke:** Si un atributo es redundante con el nombre del producto (ej: `Maduro` en `Plátano maduro`), `getStructuredSpecKey` resuelve a cadena vacía `""`, consolidando toda la demanda en una única línea de compra base. Queda prohibido dividir las compras en líneas artificiales por atributos inherentes al producto.
-  - **Segregación de Calidades Diferenciales Reales:** Si la orden solicita una condición física no implícita en el nombre (ej: `Papaya maradol` `Maduro` vs `Pintón`, o `Unidad 2000 gr`), se genera una línea de compra separada para permitir al comprador adquirir bultos con el grado de madurez exacto.
+* **Algoritmo de Consolidación Anti-Fragmentación & Respeto Exclusivo de Especificaciones Estructuradas:**
+  - El sistema agrupa la demanda total de todas las órdenes operativas (`status IN ['para_compra', 'approved', 'picking', ...]`) sobre la clave canónica:
+    $$\text{Clave Compra:} \quad \text{product\_id} + \text{"\_\_"} + (\text{formatStructuredSpecification(item)} \parallel \text{""}) + \text{"\_\_"} + \text{delivery\_date}$$
+  - **Dogma Poka-Yoke Anti-Fragmentación:** Si un ítem no cuenta con atributos operativos estructurados (`selected_options`) o si un atributo es redundante con el nombre del producto (ej: `Maduro` en `Plátano maduro`), la especificación resuelve a cadena vacía `""`. Toda la demanda base coalesce en una única línea de compra estándar.
+  - **Prohibición Absoluta de Fallbacks de Texto No Estructurado:** Queda terminantemente prohibido utilizar `variant_label`, `nickname`, notas informales de empaque (`"paquete x 1 kilo"`, `"1000 gr"`), plurales informales (`"bananos"`), colores genéricos (`"amarillo"`) o heurísticas de texto libre para inventar variantes espurias. Si el ítem no nació con estructura formal en el pedido, coalesce en la línea estándar base.
+  - **Segregación de Variantes Estructuradas Reales:** Solo cuando el pedido nace con especificaciones estructuradas válidas (ej: `Banano criollo [10 und de 160 gr; Pintón]`, `Granadilla [160 und de 130 gr]` o `Papaya maradol [und de 2 kg; Maduro]`), se genera una línea separada con badge destacado para compra especializada.
+  - **Erradicación Absoluta del SKU:** La planilla omite por completo la columna SKU y los badges de SKU en todas sus vistas e informes exportables, ordenando y totalizando por productos reales y sublistas de compra.
+  - **Deducción Secuencial de Stock de Bodega:** Deduce el inventario de bodega en tiempo real sobre la demanda agregada antes de proyectar la compra final con el 5% de merma.
 
 #### 5. Planilla de Recepción y Control de Báscula en Bodega (`/admin/procurement/receiving-print`)
 * **Propósito Operativo:** Instrumento de pesaje en muelle de descargue para auditar camiones de plaza frente a lo ordenado.
@@ -2128,5 +2161,52 @@ sequenceDiagram
   3. Los pedidos en borrador `pending_approval` quedan 100% aislados en el módulo comercial de pedidos hasta que el operador los apruebe.
   4. Si para la fecha consultada no existe ninguna operación lanzada, la interfaz muestra limpiamente el estado informativo: *"No hay operación de alistamiento montada para esta fecha (0 pedidos aprobados)"*, sin generar planillas ficticias ni falsear bahías de muelle con números de orden.
 
+#### Escenario 35: Consolidación Estricta de Compras Basada Exclusivamente en Especificaciones Estructuradas (Prohibición de Fallback de Texto Libre)
+- **Given** una tanda de pedidos aprobados para una fecha con los siguientes ítems de "Banano criollo":
+  - Pedido 1: 5 kg sin opciones estructuradas (`selected_options: null`).
+  - Pedido 2: 6 kg con texto libre residual en base de datos (`variant_label: 'bananos'`), pero sin `selected_options` estructuradas.
+  - Pedido 3: 1.6 kg con especificación estructurada real nacida en el pedido (`selected_options: { _original_qty: 10, _unit_weight_gr: 160, Maduración: 'Pintón' }`).
+- **And** cinco pedidos de "Melón" con observaciones no estructuradas ("paquete x 1 kilo", "1000 gr", "amarillo", etc.) sin `selected_options`.
+- **When** se genera la Planilla Consolidada de Compras (`/admin/procurement/purchases-print`).
+- **Then**:
+  1. Los Pedidos 1 y 2 de "Banano criollo" se consolidan estrictamente en **UNA SOLA línea base estándar de 11 KG**, erradicando cualquier badge espurio `[Bananos]`.
+  2. El Pedido 3 de "Banano criollo" se segrega como **línea de compra diferenciada**: `Banano criollo [10 und de 160 gr; Pintón]` por 1.6 KG.
+  3. Los cinco pedidos de "Melón" se consolidan en **UNA SOLA línea base estándar** sumando sus kilos netos, suprimiendo cualquier fragmentación originada en textos no estructurados.
+  4. La planilla de compras no renderiza ninguna columna de SKU ni badges `[SKU]`, reportando el conteo como "X Productos" por sublista.
+  5. El inventario disponible en bodega se deduce secuencialmente sobre las líneas del producto antes de calcular la compra sugerida (+5% merma).
 
+#### Escenario 36: Motor Canónico de Neteo de Compras con Cruce de Inventario y Stock de Seguridad (SDD v1.9.2)
+- **Given** una tanda de pedidos aprobados para "Papaya maradol" para la fecha de entrega $D+1$:
+  - Pedido 1: 10 unidades de 2000 gr Maduro (20.0 kg).
+  - Pedido 2: 5 unidades de 2000 gr Maduro (10.0 kg).
+  - Catálogo: `products.min_inventory_level = 6.0` kg (Stock de Seguridad).
+  - Inventario físico disponible en bodega a la hora de corte: 12.0 kg.
+- **When** se ejecuta la consolidación de compras en `/ops/compras` o se genera la planilla `/admin/procurement/purchases-print`.
+- **Then**:
+  1. El motor canónico `src/lib/procurement/procurementNettingEngine.ts` evalúa la especificación intrínseca de ambos pedidos como `und de 2 kg; Maduro`, unificando su demanda en **una única línea de 30.0 kg**.
+  2. La **Necesidad Bruta** se calcula como:
+     $$\text{Necesidad Bruta} = 30.0\text{ kg (Demanda)} + 6.0\text{ kg (Stock de Seguridad)} = 36.0\text{ kg}$$
+  3. El **Stock Aplicado** de bodega deduce:
+     $$\text{Stock Aplicado} = \min(12.0,\ 36.0) = 12.0\text{ kg}$$
+  4. La **Meta Neta a Comprar** resulta en:
+     $$\text{Meta Neta} = \max(0,\ 36.0 - 12.0) = 24.0\text{ kg}$$
+  5. La **Compra Sugerida con Merma (+5%)** para el comprador en Corabastos se fija en:
+     $$\text{Compra Sugerida} = \text{round}(24.0 \times 1.05,\ 1) = 25.2\text{ kg}$$
+  6. Ambos submódulos (`/ops/compras` y `/admin/procurement/purchases-print`) exhiben exactamente las mismas cantidades y respetan la misma fuente de verdad.
 
+#### Escenario 37: Respeto Estricto de Unidad Maestra de Compra del Catálogo (`resolvePurchaseUnit`) e Inclusión Discreta de `accounting_id` (SDD v1.9.3)
+- **Given** una tanda de pedidos programados para la fecha de entrega $D+1$ con productos de distintas presentaciones comerciales:
+  - "Cidron" con catálogo `unit_of_measure: 'Atado'` y `accounting_id: 21`.
+  - "Arbolitos de coliflor x libra" con catálogo `unit_of_measure: 'Paquete 500 gramos'` y `accounting_id: 1020`.
+  - "Coliflor" con catálogo `unit_of_measure: 'Unidad'` y `accounting_id: 24`.
+  - "Aguacate" con catálogo `unit_of_measure: 'Kg'` y `accounting_id: 211`.
+- **When** se genera la Planilla Consolidada de Compras (`/admin/procurement/purchases-print`) o se exporta a Excel.
+- **Then**:
+  1. **Unidad Maestra de Compra Estricta (`UM`)**: El motor `resolvePurchaseUnit` resuelve la unidad de compra canónica directamente del maestro de productos, evitando defaulting indiscriminado a `KG`:
+     - Para "Cidron", la columna `UM` muestra estrictamente **`ATADO`**.
+     - Para "Arbolitos de coliflor", la columna `UM` muestra estrictamente **`PQ 500G`**.
+     - Para "Coliflor", la columna `UM` muestra estrictamente **`UN`**.
+     - Para "Aguacate", la columna `UM` muestra estrictamente **`KG`**.
+  2. **Inclusión Discreta de ID Contable (`accounting_id`)**:
+     - En la tabla de impresión visual/física, junto al nombre comercial de cada producto se renderiza de manera discreta un identificador en tipografía monoespaciada gris tenue (`#94A3B8`, `6.8pt`, e.g. `#21`, `#1020`, `#24`, `#211`), permitiendo la conciliación contable sin saturar visualmente el texto para el comprador en plaza.
+     - En la exportación a Excel (`exportToExcel`), se incluye la columna dedicada `'ID Contable'` inmediatamente después de `'ID Producto'`, con el valor formateado `#<accounting_id>`.

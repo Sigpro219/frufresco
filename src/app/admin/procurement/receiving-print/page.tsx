@@ -309,9 +309,9 @@ export default function ReceivingPrintPage() {
                                 paperSize="letter"
                                 meta={{
                                     title: 'INGRESO DE MERCANCÍA & CONTROL DE MUELLE (02:00 AM)',
-                                    subtitle: `SUBLISTA: ${sublistName} · PESAJE EN PLATAFORMA`,
+                                    subtitle: 'CONTROL DE PESAJE Y COTEJO EN PLATAFORMA DE MUELLE',
                                     date: selectedDate,
-                                    reference: `MUELLE-RECIBO: ${sublistName}`,
+                                    reference: `REC-${selectedDate.replace(/-/g, '')}`,
                                     badge: sublistName,
                                     badgeVariant: 'dark'
                                 }}

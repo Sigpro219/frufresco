@@ -6,6 +6,7 @@ import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
+import { getCanonicalProcurementSpec, normalizeDemandToKg } from '@/lib/procurement/procurementNettingEngine';
 import confetti from "canvas-confetti";
 import { 
   Calendar, 
@@ -550,15 +551,20 @@ export default function ProcurementPage() {
               processedProductIds.add(gt.product_id);
             }
           });
+          if (groupTasks[0]?.parent_id && !processedProductIds.has(groupTasks[0].parent_id)) {
+            totalGroupStock += stockMap[groupTasks[0].parent_id] || 0;
+            processedProductIds.add(groupTasks[0].parent_id);
+          }
 
           let remainingStock = totalGroupStock;
           groupTasks.forEach((gt, idx) => {
-            const pedido = gt.total_requested;
-            // Safety stock: only add to the first item of the sequence
+            const pedido = Math.round(gt.total_requested * 10) / 10;
+            // Safety stock: only add to the first item of the sequence (línea estándar base)
             const safety = (idx === 0) ? (gt.min_inventory_level || 0) : 0;
-            const appliedStock = Math.min(remainingStock, pedido + safety);
-            remainingStock -= appliedStock;
-            const meta = Math.max(0, pedido - appliedStock + safety);
+            const grossReq = Math.round((pedido + safety) * 10) / 10;
+            const appliedStock = Math.min(remainingStock, grossReq);
+            remainingStock = Math.max(0, Math.round((remainingStock - appliedStock) * 10) / 10);
+            const meta = Math.max(0, Math.round((grossReq - appliedStock) * 10) / 10);
 
             gt.applied_stock = appliedStock;
             gt.meta_neteo = meta;
@@ -669,11 +675,12 @@ export default function ProcurementPage() {
         `
                   id, 
                   quantity, 
+                  unit,
                   product_id, 
                   variant_label,
                   nickname,
                   selected_options,
-                  products(unit_of_measure),
+                  products(id, name, unit_of_measure, weight_kg, parent_id, min_inventory_level),
                   orders!inner(delivery_date, status)
               `,
       )
@@ -702,26 +709,41 @@ export default function ProcurementPage() {
       }
     > = {};
     items.forEach((item: any) => {
-      const canonicalVariant = getStructuredSpecKey(item) || item.variant_label || "";
+      const pName = item.products?.name || item.nickname || '';
+      const canonicalVariant = getCanonicalProcurementSpec({
+        selected_options: item.selected_options,
+        variant_label: item.variant_label,
+        nickname: item.nickname,
+        product_name: pName,
+        product: { name: pName }
+      });
+      const norm = normalizeDemandToKg({
+        quantity: Number(item.quantity) || 0,
+        rawUnit: item.unit,
+        productUom: item.products?.unit_of_measure,
+        selectedOptions: item.selected_options,
+        variantLabel: item.variant_label,
+        productWeightKg: item.products?.weight_kg
+      });
       const dDate = item.orders?.delivery_date || targetDate;
       const key = `${item.product_id}_${canonicalVariant}_${dDate}`;
       if (!totals[key]) {
         totals[key] = {
           qty: 0,
-          unit: item.products?.unit_of_measure || "kg",
+          unit: norm.unitStr,
           pid: item.product_id,
           variant: canonicalVariant,
           delivery_date: dDate,
         };
       }
-      totals[key].qty += item.quantity;
+      totals[key].qty += norm.effectiveQty;
     });
 
     // 3. Upsert en procurement_tasks en bloque (Alta velocidad)
     const upsertRows = Object.values(totals).map((task) => ({
       product_id: task.pid,
       variant_label: task.variant,
-      total_requested: task.qty,
+      total_requested: Math.round(task.qty * 10) / 10,
       unit: task.unit,
       delivery_date: task.delivery_date,
     }));

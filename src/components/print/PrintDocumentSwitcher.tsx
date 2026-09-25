@@ -33,8 +33,8 @@ export const PRINT_DOCUMENTS: PrintDocumentOption[] = [
     {
         key: 'purchases',
         label: 'Planilla de Compras (Corabastos)',
-        shortLabel: 'Compras Corabastos (Carta)',
-        paperFormat: 'Carta (Portrait)',
+        shortLabel: 'Compras Corabastos (Oficio)',
+        paperFormat: 'Oficio (Portrait)',
         path: '/admin/procurement/purchases-print',
         description: 'Consolidado de abastecimiento agrupado por sublistas de plaza'
     },

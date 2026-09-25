@@ -5,20 +5,22 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Printer, ArrowLeft, Download, Filter, ShoppingBag, FileSpreadsheet } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import UniversalLetterhead from '@/components/print/UniversalLetterhead';
-import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
+import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
 import * as XLSX from 'xlsx';
-import { getStructuredSpecKey } from '@/lib/orderUtils';
+import { formatStructuredSpecification } from '@/lib/orderUtils';
+import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
+
+
 
 interface PurchaseItem {
     id: string;
     product_id: string;
+    accounting_id?: number | string | null;
     product_name: string;
-    variant_label?: string;
+    variant_label?: string; // Especificación canónica / característica con la que nació el pedido
     parent_id?: string;
     parent_name?: string;
-    sku?: string;
     sublist: string;
     unit: string;
     demanda_neta: number;
@@ -50,69 +52,33 @@ export default function PurchasesPrintPage() {
     const fetchPurchasesData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch procurement tasks for this date
-            const { data: tasksData, error: tErr } = await supabase
-                .from('procurement_tasks')
-                .select('*')
-                .eq('delivery_date', selectedDate);
+            const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
 
-            if (tErr) throw tErr;
-
-            let rawTasks = tasksData || [];
-
-            // If no procurement_tasks generated yet, fallback directly to active order_items for that date
-            if (rawTasks.length === 0) {
-                const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
-                const { data: ordersWithItems, error: oErr } = await supabase
-                    .from('orders')
-                    .select('id, delivery_date, order_items(id, product_id, quantity, unit, nickname, variant_label, selected_options)')
-                    .eq('delivery_date', selectedDate)
-                    .in('status', OPERATIONAL_STATUSES);
-
-                if (!oErr && ordersWithItems) {
-                    const taskMap: Record<string, any> = {};
-                    ordersWithItems.forEach((ord: any) => {
-                        (ord.order_items || []).forEach((it: any) => {
-                            const pId = it.product_id;
-                            if (!pId) return;
-                            const vLabel = getStructuredSpecKey(it) || it.variant_label || '';
-                            const mapKey = `${pId}_${vLabel}`;
-                            if (!taskMap[mapKey]) {
-                                taskMap[mapKey] = {
-                                    id: it.id,
-                                    product_id: pId,
-                                    total_requested: 0,
-                                    variant_label: vLabel || undefined,
-                                    unit: it.unit
-                                };
-                            }
-                            taskMap[mapKey].total_requested += Number(it.quantity) || 0;
-                        });
-                    });
-                    rawTasks = Object.values(taskMap);
-                }
-            }
-
-            if (rawTasks.length === 0) {
-                setItems([]);
-                setLoading(false);
-                return;
-            }
-
-            // 2. Fetch product details & inventory stocks in parallel
-            const productIds = Array.from(new Set(rawTasks.map((t: any) => t.product_id).filter(Boolean)));
-            const [prodsRes, stocksRes] = await Promise.all([
+            // 1. Fetch active orders and procurement tasks in parallel
+            const [ordersRes, tasksRes, stocksRes] = await Promise.all([
                 supabase
-                    .from('products')
-                    .select('id, name, sku, unit_of_measure, purchase_sublist, parent_id, min_inventory_level')
-                    .in('id', productIds),
+                    .from('orders')
+                    .select(`
+                        id, delivery_date, status,
+                        order_items(
+                            id, product_id, quantity, unit, nickname, variant_label, selected_options,
+                            products(id, name, unit_of_measure, purchase_sublist, weight_kg, parent_id, min_inventory_level, accounting_id)
+                        )
+                    `)
+                    .eq('delivery_date', selectedDate)
+                    .in('status', OPERATIONAL_STATUSES),
+                supabase
+                    .from('procurement_tasks')
+                    .select('*')
+                    .eq('delivery_date', selectedDate),
                 supabase
                     .from('inventory_stocks')
                     .select('product_id, quantity')
                     .eq('status', 'available')
             ]);
 
-            const products = prodsRes.data || [];
+            const ordersWithItems = ordersRes.data || [];
+            const rawTasks = tasksRes.data || [];
             const stocks = stocksRes.data || [];
 
             // Stock map
@@ -121,60 +87,66 @@ export default function PurchasesPrintPage() {
                 stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (Number(s.quantity) || 0);
             });
 
-            // Product map
-            const prodMap: Record<string, any> = {};
-            products.forEach((p: any) => {
-                prodMap[p.id] = p;
+            // Recopilar items para el motor canónico de neteo
+            const itemsForNetting: NettingOrderItem[] = [];
+            ordersWithItems.forEach((ord: any) => {
+                (ord.order_items || []).forEach((it: any) => {
+                    itemsForNetting.push(it);
+                });
             });
 
-            // Parent names map
-            const parentIds = Array.from(new Set(products.map((p: any) => p.parent_id).filter(Boolean)));
-            const parentMap: Record<string, string> = {};
-            if (parentIds.length > 0) {
-                const { data: parentProds } = await supabase
-                    .from('products')
-                    .select('id, name')
-                    .in('id', parentIds);
-                (parentProds || []).forEach((p: any) => {
-                    parentMap[p.id] = p.name;
-                });
+            // Tareas huérfanas en procurement_tasks (si las hubiera sin order_items directos)
+            if (rawTasks.length > 0) {
+                const seenPids = new Set(itemsForNetting.map(i => i.product_id));
+                const orphanTasks = rawTasks.filter((t: any) => !seenPids.has(t.product_id));
+
+                if (orphanTasks.length > 0) {
+                    const orphanIds = Array.from(new Set(orphanTasks.map((t: any) => t.product_id).filter(Boolean)));
+                    const { data: orphanProds } = await supabase
+                        .from('products')
+                        .select('id, name, unit_of_measure, purchase_sublist, parent_id, weight_kg, min_inventory_level, accounting_id')
+                        .in('id', orphanIds);
+
+                    const orphanProdMap: Record<string, any> = {};
+                    (orphanProds || []).forEach((p: any) => { orphanProdMap[p.id] = p; });
+
+                    orphanTasks.forEach((t: any) => {
+                        const p = orphanProdMap[t.product_id];
+                        itemsForNetting.push({
+                            product_id: t.product_id,
+                            product_name: p?.name,
+                            quantity: Number(t.total_requested) || 0,
+                            unit: t.unit,
+                            variant_label: t.variant_label,
+                            accounting_id: p?.accounting_id,
+                            products: p
+                        });
+                    });
+                }
             }
 
-            // Build compiled purchase items with Netting
-            const compiled: PurchaseItem[] = rawTasks.map((t: any) => {
-                const p = prodMap[t.product_id];
-                const pName = p?.name || 'Producto Desconocido';
-                const parentName = p?.parent_id ? (parentMap[p.parent_id] || pName) : pName;
-                const sublist = (p?.purchase_sublist || 'GENERAL CORABASTOS').toUpperCase().trim();
-                const unit = p?.unit_of_measure || t.unit || 'KG';
-                const requested = Number(t.total_requested) || 0;
-                const stock = stockMap[t.product_id] || 0;
-                const toBuy = Math.max(0, requested - stock);
-                const withMerma = Math.round(toBuy * 1.05 * 10) / 10; // +5% de merma redondeado a 1 decimal
-
-                return {
-                    id: t.id,
-                    product_id: t.product_id,
-                    product_name: pName,
-                    variant_label: t.variant_label,
-                    parent_id: p?.parent_id,
-                    parent_name: parentName,
-                    sku: p?.sku || '',
-                    sublist,
-                    unit,
-                    demanda_neta: requested,
-                    stock_bodega: stock,
-                    a_comprar: toBuy,
-                    con_merma: withMerma
-                };
+            // 2. Ejecutar Motor Canónico de Neteo
+            const compiledNetting = calculateProcurementNetting({
+                items: itemsForNetting,
+                stocks: stockMap,
+                options: { mermaFactor: 0.05, applySafetyStock: true }
             });
 
-            // Sort: by sublist first, then parent name, then variant
-            compiled.sort((a, b) => {
-                if (a.sublist !== b.sublist) return a.sublist.localeCompare(b.sublist);
-                if (a.parent_name !== b.parent_name) return (a.parent_name || '').localeCompare(b.parent_name || '');
-                return a.product_name.localeCompare(b.product_name);
-            });
+            const compiled: PurchaseItem[] = compiledNetting.map(row => ({
+                id: row.key,
+                product_id: row.product_id,
+                accounting_id: row.accounting_id,
+                product_name: row.product_name,
+                variant_label: row.canonical_spec || undefined,
+                parent_id: row.parent_id || undefined,
+                parent_name: row.parent_name,
+                sublist: row.sublist,
+                unit: row.unit,
+                demanda_neta: row.raw_demand_kg,
+                stock_bodega: row.applied_stock,
+                a_comprar: row.net_to_buy,
+                con_merma: row.suggested_with_merma
+            }));
 
             setItems(compiled);
 
@@ -202,17 +174,17 @@ export default function PurchasesPrintPage() {
         return availableSublists.filter(s => s === selectedSublist);
     }, [availableSublists, selectedSublist]);
 
-    // Export to Excel (11 Standard Columns)
+    // Export to Excel (11 Standard Columns - With Accounting ID)
     const exportToExcel = () => {
         const rows = items.map((it, idx) => ({
             '#': idx + 1,
             'Sublista / Pabellón': it.sublist,
             'ID Producto': it.product_id,
-            'SKU': it.sku,
+            'ID Contable': it.accounting_id ? `#${it.accounting_id}` : '',
             'Producto / Calibre': it.product_name + (it.variant_label ? ` (${it.variant_label})` : ''),
             'Producto Matriz (Padre)': it.parent_name,
             'Unidad Medida': it.unit,
-            'Demanda Neta (KG/UN)': it.demanda_neta,
+            'Demanda Neta': it.demanda_neta,
             'Stock en Bodega (INV)': it.stock_bodega,
             'A Comprar (+Merma Sugerida)': it.con_merma,
             'Puesto / Proveedor Abastos': ''
@@ -226,9 +198,9 @@ export default function PurchasesPrintPage() {
         worksheet['!cols'] = [
             { wch: 4 },  // #
             { wch: 22 }, // Sublista
-            { wch: 15 }, // ID
-            { wch: 10 }, // SKU
-            { wch: 30 }, // Producto
+            { wch: 15 }, // ID Producto
+            { wch: 12 }, // ID Contable
+            { wch: 32 }, // Producto
             { wch: 25 }, // Matriz
             { wch: 8 },  // UM
             { wch: 16 }, // Demanda
@@ -243,17 +215,19 @@ export default function PurchasesPrintPage() {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
-            <GoldenPrintStyles />
+            <GoldenPrintStyles paperSize="oficio" />
 
-            {/* Print Settings */}
-            <style jsx global>{`
+            {/* Print Settings (Inyección DOM Nativa Directa para Hoja Oficio) */}
+            <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     @page {
-                        size: letter portrait !important;
-                        margin: 0.8cm !important;
+                        size: legal portrait !important;
+                        margin: 0.8cm 1.0cm !important;
                     }
                     body {
                         background-color: #FFFFFF !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                     }
                     .no-print {
                         display: none !important;
@@ -267,7 +241,7 @@ export default function PurchasesPrintPage() {
                         break-inside: avoid !important;
                     }
                 }
-            `}</style>
+            ` }} />
 
             {/* Control Bar (No Print) */}
             <div className="no-print" style={{
@@ -372,9 +346,9 @@ export default function PurchasesPrintPage() {
                                 printViaNewWindow({
                                     element: printDocRef.current,
                                     title: `Planilla_Compras_${selectedDate}`,
-                                    paperSize: 'letter',
+                                    paperSize: 'oficio',
                                     orientation: 'portrait',
-                                    margin: '1.0cm 1.2cm'
+                                    margin: '0.8cm 1.0cm'
                                 });
                             }
                         }}
@@ -400,46 +374,70 @@ export default function PurchasesPrintPage() {
             </div>
 
             {/* Document Body */}
-            <div ref={printDocRef} style={{ maxWidth: '850px', margin: '1.5rem auto', padding: '0 1rem' }}>
+            <div ref={printDocRef} style={{ maxWidth: '850px', margin: '0.75rem auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
                         <p style={{ fontWeight: '700' }}>Cargando datos de compras y stock en bodega...</p>
                     </div>
                 ) : filteredSublists.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', maxWidth: '650px', margin: '2rem auto' }}>
                         <p style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>No hay requerimientos de compras para esta fecha.</p>
                         <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Selecciona otra fecha de entrega para generar las planillas.</p>
                     </div>
                 ) : (
                     filteredSublists.map((sublistName) => {
                         const sublistItems = groupedBySublist[sublistName] || [];
+
+                        // Paginación dinámica ponderada por altura visual:
+                        // - Fila simple (sin variant_label): 1.0 unidad
+                        // - Fila con variant_label (tag de calibre, 2 líneas): 1.6 unidades
+                        // Hoja oficio útil tras encabezado+banner ≈ 257 mm → caben ~26 unidades.
+                        // Última página siempre reserva espacio extra para el tfoot + firmas (~3 u).
+                        const MAX_ROW_UNITS = 26;
+                        const FOOTER_RESERVE = 3; // unidades reservadas para tfoot + firmas en última página
+                        const sublistPages: PurchaseItem[][] = [];
+                        let currentPage: PurchaseItem[] = [];
+                        let currentUnits = 0;
+
+                        sublistItems.forEach((item, itemGlobalIdx) => {
+                            const rowWeight = item.variant_label ? 1.6 : 1.0;
+                            const isLastItem = itemGlobalIdx === sublistItems.length - 1;
+                            const budgetForPage = isLastItem || currentPage.length === 0
+                                ? MAX_ROW_UNITS - FOOTER_RESERVE
+                                : MAX_ROW_UNITS;
+
+                            if (currentUnits + rowWeight > budgetForPage && currentPage.length > 0) {
+                                sublistPages.push(currentPage);
+                                currentPage = [];
+                                currentUnits = 0;
+                            }
+                            currentPage.push(item);
+                            currentUnits += rowWeight;
+                        });
+                        if (currentPage.length > 0) sublistPages.push(currentPage);
+                        if (sublistPages.length === 0) sublistPages.push([]);
+
                         const totalKilosNetos = sublistItems.reduce((s, it) => s + it.demanda_neta, 0);
+                        const totalStockBodega = sublistItems.reduce((s, it) => s + it.stock_bodega, 0);
                         const totalAComprar = sublistItems.reduce((s, it) => s + it.con_merma, 0);
 
-                        return (
-                            <div
-                                key={sublistName}
-                                className="page-break"
-                                style={{
-                                    backgroundColor: '#FFFFFF',
-                                    padding: '14px 18px',
-                                    marginBottom: '20px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #E2E8F0',
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
-                                }}
-                            >
-                                <UniversalLetterhead
-                                    brand={INVESTMENTS_CORTES_BRAND}
-                                    paperSize="letter"
-                                    meta={{
-                                        title: 'PLANILLA DE COMPRAS CORABASTOS',
-                                        subtitle: `SUBLISTA: ${sublistName} · NEGOCIACIÓN EN PLAZA`,
-                                        date: selectedDate,
-                                        reference: `SUBLISTA: ${sublistName}`,
-                                        badge: sublistName,
-                                        badgeVariant: 'dark'
-                                    }}
+                        return sublistPages.map((pageItems, pageIdx) => {
+                            const isLastPage = pageIdx === sublistPages.length - 1;
+                            const pageSubtitle = `NEGOCIACIÓN EN PLAZA · CENTRAL CORABASTOS${sublistPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${sublistPages.length}` : ''}`;
+                            const planRef = `PLC-${selectedDate.replace(/-/g, '')}`;
+
+                            return (
+                                <Letterhead
+                                    key={`${sublistName}-page-${pageIdx}`}
+                                    title="Planilla de Compras Corabastos"
+                                    subtitle={pageSubtitle}
+                                    date={selectedDate}
+                                    reference={planRef}
+                                    badge={sublistName}
+                                    badgeVariant="dark"
+                                    className="page-break"
+                                    paperSize="oficio"
+                                    showWatermark={false}
                                 >
                                     {/* Sublist summary banner */}
                                     <div style={{
@@ -447,116 +445,173 @@ export default function PurchasesPrintPage() {
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
                                         backgroundColor: '#F8FAFC',
-                                        padding: '4px 8px',
-                                        border: '1px solid #E2E8F0',
+                                        padding: '3px 8px',
+                                        border: '1px solid #CBD5E1',
                                         borderRadius: '4px',
-                                        fontSize: '0.66rem',
+                                        fontSize: '7pt',
                                         marginBottom: '6px'
                                     }}>
                                         <div>
-                                            <strong>Instrucciones:</strong> Negocie bulto/kilo con proveedores habituales. Anote el precio pactado y el puesto exacto.
+                                            <strong style={{ color: '#0F172A' }}>Instrucciones para Plaza:</strong> Negocie precio pactado por kilo/bulto y anote el número de puesto en Corabastos.
                                         </div>
-                                        <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A' }}>
-                                            {sublistItems.length} SKUs &bull; Demanda: {totalKilosNetos.toLocaleString('es-CO')} &bull; Meta +Merma: {totalAComprar.toLocaleString('es-CO')}
+                                        <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '7.2pt' }}>
+                                            {sublistItems.length} Productos &bull; Demanda: {totalKilosNetos.toLocaleString('es-CO')} &bull; Meta +Merma: {totalAComprar.toLocaleString('es-CO')}
                                         </div>
                                     </div>
 
                                     {/* Items Table */}
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.68rem' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
-                                            <tr style={{ backgroundColor: '#0F172A', color: '#FFFFFF' }}>
-                                                <th style={{ width: '22px', textAlign: 'center', padding: '3px 2px', border: '1px solid #0F172A' }}>#</th>
-                                                <th style={{ textAlign: 'left', padding: '3px 6px', border: '1px solid #0F172A' }}>Producto / Calibre Especificado</th>
-                                                <th style={{ width: '32px', textAlign: 'center', padding: '3px 2px', border: '1px solid #0F172A' }}>UM</th>
-                                                <th style={{ width: '55px', textAlign: 'right', padding: '3px 4px', border: '1px solid #0F172A' }}>Demanda</th>
-                                                <th style={{ width: '50px', textAlign: 'right', padding: '3px 4px', border: '1px solid #0F172A', backgroundColor: '#1E293B' }}>Stock INV</th>
-                                                <th style={{ width: '65px', textAlign: 'right', padding: '3px 4px', border: '1px solid #0F172A', backgroundColor: '#0D7A57' }}>+Merma (5%)</th>
-                                                <th style={{ width: '75px', textAlign: 'center', padding: '3px 4px', border: '1px solid #0F172A' }}>Precio $/Kg</th>
-                                                <th style={{ width: '100px', textAlign: 'center', padding: '3px 4px', border: '1px solid #0F172A' }}>Puesto / Proveedor</th>
+                                            <tr>
+                                                <th style={{ width: '3.5%', textAlign: 'center', fontSize: '8.2pt' }}>#</th>
+                                                <th style={{ width: '36%', fontSize: '8.2pt' }}>Producto / Calibre Especificado</th>
+                                                <th style={{ width: '6.5%', textAlign: 'center', fontSize: '8.2pt' }}>UM</th>
+                                                <th style={{ width: '9%', textAlign: 'right', fontSize: '8.2pt' }}>Demanda</th>
+                                                <th style={{ width: '9%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#1E293B' }}>Stock INV</th>
+                                                <th style={{ width: '11%', textAlign: 'right', fontSize: '8.2pt', backgroundColor: '#0D7A57' }}>+Merma (5%)</th>
+                                                <th style={{ width: '11%', textAlign: 'center', fontSize: '8.2pt' }}>Precio $/Kg</th>
+                                                <th style={{ width: '14%', textAlign: 'center', fontSize: '8.2pt' }}>Puesto / Proveedor</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {sublistItems.map((it, idx) => {
-                                                const bg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+                                            {pageItems.map((it, itemIdx) => {
+                                                const prevPagesCount = sublistPages.slice(0, pageIdx).reduce((s, p) => s + p.length, 0);
+                                                const globalIdx = prevPagesCount + itemIdx + 1;
+                                                const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
                                                 return (
-                                                    <tr key={it.id || idx} style={{ backgroundColor: bg }}>
-                                                        <td style={{ textAlign: 'center', padding: '2.5px 2px', border: '1px solid #E2E8F0', fontWeight: '700', color: '#64748B' }}>
-                                                            {idx + 1}
+                                                    <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
+                                                        <td style={{ textAlign: 'center', fontSize: '7.8pt', fontWeight: 'bold', color: '#64748B' }}>
+                                                             {globalIdx}
                                                         </td>
-                                                        <td style={{ textAlign: 'left', padding: '2.5px 6px', border: '1px solid #E2E8F0' }}>
-                                                            <strong style={{ color: '#0F172A' }}>{it.product_name}</strong>
-                                                            {it.variant_label && <span style={{ fontSize: '0.60rem', color: '#475569', marginLeft: '4px' }}>({it.variant_label})</span>}
-                                                            {it.sku && <span style={{ fontSize: '0.56rem', color: '#94A3B8', marginLeft: '4px' }}>[{it.sku}]</span>}
+                                                        <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', paddingRight: '6px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '8.2pt', lineHeight: 1.2 }}>
+                                                                    {it.product_name}
+                                                                </span>
+                                                                {it.accounting_id !== undefined && it.accounting_id !== null && (
+                                                                    <span style={{ 
+                                                                        fontSize: '6.8pt', 
+                                                                        color: '#94A3B8', 
+                                                                        fontWeight: '600', 
+                                                                        fontFamily: 'monospace',
+                                                                        letterSpacing: '0.02em',
+                                                                        userSelect: 'none'
+                                                                    }}>
+                                                                        #{it.accounting_id}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {it.variant_label && (
+                                                                <div style={{ fontSize: '6.8pt', color: '#475569', marginTop: '1.5px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                                    <span style={{ backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 5px', fontWeight: '700', color: '#1E293B' }}>
+                                                                        {it.variant_label}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </td>
-                                                        <td style={{ textAlign: 'center', padding: '2.5px 2px', border: '1px solid #E2E8F0', color: '#475569' }}>
+                                                        <td style={{ textAlign: 'center', fontSize: '7.5pt', fontWeight: '600', color: '#334155' }}>
                                                             {it.unit}
                                                         </td>
-                                                        <td style={{ textAlign: 'right', padding: '2.5px 4px', border: '1px solid #E2E8F0', fontWeight: '700', color: '#475569' }}>
+                                                        <td style={{ textAlign: 'right', fontSize: '7.8pt', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
                                                             {it.demanda_neta.toLocaleString('es-CO')}
                                                         </td>
-                                                        <td style={{ textAlign: 'right', padding: '2.5px 4px', border: '1px solid #E2E8F0', color: '#64748B' }}>
+                                                        <td style={{ textAlign: 'right', fontSize: '7.8pt', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: it.stock_bodega > 0 ? '#0F172A' : '#94A3B8' }}>
                                                             {it.stock_bodega > 0 ? it.stock_bodega.toLocaleString('es-CO') : '-'}
                                                         </td>
-                                                        <td style={{ textAlign: 'right', padding: '2.5px 4px', border: '1px solid #E2E8F0', fontWeight: '900', color: '#0D7A57', backgroundColor: '#F0FDF4' }}>
-                                                            {it.con_merma.toLocaleString('es-CO')}
+                                                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                backgroundColor: '#ECFDF5',
+                                                                border: '1px solid #A7F3D0',
+                                                                borderRadius: '4px',
+                                                                padding: '1px 5px',
+                                                                fontWeight: '900',
+                                                                color: '#065F46',
+                                                                fontSize: '8pt',
+                                                                fontVariantNumeric: 'tabular-nums'
+                                                            }}>
+                                                                {it.con_merma.toLocaleString('es-CO')}
+                                                            </span>
                                                         </td>
-                                                        <td style={{ textAlign: 'center', padding: '2.5px 4px', border: '1px solid #CBD5E1', borderBottom: '1px dashed #94A3B8' }}>
-                                                            $ ________
+                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
+                                                            <div style={{
+                                                                borderBottom: '1px dashed #94A3B8',
+                                                                height: '18px',
+                                                                display: 'flex',
+                                                                alignItems: 'flex-end',
+                                                                justifyContent: 'flex-start',
+                                                                paddingLeft: '3px',
+                                                                fontSize: '6.8pt',
+                                                                color: '#64748B',
+                                                                fontWeight: '600'
+                                                            }}>
+                                                                $
+                                                            </div>
                                                         </td>
-                                                        <td style={{ textAlign: 'center', padding: '2.5px 4px', border: '1px solid #CBD5E1', borderBottom: '1px dashed #94A3B8' }}>
-                                                            ________________
+                                                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
+                                                            <div style={{
+                                                                borderBottom: '1px dashed #94A3B8',
+                                                                height: '18px'
+                                                            }}></div>
                                                         </td>
                                                     </tr>
                                                 );
                                             })}
-
-                                            {/* Sublist Total */}
-                                            <tr style={{ backgroundColor: '#F1F5F9', fontWeight: '900' }}>
-                                                <td colSpan={3} style={{ textAlign: 'right', padding: '4px 6px', border: '1px solid #CBD5E1', color: '#0F172A' }}>
-                                                    TOTAL {sublistName}:
-                                                </td>
-                                                <td style={{ textAlign: 'right', padding: '4px 4px', border: '1px solid #CBD5E1' }}>
-                                                    {totalKilosNetos.toLocaleString('es-CO')}
-                                                </td>
-                                                <td style={{ textAlign: 'right', padding: '4px 4px', border: '1px solid #CBD5E1', color: '#64748B' }}>
-                                                    {sublistItems.reduce((s, it) => s + it.stock_bodega, 0).toLocaleString('es-CO')}
-                                                </td>
-                                                <td style={{ textAlign: 'right', padding: '4px 4px', border: '1px solid #CBD5E1', color: '#0D7A57' }}>
-                                                    {totalAComprar.toLocaleString('es-CO')}
-                                                </td>
-                                                <td colSpan={2} style={{ textAlign: 'center', padding: '4px 4px', border: '1px solid #CBD5E1' }}>
-                                                    -
-                                                </td>
-                                            </tr>
                                         </tbody>
+                                        {isLastPage && (
+                                            <tfoot>
+                                                <tr style={{ backgroundColor: '#F1F5F9', fontWeight: '900' }}>
+                                                    <td colSpan={3} style={{ textAlign: 'right', padding: '3px 6px', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '8pt' }}>
+                                                        TOTAL {sublistName}:
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', fontSize: '8pt', fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
+                                                        {totalKilosNetos.toLocaleString('es-CO')}
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '8pt', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {totalStockBodega.toLocaleString('es-CO')}
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#065F46', fontSize: '8.2pt', fontWeight: '900', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {totalAComprar.toLocaleString('es-CO')}
+                                                    </td>
+                                                    <td colSpan={2} style={{ textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', color: '#94A3B8' }}>
+                                                        -
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        )}
                                     </table>
 
-                                    {/* Signatures footer */}
-                                    <div style={{
-                                        marginTop: '12px',
-                                        paddingTop: '6px',
-                                        borderTop: '1px solid #CBD5E1',
-                                        display: 'grid',
-                                        gridTemplateColumns: '1fr 1fr 1fr',
-                                        gap: '12px',
-                                        fontSize: '0.62rem'
-                                    }}>
-                                        <div>
-                                            <strong>Comprador en Corabastos:</strong> ___________________________
-                                            <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Firma y responsable de negociación</div>
+                                    {/* Signatures footer on last page */}
+                                    {isLastPage && (
+                                        <div style={{
+                                            marginTop: 'auto',
+                                            paddingTop: '8px',
+                                            borderTop: '1px solid #CBD5E1',
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr 1fr',
+                                            gap: '12px',
+                                            fontSize: '6.8pt'
+                                        }}>
+                                            <div>
+                                                <strong style={{ color: '#0F172A' }}>Comprador en Corabastos:</strong>
+                                                <div style={{ borderBottom: '1px solid #0F172A', height: '18px', width: '90%', marginTop: '4px' }}></div>
+                                                <div style={{ fontSize: '6pt', color: '#64748B', marginTop: '2px' }}>Firma y responsable de negociación</div>
+                                            </div>
+                                            <div>
+                                                <strong style={{ color: '#0F172A' }}>Conductor / Camión Recolector:</strong>
+                                                <div style={{ borderBottom: '1px solid #0F172A', height: '18px', width: '90%', marginTop: '4px' }}></div>
+                                                <div style={{ fontSize: '6pt', color: '#64748B', marginTop: '2px' }}>Cargue verificado en plaza</div>
+                                            </div>
+                                            <div>
+                                                <strong style={{ color: '#0F172A' }}>Recepción en Bodega Central:</strong>
+                                                <div style={{ borderBottom: '1px solid #0F172A', height: '18px', width: '90%', marginTop: '4px' }}></div>
+                                                <div style={{ fontSize: '6pt', color: '#64748B', marginTop: '2px' }}>Recibido y pesaje a ciegas</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <strong>Conductor / Camión Recolector:</strong> ___________________________
-                                            <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Cargue verificado en plaza</div>
-                                        </div>
-                                        <div>
-                                            <strong>Recepción en Bodega Central:</strong> ___________________________
-                                            <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Recibido y pesaje a ciegas</div>
-                                        </div>
-                                    </div>
-                                </UniversalLetterhead>
-                            </div>
-                        );
+                                    )}
+                                </Letterhead>
+                            );
+                        });
                     })
                 )}
             </div>
