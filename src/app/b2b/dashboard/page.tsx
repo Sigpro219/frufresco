@@ -3716,7 +3716,18 @@ export default function B2BDashboard() {
                                 {selectedProductForModal.options_config
                                     .slice()
                                     .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
-                                    .map((opt: any, optIdx: number) => (
+                                    .map((opt: any) => {
+                                        const isRipeness = (opt.name || '').toLowerCase().includes('maduraci');
+                                        const values = isRipeness
+                                            ? (opt.values || []).filter((v: string) => {
+                                                const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                                                return clean !== 'maduro' && clean !== 'madura';
+                                            })
+                                            : (opt.values || []);
+                                        return { ...opt, values };
+                                    })
+                                    .filter((opt: any) => opt.values && opt.values.length > 0)
+                                    .map((opt: any, optIdx: number, filteredOpts: any[]) => (
                                     <div key={opt.name}>
                                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
                                             {opt.name}
@@ -3727,7 +3738,7 @@ export default function B2BDashboard() {
                                             onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Tab' && !e.shiftKey) {
-                                                    if (optIdx === (selectedProductForModal.options_config.length - 1)) {
+                                                    if (optIdx === (filteredOpts.length - 1)) {
                                                         e.preventDefault();
                                                         modalInputRef.current?.focus();
                                                         modalInputRef.current?.select();

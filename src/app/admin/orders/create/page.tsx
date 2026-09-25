@@ -7839,6 +7839,18 @@ function CreateOrderContent() {
                             values = [selectedProductForModal.unit_of_measure || 'Unidad'];
                         }
                     }
+
+                    // GOBERNANZA DE MADURACIÓN POR DEFECTO (Línea Base SDD):
+                    // En el montaje interno de pedidos, "Maduro" es la norma biológica estándar.
+                    // Se oculta la opción explícita "Maduro" para que el asesor no fragmente la compra en Corabastos.
+                    // Solo quedan seleccionables las excepciones operativas reales (ej. Pintón, Verde, Biche).
+                    const isRipeness = opt.name.toLowerCase().includes('maduraci');
+                    if (isRipeness) {
+                        values = values.filter((v: string) => {
+                            const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                            return clean !== 'maduro' && clean !== 'madura';
+                        });
+                    }
                     
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {
                         const cleanA = (valA.includes('|') ? valA.split('|')[0] : valA).trim().toLowerCase();
@@ -7862,7 +7874,8 @@ function CreateOrderContent() {
                     });
                     
                     return { ...opt, values: sortedValues };
-                });
+                })
+                .filter((opt: any) => opt.values && opt.values.length > 0);
 
                 // Build options list for manual orders (strictly base units: Kg, Unidad, etc.)
                 const optionsList: { unit: string; factor: number; label: string }[] = [];

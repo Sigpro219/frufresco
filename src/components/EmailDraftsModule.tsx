@@ -10611,7 +10611,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 if ((opt.name || '').toLowerCase().includes('tamaño') || (opt.name || '').toLowerCase().includes('tamano')) return false;
                 return true;
               })
-              .map((opt: any, index: number) => (
+              .map((opt: any) => {
+                const isRipeness = (opt.name || '').toLowerCase().includes('maduraci');
+                const values = isRipeness
+                  ? (opt.values || []).filter((v: string) => {
+                      const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                      return clean !== 'maduro' && clean !== 'madura';
+                    })
+                  : (opt.values || []);
+                return { ...opt, values };
+              })
+              .filter((opt: any) => opt.values && opt.values.length > 0)
+              .map((opt: any, index: number, filteredOpts: any[]) => (
               <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   {opt.name}
@@ -10624,7 +10635,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      if (index < (selectedProductForVariant.options_config?.length || 0) - 1) {
+                      if (index < filteredOpts.length - 1) {
                         const nextSelect = document.getElementById(`modal-select-${index + 1}`);
                         if (nextSelect) nextSelect.focus();
                       } else {
@@ -11280,6 +11291,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 values = [product.unit_of_measure || 'Unidad'];
               }
             }
+
+            // GOBERNANZA DE MADURACIÓN POR DEFECTO (Línea Base SDD):
+            // Ocultar opción explícita "Maduro" en borradores de pedidos internos.
+            const isRipeness = opt.name.toLowerCase().includes('maduraci');
+            if (isRipeness) {
+              values = values.filter((v: string) => {
+                const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                return clean !== 'maduro' && clean !== 'madura';
+              });
+            }
             
             const sortedValues = values.slice().sort((valA: string, valB: string) => {
               const cleanA = (valA.includes('|') ? valA.split('|')[0] : valA).trim().toLowerCase();
@@ -11301,7 +11322,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             });
             
             return { ...opt, values: sortedValues };
-          });
+          })
+          .filter((opt: any) => opt.values && opt.values.length > 0);
 
         const modalOptionsList: { unit: string; factor: number; label: string }[] = [];
         const baseUnit = product.unit_of_measure || 'Kg';

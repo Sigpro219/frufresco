@@ -84,7 +84,7 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
             assert.strictEqual(spec, '', 'El texto libre informal no debe inventar variantes');
         });
 
-        it('debe conservar variantes reales diferenciales (Maduro vs Pintón)', () => {
+        it('debe conservar variantes reales diferenciales (Maduro como base vs Pintón como excepción)', () => {
             const itemMaduro = {
                 product_name: 'Papaya maradol',
                 selected_options: {
@@ -100,7 +100,9 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
                 }
             };
 
-            assert.strictEqual(getCanonicalProcurementSpec(itemMaduro), 'und de 2 kg; Maduro');
+            // REGLA SDD: "Maduro" es línea base estándar (no genera sufijo cualitativo redundante)
+            assert.strictEqual(getCanonicalProcurementSpec(itemMaduro), 'und de 2 kg');
+            // "Pintón" es una excepción cualitativa diferencial real
             assert.strictEqual(getCanonicalProcurementSpec(itemPinton), 'und de 2 kg; Pintón');
         });
     });
@@ -212,7 +214,7 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
             assert.strictEqual(compiled.length, 1, 'Debe generar exactamente UNA línea consolidada');
             const row = compiled[0];
             assert.strictEqual(row.product_name, 'Papaya maradol');
-            assert.strictEqual(row.canonical_spec, 'Maduro');
+            assert.strictEqual(row.canonical_spec, '', 'Maduro es la línea base estándar');
             assert.strictEqual(row.order_count, 2, 'Debe registrar 2 pedidos consolidados');
             assert.strictEqual(row.raw_demand_kg, 30, 'Demanda debe ser 20 + 10 = 30 kg');
             assert.strictEqual(row.safety_stock, 6, 'Stock de seguridad debe ser 6 kg');
@@ -258,9 +260,61 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
             const compiled = calculateProcurementNetting({ items, stocks: {} });
             assert.strictEqual(compiled.length, 1, 'Debe unificar en UNA sola línea consolidada de compra');
             assert.strictEqual(compiled[0].product_name, 'Mango tommy');
-            assert.strictEqual(compiled[0].canonical_spec, 'Maduro');
+            assert.strictEqual(compiled[0].canonical_spec, '', 'Maduro es línea base estándar');
             assert.strictEqual(compiled[0].raw_demand_kg, 47.5, 'Demanda debe sumar 25.5 + 22.0 = 47.5 kg');
             assert.strictEqual(compiled[0].net_to_buy, 47.5, 'A comprar debe ser 47.5 kg');
+        });
+
+        it('unifica pedidos con maduración no especificada y pedidos con maduración "Maduro" en la misma línea base', () => {
+            const items: NettingOrderItem[] = [
+                {
+                    product_id: 'prod-pina-1',
+                    quantity: 116,
+                    unit: 'kg',
+                    selected_options: null,
+                    products: {
+                        id: 'prod-pina-1',
+                        name: 'Piña golden',
+                        purchase_sublist: 'FRUTAS',
+                        unit_of_measure: 'Kg'
+                    }
+                },
+                {
+                    product_id: 'prod-pina-1',
+                    quantity: 2,
+                    unit: 'kg',
+                    selected_options: { 'Maduración': 'Maduro' },
+                    products: {
+                        id: 'prod-pina-1',
+                        name: 'Piña golden',
+                        purchase_sublist: 'FRUTAS',
+                        unit_of_measure: 'Kg'
+                    }
+                },
+                {
+                    product_id: 'prod-pina-1',
+                    quantity: 24,
+                    unit: 'kg',
+                    selected_options: { 'Maduración': 'Pintón' },
+                    products: {
+                        id: 'prod-pina-1',
+                        name: 'Piña golden',
+                        purchase_sublist: 'FRUTAS',
+                        unit_of_measure: 'Kg'
+                    }
+                }
+            ];
+
+            const compiled = calculateProcurementNetting({ items, stocks: {} });
+            assert.strictEqual(compiled.length, 2, 'Debe unificar base (116) + Maduro (2) = 118 kg, y separar Pintón (24 kg)');
+            
+            const baseRow = compiled.find(r => r.canonical_spec === '');
+            const pintonRow = compiled.find(r => r.canonical_spec === 'Pintón');
+
+            assert.ok(baseRow, 'Debe existir la fila consolidada base');
+            assert.strictEqual(baseRow.raw_demand_kg, 118, 'La demanda base unificada debe ser 118 kg (116 + 2)');
+            assert.ok(pintonRow, 'Debe existir la fila separada para Pintón');
+            assert.strictEqual(pintonRow.raw_demand_kg, 24, 'La demanda de Pintón debe ser 24 kg');
         });
 
         it('segrega líneas cuando las características cualitativas difieren realmente', () => {
@@ -294,11 +348,11 @@ describe('Procurement Netting Engine (Cross-Docking / JIT)', () => {
             const stocks = { 'prod-papaya-1': 5 };
             const compiled = calculateProcurementNetting({ items, stocks });
 
-            assert.strictEqual(compiled.length, 2, 'Debe haber 2 líneas separadas (Maduro y Pintón)');
-            const maduro = compiled.find(r => r.canonical_spec.includes('Maduro'))!;
+            assert.strictEqual(compiled.length, 2, 'Debe haber 2 líneas separadas (Base/Maduro y Pintón)');
+            const maduro = compiled.find(r => r.canonical_spec === '')!;
             const pinton = compiled.find(r => r.canonical_spec.includes('Pintón'))!;
 
-            assert.ok(maduro, 'Debe existir fila para Maduro');
+            assert.ok(maduro, 'Debe existir fila base para Maduro');
             assert.ok(pinton, 'Debe existir fila para Pintón');
             // Deducción secuencial: la primera línea consume los 5 kg de bodega
             assert.strictEqual(maduro.applied_stock, 5);

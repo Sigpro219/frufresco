@@ -133,13 +133,26 @@ export function getCanonicalProcurementSpec(item: {
     }
 
     // 2. Extraer atributos culinarios estructurados (Maduración, Corte, Calibre, Punto, Especificación)
-    const knownKeys = ['Maduración', 'Maduracion', 'Corte', 'Calibre', 'Punto', 'Especificación', 'Especificacion'];
+    const knownKeys = ['Maduración', 'Maduracion', 'maduración', 'maduracion', 'Corte', 'corte', 'Calibre', 'calibre', 'Punto', 'punto', 'Especificación', 'Especificacion', 'especificación', 'especificacion'];
     knownKeys.forEach(k => {
         if (opts[k] && typeof opts[k] === 'string' && opts[k].trim()) {
             const val = opts[k].trim();
-            if (!/^\d+$/.test(val) && val.toLowerCase() !== 'estandar' && val.toLowerCase() !== 'estándar') {
+            const lowerKey = k.toLowerCase();
+            const lowerVal = val.toLowerCase();
+
+            // REGLA DE NEGOCIO CORABASTOS / SDD: "Maduro" es la línea base biológica y comercial estándar
+            // para frutas en compras mayoristas. No genera variante diferencial para evitar fragmentar
+            // compras idénticas (ej: Piña golden 116 kg + Piña golden 2 kg [Maduro] = 118 kg consolidado).
+            // Solo las desviaciones operativas (Pintón, Verde, Biche, etc.) generan especificación canónica.
+            if (lowerKey.includes('madurac') && (lowerVal === 'maduro' || lowerVal === 'madura')) {
+                return;
+            }
+
+            if (!/^\d+$/.test(val) && lowerVal !== 'estandar' && lowerVal !== 'estándar') {
                 if (!isRedundantAttribute(val, prodName)) {
-                    attributeParts.push(val);
+                    if (!attributeParts.includes(val)) {
+                        attributeParts.push(val);
+                    }
                 }
             }
         }

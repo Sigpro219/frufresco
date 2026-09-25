@@ -987,7 +987,19 @@ export default function OrderDetailPage() {
                         <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
 
                         {/* RENDER OPTIONS */}
-                        {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any) => (
+                        {selectedProductForModal.options_config && selectedProductForModal.options_config
+                            .map((opt: any) => {
+                                const isRipeness = (opt.name || '').toLowerCase().includes('maduraci');
+                                const values = isRipeness
+                                    ? (opt.values || []).filter((v: string) => {
+                                        const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                                        return clean !== 'maduro' && clean !== 'madura';
+                                    })
+                                    : (opt.values || []);
+                                return { ...opt, values };
+                            })
+                            .filter((opt: any) => opt.values && opt.values.length > 0)
+                            .map((opt: any) => (
                             <div key={opt.name} style={{ marginBottom: '1rem', textAlign: 'left' }}>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#4B5563', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
                                     {opt.name}
