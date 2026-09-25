@@ -36,9 +36,11 @@ export default function LoginPage() {
     const [showWorkspaceSelector, setShowWorkspaceSelector] = useState(false);
     const [discoveredProfiles, setDiscoveredProfiles] = useState<any[]>([]);
 
-    // Capturar parámetros de URL (error de desactivación, modo recuperación, errores de enlace expirado)
+    // Capturar parámetros de URL (PKCE code, tokens en hash, error de desactivación, modo recuperación)
     useEffect(() => {
-        if (typeof window !== 'undefined') {
+        const handleAuthRecoveryLifecycle = async () => {
+            if (typeof window === 'undefined') return;
+
             const params = new URLSearchParams(window.location.search);
             const errParam = params.get('error');
             if (errParam === 'deactivated') {
@@ -53,23 +55,86 @@ export default function LoginPage() {
                 }
             }
 
+            // 1. Manejar PKCE code exchange (?code=xxxx)
+            const code = params.get('code');
+            if (code) {
+                try {
+                    console.log('🔄 Canjeando código PKCE por sesión activa de recuperación...');
+                    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+                    if (exchangeError) {
+                        console.warn('⚠️ Error al canjear código de sesión:', exchangeError.message);
+                        if (exchangeError.message.toLowerCase().includes('expired') || exchangeError.message.toLowerCase().includes('invalid')) {
+                            setError('⚠️ El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
+                        } else {
+                            setError(`⚠️ ${exchangeError.message}`);
+                        }
+                    } else if (data.session) {
+                        console.log('✅ Sesión establecida exitosamente vía PKCE code para:', data.session.user.email);
+                        setIsRecoveryMode(true);
+                        setShowForceChangePassword(true);
+                        return;
+                    }
+                } catch (e: any) {
+                    console.error('Error exchanging code for session:', e);
+                }
+            }
+
+            // 2. Manejar Implicit flow tokens en hash (#access_token=...&refresh_token=...)
+            if (window.location.hash) {
+                const hash = window.location.hash.substring(1);
+                const hashParams = new URLSearchParams(hash);
+                const accessToken = hashParams.get('access_token');
+                const refreshToken = hashParams.get('refresh_token');
+                const type = hashParams.get('type');
+
+                if (accessToken && refreshToken) {
+                    try {
+                        console.log('🔄 Restaurando sesión de recuperación desde hash tokens...');
+                        const { data, error: sessionError } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken
+                        });
+                        if (sessionError) {
+                            console.warn('⚠️ Error estableciendo sesión desde hash:', sessionError.message);
+                        } else if (data.session) {
+                            console.log('✅ Sesión establecida exitosamente vía Hash tokens para:', data.session.user.email);
+                            if (type === 'recovery' || params.get('mode') === 'recovery') {
+                                setIsRecoveryMode(true);
+                                setShowForceChangePassword(true);
+                                return;
+                            }
+                        }
+                    } catch (e: any) {
+                        console.error('Error setting session from hash:', e);
+                    }
+                }
+            }
+
+            // 3. Fallback modo recovery explícito en query o hash
             if (params.get('mode') === 'recovery' || window.location.hash.includes('type=recovery')) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    console.log('✅ Sesión existente confirmada en modo recovery:', session.user.email);
+                }
                 setIsRecoveryMode(true);
                 setShowForceChangePassword(true);
             }
-        }
+        };
+
+        handleAuthRecoveryLifecycle();
     }, []);
 
     // Escuchar evento PASSWORD_RECOVERY de Supabase
     useEffect(() => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-            if (event === 'PASSWORD_RECOVERY') {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isRecoveryMode)) {
+                console.log('🔔 Evento de autenticación detectado:', event);
                 setIsRecoveryMode(true);
                 setShowForceChangePassword(true);
             }
         });
         return () => subscription.unsubscribe();
-    }, []);
+    }, [isRecoveryMode]);
 
     // Helper para determinar redirección según el perfil
     const routeUserByProfile = (targetProfile: any) => {
@@ -130,16 +195,25 @@ export default function LoginPage() {
         }
 
         try {
+            // Verificar si hay sesión activa antes de actualizar
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                setError('⚠️ La sesión de recuperación no está activa o el enlace ya expiró. Por favor solicita un nuevo enlace de recuperación.');
+                setLoading(false);
+                return;
+            }
+
             // 1. Actualizar contraseña en Supabase Auth
             const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
             if (authError) throw authError;
 
             // 2. Si estaba marcado con needs_password_change, desmarcarlo en profiles
-            if (user?.id) {
+            const targetUserId = session.user?.id || user?.id;
+            if (targetUserId) {
                 await supabase
                     .from('profiles')
                     .update({ needs_password_change: false })
-                    .eq('id', user.id);
+                    .eq('id', targetUserId);
             }
 
             console.log('✅ Contraseña restablecida con éxito');
@@ -151,7 +225,11 @@ export default function LoginPage() {
 
         } catch (err: any) {
             console.error('❌ Error al actualizar contraseña:', err);
-            setError(err.message || 'Error inesperado al cambiar la contraseña');
+            let msg = err.message || 'Error inesperado al cambiar la contraseña';
+            if (msg.includes('Auth session missing')) {
+                msg = '⚠️ La sesión de autenticación no está activa o el enlace expiró. Por favor solicita un nuevo enlace de recuperación.';
+            }
+            setError(msg);
             setLoading(false);
         }
     };
