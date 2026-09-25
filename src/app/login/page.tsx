@@ -64,16 +64,7 @@ export default function LoginPage() {
             } else if (errParam) {
                 const desc = params.get('error_description') || errParam;
                 const cleanDesc = decodeURIComponent(desc).replace(/\+/g, ' ');
-                const lower = cleanDesc.toLowerCase();
-                if (lower.includes('expired') || params.get('error_code') === 'otp_expired' || cleanDesc === 'invalid_link') {
-                    setError('⚠️ El enlace o código de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
-                } else if (lower.includes('rate limit') || lower.includes('too many requests')) {
-                    setError('⚠️ Has realizado demasiadas solicitudes recientemente. Por favor espera unos minutos antes de reintentar.');
-                } else if (lower.includes('invalid') || lower.includes('token is invalid')) {
-                    setError('⚠️ El enlace o código de acceso no es válido. Por favor solicita uno nuevo.');
-                } else {
-                    setError(`⚠️ ${cleanDesc}`);
-                }
+                setError(mapRecoveryErrorMessage(cleanDesc));
             }
 
             // 1. Manejar PKCE code exchange (?code=xxxx) enviándolo al servidor para canje con @supabase/ssr
@@ -177,7 +168,7 @@ export default function LoginPage() {
 
     // Redirección inteligente al cargar perfil
     useEffect(() => {
-        if (profile && !showWorkspaceSelector && !showForceChangePassword) {
+        if (profile && !showWorkspaceSelector && !showForceChangePassword && !showForgotPassword) {
             if (profile.needs_password_change) {
                 console.log('🔒 El usuario requiere cambio de contraseña obligatorio antes de ingresar');
                 setShowForceChangePassword(true);
@@ -192,7 +183,7 @@ export default function LoginPage() {
                 routeUserByProfile(profile);
             }
         }
-    }, [profile, showWorkspaceSelector, showForceChangePassword, discoveredProfiles]);
+    }, [profile, showWorkspaceSelector, showForceChangePassword, showForgotPassword, discoveredProfiles]);
 
     const handlePasswordUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -296,6 +287,7 @@ export default function LoginPage() {
 
             if (resetError) throw resetError;
 
+            setForgotEmail(cleanEmail);
             setRecoveryStep('otp');
             setResendCooldown(60);
         } catch (err: any) {
@@ -1076,6 +1068,12 @@ export default function LoginPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
+                                                        const cleanEmail = forgotEmail.trim().toLowerCase();
+                                                        if (!cleanEmail) {
+                                                            setForgotError('⚠️ Ingresa primero tu correo electrónico para verificar el código.');
+                                                            return;
+                                                        }
+                                                        setForgotEmail(cleanEmail);
                                                         setRecoveryStep('otp');
                                                         setForgotError('');
                                                     }}

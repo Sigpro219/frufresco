@@ -313,11 +313,11 @@ test('Alistamiento Print: Normalización Canónica de Unidades en Fila 1', async
         });
     });
 
-    await t.test('PrintDocumentSwitcher: Catálogo de 6 documentos oficiales y cálculo de fechas', () => {
-        // 1. Debe registrar exactamente los 6 documentos de la suite oficial (incluyendo Manifiesto de Ruta)
-        assert.strictEqual(PRINT_DOCUMENTS.length, 6);
+    await t.test('PrintDocumentSwitcher: Catálogo de 7 documentos oficiales y cálculo de fechas', () => {
+        // 1. Debe registrar exactamente los 7 documentos de la suite oficial (incluyendo Manifiesto de Ruta e Inventario)
+        assert.strictEqual(PRINT_DOCUMENTS.length, 7);
         const keys = PRINT_DOCUMENTS.map(d => d.key);
-        assert.deepStrictEqual(keys, ['alistamiento', 'purchases', 'receiving', 'labels', 'manifest', 'contingency']);
+        assert.deepStrictEqual(keys, ['alistamiento', 'purchases', 'receiving', 'inventory', 'labels', 'manifest', 'contingency']);
 
         // 2. getBogotaDate debe generar formato YYYY-MM-DD
         const today = getBogotaDate(0);

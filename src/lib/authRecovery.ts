@@ -21,7 +21,15 @@ export function validateRecoveryInput(
     newPassword: string,
     confirmPassword: string
 ): RecoveryValidationResult {
-    const cleanOtp = (otpCode || '').trim().replace(/\D/g, '');
+    const rawOtp = (otpCode || '').trim();
+    if (/[^\d\s-]/.test(rawOtp)) {
+        return {
+            isValid: false,
+            error: '⚠️ El código de verificación solo debe contener números.',
+        };
+    }
+
+    const cleanOtp = rawOtp.replace(/\D/g, '');
     const cleanPassword = (newPassword || '').trim();
     const cleanConfirm = (confirmPassword || '').trim();
 
@@ -80,6 +88,15 @@ export function mapRecoveryErrorMessage(rawError: any): string {
         return '⚠️ Has solicitado varios códigos recientemente o alcanzado el límite de intentos. Por favor espera unos minutos antes de reintentar.';
     }
 
+    if (
+        lower.includes('session missing') ||
+        lower.includes('session_missing') ||
+        lower.includes('pkce') ||
+        lower.includes('not authenticated')
+    ) {
+        return '⚠️ La sesión de recuperación no está activa o el código expiró. Por favor solicita un nuevo código.';
+    }
+
     if (lower.includes('same password') || lower.includes('should be different')) {
         return '⚠️ La nueva contraseña debe ser diferente a la contraseña anterior.';
     }
@@ -88,8 +105,19 @@ export function mapRecoveryErrorMessage(rawError: any): string {
         return '⚠️ La nueva contraseña debe tener al menos 6 caracteres.';
     }
 
-    if (lower.includes('user not found')) {
+    if (
+        lower.includes('user not found') ||
+        lower.includes('signups not allowed')
+    ) {
         return '⚠️ No se encontró una cuenta asociada a este correo electrónico.';
+    }
+
+    if (lower.includes('network') || lower.includes('fetch failed') || lower.includes('failed to fetch')) {
+        return '⚠️ Error de conexión de red. Por favor verifica tu conexión a internet e intenta nuevamente.';
+    }
+
+    if (lower.includes('email_address_invalid') || lower.includes('invalid email')) {
+        return '⚠️ El formato de correo electrónico ingresado no es válido.';
     }
 
     return rawMsg ? `⚠️ ${rawMsg}` : '⚠️ Error al procesar la solicitud.';
@@ -180,12 +208,15 @@ export async function performOtpPasswordReset({
         // 3. Limpiar needs_password_change en tabla profiles
         if (userId) {
             try {
-                await supabaseClient
+                const { error: profErr } = await supabaseClient
                     .from('profiles')
                     .update({ needs_password_change: false })
                     .eq('id', userId);
-            } catch (profErr) {
-                console.warn('⚠️ No se pudo actualizar profiles.needs_password_change:', profErr);
+                if (profErr) {
+                    console.warn('⚠️ Error al actualizar profiles.needs_password_change:', profErr.message || profErr);
+                }
+            } catch (profErr: any) {
+                console.warn('⚠️ Excepción al actualizar profiles.needs_password_change:', profErr?.message || profErr);
             }
         }
 

@@ -16,9 +16,14 @@ test('validateRecoveryInput: validaciones estrictas de OTP de 6 dígitos y contr
     assert.equal(shortOtp.isValid, false);
     assert.match(shortOtp.error || '', /6 dígitos/i);
 
+    // Caracteres alfabéticos o inválidos
     const nonDigitOtp = validateRecoveryInput('abc-12', 'Pass1234', 'Pass1234');
     assert.equal(nonDigitOtp.isValid, false);
-    assert.match(nonDigitOtp.error || '', /6 dígitos/i);
+    assert.match(nonDigitOtp.error || '', /solo debe contener números/i);
+
+    const trailingAlphaOtp = validateRecoveryInput('123456a', 'Pass1234', 'Pass1234');
+    assert.equal(trailingAlphaOtp.isValid, false);
+    assert.match(trailingAlphaOtp.error || '', /solo debe contener números/i);
 
     // 2. Contraseña corta (< 6 caracteres)
     const shortPass = validateRecoveryInput('123456', '12345', '12345');
@@ -35,9 +40,12 @@ test('validateRecoveryInput: validaciones estrictas de OTP de 6 dígitos y contr
     assert.equal(valid.isValid, true);
     assert.equal(valid.error, undefined);
 
-    // 5. Código formateado con guiones o espacios (ej. "839-201")
+    // 5. Código formateado con guiones o espacios (ej. "839-201" o "839 201")
     const validFormatted = validateRecoveryInput('839-201', 'Segura#2026', 'Segura#2026');
     assert.equal(validFormatted.isValid, true);
+
+    const validSpaced = validateRecoveryInput('839 201', 'Segura#2026', 'Segura#2026');
+    assert.equal(validSpaced.isValid, true);
 });
 
 test('mapRecoveryErrorMessage: mapeo claro a mensajes en español amigables', () => {
@@ -57,6 +65,17 @@ test('mapRecoveryErrorMessage: mapeo claro a mensajes en español amigables', ()
     // Password requirements
     assert.match(mapRecoveryErrorMessage({ message: 'New password should be different from old password' }), /diferente/i);
     assert.match(mapRecoveryErrorMessage({ message: 'Password should be at least 6 characters' }), /al menos 6 caracteres/i);
+
+    // Session missing / PKCE
+    assert.match(mapRecoveryErrorMessage({ message: 'Auth session missing!' }), /sesión de recuperación no está activa/i);
+    assert.match(mapRecoveryErrorMessage({ message: 'PKCE code verifier not found' }), /sesión de recuperación no está activa/i);
+
+    // Signups not allowed / User not found
+    assert.match(mapRecoveryErrorMessage({ message: 'Signups not allowed for otp' }), /no se encontró una cuenta/i);
+    assert.match(mapRecoveryErrorMessage({ message: 'User not found' }), /no se encontró una cuenta/i);
+
+    // Network error
+    assert.match(mapRecoveryErrorMessage({ message: 'Failed to fetch' }), /conexión de red/i);
 
     // Fallback genérico
     assert.match(mapRecoveryErrorMessage(null), /error inesperado/i);
@@ -195,4 +214,99 @@ test('performOtpPasswordReset: devuelve error en español cuando ambos tipos de 
 
     assert.equal(result.success, false);
     assert.match(result.error || '', /expirado/i);
+});
+
+test('performOtpPasswordReset: valida presencia de correo electrónico', async () => {
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => ({ data: { user: null }, error: null }),
+            updateUser: async () => ({ data: { user: null }, error: null }),
+        },
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: '   ',
+        otpCode: '123456',
+        newPassword: 'NuevaPassword1',
+        confirmPassword: 'NuevaPassword1',
+    });
+
+    assert.equal(result.success, false);
+    assert.match(result.error || '', /correo electrónico/i);
+});
+
+test('performOtpPasswordReset: propaga error en español si updateUser falla tras OTP exitoso', async () => {
+    const mockSupabase = {
+        auth: {
+            verifyOtp: async () => ({
+                data: {
+                    user: { id: 'usr-123', email: 'test@frufresco.com' },
+                    session: { access_token: 'fake' },
+                },
+                error: null,
+            }),
+            updateUser: async () => ({
+                data: { user: null },
+                error: { message: 'New password should be different from old password' },
+            }),
+        },
+    };
+
+    const result = await performOtpPasswordReset({
+        supabaseClient: mockSupabase,
+        email: 'test@frufresco.com',
+        otpCode: '123456',
+        newPassword: 'MismaPassword1',
+        confirmPassword: 'MismaPassword1',
+    });
+
+    assert.equal(result.success, false);
+    assert.match(result.error || '', /diferente a la contraseña anterior/i);
+});
+
+test('performOtpPasswordReset: mantiene éxito de recuperación si profiles.update retorna error no fatal', async () => {
+    let warningLogged = false;
+    const originalWarn = console.warn;
+    console.warn = (...args: any[]) => {
+        warningLogged = true;
+        originalWarn(...args);
+    };
+
+    try {
+        const mockSupabase = {
+            auth: {
+                verifyOtp: async () => ({
+                    data: {
+                        user: { id: 'usr-prof-err', email: 'test@frufresco.com' },
+                        session: { access_token: 'fake' },
+                    },
+                    error: null,
+                }),
+                updateUser: async () => ({
+                    data: { user: { id: 'usr-prof-err' } },
+                    error: null,
+                }),
+            },
+            from: () => ({
+                update: () => ({
+                    eq: async () => ({ error: { message: 'RLS row violation' } }),
+                }),
+            }),
+        };
+
+        const result = await performOtpPasswordReset({
+            supabaseClient: mockSupabase,
+            email: 'test@frufresco.com',
+            otpCode: '123456',
+            newPassword: 'NuevaSegura2026',
+            confirmPassword: 'NuevaSegura2026',
+        });
+
+        assert.equal(result.success, true);
+        assert.equal(result.userId, 'usr-prof-err');
+        assert.equal(warningLogged, true);
+    } finally {
+        console.warn = originalWarn;
+    }
 });

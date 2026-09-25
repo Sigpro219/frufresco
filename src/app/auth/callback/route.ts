@@ -4,7 +4,12 @@ import { NextResponse } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 
 export async function GET(request: Request) {
-    const { searchParams, origin } = new URL(request.url)
+    const url = new URL(request.url)
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+    const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : url.origin
+    const { searchParams } = url
+
     const code = searchParams.get('code')
     const token_hash = searchParams.get('token_hash')
     const type = searchParams.get('type') as EmailOtpType | null
@@ -90,8 +95,9 @@ export async function GET(request: Request) {
             token_hash,
         })
 
-        if (!error && data.session) {
-            console.log('✅ Sesión canjeada con éxito en servidor vía token_hash para:', data.session.user.email)
+        if (!error && (data?.session || data?.user)) {
+            const userEmail = data.session?.user?.email || data.user?.email || 'usuario'
+            console.log('✅ Sesión canjeada con éxito en servidor vía token_hash para:', userEmail)
             return response
         } else if (error) {
             console.error('❌ Error canjeando token_hash en servidor:', error.message)
