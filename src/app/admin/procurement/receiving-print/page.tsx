@@ -137,10 +137,10 @@ export default function ReceivingPrintPage() {
         }
     };
 
-    // Paginación a 2 Columnas:
-    // En Oficio Portrait (330mm) caben ~38 filas por columna (76 productos por hoja).
-    // En Carta Portrait (279mm) caben ~31 filas por columna (62 productos por hoja).
-    const rowsPerColumn = paperFormat === 'oficio' ? 38 : 31;
+    // Paginación a 2 Columnas para Conteo a Ciegas:
+    // En Oficio Portrait (330mm) caben 54 filas por columna (108 productos por hoja, idéntico a INGRESO.pdf).
+    // En Carta Portrait (279mm) caben 42 filas por columna (84 productos por hoja).
+    const rowsPerColumn = paperFormat === 'oficio' ? 54 : 42;
     const itemsPerPage = rowsPerColumn * 2;
 
     const pages = useMemo(() => {
@@ -164,7 +164,7 @@ export default function ReceivingPrintPage() {
                 @media print {
                     @page {
                         size: ${paperFormat === 'oficio' ? 'legal portrait' : 'letter portrait'} !important;
-                        margin: 0.8cm 0.9cm !important;
+                        margin: 0.6cm 0.8cm !important;
                     }
                     body {
                         background-color: #FFFFFF !important;
@@ -259,7 +259,7 @@ export default function ReceivingPrintPage() {
                                     title: `Control_Llegada_${selectedDate}`,
                                     paperSize: paperFormat,
                                     orientation: 'portrait',
-                                    margin: '0.8cm 0.9cm'
+                                    margin: '0.6cm 0.8cm'
                                 });
                             }
                         }}
@@ -310,7 +310,7 @@ export default function ReceivingPrintPage() {
                                     width: paperFormat === 'oficio' ? '215.9mm' : '215.9mm',
                                     minHeight: paperFormat === 'oficio' ? '330mm' : '279.4mm',
                                     margin: '0 auto',
-                                    padding: '0.8cm 0.9cm',
+                                    padding: '0.6cm 0.8cm',
                                     boxSizing: 'border-box',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -321,12 +321,12 @@ export default function ReceivingPrintPage() {
                             >
                                 {/* Header Section emulating INGRESO.pdf */}
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                                         <div style={{ width: '90px' }}>
                                             <img
                                                 src="/images/frufresco-logo.png"
                                                 alt="FruFresco"
-                                                style={{ height: '36px', objectFit: 'contain' }}
+                                                style={{ height: '32px', objectFit: 'contain' }}
                                                 onError={(e) => {
                                                     // Fallback si la imagen no carga
                                                     (e.target as HTMLElement).style.display = 'none';
@@ -334,7 +334,7 @@ export default function ReceivingPrintPage() {
                                             />
                                         </div>
                                         <div style={{ textAlign: 'center', flex: 1 }}>
-                                            <h2 style={{ margin: 0, fontSize: '12pt', fontWeight: '900', color: '#0D7A57', letterSpacing: '0.05em' }}>
+                                            <h2 style={{ margin: 0, fontSize: '11.5pt', fontWeight: '900', color: '#0D7A57', letterSpacing: '0.05em' }}>
                                                 INVESTMENTS CORTES SAS
                                             </h2>
                                         </div>
@@ -347,9 +347,9 @@ export default function ReceivingPrintPage() {
                                         justifyContent: 'space-between',
                                         alignItems: 'baseline',
                                         borderBottom: '1.5px solid #000000',
-                                        paddingBottom: '3px',
-                                        marginBottom: '6px',
-                                        fontSize: '7.2pt',
+                                        paddingBottom: '2px',
+                                        marginBottom: '4px',
+                                        fontSize: '7pt',
                                         fontWeight: 'bold',
                                         color: '#000000'
                                     }}>
@@ -364,19 +364,19 @@ export default function ReceivingPrintPage() {
                                     {/* Two-Column Side-by-Side Tables */}
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', alignItems: 'start' }}>
                                         {/* Left Table Block */}
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.6pt' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '42%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '14%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
-                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
-                                                    <th style={{ width: '28%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                                    <th style={{ width: '42%', textAlign: 'left', padding: '1.5px 3px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '14%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '16%', textAlign: 'center', padding: '1.5px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.2pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
+                                                    <th style={{ width: '28%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {page.left.map((it, idx) => (
-                                                    <tr key={it.product_id || idx} style={{ height: '20px' }}>
-                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
+                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '19px' }}>
+                                                        <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
                                                             <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                             {it.accounting_id && (
                                                                 <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
@@ -393,19 +393,19 @@ export default function ReceivingPrintPage() {
                                         </table>
 
                                         {/* Right Table Block */}
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.6pt' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '42%', textAlign: 'left', padding: '2px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '14%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
-                                                    <th style={{ width: '16%', textAlign: 'center', padding: '2px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.5pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
-                                                    <th style={{ width: '28%', textAlign: 'center', padding: '2px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
+                                                    <th style={{ width: '42%', textAlign: 'left', padding: '1.5px 3px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '14%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '16%', textAlign: 'center', padding: '1.5px 1px', border: '1px solid #000000', fontWeight: 'bold', lineHeight: 1.1 }}>Calidad - Apto<br/><span style={{ fontSize: '5.2pt', fontWeight: 'normal' }}>(SI/NO)</span></th>
+                                                    <th style={{ width: '28%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>Nombre</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {page.right.map((it, idx) => (
-                                                    <tr key={it.product_id || idx} style={{ height: '20px' }}>
-                                                        <td style={{ textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
+                                                    <tr key={it.product_id || idx} style={{ height: paperFormat === 'oficio' ? '17.5px' : '19px' }}>
+                                                        <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={it.product_name}>
                                                             <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                             {it.accounting_id && (
                                                                 <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
@@ -420,11 +420,11 @@ export default function ReceivingPrintPage() {
                                                 ))}
                                                 {/* Rellenar filas vacías en la columna derecha si es más corta que la izquierda */}
                                                 {Array.from({ length: Math.max(0, page.left.length - page.right.length) }).map((_, emptyIdx) => (
-                                                    <tr key={`empty-${emptyIdx}`} style={{ height: '20px' }}>
-                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
-                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
-                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
-                                                        <td style={{ border: '1px solid #CBD5E1', backgroundColor: '#FAFAFA' }}></td>
+                                                    <tr key={`empty-${emptyIdx}`} style={{ height: paperFormat === 'oficio' ? '17.5px' : '19px' }}>
+                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
+                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
+                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
+                                                        <td style={{ border: '1px solid #000000', backgroundColor: '#FFFFFF' }}></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
