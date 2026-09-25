@@ -653,6 +653,8 @@ function CreateOrderContent() {
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
+    const [allowOffAgreementPurchases, setAllowOffAgreementPurchases] = useState<boolean>(true);
+    const [agreementProductIds, setAgreementProductIds] = useState<Set<string>>(new Set());
 
     // Staging Pareto Dropdown States
     const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
@@ -670,13 +672,18 @@ function CreateOrderContent() {
         }
         const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-        const cacheKey = `${cleanQuery}_${extractedId}_${products.length}_${clientExceptions.length}`;
+        const isStrictAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
+        const eligibleProducts = isStrictAgreement
+            ? products.filter(p => agreementProductIds.has(p.id))
+            : products;
+
+        const cacheKey = `${cleanQuery}_${extractedId}_${eligibleProducts.length}_${clientExceptions.length}_${isStrictAgreement ? 'strict' : 'open'}`;
         if (searchQueryCacheRef.current.has(cacheKey)) {
             return searchQueryCacheRef.current.get(cacheKey)!;
         }
 
         if (!cleanQuery && !extractedId) {
-            const defaultResults = [...products].sort((a, b) => {
+            const defaultResults = [...eligibleProducts].sort((a, b) => {
                 const freqA = clientFrequentProductMap[a.id]?.count || 0;
                 const freqB = clientFrequentProductMap[b.id]?.count || 0;
                 if (freqB !== freqA) return freqB - freqA;
@@ -686,7 +693,7 @@ function CreateOrderContent() {
             return defaultResults;
         }
 
-        const matched = products.filter(p => {
+        const matched = eligibleProducts.filter(p => {
             const normName = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const normSku = (p.sku || '').toLowerCase();
             const normAcc = (getAccountingIdDisplay(p) || '').toLowerCase();
@@ -745,6 +752,9 @@ function CreateOrderContent() {
 
             if (cleanQuery && normNameA.startsWith(cleanQuery)) scoreA += 1000;
             if (cleanQuery && normNameB.startsWith(cleanQuery)) scoreB += 1000;
+
+            if (agreementProductIds.has(a.id)) scoreA += 4000;
+            if (agreementProductIds.has(b.id)) scoreB += 4000;
 
             if (excA) scoreA += 500;
             if (excB) scoreB += 500;
@@ -1082,6 +1092,20 @@ function CreateOrderContent() {
                 const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
                 const branchId = currentProfile?.id || selectedClient;
                 const parentId = currentProfile?.parent_id || null;
+                const parentProfile = parentId ? clients.find(c => c.id === parentId) : null;
+
+                // Evaluación de permiso de compras fuera de convenio (con herencia de matriz)
+                let allowOff = true;
+                if (currentProfile) {
+                    if (currentProfile.override_parent_off_agreement && currentProfile.allow_off_agreement_purchases !== undefined && currentProfile.allow_off_agreement_purchases !== null) {
+                        allowOff = currentProfile.allow_off_agreement_purchases !== false;
+                    } else if (parentProfile && parentProfile.allow_off_agreement_purchases !== undefined && parentProfile.allow_off_agreement_purchases !== null) {
+                        allowOff = parentProfile.allow_off_agreement_purchases !== false;
+                    } else if (currentProfile.allow_off_agreement_purchases !== undefined && currentProfile.allow_off_agreement_purchases !== null) {
+                        allowOff = currentProfile.allow_off_agreement_purchases !== false;
+                    }
+                }
+                setAllowOffAgreementPurchases(allowOff);
 
                 // Nivel 1: Prevalencia Máxima - Acuerdo asignado directamente a la Sucursal
                 let candidateAgreement: any = null;
@@ -1209,19 +1233,30 @@ function CreateOrderContent() {
                     }
                 });
 
-                const agreementProductIds = new Set<string>();
+                const agrProdIds = new Set<string>();
                 if (activeAgreement) {
-                    const { data: qItems } = await supabase
-                        .from('quote_items')
-                        .select('product_id, unit_price')
-                        .eq('quote_id', activeAgreement.id);
+                    let allQuoteItems: any[] = [];
+                    let qPage = 0;
+                    const qLimit = 1000;
+                    while (true) {
+                        const { data: qChunk, error: qErr } = await supabase
+                            .from('quote_items')
+                            .select('product_id, unit_price')
+                            .eq('quote_id', activeAgreement.id)
+                            .range(qPage * qLimit, (qPage + 1) * qLimit - 1);
+                        if (qErr || !qChunk || qChunk.length === 0) break;
+                        allQuoteItems = allQuoteItems.concat(qChunk);
+                        if (qChunk.length < qLimit) break;
+                        qPage++;
+                    }
                     
-                    qItems?.forEach((p: any) => {
+                    allQuoteItems.forEach((p: any) => {
                         map[p.product_id] = p.unit_price;
                         customIds.add(p.product_id);
-                        agreementProductIds.add(p.product_id);
+                        agrProdIds.add(p.product_id);
                     });
                 }
+                setAgreementProductIds(agrProdIds);
 
                 // Fallback institucional: precargar precios de General Institucional para productos sin tarifa específica
                 if (isB2B && resolvedModel && resolvedModel.id !== GENERAL_INSTITUCIONAL_ID) {
@@ -1329,7 +1364,7 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, payment_days')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, is_corporate_parent, allow_off_agreement_purchases, override_parent_off_agreement, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, payment_days')
                 .eq('role', 'b2b_client')
                 .eq('is_active', true)
                 .order('company_name', { ascending: true });
@@ -4429,6 +4464,11 @@ function CreateOrderContent() {
     const filteredProducts = useMemo(() => {
         if (!productSearch || productSearch.trim().length < 2) return [];
 
+        const isStrictAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
+        const candidatePool = isStrictAgreement
+            ? (products || []).filter(p => agreementProductIds.has(p.id))
+            : (products || []);
+
         const normalizeStr = (s: string) => (s || '')
             .toLowerCase()
             .normalize("NFD")
@@ -4438,7 +4478,7 @@ function CreateOrderContent() {
         const cleanQuery = normalizeStr(productSearch);
 
         // Filter products that match query by name, sku, accounting_id, or client exception nickname
-        const matched = (products || []).filter(p => {
+        const matched = candidatePool.filter(p => {
             const normName = normalizeStr(p.name);
             const normSku = normalizeStr(p.sku);
             const normAcc = normalizeStr(String(p.accounting_id || ''));
@@ -4460,6 +4500,9 @@ function CreateOrderContent() {
 
             let scoreA = 0;
             let scoreB = 0;
+
+            if (agreementProductIds.has(a.id)) scoreA += 4000;
+            if (agreementProductIds.has(b.id)) scoreB += 4000;
 
             // Prioritize client exceptions/nicknames (highest boost)
             if (excA) scoreA += 1000;
@@ -4484,7 +4527,7 @@ function CreateOrderContent() {
             // Fallback: alphabetical
             return normNameA.localeCompare(normNameB);
         }).slice(0, 12);
-    }, [productSearch, products, clientExceptions, clientFrequentProductMap]);
+    }, [productSearch, products, clientExceptions, clientFrequentProductMap, allowOffAgreementPurchases, agreementProductIds]);
 
     const handleProductSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (filteredProducts.length === 0) return;
@@ -4782,6 +4825,22 @@ function CreateOrderContent() {
                                                             <Tag size={12} strokeWidth={2} />
                                                             {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Tarifa: ${activePricingModel?.name || 'General Institucional'}`}
                                                             {isContractExpired && <span style={{ color: '#DC2626' }}>(Expirado)</span>}
+                                                        </span>
+                                                    )}
+                                                    {activePricingModel?.is_agreement && (
+                                                        <span style={{
+                                                            padding: '2px 8px',
+                                                            borderRadius: '5px',
+                                                            backgroundColor: !allowOffAgreementPurchases ? '#FEF2F2' : '#F0FDF4',
+                                                            border: `1px solid ${!allowOffAgreementPurchases ? '#FECACA' : '#BBF7D0'}`,
+                                                            color: !allowOffAgreementPurchases ? '#991B1B' : '#166534',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '800',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }} title={!allowOffAgreementPurchases ? 'Compras restringidas estrictamente a productos pactados en el acuerdo vigente' : 'Compras permitidas para productos fuera de convenio con tarifa general'}>
+                                                            {!allowOffAgreementPurchases ? '🔒 Solo Convenio' : '🔓 Permite Fuera de Convenio'}
                                                         </span>
                                                     )}
                                                     {selectedClientDetails?.parent_id && (
@@ -6537,6 +6596,39 @@ function CreateOrderContent() {
                                                                                                 }}>
                                                                                                     {p.name} <span style={{ fontSize: '0.82em', color: isFocused ? '#2563EB' : '#6B7280', fontWeight: '600' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
                                                                                                 </span>
+                                                                                                {agreementProductIds.size > 0 && (
+                                                                                                    agreementProductIds.has(p.id) ? (
+                                                                                                        <span style={{ 
+                                                                                                            fontSize: '0.66rem', 
+                                                                                                            backgroundColor: isFocused ? '#E0E7FF' : '#EEF2FF', 
+                                                                                                            color: '#3730A3', 
+                                                                                                            padding: '2px 7px', 
+                                                                                                            borderRadius: '4px', 
+                                                                                                            fontWeight: '800', 
+                                                                                                            display: 'inline-flex', 
+                                                                                                            alignItems: 'center', 
+                                                                                                            gap: '3px',
+                                                                                                            border: isFocused ? '1px solid #6366F1' : '1px solid #C7D2FE'
+                                                                                                        }}>
+                                                                                                            📄 Convenio
+                                                                                                        </span>
+                                                                                                    ) : (
+                                                                                                        <span style={{ 
+                                                                                                            fontSize: '0.66rem', 
+                                                                                                            backgroundColor: '#F3F4F6', 
+                                                                                                            color: '#4B5563', 
+                                                                                                            padding: '2px 6px', 
+                                                                                                            borderRadius: '4px', 
+                                                                                                            fontWeight: '700', 
+                                                                                                            display: 'inline-flex', 
+                                                                                                            alignItems: 'center', 
+                                                                                                            gap: '3px',
+                                                                                                            border: '1px solid #E5E7EB'
+                                                                                                        }}>
+                                                                                                            📦 Catálogo Libre
+                                                                                                        </span>
+                                                                                                    )
+                                                                                                )}
                                                                                                 {isClientHabitual && (
                                                                                                     <span style={{ 
                                                                                                         fontSize: '0.68rem', 

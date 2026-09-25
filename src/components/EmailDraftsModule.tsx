@@ -1179,6 +1179,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [clientExceptions, setClientExceptions] = useState<any[]>([]);
   const [clientFrequentProductMap, setClientFrequentProductMap] = useState<Record<string, { count: number; totalQty: number; nickname?: string }>>({});
   const [clientFrequentProductIds, setClientFrequentProductIds] = useState<string[]>([]);
+  const [allowOffAgreementPurchases, setAllowOffAgreementPurchases] = useState<boolean>(true);
+  const [agreementProductIds, setAgreementProductIds] = useState<Set<string>>(new Set());
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
   const [isClientDetailsExpanded, setIsClientDetailsExpanded] = useState(false);
   const [attachmentFilterIndex, setAttachmentFilterIndex] = useState<number | 'all'>('all');
@@ -2707,13 +2709,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
     const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-    const cacheKey = `${cleanQuery}_${extractedId}_${products.length}_${clientExceptions.length}`;
+    const isStrictAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
+    const eligibleProducts = isStrictAgreement
+      ? products.filter(p => agreementProductIds.has(p.id))
+      : products;
+
+    const cacheKey = `${cleanQuery}_${extractedId}_${eligibleProducts.length}_${clientExceptions.length}_${isStrictAgreement ? 'strict' : 'open'}`;
     if (searchQueryCacheRef.current.has(cacheKey)) {
       return searchQueryCacheRef.current.get(cacheKey)!;
     }
 
     if (!cleanQuery && !extractedId) {
-      const defaultResults = [...products].sort((a, b) => {
+      const defaultResults = [...eligibleProducts].sort((a, b) => {
         const freqA = clientFrequentProductMap[a.id]?.count || 0;
         const freqB = clientFrequentProductMap[b.id]?.count || 0;
         if (freqB !== freqA) return freqB - freqA;
@@ -2723,7 +2730,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return defaultResults;
     }
 
-    const matched = products.filter(p => {
+    const matched = eligibleProducts.filter(p => {
       const normName = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const normSku = (p.sku || '').toLowerCase();
       const normAcc = (getAccountingIdDisplay(p) || '').toLowerCase();
@@ -2778,6 +2785,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 8000;
         if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 8000;
       }
+
+      // Prioritize items in active agreement
+      if (agreementProductIds.has(a.id)) scoreA += 4000;
+      if (agreementProductIds.has(b.id)) scoreB += 4000;
 
       // Exact full name match
       if (cleanQuery && normNameA === cleanQuery) scoreA += 3000;
@@ -3125,6 +3136,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       const branchId = currentProfileForContract?.id || null;
       const parentId = currentProfileForContract?.parent_id || null;
+      const parentProfile = parentId ? profiles.find(p => p.id === parentId) : null;
+
+      // Evaluación de permiso de compras fuera de convenio (con herencia de matriz)
+      let allowOff = true;
+      if (currentProfileForContract) {
+        if (currentProfileForContract.override_parent_off_agreement && currentProfileForContract.allow_off_agreement_purchases !== undefined && currentProfileForContract.allow_off_agreement_purchases !== null) {
+          allowOff = currentProfileForContract.allow_off_agreement_purchases !== false;
+        } else if (parentProfile && parentProfile.allow_off_agreement_purchases !== undefined && parentProfile.allow_off_agreement_purchases !== null) {
+          allowOff = parentProfile.allow_off_agreement_purchases !== false;
+        } else if (currentProfileForContract.allow_off_agreement_purchases !== undefined && currentProfileForContract.allow_off_agreement_purchases !== null) {
+          allowOff = currentProfileForContract.allow_off_agreement_purchases !== false;
+        }
+      }
+      setAllowOffAgreementPurchases(allowOff);
+
+      const agrProdIds = new Set<string>();
 
       // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
       const activeAgreement = (branchId ? agreements.find(q => q.client_id === branchId) : null)
@@ -3182,10 +3209,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         if (agreementMap) {
           loadedPrices = { ...agreementMap };
+          Object.keys(agreementMap).forEach(id => agrProdIds.add(id));
         }
       } else {
         // 2. Fetch pricing model if no agreement
-        const parentProfile = currentProfileForContract?.parent_id ? profiles.find(p => p.id === currentProfileForContract.parent_id) : null;
         const resolvedModelId = currentProfileForContract?.pricing_model_id || parentProfile?.pricing_model_id || null;
 
         if (resolvedModelId) {
@@ -3225,6 +3252,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
 
+      setAgreementProductIds(agrProdIds);
       setActivePricingModel(resolvedModel);
       setIsB2CDefault(b2cFallback);
       setIsContractExpired(expired);
@@ -3539,7 +3567,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id, parent_id, is_active')
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id, parent_id, is_corporate_parent, allow_off_agreement_purchases, override_parent_off_agreement, is_active')
         .order('company_name', { ascending: true });
       if (data) setProfiles(data);
     } catch (e) {
@@ -8585,6 +8613,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           }}>
                                             {p.name} <span style={{ fontSize: '0.78em', color: isFocused ? '#2563EB' : '#64748B', fontWeight: '600' }}>(ID: {getAccountingIdDisplay(p)})</span>
                                           </span>
+                                          {agreementProductIds.size > 0 && (
+                                            agreementProductIds.has(p.id) ? (
+                                              <span style={{ 
+                                                fontSize: '0.66rem', 
+                                                backgroundColor: isFocused ? '#E0E7FF' : '#EEF2FF', 
+                                                color: '#3730A3', 
+                                                padding: '2px 7px', 
+                                                borderRadius: '4px', 
+                                                fontWeight: '800', 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '3px',
+                                                border: isFocused ? '1px solid #6366F1' : '1px solid #C7D2FE'
+                                              }}>
+                                                📄 Convenio
+                                              </span>
+                                            ) : (
+                                              <span style={{ 
+                                                fontSize: '0.66rem', 
+                                                backgroundColor: '#F3F4F6', 
+                                                color: '#4B5563', 
+                                                padding: '2px 6px', 
+                                                borderRadius: '4px', 
+                                                fontWeight: '700', 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '3px',
+                                                border: '1px solid #E5E7EB'
+                                              }}>
+                                                📦 Catálogo Libre
+                                              </span>
+                                            )
+                                          )}
                                           {isClientHabitual && (
                                             <span style={{ 
                                               fontSize: '0.66rem', 
@@ -10178,6 +10239,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   {activePricingModel && (
                     <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                       <Tag size={11} /> {isB2CDefault ? 'Tarifa B2C (Defecto)' : `Modelo: ${activePricingModel.name}`}
+                    </span>
+                  )}
+                  {activePricingModel?.is_agreement && (
+                    <span style={{
+                      fontSize: '0.7rem',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: !allowOffAgreementPurchases ? '#FEF2F2' : '#F0FDF4',
+                      border: `1px solid ${!allowOffAgreementPurchases ? '#FECACA' : '#BBF7D0'}`,
+                      color: !allowOffAgreementPurchases ? '#991B1B' : '#166534',
+                      fontWeight: '800',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }} title={!allowOffAgreementPurchases ? 'Compras restringidas estrictamente a productos pactados en el acuerdo vigente' : 'Compras permitidas para productos fuera de convenio con tarifa general'}>
+                      {!allowOffAgreementPurchases ? '🔒 Solo Convenio' : '🔓 Permite Fuera de Convenio'}
                     </span>
                   )}
                 </div>

@@ -164,6 +164,23 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
   6. **Motor de Alistamiento (`src/lib/orderUtils.ts`):** Función canónica `normalizePickingNote` integrada en `formatStructuredSpecification`. Si un pedido llega desde la web con `Tamaño: Grande` o desde montaje con `Nota alistamiento: Cero`, en la sábana maestra de alistamiento (`alistamiento-print`) y en las hojas de picking (`contingency-print`) se imprime de forma uniforme la nota oficial de bodega: **`Cero`**, **`Mediana`**, **`Richy`**.
 - **Criterio de Aceptación:** Cumplido. Paridad total, exclusión mutua verificada en UI/DB y traducción automática de calibres para el piso de picking en Corabastos.
 
+### ✅ DEUDA TÉCNICA 14: Restricción Estricta de Catálogo por Acuerdo Comercial & Herencia de Compras Fuera de Convenio
+- **Diagnóstico:** Al montar pedidos manuales o procesar borradores de correo para clientes institucionales con acuerdos comerciales cerrados (ej. CESNE), los desplegables y buscadores de productos presentaban el catálogo general completo (ej. Lechuga crespa verde hidropónica #776), a pesar de que el cliente o su casa matriz tienen configurado contractualmente el bloqueo de compras fuera de convenio (`allow_off_agreement_purchases = false`).
+- **Arquitectura de Gobernanza & Herencia Canónica:**
+  1. **Regla de Restricción Estricta (`isStrictAgreement`):**
+     - Si la sucursal tiene `allow_off_agreement_purchases === false` (evaluando `override_parent_off_agreement` y la configuración de su matriz corporativa) Y existe un acuerdo comercial vigente (`quotes` activo y no expirado con registros en `quote_items`):
+       - Los algoritmos de búsqueda y autocompletado (`getScoredProductsForQuery` y `filteredProducts`) reducen el universo de productos exclusivamente a los SKUs pactados (`agreementProductIds`).
+       - Los productos que no pertenezcan al acuerdo quedan 100% excluidos de los desplegables, impidiendo errores de facturación o despachos no autorizados.
+  2. **Regla de Catálogo Abierto:**
+     - Si `allow_off_agreement_purchases === true` (o no existe acuerdo comercial activo): el catálogo general se mantiene abierto y los productos en acuerdo reciben un boost de relevancia (+4000) en el scoring de búsqueda, utilizando los precios de fallback institucional o modelo asignado.
+  3. **Acompañamiento Visual Poka-Yoke:**
+     - **Cabecera de Cliente:** Badge distintivo `[🔒 Solo Convenio]` (rojo) o `[🔓 Permite Fuera de Convenio]` (verde) junto al nombre del acuerdo comercial.
+     - **Desplegable de SKUs (Mesa de Trabajo):** Badge `[📄 Convenio]` (azul índigo) para ítems pactados y `[📦 Catálogo Libre]` (gris) para ítems del catálogo general institucional.
+- **Implementación Full-Stack:**
+  - `src/app/admin/orders/create/page.tsx`: Inclusión de `allow_off_agreement_purchases`, `override_parent_off_agreement` e `is_corporate_parent` en `fetchB2B`, carga paginada exhaustiva de `quote_items`, filtrado estricto en `getScoredProductsForQuery` y `filteredProducts`, y badges en UI.
+  - `src/components/EmailDraftsModule.tsx`: Inclusión de campos en `fetchProfiles`, resolución de permisos en `resolveContract`, filtrado condicional en `getScoredProductsForQuery`, y badges en UI de mesa de trabajo y resumen de cliente detectado.
+- **Criterio de Aceptación:** Cumplido. Clientes con bloqueo estricto solo ven sus SKUs pactados; clientes abiertos mantienen catálogo completo con precios acordes.
+
 ---
 
 ## 5. Verificación & Conclusiones
@@ -2321,6 +2338,6 @@ sequenceDiagram
        6. `Tara (Kg)` (10%, cabecera `#334155`): `[ _____ ]`.
        7. `Neto Real (Kg)` (10%, cabecera `#0D7A57`): `[ _____ ]`.
        8. `Calidad` (10%): Casillas de verificación `[ ] Aprob  [ ] Rech`.
-  5. **Paginación Limpia Carta Portrait y Protocolo de Muelle**:
-     - Se preserva el encabezado corporativo `UniversalLetterhead` con banner de protocolo de pesaje (tara 1.8 kg/canastilla) y bloque de firmas tripartito al pie: Conductor Corabastos, Auxiliar de Báscula y Auditor de Calidad Agroindustrial.
+  5. **Paginación y Formato Oficio Portrait (Legal) sin Bloque de Firmas**:
+     - La planilla se ajusta al formato de papel Oficio / Legal Portrait (`MAX_ROW_UNITS = 36` por hoja) con encabezado corporativo `UniversalLetterhead` y banner de protocolo de pesaje (tara 1.8 kg/canastilla). Se retira la línea de firmas para maximizar el área útil de cotejo en muelle.
 

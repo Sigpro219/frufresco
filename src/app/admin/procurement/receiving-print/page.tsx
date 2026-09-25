@@ -21,8 +21,8 @@ interface ReceivingItem {
     ordered_qty: number;
 }
 
-const MAX_ROW_UNITS = 22;
-const FOOTER_RESERVE = 4;
+const MAX_ROW_UNITS = 36;
+const FOOTER_RESERVE = 0;
 
 export default function ReceivingPrintPage() {
     const searchParams = useSearchParams();
@@ -183,12 +183,12 @@ export default function ReceivingPrintPage() {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
-            <GoldenPrintStyles paperSize="letter" />
+            <GoldenPrintStyles paperSize="oficio" />
 
             <style jsx global>{`
                 @media print {
                     @page {
-                        size: letter portrait !important;
+                        size: legal portrait !important;
                         margin: 0.8cm !important;
                     }
                     body {
@@ -283,9 +283,9 @@ export default function ReceivingPrintPage() {
                                 printViaNewWindow({
                                     element: printDocRef.current,
                                     title: `Ingreso_Muelle_${selectedDate}`,
-                                    paperSize: 'letter',
+                                    paperSize: 'oficio',
                                     orientation: 'portrait',
-                                    margin: '1.0cm 1.2cm'
+                                    margin: '0.8cm 1.0cm'
                                 });
                             }
                         }}
@@ -357,7 +357,7 @@ export default function ReceivingPrintPage() {
                                 key={`${sublistName}-page-${pageIdx}`}
                                 className="page-break"
                                 brand={INVESTMENTS_CORTES_BRAND}
-                                paperSize="letter"
+                                paperSize="oficio"
                                 meta={{
                                     title: 'INGRESO DE MERCANCÍA & CONTROL DE MUELLE (02:00 AM)',
                                     subtitle: pageSubtitle,
@@ -476,30 +476,6 @@ export default function ReceivingPrintPage() {
                                             })}
                                         </tbody>
                                     </table>
-
-                                    {/* Footer Signatures */}
-                                    <div style={{
-                                        marginTop: '12px',
-                                        paddingTop: '6px',
-                                        borderTop: '1px solid #CBD5E1',
-                                        display: 'grid',
-                                        gridTemplateColumns: '1fr 1fr 1fr',
-                                        gap: '12px',
-                                        fontSize: '0.62rem'
-                                    }}>
-                                        <div>
-                                            <strong style={{ color: '#0F172A' }}>Conductor de Camión Corabastos:</strong> ___________________________
-                                            <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Entrega de carga y canastillas</div>
-                                        </div>
-                                        <div>
-                                            <strong style={{ color: '#0F172A' }}>Auxiliar Báscula de Muelle:</strong> ___________________________
-                                            <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Pesaje verificado</div>
-                                        </div>
-                                        <div>
-                                            <strong style={{ color: '#0F172A' }}>Auditor de Calidad Agroindustrial:</strong> ___________________________
-                                            <div style={{ fontSize: '0.54rem', color: '#64748B', marginTop: '2px' }}>Visto bueno sanitario y fitosanitario</div>
-                                        </div>
-                                    </div>
                                 </UniversalLetterhead>
                         );
                     });
