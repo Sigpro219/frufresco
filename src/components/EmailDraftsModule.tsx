@@ -5124,6 +5124,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
     }
 
+    if (matchedProfile && !deliveryRestrictionStatus.isValid) {
+      const confirmExcepcion = window.confirm(
+        `⚠️ ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
+        `${deliveryRestrictionStatus.message}\n\n` +
+        `Fecha de entrega seleccionada: ${deliveryDate}\n\n` +
+        `¿Deseas autorizar esta entrega como un DESPACHO EXCEPCIONAL fuera de la política habitual de la sucursal?`
+      );
+      if (!confirmExcepcion) {
+        showToast('Aprobación de pedido cancelada debido a restricción logística.', 'info');
+        return;
+      }
+    }
+
     setActionConfirm({
       isOpen: true,
       title: 'Aprobar Pedido y Enviar Acuse',
@@ -5138,6 +5151,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           
           let finalProfileId = selectedDraft.profile_id;
           let finalAdminNotes = `[PEDIDO CORREO] Asunto: ${selectedDraft.email_subject || ''}\n---\n${selectedDraft.email_body || ''}\n---\n`;
+
+          if (matchedProfile && !deliveryRestrictionStatus.isValid) {
+            finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.message})]\n` + finalAdminNotes;
+          }
 
           // A. Crear perfil de cliente si no existe
           if (!finalProfileId) {
@@ -5582,12 +5599,29 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return;
     }
 
+    if (currentMatchedProfile && !deliveryRestrictionStatus.isValid) {
+      const confirmExcepcion = window.confirm(
+        `⚠️ ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
+        `${deliveryRestrictionStatus.message}\n\n` +
+        `Fecha de entrega seleccionada: ${deliveryDate}\n\n` +
+        `¿Deseas autorizar esta entrega como un DESPACHO EXCEPCIONAL fuera de la política habitual de la sucursal?`
+      );
+      if (!confirmExcepcion) {
+        showToast('Aprobación de pedido cancelada debido a restricción logística.', 'info');
+        return;
+      }
+    }
+
     setConfirmingOrder(true);
 
     try {
       const metadata = getDraftMetadata(selectedDraft);
       let finalProfileId = selectedDraft.profile_id;
       let finalAdminNotes = `[PEDIDO CORREO] Asunto: ${selectedDraft.email_subject || ''}\n---\n${selectedDraft.email_body || ''}\n---\n`;
+
+      if (currentMatchedProfile && !deliveryRestrictionStatus.isValid) {
+        finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.message})]\n` + finalAdminNotes;
+      }
 
       // 1. If no profile exists (new client), create one
       if (!finalProfileId) {
@@ -7629,6 +7663,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <strong>Asunto:</strong> {cleanSubject(selectedDraft.email_subject)}
                     </span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reactive Delivery Restriction Warning Banner */}
+            {matchedProfile && !deliveryRestrictionStatus.isValid && (
+              <div style={{
+                margin: '0 1.5rem 0.8rem 1.5rem',
+                padding: '0.65rem 1rem',
+                backgroundColor: '#FEF2F2',
+                border: '1.5px solid #FCA5A5',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                color: '#991B1B',
+                fontSize: '0.8rem',
+                fontWeight: '700'
+              }}>
+                <AlertTriangle size={18} style={{ color: '#DC2626', flexShrink: 0 }} />
+                <div>
+                  <span style={{ fontWeight: '900', color: '#991B1B' }}>⚠️ Restricción Logística de Entrega: </span>
+                  <span style={{ fontWeight: '600', color: '#7F1D1D' }}>
+                    {deliveryRestrictionStatus.message}
+                  </span>
                 </div>
               </div>
             )}

@@ -2358,3 +2358,22 @@ sequenceDiagram
   4. **Trazabilidad Contable Cruzada (`accounting_id`)**:
      - Las hojas de Báscula/Picking y Remisiones físicas del kit exhiben de manera uniforme el código `#{accounting_id}` contable junto al nombre del producto.
 
+#### Escenario 44: Superbuscador Multi-Criterio de Sucursales, Gobernanza Poka-Yoke de Restricciones Logísticas de Entrega & Eliminación Total en Carga (SDD v1.9.15)
+- **Given** la captura de pedidos en `/admin/orders/create`, la bandeja de borradores de correo `EmailDraftsModule.tsx`, y el panel de control de despacho en `/admin/orders/loading`:
+- **When** un asesor u operador interactúa con la selección de clientes, programa la fecha de entrega o edita un pedido en el modal de alistamiento/carga:
+- **Then**:
+  1. **Superbuscador Tokenizado Multi-Criterio de Sucursales**:
+     - En `/admin/orders/create` y `EmailDraftsModule.tsx`, el buscador de clientes indexa concurrentemente: nombre de la sucursal (`company_name`), nombre de la casa matriz asociada (`parent_name`), NIT (`nit`), dirección (`address`), teléfono (`contact_phone`), nombre de contacto (`contact_name`), ciudad (`city`) y notas de restricción (`delivery_restrictions`).
+     - Normaliza y remueve acentos/diacríticos (`normalize('NFD').replace(/[\u0300-\u036f]/g, '')`), permitiendo que términos como "bogota", "coopidrogas", "kennedy" o números de NIT arrojen resultados exactos sin importar el orden de los tokens de búsqueda.
+     - Garantiza que los resultados representen siempre puntos de entrega físicos reales (sucursales entregables), jerarquizando las matrices corporativas para que sus sucursales sean encontradas inmediatamente al buscar el nombre de la matriz.
+  2. **Gobernanza y Validación Poka-Yoke de Restricciones Logísticas de Entrega (`allowed_days`)**:
+     - Al seleccionar una fecha de entrega (`delivery_date`), el sistema coteja automáticamente el día de la semana contra la matriz de días permitidos configurada en el perfil del cliente (`profiles.logistics_data.allowed_days` o `profiles.logistics_data.days`).
+     - Si la fecha seleccionada corresponde a un día no permitido (e.g. un sábado para un cliente con restricción de solo martes y jueves):
+       - Despliega reactivamente un banner de advertencia visual en rojo (`[⚠️ Restricción Logística de Entrega: Esta sede tiene restringida la entrega para el día (...)]`).
+       - Intercepta los flujos de radicación y aprobación de pedidos (`handleCreateOrder`, `handleSendManualReceipt`, `handleConfirmOrderDirectly`), solicitando una confirmación de excepción expresa (`window.confirm`).
+       - En caso de ser autorizado por el operador, inyecta automáticamente una etiqueta inmutable en las notas de administración: `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (...)]` para auditoría y trazabilidad operativa.
+  3. **Eliminación Total y Poka-Yoke de Pedidos en Modal de Carga (`/admin/orders/loading`)**:
+     - En el modal de visualización/edición de pedidos de carga (`editMode === true`), se habilita un botón explícito de eliminación permanente `[🗑️ Eliminar Pedido]`.
+     - Exige confirmación Poka-Yoke de doble verificación, y al confirmarse, elimina en cascada los registros asociados en `order_items` y `orders`, dejando registro de auditoría en `order_audit_logs`.
+
+

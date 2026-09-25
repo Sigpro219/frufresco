@@ -72,8 +72,42 @@ interface OrderData {
         logistics_data?: any;
         nit?: string;
         role?: string;
+        parent_id?: string | null;
+        parent?: {
+            id?: string;
+            company_name?: string;
+        } | null;
     };
     order_items: OrderItem[];
+}
+
+/**
+ * Extrae la Casa Matriz (razón social principal) y el nombre de la Sucursal/Sede operativa
+ */
+function extractParentAndBranch(order: OrderData): { parentName: string; branchName: string } {
+    const profile = order.profiles || {};
+    const fullCompany = (profile.company_name || profile.contact_name || order.customer_name || 'CLIENTE').trim();
+
+    // 1. Si viene objeto parent directo desde Supabase
+    if (profile.parent?.company_name) {
+        const parentName = profile.parent.company_name.trim();
+        const branchOnly = extractBranchOnly(order);
+        const branchName = branchOnly && branchOnly.toUpperCase() !== parentName.toUpperCase() ? branchOnly : fullCompany;
+        return { parentName, branchName };
+    }
+
+    // 2. Si el company_name contiene separadores tipo "MATRIZ - SUCURSAL"
+    const parts = fullCompany.split(/[-–—]/).map(p => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+        const parentName = parts[0];
+        const branchName = extractBranchOnly(order) || parts.slice(1).join(' - ');
+        return { parentName, branchName };
+    }
+
+    return {
+        parentName: fullCompany,
+        branchName: extractBranchOnly(order) || fullCompany
+    };
 }
 
 /**
@@ -389,7 +423,7 @@ export default function ContingencyPrintPage() {
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
-                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role),
+                        profiles:profiles(id, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, parent:parent_id(id, company_name)),
                         order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level))
                     `);
 
@@ -920,7 +954,7 @@ export default function ContingencyPrintPage() {
                 {/* 2. HOJAS DE PICKING DE BODEGA Y PESAJE EN BÁSCULA         */}
                 {/* ========================================================= */}
                 {showPicking && orders.map((order, orderIdx) => {
-                    const clientName = order.profiles?.company_name || order.profiles?.contact_name || order.customer_name || 'Cliente';
+                    const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
@@ -930,7 +964,7 @@ export default function ContingencyPrintPage() {
                         <Letterhead
                             key={`picking-${order.id}`}
                             title="Hoja de Picking & Pesaje en Báscula"
-                            subtitle={`CLIENTE: ${clientName.toUpperCase()}`}
+                            subtitle={`CLIENTE: ${parentName.toUpperCase()}`}
                             date={order.delivery_date}
                             reference={`PEDIDO #${orderNum}`}
                             espacioNum={espacioNum}
@@ -942,7 +976,8 @@ export default function ContingencyPrintPage() {
                             {/* Metadata cliente compacta */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', backgroundColor: '#F8FAFC', padding: '5px 8px', border: '1px solid #E2E8F0', borderRadius: '4px', fontSize: '0.66rem', marginBottom: '5px' }}>
                                 <div>
-                                    <div><strong>Dirección:</strong> {order.shipping_address || order.profiles?.address || 'Bogotá'}</div>
+                                    <div><strong>Sucursal:</strong> {branchName}</div>
+                                    <div><strong>Dirección:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
                                     <div><strong>Contacto:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
                                 </div>
                                 <div>
@@ -1035,12 +1070,11 @@ export default function ContingencyPrintPage() {
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
                 {/* ========================================================= */}
                 {showRemissions && orders.flatMap((order, orderIdx) => {
-                    const clientName = order.profiles?.company_name || order.profiles?.contact_name || order.customer_name || 'Cliente';
+                    const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
                     const subtotal = order.subtotal || order.total || 0;
-                    const isHogar = order.profiles?.role === 'hogar' || order.profiles?.role === 'b2c';
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici');
-                    const remissionPrefix = isReposicion ? 'REPOSICIÓN' : (isHogar ? 'REMISION H' : 'REMISION I');
+                    const remissionPrefix = isReposicion ? 'REPOSICIÓN' : 'REMISIÓN';
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
                         : (order.sequence_id ? `${order.sequence_id}` : `${orderIdx + 1}`);
@@ -1054,7 +1088,7 @@ export default function ContingencyPrintPage() {
                         <Letterhead
                             key={`remission-${order.id}-copy-${copyIdx}`}
                             title={`${remissionPrefix} #${orderNum}`}
-                            subtitle={`CLIENTE: ${clientName.toUpperCase()}`}
+                            subtitle={`CLIENTE: ${parentName.toUpperCase()}`}
                             date={order.delivery_date}
                             badge={copyInfo.copyType}
                             badgeVariant={copyInfo.isCopy ? 'light' : 'dark'}
@@ -1083,7 +1117,7 @@ export default function ContingencyPrintPage() {
                                 marginBottom: '6px'
                             }}>
                                 <div>
-                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>CLIENTE:</strong> {clientName}</div>
+                                    <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>SUCURSAL:</strong> {branchName}</div>
                                     <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
                                     <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
                                     <div style={{ lineHeight: 1.35 }}><strong style={{ color: '#0F172A' }}>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
