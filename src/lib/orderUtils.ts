@@ -107,6 +107,38 @@ export const resolvePhysicalInstruction = (item: {
 };
 
 /**
+ * Parsea el peso numérico en kilogramos (kg) a partir de una cadena descriptiva
+ * Soporta patrones como:
+ * - "Und|160" -> 0.16
+ * - "Unidad 160 gr", "160g", "160 gramos" -> 0.16
+ * - "2 kg", "1.5 kilos" -> 2, 1.5
+ * - "libra", "lb" -> 0.5
+ */
+export const getParsedWeight = (text: string | null | undefined): number | null => {
+    if (!text) return null;
+    const str = String(text).trim();
+    if (!str) return null;
+    if (str.includes('|')) {
+        const parts = str.split('|');
+        const grams = parseFloat(parts[1]);
+        if (!isNaN(grams) && grams > 0) return grams / 1000;
+    }
+    const clean = str.toLowerCase();
+    const kgMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilos)/);
+    if (kgMatch) {
+        const val = parseFloat(kgMatch[1].replace(',', '.'));
+        if (!isNaN(val) && val > 0) return val;
+    }
+    const gMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+    if (gMatch) {
+        const val = parseFloat(gMatch[1].replace(',', '.'));
+        if (!isNaN(val) && val > 0) return val / 1000;
+    }
+    if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+    return null;
+};
+
+/**
  * Builds canonical dual-unit metadata when an item is selected or modified.
  */
 export const buildDualUnitMetadata = (params: {
@@ -119,8 +151,14 @@ export const buildDualUnitMetadata = (params: {
     if (!quantity || quantity <= 0) return null;
 
     const opts = selectedOptions || {};
-    const presText = (opts['Presentación'] || opts['Presentacion'] || '') as string;
-    if (!presText) return null;
+    const rawPres = (opts['Presentación'] || opts['Presentacion'] || '') as string;
+    if (!rawPres) return null;
+
+    let presText = rawPres;
+    if (presText.includes('|')) {
+        const [base, gr] = presText.split('|');
+        presText = `${base} ${gr} gr`;
+    }
 
     const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
     const matchKg = !matchGr ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
@@ -371,5 +409,165 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
     }
     return null;
 };
+
+export interface ProductCharacteristicBadge {
+    type: 'count' | 'caliber' | 'ripeness' | 'cut' | 'portion' | 'custom';
+    label: string;
+    text: string;
+    color: string;
+    backgroundColor: string;
+    borderColor?: string;
+}
+
+/**
+ * Resuelve y estructura canónicamente las características del producto (Calibre, Conteo, Maduración, Corte)
+ * eliminando redundancias de unidad (como "x kilo", "1000 gr", "kg") para garantizar la integridad
+ * visual de datos estipulada en el Escenario 49 (SDD v1.9.19).
+ */
+export function resolveProductCharacteristicsBadges(item: {
+    variant_label?: string | null;
+    nickname?: string | null;
+    selected_options?: Record<string, any> | null;
+    unit?: string | null;
+    products?: { name?: string | null; unit_of_measure?: string | null } | null;
+    product_name?: string | null;
+}): ProductCharacteristicBadge[] {
+    const badges: ProductCharacteristicBadge[] = [];
+    if (!item) return badges;
+
+    const prodName = (item.products?.name || item.product_name || '').toLowerCase();
+    const opts = item.selected_options || {};
+    const unit = (item.products?.unit_of_measure || item.unit || 'kg').toLowerCase();
+    const isKg = unit.includes('kg') || unit.includes('kilo');
+
+    // Usar variant_label prioritariamente; si no existe, extraer de nickname
+    let textToAnalyze = item.variant_label ? item.variant_label.trim() : '';
+    if (!textToAnalyze && item.nickname) {
+        textToAnalyze = item.nickname.trim();
+    }
+
+    // Limpiar notas de picking/entrega que van en sus propios badges
+    textToAnalyze = textToAnalyze.replace(/\s*\((Nota|Entr):[^\)]*\)/gi, ' ');
+    // Si contiene el nombre completo del producto o partes de él, removerlo
+    if (prodName) {
+        const prodWords = prodName.split(/\s+/).filter(w => w.length > 2);
+        prodWords.forEach(w => {
+            textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${w}\\b`, 'gi'), ' ');
+        });
+    }
+
+    // 1. Extraer Conteo / Densidad Unit (ej: "55 unds", "50 und", "55 unds/kilo")
+    const countMatch = textToAnalyze.match(/\b(\d+)\s*(?:unds?|unidades?|und|u)\b/i) ||
+                       (opts['Conteo'] || opts['Densidad'] ? String(opts['Conteo'] || opts['Densidad']).match(/(\d+)/) : null);
+    if (countMatch) {
+        const countNum = countMatch[1];
+        const countText = isKg ? `${countNum} und/kg` : `${countNum} unds`;
+        badges.push({
+            type: 'count',
+            label: 'Conteo',
+            text: countText,
+            color: '#0369A1',
+            backgroundColor: '#E0F2FE',
+            borderColor: '#BAE6FD'
+        });
+        textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${countMatch[0]}\\b`, 'gi'), ' ');
+    }
+
+    // 2. Extraer Calibre / Tamaño (ej: "Grande", "Mediana", "Richy", "Cero", "Extra")
+    const caliberRegex = /\b(grande|cero|mediana|mediano|peque[nñ]o|peque[nñ]a|richy|extra|grueso|delgado|parejo|jumbo|mini)\b/i;
+    const caliberMatch = textToAnalyze.match(caliberRegex) ||
+                         (opts['Calibre'] || opts['Tamaño'] || opts['Tamano'] ? String(opts['Calibre'] || opts['Tamaño'] || opts['Tamano']).match(caliberRegex) : null);
+    if (caliberMatch) {
+        const rawCaliber = caliberMatch[1].toLowerCase();
+        let normalizedCaliber = rawCaliber.charAt(0).toUpperCase() + rawCaliber.slice(1);
+        if (normalizedCaliber === 'Mediano') normalizedCaliber = 'Mediana';
+        if (normalizedCaliber === 'Pequeno' || normalizedCaliber === 'Pequeño') normalizedCaliber = 'Richy';
+        badges.push({
+            type: 'caliber',
+            label: 'Calibre',
+            text: `Calibre: ${normalizedCaliber}`,
+            color: '#B45309',
+            backgroundColor: '#FEF3C7',
+            borderColor: '#FDE68A'
+        });
+        textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${caliberMatch[0]}\\b`, 'gi'), ' ');
+    }
+
+    // 3. Extraer Maduración / Punto Culinario (ej: "Listo para tajar", "Pintón", "Maduro", "Verde")
+    const ripenessRegex = /\b(listos?\s*para\s*tajar|maduro|madura|pint[oó]n|verde|biche)\b/i;
+    const ripenessMatch = textToAnalyze.match(ripenessRegex) ||
+                          (opts['Maduración'] || opts['Maduracion'] || opts['Punto'] ? String(opts['Maduración'] || opts['Maduracion'] || opts['Punto']).match(ripenessRegex) : null);
+    if (ripenessMatch) {
+        const rawRipeness = ripenessMatch[1].toLowerCase();
+        let normalizedRipeness = 'Maduro';
+        if (rawRipeness.includes('tajar')) normalizedRipeness = 'Listo para tajar';
+        else if (rawRipeness.includes('pinton') || rawRipeness.includes('pintón')) normalizedRipeness = 'Pintón';
+        else if (rawRipeness.includes('verde')) normalizedRipeness = 'Verde';
+        else if (rawRipeness.includes('biche')) normalizedRipeness = 'Biche';
+        
+        badges.push({
+            type: 'ripeness',
+            label: 'Maduración',
+            text: normalizedRipeness,
+            color: '#15803D',
+            backgroundColor: '#DCFCE7',
+            borderColor: '#BBF7D0'
+        });
+        textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${ripenessMatch[0]}\\b`, 'gi'), ' ');
+    }
+
+    // 4. Extraer Corte (ej: "Juliana", "Cubos", "Tajado", "Desgranado")
+    const cutRegex = /\b(juliana|cubos|tajado|rodajas|desgranado|rallado)\b/i;
+    const cutMatch = textToAnalyze.match(cutRegex) ||
+                     (opts['Corte'] ? String(opts['Corte']).match(cutRegex) : null);
+    if (cutMatch) {
+        const cutVal = cutMatch[1].charAt(0).toUpperCase() + cutMatch[1].slice(1).toLowerCase();
+        badges.push({
+            type: 'cut',
+            label: 'Corte',
+            text: `Corte: ${cutVal}`,
+            color: '#6B21A8',
+            backgroundColor: '#F3E8FF',
+            borderColor: '#E9D5FF'
+        });
+        textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${cutMatch[0]}\\b`, 'gi'), ' ');
+    }
+
+    // 5. Extraer peso unitario por pieza (ej: "und de 160 gr", "undx160gr")
+    const unitGrMatch = textToAnalyze.match(/\b(?:und(?:x|[\s]+de[\s]+)?|u[\s]*)(\d+)\s*(?:gr|g)\b/i);
+    if (unitGrMatch) {
+        badges.push({
+            type: 'portion',
+            label: 'Porción',
+            text: `und x ${unitGrMatch[1]} gr`,
+            color: '#0D9488',
+            backgroundColor: '#CCFBF1',
+            borderColor: '#99F6E4'
+        });
+        textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${unitGrMatch[0]}\\b`, 'gi'), ' ');
+    }
+
+    // 6. Filtrar ruido residual de unidades (ej: "x kilo", "x kg", "1000 gr", "kg", "kilo")
+    textToAnalyze = textToAnalyze
+        .replace(/\b(?:x\s*kilo|x\s*kg|al\s*kilo|por\s*kilo|kilo|kg|1000\s*gr|1000g)\b/gi, ' ')
+        .replace(/[\(\)\[\],.:]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // 7. Si queda texto residual válido no catalogado
+    if (textToAnalyze.length > 2 && !/^\d+$/.test(textToAnalyze) && textToAnalyze.toLowerCase() !== 'estandar' && textToAnalyze.toLowerCase() !== 'estándar') {
+        badges.push({
+            type: 'custom',
+            label: 'Especificación',
+            text: textToAnalyze,
+            color: '#475569',
+            backgroundColor: '#F1F5F9',
+            borderColor: '#CBD5E1'
+        });
+    }
+
+    return badges;
+}
+
 
 

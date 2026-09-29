@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.18 (Estándar Canónico de Ingesta Omnicanal: Ingesta Polimórfica de Texto WhatsApp / Chat & Gobernanza N° OC de Cliente)  
+> **Versión:** 1.9.20 (Paridad Canónica de Doble Unidad en Edición de Pedidos & Gobernanza de Pesos Nominales)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
@@ -811,8 +811,12 @@ Todo ítem configurado con unidad dual debe persistir en su payload JSONB:
 #### 9.7.4 Cadena de Custodia en las 7 Estaciones Operativas
 1. **Estación 1 - Ingesta Comercial (`EmailDraftsModule` y `orders/create`):**
    Al asociar la presentación con peso nominal, se calcula la masa en Kg y se inyecta `_physical_instruction` canónico sin la palabra "estándar".
-2. **Estación 2 - Monitoreo & Torre de Control (`admin/orders/loading`):**
-   El modal de pedidos visualiza concurrentemente la masa total `2,0 Kg` y el badge verde `'1 Unidad 2000 gr'`. Si un pedido histórico carece de la llave `_physical_instruction`, un parser heurístico deduce el badge desde `selected_options.Presentación` o `variant_label`.
+2. **Estación 2 - Monitoreo, Torre de Control & Edición (`admin/orders/loading`):**
+   - El modal de pedidos visualiza concurrentemente la masa total (ej. `1,6 Kg`) y el badge estructurado (ej. `'10 und de 160 gr'`). Si un pedido histórico carece de la llave `_physical_instruction`, un parser heurístico deduce el badge desde `selected_options.Presentación` o `variant_label`.
+   - **Paridad Estricta en Modificación/Adición de Ítems (SDD v1.9.20):** Cuando un usuario añade o edita un ítem dentro del modal de pedidos de `/admin/orders/loading`, la selección de presentaciones unitarias ponderadas (ej. `Unidad 160 gr`) extrae de inmediato el peso en kilogramos con `getParsedWeight()`.
+   - **Feedback Visual Poka-Yoke:** La interfaz proyecta en vivo la píldora reactiva `Total: X kg` antes de confirmar.
+   - **Persistencia de Metadatos Duales:** Al confirmar, se calcula la masa logística equivalente (`baseQty = qtyVal * factor`), y se inyectan en `selected_options` los metadatos canónicos `_original_qty`, `_conversion_factor`, `_unit_weight_gr` y `_physical_instruction`, garantizando que la edición no altere la cadena de custodia ni convierta erróneamente unidades discretas en kilogramos masivos.
+   - **Edición en Línea:** Cada fila en `editMode` dispone del botón "Opciones" y píldora estructurada cliqueable para reconfigurar variantes y conteos en el sub-modal sin recrear el producto.
 3. **Estación 3 - Planilla de Alistamiento Físico (`alistamiento-print`):**
    La hoja impresa de alistamiento incluye la instrucción física para que el bodeguero extraiga las unidades físicas exactas antes de llevar a báscula.
 4. **Estación 4 - Células de Trabajo & Terminal Rápido (`ops/picking` y `terminal`):**
@@ -2468,3 +2472,28 @@ sequenceDiagram
      - En Sábana de Alistamiento (`alistamiento-print`): Despliegue de la OC para el equipo de bodega.
      - En Rótulos Térmicos QR (`print-labels`): Inclusión de `OC: [Número]` en la etiqueta física de canastilla.
 
+#### Escenario 49: Estándar Canónico de Despliegue de Estructura de Datos de Producto (Calibre, Conteo, Maduración y Presentación) (SDD v1.9.19)
+- **Given** la existencia de pedidos con especificaciones operativas, calibres y conteos unitarios (ej: "Ciruela Importada Grande x Kilo (55 unds)", "Manzana Verde x Kilo (50 unds)", "Aguacate listo para tajar"):
+- **When** se visualiza la información del producto en cualquier punto del sistema (Galería de Pedidos `/admin/orders/loading`, Modal de Detalle de Pedido, Impresión de Compras, o Alistamiento en Bodega):
+- **Then**:
+  1. **Principio Incondicional de Estructura Canónica**:
+     - Queda terminantemente prohibido verter cadenas de texto crudo, sucio o redundante dentro de los badges de características (prohibido `✨ x kilo`, `✨ x kilo 50 unds`, `✨ grande x kilo 55 unds`, `1000 gr`).
+     - La unidad de medida comercial/catálogo (`Kg`, `Und`, `Bandeja`) pertenece única y exclusivamente a la columna **CANTIDAD / UNIDAD** y jamás debe duplicarse dentro de los badges de atributos.
+  2. **Estructura Descompuesta y Píldoras Semánticas Especializadas**:
+     - Las características del producto deben descomponerse atómicamente y renderizarse en píldoras semánticas diferenciadas:
+       * **Badge de Calibre / Tamaño** (ej: `Calibre: Grande`, `Mediano`, `Richy`, `Cero`): Píldora de alta visibilidad para compras y clasificación.
+       * **Badge de Conteo / Densidad** (ej: `55 und/kg`, `50 und/kg`, `und de 160 gr`): Indica la masa por pieza o conteo por kilogramo requerido por el cliente HORECA.
+       * **Badge de Maduración / Punto Culinario** (ej: `Maduro`, `Pintón`, `Verde`, `Listo para tajar`): Resalta la condición organoléptica solicitada.
+       * **Badge de Presentación / Empaque** (ej: `Bandeja`, `Atado`, `Malla`): Aplica si la unidad de entrega es especializada.
+  3. **Motor Compartido de Extracción y Limpieza**:
+     - Toda la aplicación (modal de pedidos, compras, remisiones) debe alimentarse de una lógica de parsing homologada (`resolveProductCharacteristics` / `formatStructuredSpecification`) que elimine expresiones regulares como `x kilo`, `x kg`, `por kilo`, paréntesis redundantes, y aísle los componentes clave con tipografía, colores y semántica industrial uniforme.
+
+#### Escenario 50: Paridad Bidireccional de Doble Unidad en Modificación de Pedidos (`/admin/orders/loading`) (SDD v1.9.20)
+- **Given** un pedido existente en la Torre de Control (`/admin/orders/loading`) en modo de edición (`editMode`).
+- **When** el usuario añade un producto nuevo con presentación ponderada (ej. *Banano criollo*, presentación *Unidad 160 gr*) o edita un ítem existente mediante el botón "Opciones", seleccionando una cantidad discreta (ej. `10 unidades`):
+- **Then**:
+  1. **Resolución Inmediata de Factor de Conversión**: El componente extrae el peso nominal mediante `getParsedWeight()` (ej. 160 gr = 0.160 kg) sincronizando `selectedUnit` y `selectedConversionFactor`.
+  2. **Proyección Poka-Yoke**: La interfaz muestra en tiempo real el badge `⚖️ Total: 1,6 kg` evitando confusiones operativas.
+  3. **Cálculo Base Canónico**: Al confirmar la adición/modificación, el sistema computa `baseQty = 10 * 0.160 = 1.6 kg`, registrando exactamente $1.6 \times \text{precio}$ en lugar de $10 \times \text{precio}$.
+  4. **Inyección de Metadatos de Doble Unidad**: Se construye el objeto canónico `buildDualUnitMetadata` integrando `_original_qty: 10`, `_unit_weight_gr: 160`, `_conversion_factor: 0.16` y `_physical_instruction: "10 Unidades 160 gr"`.
+  5. **Preservación en Base de Datos**: Al guardar el pedido (`handleUpdateOrder`), `order_items` persiste `quantity: 1.6` y las opciones enriquecidas en `selected_options`, garantizando que las estaciones posteriores (Alistamiento, Picking en Báscula, Remisión y Facturación) operen con absoluta consistencia.

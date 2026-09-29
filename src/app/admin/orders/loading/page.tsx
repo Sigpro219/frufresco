@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -320,6 +320,7 @@ function OrderLoadingContent() {
 
     const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+    const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
     const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
 
     const dockRef = useRef<HTMLDivElement>(null);
@@ -1643,7 +1644,7 @@ function OrderLoadingContent() {
                     const productIds = [...new Set(rawItems.map(i => i.product_id))];
                     const { data: rawProducts, error: prodErr } = await supabase
                         .from('products')
-                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url, iva_rate')
+                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url, iva_rate, options_config')
                         .in('id', productIds);
                     
                     if (!prodErr && rawProducts) {
@@ -1928,8 +1929,64 @@ function OrderLoadingContent() {
         }
     };
 
+    const openEditItemModal = async (item: any, idx: number) => {
+        let product = item.products;
+        if (!product?.options_config) {
+            const { data: fullProd } = await supabase
+                .from('products')
+                .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
+                .eq('id', item.product_id)
+                .single();
+            if (fullProd) {
+                product = fullProd;
+            }
+        }
+
+        setEditingItemIndex(idx);
+        
+        const opts = item.selected_options || {};
+        setSelectedOptions({ ...opts });
+        
+        const displayQty = opts._original_qty || item.quantity || 1;
+        setVariantQuantity(String(displayQty));
+        
+        const defaultUnit = product?.unit_of_measure || 'Kg';
+        let initUnit = opts._original_unit || defaultUnit;
+        let initFactor = opts._conversion_factor || 1;
+        
+        Object.entries(opts).forEach(([optName, optVal]) => {
+            if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
+                const strVal = String(optVal);
+                const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
+                const baseUnitLower = (defaultUnit || 'kg').toLowerCase();
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                    initUnit = defaultUnit;
+                    initFactor = 1;
+                } else if (strVal.includes('|')) {
+                    const [base, gr] = strVal.split('|');
+                    initUnit = `${base} de ${gr} gr`;
+                    const pw = parseFloat(gr);
+                    if (!isNaN(pw) && pw > 0) initFactor = pw / 1000;
+                } else {
+                    initUnit = strVal;
+                    const pw = getParsedWeight(strVal);
+                    if (pw !== null) initFactor = pw;
+                }
+            }
+        });
+        
+        setSelectedUnit(initUnit);
+        setSelectedConversionFactor(initFactor);
+        setSelectedProductForVariant({
+            ...product,
+            id: item.product_id,
+            name: item.products?.name || product?.name
+        });
+    };
+
     const proceedAddProduct = (product: any, exc: any) => {
         // Reset sub-modal states
+        setEditingItemIndex(null);
         setVariantQuantity('1');
         setSelectedOptions({});
 
@@ -1947,8 +2004,32 @@ function OrderLoadingContent() {
 
         // Find default unit conversions
         const defaultUnit = product.unit_of_measure || 'Kg';
-        setSelectedUnit(defaultUnit);
-        setSelectedConversionFactor(1);
+        let initUnit = defaultUnit;
+        let initFactor = 1;
+
+        Object.entries(initialOptions).forEach(([optName, optVal]) => {
+            if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
+                const strVal = String(optVal);
+                const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
+                const baseUnitLower = (defaultUnit || 'kg').toLowerCase();
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                    initUnit = defaultUnit;
+                    initFactor = 1;
+                } else if (strVal.includes('|')) {
+                    const [base, gr] = strVal.split('|');
+                    initUnit = `${base} de ${gr} gr`;
+                    const pw = parseFloat(gr);
+                    if (!isNaN(pw) && pw > 0) initFactor = pw / 1000;
+                } else {
+                    initUnit = strVal;
+                    const pw = getParsedWeight(strVal);
+                    if (pw !== null) initFactor = pw;
+                }
+            }
+        });
+
+        setSelectedUnit(initUnit);
+        setSelectedConversionFactor(initFactor);
 
         setProductSearch('');
         setSearchResults([]);
@@ -1956,16 +2037,83 @@ function OrderLoadingContent() {
 
     const confirmVariantAdd = () => {
         if (!selectedProductForVariant) return;
-        const optionValues = Object.values(selectedOptions).filter(v => v);
-        const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
+        const sortedOptionKeys = Object.keys(selectedOptions).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const optionValues = sortedOptionKeys.filter(k => selectedOptions[k]).map(k => selectedOptions[k]);
+        const variantLabel = optionValues.length > 0 ? optionValues.map(v => String(v).includes('|') ? `${String(v).split('|')[0]} (${String(v).split('|')[1]} gr)` : v).join(', ') : undefined;
         
         const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
-        const baseQty = parseFloat((qtyVal * selectedConversionFactor).toFixed(3));
-        addOrUpdateItemInState(selectedProductForVariant, baseQty, variantLabel, selectedOptions);
+        
+        let resolvedUnit = selectedUnit || selectedProductForVariant.unit_of_measure || 'Kg';
+        let resolvedFactor = selectedConversionFactor || (selectedProductForVariant.weight_kg ? Number(selectedProductForVariant.weight_kg) : 1);
+        const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
+
+        Object.entries(selectedOptions).forEach(([optName, optVal]) => {
+            if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
+                const strVal = String(optVal);
+                const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                    resolvedUnit = selectedProductForVariant.unit_of_measure || 'Kg';
+                    resolvedFactor = 1;
+                } else if (strVal.includes('|')) {
+                    const [base, gr] = strVal.split('|');
+                    resolvedUnit = `${base} de ${gr} gr`;
+                    const pw = parseFloat(gr);
+                    if (!isNaN(pw) && pw > 0) resolvedFactor = pw / 1000;
+                } else {
+                    resolvedUnit = strVal;
+                    const pw = getParsedWeight(strVal);
+                    if (pw !== null) resolvedFactor = pw;
+                }
+            }
+        });
+
+        const baseQty = parseFloat((qtyVal * resolvedFactor).toFixed(3));
+
+        // ── Dual-unit metadata: preserve physical count alongside billing Kg ──
+        const dual = buildDualUnitMetadata({
+            quantity: qtyVal,
+            unit: resolvedUnit,
+            selectedOptions,
+            product: selectedProductForVariant
+        });
+
+        const enrichedOptions = dual
+            ? {
+                ...selectedOptions,
+                _original_qty: dual.originalQty,
+                _conversion_factor: dual.conversionFactor,
+                _original_unit: dual.originalUnit,
+                _unit_weight_gr: dual.unitWeightGr,
+                _physical_instruction: dual.physicalInstruction
+            }
+            : (resolvedFactor !== 1
+                ? {
+                    ...selectedOptions,
+                    _original_qty: qtyVal,
+                    _conversion_factor: resolvedFactor,
+                    _original_unit: resolvedUnit,
+                    _physical_instruction: cleanPhysicalInstruction(`${qtyVal} ${resolvedUnit}`) || `${qtyVal} ${resolvedUnit}`
+                }
+                : { ...selectedOptions });
+
+        if (editingItemIndex !== null && editingItemIndex >= 0 && editingItemIndex < orderItems.length) {
+            const newOrderItems = [...orderItems];
+            newOrderItems[editingItemIndex] = {
+                ...newOrderItems[editingItemIndex],
+                quantity: baseQty,
+                variant_label: variantLabel || null,
+                selected_options: enrichedOptions,
+                unit: resolvedUnit,
+                isModified: true
+            };
+            setOrderItems(newOrderItems);
+            setEditingItemIndex(null);
+        } else {
+            addOrUpdateItemInState(selectedProductForVariant, baseQty, variantLabel, enrichedOptions);
+        }
+
         setSelectedProductForVariant(null);
     };
-
-
 
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
@@ -1982,6 +2130,7 @@ function OrderLoadingContent() {
             newOrderItems[existsIndex] = {
                 ...newOrderItems[existsIndex],
                 quantity: newOrderItems[existsIndex].quantity + qty,
+                selected_options: optionsRaw || newOrderItems[existsIndex].selected_options,
                 isModified: true
             };
             setOrderItems(newOrderItems);
@@ -1999,13 +2148,15 @@ function OrderLoadingContent() {
                 variant_label: finalLabel || null,
                 selected_options: optionsRaw || {},
                 nickname: finalNickname || null,
+                unit: optionsRaw?._original_unit || product.unit_of_measure || 'Kg',
                 products: {
                     name: product.name,
                     sku: product.sku,
                     accounting_id: product.accounting_id,
                     unit_of_measure: product.unit_of_measure,
                     weight_kg: product.weight_kg,
-                    iva_rate: product.iva_rate
+                    iva_rate: product.iva_rate,
+                    options_config: product.options_config
                 },
                 isNew: true
             };
@@ -5008,9 +5159,38 @@ function OrderLoadingContent() {
                                                          {item.products?.accounting_id || '-'}
                                                      </td>
                                                     <td style={{ padding: '1.25rem 2rem' }}>
-                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                                             {item.products?.name}
-                                                             {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
+                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                             <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                                                 {item.products?.name}
+                                                                 {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
+                                                             </div>
+                                                             {editMode && (
+                                                                 <button
+                                                                     type="button"
+                                                                     onClick={() => openEditItemModal(item, idx)}
+                                                                     style={{
+                                                                         backgroundColor: '#F8FAFC',
+                                                                         border: '1px solid #CBD5E1',
+                                                                         borderRadius: '8px',
+                                                                         padding: '4px 10px',
+                                                                         fontSize: '0.75rem',
+                                                                         fontWeight: '700',
+                                                                         color: '#334155',
+                                                                         cursor: 'pointer',
+                                                                         display: 'inline-flex',
+                                                                         alignItems: 'center',
+                                                                         gap: '4px',
+                                                                         boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                         transition: 'all 0.15s ease-in-out'
+                                                                     }}
+                                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                                     title="Editar presentación y cantidad de este ítem"
+                                                                 >
+                                                                     <Edit2 size={12} strokeWidth={2.2} style={{ color: '#2563EB' }} />
+                                                                     <span>Opciones</span>
+                                                                 </button>
+                                                             )}
                                                          </div>
                                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
                                                              {(() => {
@@ -5071,19 +5251,51 @@ function OrderLoadingContent() {
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
                                                         {editMode ? (
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                                <input 
-                                                                    type="number"
-                                                                    step="any"
-                                                                    value={item.quantity === 0 ? '' : item.quantity}
-                                                                    onFocus={(e) => e.target.select()}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
-                                                                        updateItemQuantity(idx, val);
-                                                                    }}
-                                                                    style={{ width: '75px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white' }}
-                                                                />
-                                                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                                    <input 
+                                                                        type="number"
+                                                                        step="any"
+                                                                        value={item.quantity === 0 ? '' : item.quantity}
+                                                                        onFocus={(e) => e.target.select()}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
+                                                                            updateItemQuantity(idx, val);
+                                                                        }}
+                                                                        style={{ width: '75px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
+                                                                </div>
+                                                                {(() => {
+                                                                    const specText = formatStructuredSpecification({
+                                                                        quantity: item.quantity,
+                                                                        unit: item.products?.unit_of_measure,
+                                                                        variant_label: item.variant_label,
+                                                                        nickname: item.nickname,
+                                                                        selected_options: item.selected_options
+                                                                    });
+                                                                    if (!specText) return null;
+                                                                    return (
+                                                                        <span 
+                                                                            onClick={() => openEditItemModal(item, idx)}
+                                                                            style={{
+                                                                                fontSize: '0.72rem',
+                                                                                fontWeight: '700',
+                                                                                color: '#065F46',
+                                                                                backgroundColor: '#D1FAE5',
+                                                                                border: '1px solid #6EE7B7',
+                                                                                borderRadius: '5px',
+                                                                                padding: '2px 8px',
+                                                                                letterSpacing: '0.01em',
+                                                                                whiteSpace: 'nowrap',
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                            title="Hacer clic para editar en modal"
+                                                                        >
+                                                                            {specText}
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         ) : (
                                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
@@ -5302,6 +5514,45 @@ function OrderLoadingContent() {
                         }
                     });
 
+                    // Determine dynamic unit label and factor from presentation / selectedOptions
+                    let dynamicUnitLabel = selectedUnit || selectedProductForVariant.unit_of_measure || 'Kg';
+                    let dynamicUnitFactor = selectedConversionFactor || (selectedProductForVariant.weight_kg ? Number(selectedProductForVariant.weight_kg) : 1);
+                    const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
+
+                    selectedProductForVariant.options_config?.forEach((opt: any) => {
+                        if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+                            const optVal = selectedOptions[opt.name];
+                            if (optVal) {
+                                const strVal = String(optVal);
+                                const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
+                                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                                    dynamicUnitLabel = selectedProductForVariant.unit_of_measure || 'Kg';
+                                    dynamicUnitFactor = 1;
+                                } else if (strVal.includes('|')) {
+                                    const [base, gr] = strVal.split('|');
+                                    dynamicUnitLabel = `${base} de ${gr} gr`;
+                                    const pw = parseFloat(gr);
+                                    if (!isNaN(pw) && pw > 0) dynamicUnitFactor = pw / 1000;
+                                } else {
+                                    dynamicUnitLabel = strVal;
+                                    const pw = getParsedWeight(strVal);
+                                    if (pw !== null) dynamicUnitFactor = pw;
+                                }
+                            }
+                        }
+                    });
+
+                    if (dynamicUnitLabel && !optionsList.some(o => o.unit.toLowerCase() === dynamicUnitLabel.toLowerCase())) {
+                        optionsList.push({
+                            unit: dynamicUnitLabel,
+                            factor: dynamicUnitFactor,
+                            label: `${dynamicUnitLabel} (${dynamicUnitFactor} Kg)`
+                        });
+                    }
+
+                    const parsedVariantQty = parseFloat(String(variantQuantity).replace(',', '.')) || 0;
+                    const calculatedTotalKg = parsedVariantQty * dynamicUnitFactor;
+
                     return (
                         <div style={{
                             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -5460,44 +5711,76 @@ function OrderLoadingContent() {
                                 </div>
 
                                 {/* Options Rendering */}
-                                {selectedProductForVariant.options_config?.map((opt: any, index: number) => (
-                                    <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            {opt.name}
-                                        </label>
-                                        <select
-                                            id={`modal-select-${index}`}
-                                            value={selectedOptions[opt.name] || ''}
-                                            onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                            onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForVariant.options_config.length)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.8rem',
-                                                border: '2px solid #E2E8F0',
-                                                borderRadius: '10px',
-                                                fontSize: '1rem',
-                                                backgroundColor: '#F9FAFB',
-                                                outline: 'none',
-                                                transition: 'all 0.2s ease-in-out'
-                                            }}
-                                            onFocus={(e) => {
-                                                e.target.style.borderColor = '#3B82F6';
-                                                e.target.style.backgroundColor = 'white';
-                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
-                                            }}
-                                            onBlur={(e) => {
-                                                e.target.style.borderColor = '#E2E8F0';
-                                                e.target.style.backgroundColor = '#F9FAFB';
-                                                e.target.style.boxShadow = 'none';
-                                            }}
-                                        >
-                                            <option value="">Seleccionar {opt.name}...</option>
-                                            {opt.values?.map((val: string) => (
-                                                <option key={val} value={val}>{val}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                ))}
+                                {selectedProductForVariant.options_config?.map((opt: any, index: number) => {
+                                    const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                                    return (
+                                        <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                {opt.name}
+                                            </label>
+                                            <select
+                                                id={`modal-select-${index}`}
+                                                value={selectedOptions[opt.name] || ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setSelectedOptions(prev => ({ ...prev, [opt.name]: val }));
+                                                    if (isPresentation) {
+                                                        const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                                                        const defaultUnit = selectedProductForVariant.unit_of_measure || 'Kg';
+                                                        const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                        if (isKgSel) {
+                                                            setSelectedUnit(defaultUnit);
+                                                            setSelectedConversionFactor(1);
+                                                        } else {
+                                                            const matchedUnit = optionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
+                                                            if (matchedUnit) {
+                                                                setSelectedUnit(matchedUnit.unit);
+                                                                setSelectedConversionFactor(matchedUnit.factor);
+                                                            } else {
+                                                                const parsedWeight = getParsedWeight(val);
+                                                                if (parsedWeight !== null) {
+                                                                    setSelectedUnit(cleanUnit);
+                                                                    setSelectedConversionFactor(parsedWeight);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }}
+                                                onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForVariant.options_config.length)}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.8rem',
+                                                    border: '2px solid #E2E8F0',
+                                                    borderRadius: '10px',
+                                                    fontSize: '1rem',
+                                                    backgroundColor: '#F9FAFB',
+                                                    outline: 'none',
+                                                    transition: 'all 0.2s ease-in-out'
+                                                }}
+                                                onFocus={(e) => {
+                                                    e.target.style.borderColor = '#3B82F6';
+                                                    e.target.style.backgroundColor = 'white';
+                                                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                                }}
+                                                onBlur={(e) => {
+                                                    e.target.style.borderColor = '#E2E8F0';
+                                                    e.target.style.backgroundColor = '#F9FAFB';
+                                                    e.target.style.boxShadow = 'none';
+                                                }}
+                                            >
+                                                <option value="">Seleccionar {opt.name}...</option>
+                                                {opt.values?.map((val: string) => {
+                                                    const displayVal = val.includes('|') 
+                                                        ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` 
+                                                        : val;
+                                                    return (
+                                                        <option key={val} value={val}>{displayVal}</option>
+                                                    );
+                                                })}
+                                            </select>
+                                        </div>
+                                    );
+                                })}
 
                                 {/* Quantity & Unit select grid */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
@@ -5549,9 +5832,29 @@ function OrderLoadingContent() {
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Unidad de Medida
-                                        </label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                                Unidad de Medida
+                                            </label>
+                                            {parsedVariantQty > 0 && dynamicUnitFactor > 0 && (
+                                                <span style={{
+                                                    backgroundColor: '#ECFDF5',
+                                                    color: '#065F46',
+                                                    border: '1px solid #A7F3D0',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}>
+                                                    <Scale size={13} style={{ color: '#059669' }} />
+                                                    <span>Total: {formatNumber(calculatedTotalKg, 2)} kg</span>
+                                                </span>
+                                            )}
+                                        </div>
                                         <select
                                             id="modal-unit-select"
                                             value={selectedUnit}
@@ -5650,7 +5953,10 @@ function OrderLoadingContent() {
                                 {/* Footer buttons */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
                                     <button 
-                                        onClick={() => setSelectedProductForVariant(null)}
+                                        onClick={() => {
+                                            setSelectedProductForVariant(null);
+                                            setEditingItemIndex(null);
+                                        }}
                                         style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
                                     >
                                         Cancelar
@@ -5666,7 +5972,7 @@ function OrderLoadingContent() {
                                         }}
                                         style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
                                     >
-                                        Agregar
+                                        {editingItemIndex !== null ? 'Guardar Cambios' : 'Agregar'}
                                     </button>
                                 </div>
                             </div>
