@@ -10,34 +10,130 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-    
-    if (!file) {
-      return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 });
-    }
-
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'API Key de Gemini no configurada' }, { status: 500 });
     }
 
+    let file: File | null = null;
+    let inputText: string | null = null;
 
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const jsonBody = await req.json().catch(() => ({}));
+      inputText = typeof jsonBody.text === 'string' ? jsonBody.text.trim() : null;
+    } else {
+      const formData = await req.formData();
+      file = formData.get('file') as File | null;
+      const textVal = formData.get('text');
+      if (typeof textVal === 'string' && textVal.trim().length > 0) {
+        inputText = textVal.trim();
+      }
+    }
 
-    // Obtener los bytes del archivo — usamos file.bytes() preferentemente porque es más
-    // confiable en el contexto de Next.js + Turbopack que file.arrayBuffer(), que a veces
-    // devuelve 0 bytes cuando el stream ya fue consumido internamente por el runtime.
+    if (!file && (!inputText || inputText.length === 0)) {
+      return NextResponse.json({ error: 'No se recibió ningún archivo ni texto para procesar' }, { status: 400 });
+    }
+
+    // SI LA ENTRADA ES TEXTO PLANO / WHATSAPP / CHAT
+    if (inputText && (!file || file.size === 0)) {
+      console.log(`[AI Extract] Procesando entrada de texto plano / WhatsApp (${inputText.length} caracteres)...`);
+      
+      const textPrompt = `
+        Eres un asistente experto en logística y abastecimiento para FruFresco (distribuidora mayorista de frutas, verduras y alimentos en Bogotá y Corabastos).
+        Analiza este pedido que proviene de un mensaje de WhatsApp / chat o texto libre de un cliente.
+        
+        TAREA:
+        1. Identifica el nombre del CLIENTE / SUCURSAL mencionado en el texto:
+           - Si se menciona un restaurante, hotel, empresa o punto de entrega específico (ej. "Tesoro Zona G", "Colsubsidio", "San Bartolomé"), extráelo en "clientInDocument".
+           - Si es una persona natural (hogar), extrae el nombre de la persona. Si no aparece, deja null.
+        2. Extrae todos los productos solicitados junto con su cantidad numérica y su UNIDAD DE MEDIDA O PRESENTACIÓN exacta:
+           - REGLAS DE NORMALIZACIÓN DE UNIDADES Y JERGA EN COLOMBIA / CORABASTOS:
+             * "kL", "kl", "KL", "kilo", "kilos", "Kg", "kg" -> interpreta siempre como unidad "KG" (Kilogramos). Los clientes en chat escriben frecuentemente "kL" queriendo decir Kilo.
+             * "500 gr", "500g", "1/2 kg", "medio kilo", "libra", "1 libra", "lb" -> si el ítem es por peso, extrae cantidad numérica (ej. 0.5 si es medio kilo o 1 libra) y unidad "KG" o "LIBRA" / "500 GR".
+             * "gr", "gramos", "g" -> conserva la cantidad numérica y unidad "GR".
+             * "unidad", "unidades", "und", "u", "pza", "cabeza" -> unidad "UND".
+             * Si viene solo el número sin unidad (ej: "Plátano maduro 2"), asigna cantidad 2 y unit "UND".
+        3. Identifica y extrae las ESPECIFICACIONES, CALIBRES Y OBSERVACIONES DE CALIDAD:
+           - Notas de maduración (ej. "listos para tajar", "maduro", "pinton", "verde").
+           - Calibre o tamaño (ej. "mediana", "grueso", "parejo", "pequeño").
+           - Presentaciones (ej. "bandeja 1 kL", "atado", "bolsa", "cubeta").
+           - Guarda estas especificaciones en el campo "observations" o "presentation".
+        4. Identifica la FECHA DE ENTREGA programada:
+           - Expresiones contextuales como: "para el día 29 septiembre 2026", "Pedido miércoles 30/09", "para mañana", "entrega jueves 15".
+           - Normalízala al formato ISO "YYYY-MM-DD" o texto descriptivo.
+        5. Identifica RESTRICCIONES LOGÍSTICAS O HORARIOS DE ENTREGA:
+           - Si el mensaje incluye condiciones de entrega (ej: "Importante: a partir de 12 pm. se recibe y que llegue temprano por favor", "entregar antes de las 9 am"):
+           - Extrae la franja en "deliverySlot" (ej. "12:00 PM" o "PM" o "AM") y la nota completa en "logisticsNotes".
+        6. Identifica si hay una DIRECCIÓN de entrega o envío.
+        7. Identifica si hay un TELÉFONO de contacto.
+        8. Identifica si hay un número de CÉDULA o NIT.
+        9. Identifica el NÚMERO DE ORDEN DE COMPRA (PO Number / Orden de Compra N° / OC / Pedido N°) si el cliente lo incluyó.
+        10. DETECCIÓN DE ENTREGAS DIFERIDAS POR ÍTEM (si alguna línea dice "para el martes", etc.):
+            - Asigna "deliverySchedule" con el día en mayúsculas (ej. "MARTES").
+
+        REGLAS CRÍTICAS:
+        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin markdown adicional.
+        - Si el nombre del producto es ambiguo, mantén el nombre original del texto.
+        - Las cantidades deben ser números.
+
+        FORMATO DE RESPUESTA ESPERADO:
+        {
+          "clientInDocument": "Nombre del Cliente o Sucursal o null",
+          "poNumber": "Número de Orden de Compra o null",
+          "solpedNumber": "Número de SOLPED o null",
+          "orderTypeLabel": "WHATSAPP / CHAT",
+          "referencedCodes": [],
+          "deliveryDateInDocument": "YYYY-MM-DD o null",
+          "deliverySlot": "Franja horaria detectada o null",
+          "logisticsNotes": "Restricciones de entrega u horario o null",
+          "addressInDocument": "Dirección o null",
+          "phoneInDocument": "Teléfono o null",
+          "nitInDocument": "NIT o null",
+          "documentType": "WhatsApp / Texto Plano",
+          "items": [
+            { 
+              "originalName": "Nombre del Producto", 
+              "quantity": 10, 
+              "unit": "KG / UND / CUBETA / LIBRA / etc.", 
+              "presentation": "Presentación o null", 
+              "observations": "Observaciones, maduración, calibres, etc.",
+              "deliverySchedule": "MARTES / LUNES / etc. o null"
+            }
+          ]
+        }
+
+        MENSAJE DE TEXTO / WHATSAPP RECIBIDO:
+        """
+        ${inputText}
+        """
+      `;
+
+      try {
+        const parsedData = await fetchGeminiExtraction(apiKey, textPrompt, undefined, undefined);
+        if (!parsedData.documentType) {
+          parsedData.documentType = 'WhatsApp / Texto Plano';
+        }
+        return NextResponse.json(parsedData);
+      } catch (err: any) {
+        console.error('[AI Extract Text Error]:', err);
+        return NextResponse.json({ error: err.message || 'Error interpretando el texto con IA' }, { status: 500 });
+      }
+    }
+
+    if (!file) {
+      return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 });
+    }
+
     let fileBytes: Uint8Array;
     try {
-      // file.bytes() es la API moderna (Node 20+, Edge Runtime). Intentar primero.
       fileBytes = await (file as any).bytes();
     } catch (_) {
-      // Fallback: leer como arrayBuffer y convertir
       const ab = await file.arrayBuffer();
       fileBytes = new Uint8Array(ab);
     }
 
-    console.log(`[AI Extract] Archivo recibido: "${file.name}" | tipo: ${file.type} | tamaño declarado: ${file.size} bytes | bytes leídos: ${fileBytes.byteLength}`);
+    console.log(`[AI Extract] Archivo recibido: "${file.name}" | tipo: ${file.type} | tamaño: ${file.size} bytes | bytes leídos: ${fileBytes.byteLength}`);
 
     if (fileBytes.byteLength === 0) {
       console.error('[AI Extract] ERROR: El archivo llegó vacío al servidor (0 bytes).');

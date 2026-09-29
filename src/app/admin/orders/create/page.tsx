@@ -982,6 +982,8 @@ function CreateOrderContent() {
     const [isFloatingDocExpanded, setIsFloatingDocExpanded] = useState(false);
     const [digestionDuration, setDigestionDuration] = useState<string | null>(null);
     const [digestionModel, setDigestionModel] = useState<string | null>(null);
+    const [aiInputTab, setAiInputTab] = useState<'file' | 'text'>('file');
+    const [whatsappInputText, setWhatsappInputText] = useState<string>('');
 
     // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
     useEffect(() => {
@@ -2882,19 +2884,35 @@ function CreateOrderContent() {
         }
     };
 
-    const parseOrderWithAI = async (file: File) => {
+    const parseOrderWithAI = async (input: File | string, customSource?: string) => {
         setParsingFile(true);
         const startTime = performance.now();
+        const isTextInput = typeof input === 'string';
         try {
-            const url = URL.createObjectURL(file);
-            setUploadedFileUrl(url);
-            setUploadedFile(file);
-            setShowSideDocPreview(true);
-            setShowFloatingDoc(false);
-            setIsFloatingDocExpanded(false);
+            if (isTextInput) {
+                setUploadedFile(null);
+                setUploadedFileUrl(null);
+                setWhatsappInputText(input);
+                setShowSideDocPreview(true);
+                setShowFloatingDoc(false);
+                setIsFloatingDocExpanded(false);
+                setOriginSource(customSource || 'whatsapp');
+            } else {
+                const url = URL.createObjectURL(input);
+                setUploadedFileUrl(url);
+                setUploadedFile(input);
+                setShowSideDocPreview(true);
+                setShowFloatingDoc(false);
+                setIsFloatingDocExpanded(false);
+                if (customSource) setOriginSource(customSource);
+            }
 
             const formData = new FormData();
-            formData.append('file', file);
+            if (isTextInput) {
+                formData.append('text', input);
+            } else {
+                formData.append('file', input);
+            }
 
             // Obtener el token de sesión activo, o intentar refrescarlo automáticamente si expiró
             let token: string | null = null;
@@ -3273,13 +3291,29 @@ function CreateOrderContent() {
                 setMultiOrderDate2(calcDate2);
             }
 
+            if (data.deliverySlot) {
+                setDeliverySlot(data.deliverySlot);
+            }
+            if (data.logisticsNotes) {
+                setAdminNotes(prev => {
+                    const tag = `[LOGÍSTICA: ${data.logisticsNotes}]`;
+                    return prev && !prev.includes(data.logisticsNotes) ? `${prev} | ${tag}` : (prev || tag);
+                });
+            }
+            if (isTextInput && input) {
+                setAdminNotes(prev => {
+                    const header = `[ORIGEN WHATSAPP / CHAT]\n${String(input).trim()}\n---\n`;
+                    return prev && !prev.includes('[ORIGEN WHATSAPP') ? `${header}${prev}` : (prev || header);
+                });
+            }
+
             setImportValidation({
                 clientInDocument: clientInFile,
                 isMatch: !!isMatch,
-                documentType: data.documentType || (file.name.endsWith('.pdf') ? 'PDF' : 'Documento'),
+                documentType: data.documentType || (isTextInput ? 'WhatsApp / Texto' : ((input as File).name?.endsWith('.pdf') ? 'PDF' : 'Documento')),
                 poNumber: detectedPo,
                 solpedNumber: detectedSolped,
-                orderTypeLabel: detectedOrderType,
+                orderTypeLabel: detectedOrderType || (isTextInput ? 'WHATSAPP / CHAT' : 'DOCUMENTO'),
                 referencedCodes: detectedCodes,
                 deliveryDateInDocument: detectedDate
             });
@@ -3290,7 +3324,7 @@ function CreateOrderContent() {
 
             setStagedItems(suggested);
             setIsStaging(true);
-            showToast(`⚡ Documento procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
+            showToast(`⚡ ${isTextInput ? 'Texto de WhatsApp' : 'Documento'} procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
         } catch (error: any) {
             const isAuthErr = error.message?.includes('Auth session missing') || 
                               error.message?.includes('Unauthorized') || 
@@ -4987,9 +5021,9 @@ function CreateOrderContent() {
                                 }}
                                 style={{
                                     padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
-                                    backgroundColor: originSource !== 'file_upload' ? '#FFFFFF' : 'transparent',
-                                    color: originSource !== 'file_upload' ? '#0F172A' : '#64748B',
-                                    fontWeight: '700', cursor: 'pointer', boxShadow: originSource !== 'file_upload' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    backgroundColor: (originSource !== 'file_upload' && originSource !== 'whatsapp') ? '#FFFFFF' : 'transparent',
+                                    color: (originSource !== 'file_upload' && originSource !== 'whatsapp') ? '#0F172A' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer', boxShadow: (originSource !== 'file_upload' && originSource !== 'whatsapp') ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
                                     transition: 'all 0.15s', fontSize: '0.75rem',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                                 }}
@@ -5000,19 +5034,23 @@ function CreateOrderContent() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setOriginSource('file_upload');
+                                    if (aiInputTab === 'text') {
+                                        setOriginSource('whatsapp');
+                                    } else {
+                                        setOriginSource('file_upload');
+                                    }
                                 }}
                                 style={{
                                     padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
-                                    backgroundColor: originSource === 'file_upload' ? '#2563EB' : 'transparent',
-                                    color: originSource === 'file_upload' ? '#ffffff' : '#64748B',
-                                    fontWeight: '700', cursor: 'pointer', boxShadow: originSource === 'file_upload' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    backgroundColor: (originSource === 'file_upload' || originSource === 'whatsapp') ? '#2563EB' : 'transparent',
+                                    color: (originSource === 'file_upload' || originSource === 'whatsapp') ? '#ffffff' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer', boxShadow: (originSource === 'file_upload' || originSource === 'whatsapp') ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
                                     transition: 'all 0.15s', fontSize: '0.75rem',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                                 }}
                             >
                                 <Sparkles size={13} strokeWidth={2} />
-                                <span>Digestor IA (Documento/Foto)</span>
+                                <span>Digestor IA (Documentos & WhatsApp)</span>
                             </button>
                         </div>
 
@@ -5927,70 +5965,263 @@ function CreateOrderContent() {
                         )}
 
                         {/* --- MESA DE TRABAJO (STAGING AREA) --- */}
-                        {originSource === 'file_upload' && (
+                        {(originSource === 'file_upload' || originSource === 'whatsapp') && (
                             <div style={{ marginBottom: '2.5rem' }}>
                                 {!isStaging ? (
-                                <div 
-                                    style={{ 
-                                        padding: '3rem', 
-                                        border: parsingFile ? '3px solid #3B82F6' : '2px dashed #CBD5E1', 
-                                        borderRadius: '24px', 
-                                        backgroundColor: parsingFile ? '#EFF6FF' : '#F8FAFC',
-                                        textAlign: 'center',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease',
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}
-                                    onClick={() => (document.getElementById('fileInput') as HTMLInputElement)?.click()}
-                                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
-                                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
-                                    onDrop={(e) => { 
-                                        e.preventDefault(); 
-                                        const file = e.dataTransfer.files[0];
-                                        if (file) parseOrderWithAI(file);
-                                    }}
-                                >
-                                    <input 
-                                        id="fileInput"
-                                        type="file" 
-                                        accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*"
-                                        style={{ display: 'none' }} 
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                                parseOrderWithAI(file);
-                                                e.target.value = '';
-                                            }
-                                        }}
-                                    />
-                                    {parsingFile ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 0' }}>
-                                            <Loader2 size={56} color="#3B82F6" style={{ animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
-                                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1E40AF', marginBottom: '0.5rem' }}>Procesando Documento...</h3>
-                                            <p style={{ color: '#64748B', fontSize: '0.95rem' }}>La IA está extrayendo productos y validando el cliente.</p>
-                                            <style>{`
-                                                @keyframes spin {
-                                                    0% { transform: rotate(0deg); }
-                                                    100% { transform: rotate(360deg); }
-                                                }
-                                            `}</style>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        {/* Selector de Canal / Pestañas de Ingesta */}
+                                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                            <div style={{ display: 'inline-flex', padding: '4px', backgroundColor: '#E2E8F0', borderRadius: '12px', gap: '4px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setAiInputTab('file'); setOriginSource('file_upload'); }}
+                                                    style={{
+                                                        padding: '0.45rem 1rem',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        backgroundColor: aiInputTab === 'file' ? '#FFFFFF' : 'transparent',
+                                                        color: aiInputTab === 'file' ? '#1E293B' : '#64748B',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: aiInputTab === 'file' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    <UploadCloud size={15} strokeWidth={2} />
+                                                    <span>Subir Archivo (PDF / Excel / Foto)</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setAiInputTab('text'); setOriginSource('whatsapp'); }}
+                                                    style={{
+                                                        padding: '0.45rem 1rem',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        backgroundColor: aiInputTab === 'text' ? '#16A34A' : 'transparent',
+                                                        color: aiInputTab === 'text' ? '#FFFFFF' : '#64748B',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: aiInputTab === 'text' ? '0 2px 4px rgba(22,163,74,0.25)' : 'none',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    <MessageSquare size={15} strokeWidth={2} />
+                                                    <span>Pegar Texto / WhatsApp</span>
+                                                </button>
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }}><UploadCloud size={48} strokeWidth={1.5} /></div>
-                                            <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.5rem' }}>
-                                                Mesa de Trabajo Inteligente {clientType === 'B2C' ? '(Clientes Hogar)' : '(Institucional)'}
-                                            </h3>
-                                            <p style={{ color: '#64748B', fontSize: '0.95rem', maxWidth: '480px', margin: '0 auto' }}>
-                                                {clientType === 'B2C'
-                                                    ? 'Arrastra una Lista de Mercado, PDF, Excel, Imagen o Foto aquí. La IA extraerá los productos y asociará el cliente automáticamente.'
-                                                    : 'Arrastra una Orden de Compra (PDF), Excel o Foto aquí. El sistema la tabulará automáticamente para tu revisión.'}
-                                            </p>
-                                        </>
-                                    )}
-                                </div>
-) : (
+
+                                        {/* MODO ARCHIVO: DROPZONE */}
+                                        {aiInputTab === 'file' && (
+                                            <div 
+                                                style={{ 
+                                                    padding: '3rem', 
+                                                    border: parsingFile ? '3px solid #3B82F6' : '2px dashed #CBD5E1', 
+                                                    borderRadius: '24px', 
+                                                    backgroundColor: parsingFile ? '#EFF6FF' : '#F8FAFC',
+                                                    textAlign: 'center',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.3s ease',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}
+                                                onClick={() => (document.getElementById('fileInput') as HTMLInputElement)?.click()}
+                                                onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
+                                                onDragLeave={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                                                onDrop={(e) => { 
+                                                    e.preventDefault(); 
+                                                    const file = e.dataTransfer.files[0];
+                                                    if (file) parseOrderWithAI(file);
+                                                }}
+                                            >
+                                                <input 
+                                                    id="fileInput"
+                                                    type="file" 
+                                                    accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*"
+                                                    style={{ display: 'none' }} 
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            parseOrderWithAI(file);
+                                                            e.target.value = '';
+                                                        }
+                                                    }}
+                                                />
+                                                {parsingFile ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 0' }}>
+                                                        <Loader2 size={56} color="#3B82F6" style={{ animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
+                                                        <h3 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1E40AF', marginBottom: '0.5rem' }}>Procesando Documento...</h3>
+                                                        <p style={{ color: '#64748B', fontSize: '0.95rem' }}>La IA está extrayendo productos y validando el cliente.</p>
+                                                        <style>{`
+                                                            @keyframes spin {
+                                                                0% { transform: rotate(0deg); }
+                                                                100% { transform: rotate(360deg); }
+                                                            }
+                                                        `}</style>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }}><UploadCloud size={48} strokeWidth={1.5} /></div>
+                                                        <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.5rem' }}>
+                                                            Mesa de Trabajo Inteligente {clientType === 'B2C' ? '(Clientes Hogar)' : '(Institucional)'}
+                                                        </h3>
+                                                        <p style={{ color: '#64748B', fontSize: '0.95rem', maxWidth: '480px', margin: '0 auto' }}>
+                                                            {clientType === 'B2C'
+                                                                ? 'Arrastra una Lista de Mercado, PDF, Excel, Imagen o Foto aquí. La IA extraerá los productos y asociará el cliente automáticamente.'
+                                                                : 'Arrastra una Orden de Compra (PDF), Excel o Foto aquí. El sistema la tabulará automáticamente para tu revisión.'}
+                                                        </p>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* MODO TEXTO: PEGAR MENSAJE WHATSAPP / CHAT */}
+                                        {aiInputTab === 'text' && (
+                                            <div style={{
+                                                padding: '2rem',
+                                                border: parsingFile ? '3px solid #16A34A' : '2px solid #BBF7D0',
+                                                borderRadius: '24px',
+                                                backgroundColor: parsingFile ? '#F0FDF4' : '#F8FAFC',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '1rem',
+                                                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#DCFCE7', color: '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <MessageSquare size={20} strokeWidth={2} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>
+                                                                Ingesta de Pedido desde WhatsApp / Chat
+                                                            </h3>
+                                                            <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0 }}>
+                                                                Pega el texto del pedido. La IA identificará la sucursal, productos, cantidades (ej. 70Kg, 1 libra, 500 gr, 1 kL), notas y horarios.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const text = await navigator.clipboard.readText();
+                                                                    if (text) {
+                                                                        setWhatsappInputText(text);
+                                                                        showToast('📋 Texto pegado desde el portapapeles', 'success');
+                                                                    }
+                                                                } catch (_) {
+                                                                    showToast('No fue posible acceder al portapapeles automáticamente. Pega el texto manualmente con Ctrl+V.', 'info');
+                                                                }
+                                                            }}
+                                                            style={{
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #CBD5E1',
+                                                                backgroundColor: 'white',
+                                                                color: '#334155',
+                                                                fontSize: '0.78rem',
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px'
+                                                            }}
+                                                        >
+                                                            <span>📋 Pegar Portapapeles</span>
+                                                        </button>
+                                                        {whatsappInputText && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setWhatsappInputText('')}
+                                                                style={{
+                                                                    padding: '6px 10px',
+                                                                    borderRadius: '8px',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    backgroundColor: 'white',
+                                                                    color: '#EF4444',
+                                                                    fontSize: '0.78rem',
+                                                                    fontWeight: '700',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Limpiar
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <textarea
+                                                    value={whatsappInputText}
+                                                    onChange={(e) => setWhatsappInputText(e.target.value)}
+                                                    placeholder={'Pega el mensaje aquí...\n\nEjemplo:\nPedido Tesoro Zona G para el día 29 septiembre 2026\nImportante: a partir de 12 pm. se recibe y que llegue temprano por favor.\n\nLimón Tahití 5 kg\nPimentón rojo 2 kg\nZanahoria 1 kg\nPerejil 500 gr\nUchuvas 1 libra\nAguacates papelillo 2 unidades (listos para tajar)\nChampiñón entero blanco : bandeja 1 kL'}
+                                                    rows={8}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '1rem',
+                                                        borderRadius: '14px',
+                                                        border: '1.5px solid #CBD5E1',
+                                                        fontSize: '0.88rem',
+                                                        lineHeight: '1.5',
+                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                                        color: '#0F172A',
+                                                        backgroundColor: 'white',
+                                                        outline: 'none',
+                                                        resize: 'vertical',
+                                                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)'
+                                                    }}
+                                                />
+
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                                        {whatsappInputText.trim() ? `${whatsappInputText.trim().split('\n').length} líneas de texto listas para análisis` : 'Escribe o pega el mensaje recibido'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={!whatsappInputText.trim() || parsingFile}
+                                                        onClick={() => parseOrderWithAI(whatsappInputText, 'whatsapp')}
+                                                        style={{
+                                                            padding: '0.75rem 1.75rem',
+                                                            borderRadius: '12px',
+                                                            border: 'none',
+                                                            backgroundColor: (!whatsappInputText.trim() || parsingFile) ? '#94A3B8' : '#16A34A',
+                                                            color: 'white',
+                                                            fontSize: '0.92rem',
+                                                            fontWeight: '800',
+                                                            cursor: (!whatsappInputText.trim() || parsingFile) ? 'not-allowed' : 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '8px',
+                                                            boxShadow: (!whatsappInputText.trim() || parsingFile) ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.35)',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        {parsingFile ? (
+                                                            <>
+                                                                <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                                                                <span>Interpretando Pedido...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Sparkles size={18} />
+                                                                <span>⚡ Interpretar Pedido con IA</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
                                 <div style={{ 
                                     backgroundColor: 'white', 
                                     borderRadius: '24px', 
@@ -6189,12 +6420,18 @@ function CreateOrderContent() {
                                                     <span>Digestión: <strong>{digestionDuration}s</strong></span>
                                                 </span>
                                             )}
-                                            {uploadedFile && (
+                                            {(uploadedFile || (whatsappInputText && whatsappInputText.trim().length > 0)) && (
                                                 <button 
                                                     type="button"
                                                     disabled={parsingFile}
-                                                    onClick={() => parseOrderWithAI(uploadedFile)}
-                                                    title="Volver a ejecutar la extracción del documento con Inteligencia Artificial"
+                                                    onClick={() => {
+                                                        if (uploadedFile) {
+                                                            parseOrderWithAI(uploadedFile);
+                                                        } else if (whatsappInputText) {
+                                                            parseOrderWithAI(whatsappInputText, 'whatsapp');
+                                                        }
+                                                    }}
+                                                    title="Volver a ejecutar la extracción con Inteligencia Artificial"
                                                     style={{ 
                                                         padding: '6px 14px', 
                                                         backgroundColor: '#F8FAFC', 
@@ -6215,10 +6452,10 @@ function CreateOrderContent() {
                                                     <span>{parsingFile ? 'Re-analizando...' : 'Re-analizar con IA'}</span>
                                                 </button>
                                             )}
-                                            {uploadedFileUrl && (
+                                            {(uploadedFileUrl || (whatsappInputText && whatsappInputText.trim().length > 0)) && (
                                                 <button 
                                                     onClick={() => setShowSideDocPreview(prev => !prev)}
-                                                    title="Alternar vista dividida del documento original"
+                                                    title="Alternar vista dividida del documento o texto original"
                                                     style={{ 
                                                         padding: '6px 14px', 
                                                         backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', 
@@ -6235,13 +6472,22 @@ function CreateOrderContent() {
                                                         transition: 'all 0.2s'
                                                     }}
                                                 >
-                                                    <FileText size={14} /> {(() => {
-                                                        const fileName = uploadedFile?.name?.toLowerCase() || '';
-                                                        const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
-                                                        const isImg = fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp');
-                                                        const label = isExcel ? 'Excel' : (isImg ? 'Imagen' : (importValidation.documentType || 'PDF'));
-                                                        return showSideDocPreview ? `Ocultar Visor ${label}` : `Ver ${label} Lado a Lado`;
-                                                    })()}
+                                                    {whatsappInputText && !uploadedFileUrl ? (
+                                                        <>
+                                                            <MessageSquare size={14} color="#16A34A" />
+                                                            <span>{showSideDocPreview ? 'Ocultar Texto WhatsApp' : 'Ver Texto WhatsApp Lado a Lado'}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FileText size={14} /> {(() => {
+                                                                const fileName = uploadedFile?.name?.toLowerCase() || '';
+                                                                const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
+                                                                const isImg = fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp');
+                                                                const label = isExcel ? 'Excel' : (isImg ? 'Imagen' : (importValidation.documentType || 'PDF'));
+                                                                return showSideDocPreview ? `Ocultar Visor ${label}` : `Ver ${label} Lado a Lado`;
+                                                            })()}
+                                                        </>
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
@@ -6471,6 +6717,47 @@ function CreateOrderContent() {
                                                 </div>
                                             );
                                         })()}
+
+                                        {/* Left Side: WhatsApp Original Message Preview */}
+                                        {!uploadedFileUrl && whatsappInputText && showSideDocPreview && (
+                                            <div style={{ 
+                                                width: '42%', 
+                                                minWidth: '380px', 
+                                                borderRight: '2px solid #E2E8F0', 
+                                                backgroundColor: '#F0FDF4', 
+                                                padding: '1.25rem', 
+                                                display: 'flex', 
+                                                flexDirection: 'column' 
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <MessageSquare size={15} color="#16A34A" /> Mensaje Original de WhatsApp / Chat
+                                                    </span>
+                                                    <span style={{ fontSize: '0.72rem', color: '#15803D', fontWeight: '700', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                                                        {whatsappInputText.trim().split('\n').filter(Boolean).length} líneas
+                                                    </span>
+                                                </div>
+                                                <div style={{ 
+                                                    flex: 1, 
+                                                    minHeight: '520px', 
+                                                    maxHeight: '580px', 
+                                                    overflowY: 'auto', 
+                                                    borderRadius: '12px', 
+                                                    border: '1.5px solid #BBF7D0', 
+                                                    backgroundColor: '#FFFFFF', 
+                                                    padding: '1.2rem', 
+                                                    fontSize: '0.86rem', 
+                                                    lineHeight: '1.65', 
+                                                    color: '#0F172A', 
+                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', 
+                                                    whiteSpace: 'pre-wrap', 
+                                                    wordBreak: 'break-word',
+                                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.03)'
+                                                }}>
+                                                    {whatsappInputText}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Right Side: Table Mapping */}
                                         <div 

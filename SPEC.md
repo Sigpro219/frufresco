@@ -1,8 +1,8 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.7 (Agrupación Vertical de Stock & UM por SKU con Columnas Reordenadas)  
-> **Fecha:** 25 de Septiembre, 2026  
+> **Versión:** 1.9.18 (Estándar Canónico de Ingesta Omnicanal: Ingesta Polimórfica de Texto WhatsApp / Chat & Gobernanza N° OC de Cliente)  
+> **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
 
@@ -16,8 +16,8 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 ### Regla de Dominio: Jerarquía Matriz vs Sucursales
 > **«En clientes corporativos (HORECA, cadenas y grupos empresariales), el NIT pertenece a la persona jurídica matriz y es heredado por sus diferentes sedes. Sin embargo, los pedidos, la programación de despacho, la georreferenciación y la entrega física SIEMPRE se consignan y ejecutan a nivel de Sucursal. Por diseño, las validaciones de auditoría deben permitir y respetar esta relación sin generar fricción ni bloquear la operación cuando el NIT del documento coincida con la matriz pero la entrega se dirija a una sucursal específica.»**
 
-### Principio Rector de Equivalencia Operativa
-> **«Para el operador logístico, procesar una orden de compra recibida por correo electrónico es conceptual, visual y funcionalmente equivalente a procesar un archivo PDF/Excel subido manualmente. El resultado final en ambos mundos es invariable: un pedido oficial en estado `pending_approval` programado para la operación del día siguiente, con la misma fidelidad contable, fiscal y de cubicación física.»**
+### Principio Rector de Equivalencia Operativa Omnicanal
+> **«Para el operador logístico, procesar una orden de compra recibida por correo electrónico, un archivo PDF/Excel subido manualmente, o un mensaje de texto copiado de WhatsApp/Chat es conceptual, visual y funcionalmente equivalente. El resultado final en todos los canales es invariable: un pedido oficial en estado `pending_approval` programado para la operación del día siguiente, con la misma fidelidad contable, fiscal, de cubicación física y trazabilidad de origen (`origin_source`).»**
 
 ---
 
@@ -2436,5 +2436,35 @@ sequenceDiagram
   3. **Preservación del Duplicado Consecutivo y Poka-Yoke**:
      - Cada pedido genera de forma contigua sus ejemplares de Original y Copia manteniendo fidelidad contable y sin alterar las demás vistas del kit de contingencia.
 
+#### Escenario 47: Estándar Canónico de Ingesta Omnicanal Polimórfica (Texto WhatsApp / Chat / Correos sin Adjuntos) (SDD v1.9.18)
+- **Given** la recepción de pedidos en texto no estructurado procedentes de mensajes de WhatsApp, chats corporativos o correos electrónicos sin adjuntos en `/admin/orders/create` y `/api/ai/extract-order`:
+- **When** el operador copia y pega el texto en la pestaña táctica "💬 Pegar Texto / WhatsApp" de la Mesa de Trabajo Inteligente y pulsa "⚡ Interpretar Pedido con IA":
+- **Then**:
+  1. **Contrato de Ingesta Polimórfico**:
+     - El endpoint `/api/ai/extract-order` acepta tanto cargas de archivos binarios (`file` en FormData) como cargas de texto plano (`text` en FormData o JSON `{ text: string }`).
+     - Procesa el texto directamente mediante Gemini 3.8 Flash sin compresión de imágenes ni OCR intermedio, reduciendo la latencia de respuesta a menos de 1.5 segundos.
+  2. **Normalización Inteligente de Dominio HORECA / Corabastos**:
+     - Extrae automáticamente la sucursal o cliente destinatario por coincidencia contextual (ej. "Tesoro Zona G").
+     - Extrae la fecha de entrega contextual (ej. "para el día 29 septiembre 2026" o "miércoles 30/09") y la normaliza a formato ISO `YYYY-MM-DD` respetando la regla D+1.
+     - Detecta notas logísticas y restricciones horarias (ej. "a partir de 12 pm. se recibe y que llegue temprano por favor") y las asigna a `delivery_slot` / `manual_delivery_note`.
+     - Normaliza unidades y abreviaturas coloquiales: `kL` -> `Kg`, `500 gr` -> `0.5 Kg`, `1 libra` -> `0.5 Kg`, calibres ("mediana") y notas de maduración ("listos para tajar") en observaciones de alistamiento para bodega.
+  3. **Alimentación Directa a la Mesa de Trabajo (Staging)**:
+     - Los ítems resultantes pueblan la misma tabla de staging (`stagedItems`), asociando automáticamente el cliente, precios de lista según modelo comercial, desglose de IVA y cubicación de kilos.
+     - La orden generada conserva la trazabilidad de canal en `orders.origin_source = 'whatsapp'`.
 
+#### Escenario 48: Gobernanza del N° de Orden de Compra del Cliente (PO Number) en Todo el Ciclo de Vida (SDD v1.9.18)
+- **Given** la necesidad de que el número de Orden de Compra (OC / SOLPED / Pedido del Cliente) acompañe al pedido de forma transversal desde su captura hasta la entrega física:
+- **When** se radica un pedido por cualquier canal (Documento, Email, WhatsApp o Creación Directa):
+- **Then**:
+  1. **Columna Canónica en Base de Datos**:
+     - La tabla `orders` incorpora la columna dedicada `purchase_order_number VARCHAR(100)` (o `client_po`), indexada para búsquedas y consultas directas sin requerir parseo de texto en `admin_notes`.
+  2. **Captura y Edición de Primer Nivel**:
+     - En `/admin/orders/create`: Input explícito visible "N° Orden de Compra (OC Cliente)", pre-diligenciado por la IA si fue detectado o disponible para digitación manual.
+     - En `EmailDraftsModule`: Campo persistido y editable en el borrador que se inyecta directamente a `orders.purchase_order_number` al aprobar.
+     - En `/admin/orders/[id]`: Campo editable para actualización o corrección auditada de la OC.
+  3. **Visibilidad Operativa y Logística End-to-End**:
+     - En `/admin/orders/loading`: Columna visible "OC Cliente" con badge de alta visibilidad y búsqueda por número de OC en el omnibox.
+     - En Remisión Impresa (`contingency-print`): Impresión explícita de `Orden de Compra: [Número]` en la cabecera del documento fiscal/comercial entregado al cliente.
+     - En Sábana de Alistamiento (`alistamiento-print`): Despliegue de la OC para el equipo de bodega.
+     - En Rótulos Térmicos QR (`print-labels`): Inclusión de `OC: [Número]` en la etiqueta física de canastilla.
 
