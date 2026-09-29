@@ -215,6 +215,20 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             page-break-after: avoid !important;
             break-after: avoid !important;
         }
+        .print-sheet {
+            page-break-after: always !important;
+            break-after: page !important;
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .print-sheet:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+        }
         .avoid-break {
             page-break-inside: avoid !important;
             break-inside: avoid !important;

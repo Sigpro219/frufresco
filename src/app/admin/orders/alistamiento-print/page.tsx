@@ -900,10 +900,13 @@ export default function AlistamientoSabanaPrintPage() {
                     {/* Botón Descargar PDF Oficio */}
                     <button
                         onClick={() => {
-                            const prevTitle = document.title;
-                            document.title = `Sabana_Alistamiento_Oficio_${selectedDate}`;
-                            window.print();
-                            setTimeout(() => { document.title = prevTitle; }, 1000);
+                            printViaNewWindow({
+                                element: printDocRef.current,
+                                title: `Sabana_Alistamiento_Oficio_${selectedDate}`,
+                                paperSize: 'legal',
+                                orientation: 'landscape',
+                                margin: '0.8cm 1.0cm'
+                            });
                         }}
                         style={{
                             display: 'inline-flex',
@@ -920,7 +923,7 @@ export default function AlistamientoSabanaPrintPage() {
                             boxShadow: '0 1px 3px rgba(2, 132, 199, 0.1)',
                             whiteSpace: 'nowrap'
                         }}
-                        title="Abre la vista limpia para imprimir o guardar como archivo PDF en formato Oficio"
+                        title="Abre la ventana aislada de impresión 1 a 1 para guardar como archivo PDF en formato Oficio"
                     >
                         <Download size={14} /> PDF
                     </button>
@@ -928,10 +931,13 @@ export default function AlistamientoSabanaPrintPage() {
                     {/* Botón de Impresión en Oficio */}
                     <button
                         onClick={() => {
-                            const prevTitle = document.title;
-                            document.title = `Sabana_Alistamiento_Oficio_${selectedDate}`;
-                            window.print();
-                            setTimeout(() => { document.title = prevTitle; }, 1000);
+                            printViaNewWindow({
+                                element: printDocRef.current,
+                                title: `Sábana de Alistamiento (Oficio) - ${selectedDate}`,
+                                paperSize: 'legal',
+                                orientation: 'landscape',
+                                margin: '0.8cm 1.0cm'
+                            });
                         }}
                         style={{
                             display: 'inline-flex',
