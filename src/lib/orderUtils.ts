@@ -152,45 +152,56 @@ export const buildDualUnitMetadata = (params: {
 
     const opts = selectedOptions || {};
     const rawPres = (opts['Presentación'] || opts['Presentacion'] || '') as string;
-    if (!rawPres) return null;
-
-    let presText = rawPres;
-    if (presText.includes('|')) {
-        const [base, gr] = presText.split('|');
-        presText = `${base} ${gr} gr`;
-    }
-
-    const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
-    const matchKg = !matchGr ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+    const rawGramaje = (opts['Gramaje'] || opts['Gramaje frutas'] || opts['gramaje'] || '') as string;
 
     let weightGr = 0;
     let isBandeja = false;
 
-    if (matchGr) {
-        weightGr = parseFloat(matchGr[1].replace(',', '.'));
-        isBandeja = /bandeja/i.test(presText);
-    } else if (matchKg) {
-        weightGr = parseFloat(matchKg[1].replace(',', '.')) * 1000;
-    } else {
-        return null;
+    // 1. Gramaje explícito seleccionado (Escenario 2: Presentación Kg + Gramaje)
+    if (rawGramaje && rawGramaje.toLowerCase() !== 'estándar' && rawGramaje.toLowerCase() !== 'estandar') {
+        const matchG = String(rawGramaje).match(/(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)?/i);
+        if (matchG) {
+            weightGr = parseFloat(matchG[1].replace(',', '.'));
+        }
     }
+
+    // 2. Gramaje intrínseco en Presentación (Escenario 1: Unidad 140 gr, Bandeja 500 gr)
+    if (!weightGr && rawPres) {
+        let presText = rawPres;
+        if (presText.includes('|')) {
+            const [base, gr] = presText.split('|');
+            presText = `${base} ${gr} gr`;
+        }
+
+        const matchGr = presText.match(/(?:Unidad(?:es)?|Und|U|Bandeja(?:s)?)\s*(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos)/i);
+        const matchKg = !matchGr ? presText.match(/(?:Unidad(?:es)?|Und|U)\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilos)/i) : null;
+
+        if (matchGr) {
+            weightGr = parseFloat(matchGr[1].replace(',', '.'));
+            isBandeja = /bandeja/i.test(presText);
+        } else if (matchKg) {
+            weightGr = parseFloat(matchKg[1].replace(',', '.')) * 1000;
+        }
+    }
+
+    if (!weightGr || weightGr <= 0) return null;
 
     const weightKg = weightGr / 1000;
     const isMasterKg = (product?.unit_of_measure || 'Kg').toLowerCase().includes('kg');
-    const inputIsUnit = unit.toLowerCase().includes('un') || unit.toLowerCase().includes('bandeja');
+    const isPresKg = !rawPres || rawPres.toLowerCase() === 'kg' || rawPres.toLowerCase() === 'kilo' || rawPres.toLowerCase() === 'kilogramo';
+    const isUnitKg = unit.toLowerCase() === 'kg' || unit.toLowerCase() === 'kilo' || unit.toLowerCase() === 'kilogramo';
 
     let discreteQty = quantity;
     let billingKg = quantity;
 
-    if (inputIsUnit || isMasterKg) {
-        // User entered discrete count (e.g. 1 unit of Papaya 2000 gr)
-        discreteQty = Math.max(1, Math.round(quantity));
-        billingKg = Number((discreteQty * weightKg).toFixed(2));
+    if (isPresKg && isUnitKg) {
+        // Escenario 2: Demanda en Kilogramos con calibre/gramaje por pieza (ej: 20 kg de Mandarina de 130 gr)
+        billingKg = Number(quantity.toFixed(3));
+        discreteQty = Math.max(1, Math.round(billingKg / weightKg));
     } else {
-        // User entered kg directly (e.g. 2 kg of Papaya 2000 gr)
-        discreteQty = Math.round(quantity / weightKg);
-        if (discreteQty < 1) discreteQty = 1;
-        billingKg = Number(quantity.toFixed(2));
+        // Escenario 1: Demanda en Conteo de Unidades (ej: 10 unidades de 140 gr)
+        discreteQty = Math.max(1, Math.round(quantity));
+        billingKg = Number((discreteQty * weightKg).toFixed(3));
     }
 
     const noun = isBandeja ? (discreteQty === 1 ? 'Bandeja' : 'Bandejas') : (discreteQty === 1 ? 'Unidad' : 'Unidades');
@@ -533,7 +544,7 @@ export function resolveProductCharacteristicsBadges(item: {
         textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${cutMatch[0]}\\b`, 'gi'), ' ');
     }
 
-    // 5. Extraer peso unitario por pieza (ej: "und de 160 gr", "undx160gr")
+    // 5. Extraer peso unitario por pieza (ej: "und de 160 gr", "undx160gr", o desde opts.Gramaje)
     const unitGrMatch = textToAnalyze.match(/\b(?:und(?:x|[\s]+de[\s]+)?|u[\s]*)(\d+)\s*(?:gr|g)\b/i);
     if (unitGrMatch) {
         badges.push({
@@ -545,6 +556,22 @@ export function resolveProductCharacteristicsBadges(item: {
             borderColor: '#99F6E4'
         });
         textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${unitGrMatch[0]}\\b`, 'gi'), ' ');
+    } else {
+        const rawG = opts['Gramaje'] || opts['Gramaje frutas'] || opts['gramaje'] || (opts._unit_weight_gr ? `${opts._unit_weight_gr} gr` : null);
+        if (rawG && String(rawG).toLowerCase() !== 'estándar' && String(rawG).toLowerCase() !== 'estandar') {
+            const m = String(rawG).match(/(\d+)\s*(?:gr|g)?/i);
+            if (m) {
+                badges.push({
+                    type: 'portion',
+                    label: 'Porción',
+                    text: `und x ${m[1]} gr`,
+                    color: '#0D9488',
+                    backgroundColor: '#CCFBF1',
+                    borderColor: '#99F6E4'
+                });
+                textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${m[1]}\\s*(?:gr|g)?\\b`, 'gi'), ' ');
+            }
+        }
     }
 
     // 6. Filtrar ruido residual de unidades (ej: "x kilo", "x kg", "1000 gr", "kg", "kilo")

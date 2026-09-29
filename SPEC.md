@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.22 (Estándar Canónico de Impresión Aislada 1 a 1 de Alta Fidelidad y Cero Latencia de Red en Ventana Secundaria Sandbox)  
+> **Versión:** 1.9.23 (Gobernanza Canónica de Gramaje Condicional y Paridad Transversal en Creación y Edición de Pedidos)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
@@ -2498,23 +2498,31 @@ sequenceDiagram
   4. **Inyección de Metadatos de Doble Unidad**: Se construye el objeto canónico `buildDualUnitMetadata` integrando `_original_qty: 10`, `_unit_weight_gr: 160`, `_conversion_factor: 0.16` y `_physical_instruction: "10 Unidades 160 gr"`.
   5. **Preservación en Base de Datos**: Al guardar el pedido (`handleUpdateOrder`), `order_items` persiste `quantity: 1.6` y las opciones enriquecidas en `selected_options`, garantizando que las estaciones posteriores (Alistamiento, Picking en Báscula, Remisión y Facturación) operen con absoluta consistencia.
 
-#### Escenario 51: Estándar Canónico de Gramaje Dinámico Condicional derivado de Equivalencias en Todos los Canales (SDD v1.9.21)
+#### Escenario 51: Estándar Canónico de Gramaje Dinámico Condicional y Paridad Transversal (SDD v1.9.23)
 - **Given** la necesidad de unificar la captura, cálculo y edición de productos ponderables en todos los canales de entrada del sistema:
   - Creación manual y staging de pedidos (`/admin/orders/create`)
   - Torre de control y edición de pedidos existentes (`/admin/orders/loading`)
   - Mesa de aprobación de borradores de correo (`EmailDraftsModule`)
 - **When** el usuario personaliza un producto o el motor interpreta una solicitud de cliente con gramaje o porción por pieza:
 - **Then**:
-  1. **Renombrado y Universalidad de la Variable**:
-     - La variable de atributo pasa de denominarse "GRAMAJE FRUTAS" a denominarse canónicamente **`Gramaje`**, aplicable de forma homogénea a cualquier SKU ponderable del catálogo (frutas, verduras, hortalizas, tubérculos o proteínas).
-  2. **Deducción Dinámica desde Equivalencias Parametrizadas (< 1000 gr)**:
-     - Las opciones del desplegable **`Gramaje`** no requieren configuración manual redundante en atributos de producto. Se alimentan reactivamente de las equivalencias activas del SKU en `product_conversions` cuyo factor sea menor a 1 kg (`factor < 1` o `< 1000 gr`, ej: `Unidad 100 gr`, `Unidad 130 gr`, `Unidad 140 gr`).
-  3. **Flujo Condicional y Poka-Yoke de Interfaz (Orden Natural)**:
-     - El orden de interacción prioriza la selección de la **Presentación**:
-       * **Si Presentación es por Unidad / Empaque Discreto (ej. `Unidad 140 gr`, `Bandeja 500 gr`):** El campo **`Gramaje` se oculta automáticamente**, eliminando redundancia visual puesto que la pieza ya está parametrizada. El campo `Cantidad` recibe el número entero de unidades (ej. 10 und) y el sistema proyecta y computa la masa neta ($10 \times 0.14 = 1.4\text{ kg}$).
-       * **Si Presentación es `Kg` (Kilogramo):** El campo **`Gramaje` se hace visible** (siempre que el producto cuente con equivalencias de porción menores a 1 kg). Permite elegir entre `Estándar / Granel` o los calibres específicos disponibles (`130 gr`, `140 gr`, etc.). El campo `Cantidad` recibe los kilogramos totales solicitados (ej. 20 kg) y el sistema deduce automáticamente las unidades resultantes ($20\text{ kg} / 0.13\text{ kg} \approx 154\text{ und}$).
-  4. **Paridad de Estructura de Datos en Base de Datos y Operación**:
-     - Ambos caminos (conteo fijo de unidades vs masa fija con gramaje unitario) generan **exactamente la misma estructura de metadatos canónicos** en `order_items`:
+  1. **Renombrado y Catálogo Maestro de la Variable**:
+     - La variable de atributo pasa de denominarse "Gramaje frutas" a denominarse canónicamente **`Gramaje`** en `product_attributes_master` y `products.options_config`, aplicable de forma homogénea a cualquier SKU ponderable del catálogo (frutas, verduras, hortalizas, tubérculos o proteínas).
+     - El catálogo maestro de `Gramaje` incorpora valores discretos de porción (`10 gr`, `20 gr`, `30 gr`, `40 gr`, `140 gr`, `450 gr`, etc.) sin contaminar la variable `Presentación`.
+  2. **Deducción Dinámica y Parametrización por SKU (< 1000 gr)**:
+     - Las opciones del desplegable **`Gramaje`** provienen de los gramajes parametrizados para el SKU en sus opciones o de las equivalencias activas en `product_conversions` cuyo factor sea menor a 1 kg (`factor < 1` o `< 1000 gr`, ej: `Unidad 100 gr`, `Unidad 130 gr`, `Unidad 140 gr`).
+  3. **Flujo Condicional Mutuamente Excluyente (Poka-Yoke de Interfaz en Orden Natural)**:
+     - El orden de interacción exige seleccionar primero la **Presentación**:
+       * **Escenario A: Selección por Unidad (Empaque Discreto, ej. `Unidad 140 gr`):**
+         - El selector de **`Gramaje` NO APARECE (se oculta automáticamente)**, previniendo ambigüedad o doble configuración ya que la pieza contiene su gramaje intrínseco.
+         - El usuario digita la **cantidad de unidades** (ej: 10 und).
+         - La interfaz proyecta en vivo la masa total ($10 \times 0.14 = 1.4\text{ kg}$) y persiste `quantity: 1.4` (Kg).
+       * **Escenario B: Selección por Kilogramo (`Kg` / `Kilo` / `Granel`):**
+         - El selector de **`Gramaje` APARECE** (siempre que el SKU tenga opciones de gramaje parametrizadas).
+         - El usuario selecciona el gramaje por fruto deseado (ej: `130 gr`).
+         - El usuario digita la **cantidad de kilogramos** requeridos (ej: 20 kg).
+         - La interfaz proyecta en vivo el conteo estimado de piezas ($20\text{ kg} / 0.13\text{ kg} \approx 154\text{ und}$).
+  4. **Paridad Canónica de Estructura de Datos en Base de Datos y Operación**:
+     - Ambos caminos (conteo fijo de unidades vs masa neta con gramaje unitario) producen **exactamente la misma estructura de metadatos canónicos** en `order_items`:
        * `quantity`: La masa neta en Kilogramos para báscula de despacho, inventario y facturación.
        * `unit`: `'Kg'`.
        * `selected_options._unit_weight_gr`: Gramaje por fruto (ej: `130`).
