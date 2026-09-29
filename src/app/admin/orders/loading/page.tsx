@@ -5194,22 +5194,35 @@ function OrderLoadingContent() {
                                                          </div>
                                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
                                                              {(() => {
-                                                                 const spec = formatStructuredSpecification({
-                                                                     quantity: item.quantity,
-                                                                     unit: item.products?.unit_of_measure,
+                                                                 const badges = resolveProductCharacteristicsBadges({
                                                                      variant_label: item.variant_label,
                                                                      nickname: item.nickname,
-                                                                     selected_options: item.selected_options
+                                                                     selected_options: item.selected_options,
+                                                                     unit: item.unit || item.products?.unit_of_measure,
+                                                                     products: item.products,
+                                                                     product_name: item.products?.name
                                                                  });
-                                                                 if (!item.variant_label || spec) return null;
-                                                                 if (/^\d+\s*,\s*\d+/.test(item.variant_label)) return null;
-                                                                 const cleaned = item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim();
-                                                                 if (!cleaned) return null;
-                                                                 return (
-                                                                     <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                         <Sparkles size={10} strokeWidth={1.5} /> {cleaned}
+                                                                 if (!badges || badges.length === 0) return null;
+                                                                 return badges.map((badge, bIdx) => (
+                                                                     <div 
+                                                                         key={bIdx}
+                                                                         style={{ 
+                                                                             fontSize: '0.72rem', 
+                                                                             color: badge.color, 
+                                                                             fontWeight: '700', 
+                                                                             backgroundColor: badge.backgroundColor, 
+                                                                             border: badge.borderColor ? `1px solid ${badge.borderColor}` : 'none',
+                                                                             padding: '2px 8px', 
+                                                                             borderRadius: '4px', 
+                                                                             display: 'inline-flex', 
+                                                                             alignItems: 'center', 
+                                                                             gap: '4px',
+                                                                             letterSpacing: '0.01em'
+                                                                         }}
+                                                                     >
+                                                                         <Sparkles size={10} strokeWidth={1.5} /> {badge.text}
                                                                      </div>
-                                                                 );
+                                                                 ));
                                                              })()}
                                                              {(() => {
                                                                  const exc = clientExceptions.find(e => e.product_id === (item.product_id || item.products?.id));
