@@ -5426,7 +5426,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             subject: `¡Hemos recibido tu pedido! (${friendlyCode})`,
             message: { html: emailHtml, text: emailText },
             template: { name: 'order_confirmation', data: attachmentEmailData },
-            status: 'pending'
+            status: 'pending',
+            next_retry_at: new Date(Date.now() + 2 * 60 * 1000).toISOString()
           }).select().single();
 
           if (!mailError && insertedMail) {
@@ -5889,7 +5890,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             name: 'order_confirmation',
             data: orderEmailData
           },
-          status: 'pending'
+          status: 'pending',
+          next_retry_at: new Date(Date.now() + 2 * 60 * 1000).toISOString()
         }).select().single();
 
         if (!mailError && insertedMail) {
@@ -10833,53 +10835,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Options Rendering */}
             {(() => {
               const rawEmailOpts: any[] = (selectedProductForVariant.options_config || [])
+                .filter((opt: any) => {
+                  const optName = (opt.name || '').toLowerCase();
+                  if (optName.includes('tamaño') || optName.includes('tamano')) return false;
+                  return true;
+                })
                 .map((opt: any) => {
                   if (opt.name && opt.name.toLowerCase().trim() === 'gramaje frutas') {
                     return { ...opt, name: 'Gramaje' };
                   }
                   return opt;
-                })
-                .filter((opt: any) => {
-                  const isPres = (opt.name || '').toLowerCase().includes('presentaci') || (opt.name || '').toLowerCase().includes('unidad');
-                  const isGram = (opt.name || '').toLowerCase().includes('gramaje');
-                  if (isPres || isGram) return true;
-                  if (opt.show_in_picking) return true;
-                  if (opt.show_on_web && !opt.show_in_picking) return false;
-                  if ((opt.name || '').toLowerCase().includes('tamaño') || (opt.name || '').toLowerCase().includes('tamano')) return false;
-                  return true;
                 });
-
-              // Si el producto no tiene Gramaje pero tiene presentaciones o conversiones < 1000 gr, derivarlo
-              const hasGramEmail = rawEmailOpts.some((c: any) => (c.name || '').toLowerCase().trim() === 'gramaje');
-              if (!hasGramEmail) {
-                const derivedGramajes = new Set<string>();
-                const presConfig = rawEmailOpts.find((c: any) => c.name && (c.name.toLowerCase().includes('presentaci') || c.name.toLowerCase().includes('unidad')));
-                if (presConfig && Array.isArray(presConfig.values)) {
-                  presConfig.values.forEach((v: string) => {
-                    const m = v.match(/(\d+)\s*gr/i);
-                    if (m) {
-                      const g = parseInt(m[1], 10);
-                      if (g > 0 && g < 1000) derivedGramajes.add(`${g} gr`);
-                    }
-                  });
-                }
-                (conversions || []).filter((c: any) => c.product_id === selectedProductForVariant.id).forEach((c: any) => {
-                  const factor = parseFloat(c.conversion_factor);
-                  if (factor > 0 && factor < 1) {
-                    const gr = Math.round(factor * 1000);
-                    derivedGramajes.add(`${gr} gr`);
-                  }
-                });
-                if (derivedGramajes.size > 0) {
-                  const sortedDer = Array.from(derivedGramajes).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-                  rawEmailOpts.push({
-                    name: 'Gramaje',
-                    values: sortedDer,
-                    show_in_picking: true,
-                    show_on_web: false
-                  });
-                }
-              }
 
               // Ordenar: Presentación primero (0), Gramaje segundo (1), resto A-Z
               const normalizedEmailOptions = rawEmailOpts
@@ -10908,14 +10874,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       return { ...opt, values: ['Estándar', ...values] };
                     }
                   }
-                  const isRipeness = (opt.name || '').toLowerCase().includes('maduraci');
-                  const values = isRipeness
-                    ? (opt.values || []).filter((v: string) => {
-                        const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
-                        return clean !== 'maduro' && clean !== 'madura';
-                      })
-                    : (opt.values || []);
-                  return { ...opt, values };
+                  return opt;
                 })
                 .filter((opt: any) => opt.values && opt.values.length > 0);
 
@@ -11670,16 +11629,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               } else if (values.length === 0) {
                 values = [product.unit_of_measure || 'Unidad'];
               }
-            }
-
-            // GOBERNANZA DE MADURACIÓN POR DEFECTO (Línea Base SDD):
-            // Ocultar opción explícita "Maduro" en borradores de pedidos internos.
-            const isRipeness = opt.name.toLowerCase().includes('maduraci');
-            if (isRipeness) {
-              values = values.filter((v: string) => {
-                const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
-                return clean !== 'maduro' && clean !== 'madura';
-              });
             }
             
             const sortedValues = values.slice().sort((valA: string, valB: string) => {

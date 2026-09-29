@@ -1750,6 +1750,21 @@ function CreateOrderContent() {
                 initialOptions[k] = String(v);
             });
         }
+        // Auto-match picking note to options (ej. Nota: "Pintón" -> Maduración: "Pintón")
+        if (exc && exc.picking_note) {
+            const noteClean = exc.picking_note.trim().toLowerCase();
+            (product.options_config || []).forEach((opt: any) => {
+                if (!initialOptions[opt.name] && Array.isArray(opt.values)) {
+                    const matchedVal = opt.values.find((val: string) => {
+                        const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
+                        return noteClean.includes(vClean) || vClean.includes(noteClean);
+                    });
+                    if (matchedVal) {
+                        initialOptions[opt.name] = matchedVal;
+                    }
+                }
+            });
+        }
         setSelectedOptions(initialOptions);
 
         // Always open the product modal to specify quantity, unit, or options
@@ -2295,9 +2310,25 @@ function CreateOrderContent() {
         setSelectedProductForModal(product);
 
         const exc = clientExceptions.find(e => e.product_id === product.id);
-        const mergedOptions = (selectedOptionsMap && Object.keys(selectedOptionsMap).length > 0)
+        const mergedOptions: Record<string, string> = (selectedOptionsMap && Object.keys(selectedOptionsMap).length > 0)
             ? { ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}), ...selectedOptionsMap }
             : (exc?.preferred_options && typeof exc.preferred_options === 'object' ? { ...exc.preferred_options } : {});
+
+        // Auto-match picking note to options (ej. Nota: "Pintón" -> Maduración: "Pintón")
+        if (exc && exc.picking_note) {
+            const noteClean = exc.picking_note.trim().toLowerCase();
+            (product.options_config || []).forEach((opt: any) => {
+                if (!mergedOptions[opt.name] && Array.isArray(opt.values)) {
+                    const matchedVal = opt.values.find((val: string) => {
+                        const vClean = (val.includes('|') ? val.split('|')[0] : val).trim().toLowerCase();
+                        return noteClean.includes(vClean) || vClean.includes(noteClean);
+                    });
+                    if (matchedVal) {
+                        mergedOptions[opt.name] = matchedVal;
+                    }
+                }
+            });
+        }
         setSelectedOptions(mergedOptions);
         
         const stagedItem = stagedItems.find(item => item.id === stagedId);
@@ -4592,7 +4623,9 @@ function CreateOrderContent() {
                             total_amount: formatNumber(calculateTotal()),
                             items: formattedItems
                         }
-                    }
+                    },
+                    status: 'pending',
+                    next_retry_at: new Date(Date.now() + 2 * 60 * 1000).toISOString()
                 });
             }
 
@@ -8512,21 +8545,11 @@ function CreateOrderContent() {
                 const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
                 // Normalizar atributos: Excluir los exclusivos de web (ej. Tamaño) e incluir los de alistamiento
+                // Normalizar atributos: Excluir exclusivamente Tamaño de la vista de pedidos B2B
                 let baseConfigs: any[] = (selectedProductForModal.options_config || [])
                     .filter((opt: any) => {
-                        const isPres = (opt.name || '').toLowerCase().includes('presentaci') || (opt.name || '').toLowerCase().includes('unidad');
-                        const isGram = (opt.name || '').toLowerCase().includes('gramaje');
-                        if (isPres || isGram) return true;
-                        
-                        const master = masterAttributes.find(m => (m.name || '').toLowerCase() === (opt.name || '').toLowerCase());
-                        if (master) {
-                            if (master.show_in_picking) return true;
-                            if (master.show_on_web) return false;
-                        }
-                        if (opt.show_in_picking) return true;
-                        if (opt.show_on_web && !opt.show_in_picking) return false;
-                        if ((opt.name || '').toLowerCase().includes('tamaño') || (opt.name || '').toLowerCase().includes('tamano')) return false;
-
+                        const optName = (opt.name || '').toLowerCase();
+                        if (optName.includes('tamaño') || optName.includes('tamano')) return false;
                         return true;
                     })
                     .map((opt: any) => {
@@ -8536,8 +8559,8 @@ function CreateOrderContent() {
                         return opt;
                     });
 
-                // Inyectar atributos maestros de alistamiento (show_in_picking) si aún no están en el producto
-                const pickingMasters = masterAttributes.filter(m => m.show_in_picking);
+                // Inyectar atributos maestros de alistamiento (ej. Nota alistamiento) si aún no están en el producto
+                const pickingMasters = masterAttributes.filter(m => m.show_in_picking && (m.name || '').toLowerCase() === 'nota alistamiento');
                 pickingMasters.forEach(pm => {
                     const alreadyHas = baseConfigs.some((c: any) => (c.name || '').toLowerCase() === (pm.name || '').toLowerCase());
                     if (!alreadyHas) {
@@ -8549,38 +8572,6 @@ function CreateOrderContent() {
                         });
                     }
                 });
-
-                // Si el producto no tiene Gramaje pero tiene gramajes en Presentación o conversiones < 1 kg, derivar Gramaje
-                const hasGramajeConfig = baseConfigs.some((c: any) => (c.name || '').toLowerCase().trim() === 'gramaje');
-                if (!hasGramajeConfig) {
-                    const derivedGramajes = new Set<string>();
-                    const presConfig = baseConfigs.find((c: any) => c.name && (c.name.toLowerCase().includes('presentaci') || c.name.toLowerCase().includes('unidad')));
-                    if (presConfig && Array.isArray(presConfig.values)) {
-                        presConfig.values.forEach((v: string) => {
-                            const m = v.match(/(\d+)\s*gr/i);
-                            if (m) {
-                                const g = parseInt(m[1], 10);
-                                if (g > 0 && g < 1000) derivedGramajes.add(`${g} gr`);
-                            }
-                        });
-                    }
-                    const prodConvs = conversions.filter(c => c.product_id === selectedProductForModal.id);
-                    prodConvs.forEach(c => {
-                        if (c.factor && c.factor > 0 && c.factor < 1) {
-                            const gr = Math.round(c.factor * 1000);
-                            derivedGramajes.add(`${gr} gr`);
-                        }
-                    });
-                    if (derivedGramajes.size > 0) {
-                        const sortedDer = Array.from(derivedGramajes).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-                        baseConfigs.push({
-                            name: 'Gramaje',
-                            values: sortedDer,
-                            show_in_picking: true,
-                            show_on_web: false
-                        });
-                    }
-                }
 
                 // Normalizar y ordenar atributos: Presentación primero (0), Gramaje segundo (1), resto A-Z
                 const normalizedOptionsConfig = baseConfigs
@@ -8632,18 +8623,6 @@ function CreateOrderContent() {
                         if (!hasStd) {
                             values = ['Estándar', ...values];
                         }
-                    }
-
-                    // GOBERNANZA DE MADURACIÓN POR DEFECTO (Línea Base SDD):
-                    // En el montaje interno de pedidos, "Maduro" es la norma biológica estándar.
-                    // Se oculta la opción explícita "Maduro" para que el asesor no fragmente la compra en Corabastos.
-                    // Solo quedan seleccionables las excepciones operativas reales (ej. Pintón, Verde, Biche).
-                    const isRipeness = opt.name.toLowerCase().includes('maduraci');
-                    if (isRipeness) {
-                        values = values.filter((v: string) => {
-                            const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
-                            return clean !== 'maduro' && clean !== 'madura';
-                        });
                     }
                     
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {

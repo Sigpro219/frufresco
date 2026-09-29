@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.26 (Persistencia Atómica Garantizada en Modificación y Eliminación de Ítems en Mesa de Control: `/api/orders/update` y `/api/orders/delete`)  
+> **Versión:** 1.9.28 (Pipeline de Notificaciones: Buffer de Gracia de 2 min, Remisión Oficial Editorial y Diff Cromático de Rectificación en Torre de Control)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística & Arquitectura Backend Supabase
@@ -180,6 +180,55 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
   - `src/app/admin/orders/create/page.tsx`: Inclusión de `allow_off_agreement_purchases`, `override_parent_off_agreement` e `is_corporate_parent` en `fetchB2B`, carga paginada exhaustiva de `quote_items`, filtrado estricto en `getScoredProductsForQuery` y `filteredProducts`, y badges en UI.
   - `src/components/EmailDraftsModule.tsx`: Inclusión de campos en `fetchProfiles`, resolución de permisos en `resolveContract`, filtrado condicional en `getScoredProductsForQuery`, y badges en UI de mesa de trabajo y resumen de cliente detectado.
 - **Criterio de Aceptación:** Cumplido. Clientes con bloqueo estricto solo ven sus SKUs pactados; clientes abiertos mantienen catálogo completo con precios acordes.
+
+### ✅ DEUDA TÉCNICA 15: Gobernanza de Atributos Parametrizables (Maduración Soberana y Gramaje Exclusivo por SKU)
+- **Diagnóstico:** 
+  1. En el modal de personalización de producto (`orders/create` y `EmailDraftsModule`), la variable biológica **«Maduración»** (ej. *Maduro, Pintón*) desaparecía visualmente debido a un filtro estricto sobre `show_on_web` y a la supresión arbitraria del valor *Maduro*, impidiendo al operador seleccionar requerimientos informales del cliente (ej. *Nota: "Pintón"*).
+  2. La variable **«Gramaje»** se estaba auto-inyectando e inventando de forma artificial con valores genéricos (*Estándar*) en productos que no tenían dicho atributo configurado en sus variaciones, violando el principio de que los atributos deben ser estrictamente parametrizables por SKU.
+- **Reglas de Contrato Canónicas:**
+  1. **Inviolabilidad de Atributos Configurados:** Todo atributo guardado en `options_config` de un SKU (ej. `Maduración`, `Presentación`, `Variedad`) es soberano y pertenece al producto. NUNCA se oculta del modal de montaje de pedidos. En `product_attributes_master`, `Maduración` y `Presentación` poseen `show_in_picking: true`.
+  2. **Conservación de Estados de Maduración:** Se eliminan los filtros que suprimían *Maduro*. Todas las opciones parametrizadas (*Maduro*, *Pintón*, *Verde*) quedan disponibles para selección del operador.
+  3. **Auto-Match de Notas de Alistamiento:** Si el cliente o el documento traen una nota informal (ej. *Nota: "Pintón"*), el sistema empareja automáticamente el texto con las opciones del SKU y preselecciona la variante correspondiente.
+  4. **Gramaje Estrictamente Parametrizable:**
+     - `Gramaje` **NO se auto-inyecta artificialmente**: únicamente aparece si el SKU maestro tiene configurado el atributo `Gramaje` en sus opciones y variaciones (`options_config` / `variants`).
+     - **Regla Poka-Yoke de Exclusión Mutua:**
+       * Si `Presentación = Kg`: Si el SKU tiene `Gramaje` parametrizado, se despliega el selector con sus gramajes específicos (ej. 550 gr) + *Estándar*, calculando unidades aproximadas.
+       * Si `Presentación = Unidad discreta` (ej. *Unidad 550 gr*): El selector de `Gramaje` se oculta automáticamente para evitar redundancia física.
+       * Si el SKU **no tiene** `Gramaje` parametrizado: El selector no se renderiza.
+- **Implementación Full-Stack:**
+  - `product_attributes_master`: Actualización a `show_in_picking = true` para `Maduración`, `Presentación` y `Gramaje`.
+  - `src/app/admin/orders/create/page.tsx`: Eliminación de filtros destructivos sobre `Maduración`, eliminación de inyección artificial de `Gramaje`, e integración de auto-match de notas de cliente (`exc.picking_note`).
+  - `src/components/EmailDraftsModule.tsx`: Paridad exacta en el modal de resolución de variantes de borradores de correo.
+  - SKU Maestro *Mango tommy* (`265dbe74-5e11-4d21-9389-d5d9f847cca3`): Parametrización en base de datos de sus 3 atributos oficiales (`Maduración: Maduro, Pintón`, `Presentación: Unidad 550 gr`, `Gramaje: 550 gr`).
+- **Criterio de Aceptación:** Cumplido. Maduración visible y preseleccionable; Gramaje 100% condicionado a la parametrización real de variaciones del SKU.
+
+### ✅ DEUDA TÉCNICA 16: Pipeline de Notificaciones al Cliente: Ingesta Cloud Anti-Bucles, Buffer de Gracia (2 min), Remisión Editorial y Diff Visual de Rectificación
+- **Diagnóstico Operativo:**
+  1. **Falla en Ingesta por Outlook On-Desk:** El reenvío de órdenes desde un cliente Outlook de escritorio antiguo a `email-ingest` generaba rebotes por sobrecupo de reenvío (*NDR 5.7.520 / Rate Limit*). Al rebotar, los correos de error del sistema entraban a la misma bandeja activando un bucle infinito de reenvío que inundaba el buzón y detenía la operación.
+  2. **Confirmaciones Prematuras:** El envío inmediato de comprobación no permitía rectificar errores de tipeo del operador en los primeros instantes de la aprobación.
+  3. **Disparidad de Formato:** El cliente recibía una tarjeta web genérica en lugar del formato legal y operativo de la **Remisión de Entrega Oficial** de FruFresco.
+  4. **Falta de Trazabilidad en Modificaciones Posteriores:** Cuando un cliente llamaba a modificar cantidades o agregar productos tras recibir la confirmación, la actualización en la Torre de Control (`/admin/orders/[id]`) no notificaba al cliente con claridad sobre qué ítems específicos habían cambiado.
+- **Reglas de Contrato Canónicas:**
+  1. **Desacople Cloud de Ingesta (Anti-Rebote):** Queda prohibido el uso de reglas locales en clientes de correo de escritorio. La ingesta de `pedidos@frufresco.com` se gobierna en la nube mediante **Worker IMAP SSL No Destructivo** (o Mail Flow Rule en el centro de administración de Exchange), leyendo el buzón sin alterar cabeceras ni disparar auto-reenvíos.
+  2. **Buffer de Gracia de Dos (2) Minutos:** Al aprobar un pedido en la Mesa de Trabajo, el acuse de confirmación se encola en `mail` con `scheduled_at = now() + interval '2 minutes'`. Si el operador realiza una corrección dentro de esta ventana, la remisión se actualiza sin enviar correos intermedios obsoletos al cliente.
+  3. **Paridad Editorial con Remisión de Entrega Oficial:** El cuerpo del correo (y anexo descargable) utiliza estrictamente el diseño de la **Remisión Oficial de FruFresco** ([`Letterhead`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/commercial/billing/print/%5Bid%5D/page.tsx)):
+     - Membrete legal Investments Cortés S.A.S. con NIT.
+     - Identificador `#PED-XXXX` y referencia de Orden de Compra del cliente (OC/OCC).
+     - Razón social, sede de destino, fecha programada de despacho y franja horaria.
+     - Tabla canónica: `REF / SKU` | `PRODUCTO (con presentación y gramaje)` | `CANT` | `VALOR UNIT.` | `TOTAL` | `IVA`.
+     - Subtotal, IVA discriminado y Total oficial liquidado.
+  4. **Diff Visual de Rectificación en Modificaciones Posteriores:**
+     - Al guardar cambios en un pedido existente desde `/admin/orders/[id]` ([page.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/%5Bid%5D/page.tsx)), el endpoint `/api/orders/update` compara la versión anterior (`old_data`) contra la nueva (`new_data`).
+     - Se despacha una remisión rectificativa con el asunto: `[PEDIDO CORREGIDO] Remisión Nº PED-XXXX - FruFresco`.
+     - La tabla de productos resalta cromáticamente las novedades:
+       * 🟡 **Ítem Modificado:** Fondo ámbar suave con indicador diferencial: `Cant. anterior: X ➔ Nueva: Y`.
+       * 🟢 **Ítem Agregado:** Fondo verde suave con distintivo `[+ NUEVO / ADICIONADO]`.
+       * 🔴 **Ítem Retirado:** Fondo rojo suave con texto tachado `[- RETIRADO / AGOTADO]`.
+- **Implementación Full-Stack:**
+  - `src/lib/emailTemplates.ts`: Unificación de la plantilla con el componente canónico `Letterhead` de remisiones.
+  - `src/app/api/orders/update/route.ts`: Detección diferencial de ítems (`idsToDelete`, `itemsToUpsert`, comparación de cantidades) y encolamiento de remisión rectificativa.
+  - Tabla `mail`: Soporte de `scheduled_at` para respeto del buffer de gracia de 2 minutos.
+- **Criterio de Aceptación:** Cumplido. Cero bucles en recepción; cliente recibe remisión formal con buffer de 2 minutos y diff cromático en correcciones.
 
 ---
 

@@ -24,7 +24,7 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
       const tName = template.name;
       const tData = template.data || {};
 
-      if (tName === 'order_confirmation') {
+      if (tName === 'order_confirmation' || tName === 'order_correction') {
         htmlContent = generateOrderConfirmationHtml(tData);
         textContent = generateOrderConfirmationText(tData);
       } else {
@@ -206,6 +206,13 @@ export async function POST(req: Request) {
     // Mode A: Called by Supabase Webhook for a single record
     if (payload && payload.record && payload.record.id) {
       const record = payload.record;
+
+      // Respetar buffer de gracia si está programado a futuro (ej. 2 minutos)
+      if (record.next_retry_at && new Date(record.next_retry_at).getTime() > Date.now()) {
+        console.log(`[Mail Queue Processor] Correo ${record.id} programado a futuro con buffer de gracia (${record.next_retry_at}). Permanecerá en espera.`);
+        return NextResponse.json({ success: true, scheduled: true, next_retry_at: record.next_retry_at });
+      }
+
       console.log('[Mail Queue Processor] Processing single webhook record:', record.id);
       
       const result = await sendMailRecord(supabaseAdmin, record);
