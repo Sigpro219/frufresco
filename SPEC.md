@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.21 (Estándar Canónico de Gramaje Dinámico Condicional derivado de Equivalencias en Todos los Canales)  
+> **Versión:** 1.9.22 (Estándar Canónico de Impresión Aislada 1 a 1 de Alta Fidelidad y Cero Latencia de Red en Ventana Secundaria Sandbox)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
@@ -2522,3 +2522,21 @@ sequenceDiagram
        * `selected_options._physical_instruction`: Instrucción física legible para alistamiento (ej: `"154 und de 130 gr; Maduro"`).
   5. **Paridad Transversal Invariable**:
      - Este flujo condicional, los cálculos matemáticos y la inyección de metadatos operan con idéntico comportamiento en `/admin/orders/create`, `/admin/orders/loading` y `EmailDraftsModule`.
+
+#### Escenario 52: Estándar Canónico de Impresión Aislada 1 a 1 de Alta Fidelidad y Cero Latencia de Red (`printViaNewWindow`) (SDD v1.9.22)
+- **Given** la necesidad de imprimir documentos operativos físicos de alta densidad (Sábana de Alistamiento nocturno en formato Oficio/Legal horizontal, Remisiones de despacho, Manifiestos de ruta, Órdenes de compra y Facturas):
+- **When** el operador pulsa el botón "Imprimir" o "PDF" en cualquier módulo del sistema (ej. `/admin/orders/alistamiento-print`, `/admin/orders/contingency-print`, `printViaNewWindow`, `RoutePlanner`):
+- **Then**:
+  1. **Aislamiento Sandbox de Ventana Secundaria 1 a 1 (`printViaNewWindow`)**:
+     - Para garantizar estricta fidelidad física y evitar que los estilos globales de Next.js, clases de Tailwind, barras de scroll y layouts de la aplicación principal contaminen o distorsionen los cálculos milimétricos de la hoja, la impresión se ejecuta en una ventana emergente secundaria limpia (`window.open('', '_blank')`).
+     - Esto preserva las proporciones exactas del papel (Legal 14" × 8.5" Landscape con márgenes de 0.8cm × 1.0cm; Letter 8.5" × 11" Portrait), asegurando que cada hoja o sábana de célula ocupe exactamente 1 página física sin desbordes.
+  2. **Erradicación de Dependencias de Red Externas (Eliminación del Cuelgue de 5 Minutos)**:
+     - Queda terminantemente prohibida la inyección de etiquetas externas de fuentes o estilos (`<link href="https://fonts.googleapis.com..." rel="stylesheet">`) dentro de ventanas `about:blank`.
+     - Se utiliza la pila tipográfica nativa del sistema (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`), eliminando el bloqueo de socket TCP/HTTP de Chromium que congelaba el navegador durante 300 segundos (5 minutos) antes de permitir la impresión.
+     - Se incorpora la etiqueta `<base href="...">` con el origen actual para que imágenes y logos corporativos (`/logo.png`) se resuelvan de forma inmediata y sin ambigüedad de seguridad.
+  3. **Disparador Reactivo de Impresión con Red de Seguridad (< 350 ms)**:
+     - El disparo del diálogo de impresión nativo del navegador (`window.print()`) no depende pasivamente del evento frágil `window.onload`.
+     - Evalúa de forma inmediata `document.readyState === 'complete'` e incorpora un temporizador de seguridad forzado de máximo 400 ms (`setTimeout(doPrint, 400)`), garantizando que el diálogo de impresión aparezca en menos de 350 ms aun cuando algún recurso gráfico secundario demore en responder.
+  4. **Estilización Limpia de Células y Hojas de Alistamiento (`.print-sheet`)**:
+     - Las reglas CSS embebidas en la ventana secundaria anulan automáticamente bordes de previsualización (`border: none !important`), sombras (`box-shadow: none !important`) y márgenes externos (`margin: 0 !important`), forzando `page-break-after: always !important` para cada matriz de célula y `page-break-after: avoid !important` en la última hoja.
+
