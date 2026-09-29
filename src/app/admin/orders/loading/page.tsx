@@ -51,6 +51,8 @@ import {
     Navigation,
     Edit3,
     ChevronDown,
+    ChevronUp,
+    RotateCcw,
     Filter,
     X,
     Printer,
@@ -302,6 +304,8 @@ function OrderLoadingContent() {
     // Modal States
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [orderItems, setOrderItems] = useState<any[]>([]);
+    const [cancelledOrderItems, setCancelledOrderItems] = useState<any[]>([]);
+    const [showCancelledSection, setShowCancelledSection] = useState(false);
     const [loadingItems, setLoadingItems] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [updateLoading, setUpdateLoading] = useState(false);
@@ -1604,6 +1608,8 @@ function OrderLoadingContent() {
 
     const handleOrderClick = async (order: any) => {
         setSelectedOrder(order);
+        setCancelledOrderItems(order?.logistics_data?.cancelled_items || []);
+        setShowCancelledSection(false);
         setEditStatus(order.status);
         setEditDeliveryDate(order.delivery_date);
         setEditMode(false);
@@ -2196,9 +2202,53 @@ function OrderLoadingContent() {
     };
 
     const removeItemFromOrder = (idx: number) => {
+        const itemToRemove = orderItems[idx];
+        const reason = window.prompt(
+            `Motivo de la cancelación de "${itemToRemove.products?.name || itemToRemove.nickname || 'Producto'}":`, 
+            "Cancelado por solicitud del cliente"
+        );
+        if (reason === null) return; // Si el operador cancela el prompt, no hace nada
+
+        const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
+
+        const cancelledRecord = {
+            id: itemToRemove.id || crypto.randomUUID(),
+            product_id: itemToRemove.product_id,
+            name: itemToRemove.products?.name || itemToRemove.nickname || 'Producto',
+            sku: itemToRemove.products?.sku || '',
+            quantity: itemToRemove.quantity,
+            unit_price: itemToRemove.unit_price,
+            unit: itemToRemove.unit || itemToRemove.products?.unit_of_measure || 'Kg',
+            nickname: itemToRemove.nickname || null,
+            variant_label: itemToRemove.variant_label || null,
+            selected_options: itemToRemove.selected_options || {},
+            cancelled_by_name: userTag,
+            cancelled_at: new Date().toISOString(),
+            reason: (reason || 'Cancelado por solicitud del cliente').trim(),
+            products: itemToRemove.products
+        };
+
         const newOrderItems = [...orderItems];
         newOrderItems.splice(idx, 1);
         setOrderItems(newOrderItems);
+        setCancelledOrderItems(prev => [cancelledRecord, ...prev]);
+        setShowCancelledSection(true);
+    };
+
+    const restoreCancelledItem = (cIdx: number) => {
+        const itemToRestore = cancelledOrderItems[cIdx];
+        
+        const newCancelled = [...cancelledOrderItems];
+        newCancelled.splice(cIdx, 1);
+        setCancelledOrderItems(newCancelled);
+
+        const restoredItem = {
+            ...itemToRestore,
+            order_id: selectedOrder.id,
+            isModified: true,
+            isNew: false
+        };
+        setOrderItems(prev => [...prev, restoredItem]);
     };
 
     const handleUpdateOrder = async () => {
@@ -2296,6 +2346,11 @@ function OrderLoadingContent() {
             };
 
             // 5. Llamada segura al backend (inmune a restricciones RLS de clientes o líderes)
+            const updatedLogisticsData = {
+                ...(selectedOrder.logistics_data || {}),
+                cancelled_items: cancelledOrderItems
+            };
+
             const response = await fetch('/api/orders/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2312,7 +2367,8 @@ function OrderLoadingContent() {
                         total_weight_kg: currentWeight,
                         subtotal: currentSubtotal,
                         tax: currentTax,
-                        admin_notes: updatedAdminNotes
+                        admin_notes: updatedAdminNotes,
+                        logistics_data: updatedLogisticsData
                     },
                     idsToDelete,
                     itemsToUpsert,
@@ -2343,7 +2399,8 @@ function OrderLoadingContent() {
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
                 tax: currentTax,
-                admin_notes: updatedAdminNotes
+                admin_notes: updatedAdminNotes,
+                logistics_data: updatedLogisticsData
             } : o));
             
             setSelectedOrder({ 
@@ -2358,7 +2415,8 @@ function OrderLoadingContent() {
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
                 tax: currentTax,
-                admin_notes: updatedAdminNotes
+                admin_notes: updatedAdminNotes,
+                logistics_data: updatedLogisticsData
             });
             
             setEditMode(false);
@@ -5417,6 +5475,124 @@ function OrderLoadingContent() {
                                     </table>
                                 )}
                             </div>
+
+                            {/* Sección de Productos Cancelados / Descartados */}
+                            {cancelledOrderItems.length > 0 && (
+                                <div style={{ margin: '0 2rem 1.5rem 2rem', border: '1px solid #FECACA', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#FFF5F5' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCancelledSection(!showCancelledSection)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.85rem 1.25rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            background: '#FEF2F2',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            borderBottom: showCancelledSection ? '1px solid #FCA5A5' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ 
+                                                backgroundColor: '#EF4444', 
+                                                color: 'white', 
+                                                fontSize: '0.7rem', 
+                                                fontWeight: '800', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '9999px' 
+                                            }}>
+                                                {cancelledOrderItems.length}
+                                            </span>
+                                            <span style={{ fontWeight: '800', color: '#991B1B', fontSize: '0.875rem' }}>
+                                                Productos Cancelados / Removidos del Pedido
+                                            </span>
+                                            <span style={{ fontSize: '0.75rem', color: '#B91C1C' }}>
+                                                (Excluidos de compras, alistamiento y facturación)
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#991B1B', fontSize: '0.8rem', fontWeight: '700' }}>
+                                            <span>{showCancelledSection ? 'Ocultar' : 'Ver detalle'}</span>
+                                            {showCancelledSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                        </div>
+                                    </button>
+
+                                    {showCancelledSection && (
+                                        <div style={{ padding: '0.75rem 1.25rem', overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                                <thead>
+                                                    <tr style={{ borderBottom: '1px solid #FCA5A5', color: '#7F1D1D', textAlign: 'left', fontSize: '0.75rem' }}>
+                                                        <th style={{ padding: '8px 4px' }}>PRODUCTO CANCELADO</th>
+                                                        <th style={{ padding: '8px 4px', textAlign: 'center' }}>CANTIDAD</th>
+                                                        <th style={{ padding: '8px 4px', textAlign: 'right' }}>PRECIO U.</th>
+                                                        <th style={{ padding: '8px 4px', textAlign: 'right' }}>SUBTOTAL</th>
+                                                        <th style={{ padding: '8px 4px' }}>MOTIVO & AUDITORÍA</th>
+                                                        {editMode && <th style={{ padding: '8px 4px', textAlign: 'center' }}>ACCIÓN</th>}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {cancelledOrderItems.map((cItem, cIdx) => (
+                                                        <tr key={cItem.id || cIdx} style={{ borderBottom: '1px solid #FEE2E2', color: '#374151' }}>
+                                                            <td style={{ padding: '10px 4px' }}>
+                                                                <div style={{ textDecoration: 'line-through', fontWeight: '700', color: '#6B7280' }}>
+                                                                    {cItem.products?.name || cItem.name || cItem.nickname || 'Producto'}
+                                                                </div>
+                                                                {cItem.variant_label && (
+                                                                    <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>{cItem.variant_label}</div>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ padding: '10px 4px', textAlign: 'center', color: '#6B7280', textDecoration: 'line-through' }}>
+                                                                {cItem.quantity} {cItem.unit || 'Kg'}
+                                                            </td>
+                                                            <td style={{ padding: '10px 4px', textAlign: 'right', color: '#6B7280', textDecoration: 'line-through' }}>
+                                                                {formatMoney(cItem.unit_price || 0)}
+                                                            </td>
+                                                            <td style={{ padding: '10px 4px', textAlign: 'right', color: '#9CA3AF', textDecoration: 'line-through', fontWeight: '700' }}>
+                                                                {formatMoney((cItem.unit_price || 0) * (cItem.quantity || 0))}
+                                                            </td>
+                                                            <td style={{ padding: '10px 4px', fontSize: '0.75rem' }}>
+                                                                <div style={{ fontWeight: '700', color: '#DC2626' }}>
+                                                                    {cItem.reason || 'Cancelado por solicitud del cliente'}
+                                                                </div>
+                                                                <div style={{ color: '#6B7280', fontSize: '0.7rem' }}>
+                                                                    {cItem.cancelled_by_name ? `Por: ${cItem.cancelled_by_name}` : ''} 
+                                                                    {cItem.cancelled_at ? ` (${new Date(cItem.cancelled_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })})` : ''}
+                                                                </div>
+                                                            </td>
+                                                            {editMode && (
+                                                                <td style={{ padding: '10px 4px', textAlign: 'center' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => restoreCancelledItem(cIdx)}
+                                                                        style={{
+                                                                            backgroundColor: '#059669',
+                                                                            color: 'white',
+                                                                            border: 'none',
+                                                                            borderRadius: '8px',
+                                                                            padding: '4px 10px',
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: '800',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                        title="Restaurar este producto nuevamente a la orden activa"
+                                                                    >
+                                                                        <RotateCcw size={12} strokeWidth={2} />
+                                                                        <span>Restaurar</span>
+                                                                    </button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Modal Footer */}
                             <div style={{ 

@@ -2605,4 +2605,9 @@ sequenceDiagram
      - El cliente local actualiza de inmediato su estado (`setOrderItems(result.items)`), garantizando que lo que ve el usuario en pantalla coincida uno a uno y en tiempo real con la base de datos física.
   3. **Trazabilidad & Auditoría Invariable (`order_audit_logs`)**:
      - Toda modificación o eliminación genera un registro persistente con el usuario responsable (`changed_by`), marca de tiempo y snapshot del estado anterior (`old_data`) y nuevo (`new_data`), preservando la trazabilidad operativa y financiera.
+  4. **Historial de Descarte / Archivo de Cancelaciones (`logistics_data.cancelled_items`) & Restauración Interactiva**:
+     - Al remover un producto del pedido mediante el icono de la papelera en la Mesa de Control, el sistema solicita interactivamente el motivo de la cancelación (*"Cancelado por solicitud del cliente"*, *"Agotado en plaza"*, *"Error de digitación"*).
+     - El ítem se retira de la tabla viva `order_items` para proteger la cadena física (impidiendo que Corabastos compre el producto, bodega lo aliste, o facturación lo cobre), pero **se preserva de forma persistente e indeleble en `orders.logistics_data.cancelled_items`** con su ID, producto, cantidad, precio, motivo, usuario responsable y marca de tiempo.
+     - En el modal de detalle del pedido se despliega la sección interactiva *«🔻 Productos Cancelados / Removidos del Pedido»* con vista de tachado suave y telemetría de auditoría.
+     - Si la cancelación requiere ser revertida (ej. el cliente solicita nuevamente el producto), el operador dispone del botón **`[Restaurar]`** (`RotateCcw`), el cual reincorpora de inmediato el ítem a la lista activa de la orden recalculando pesos, totales y recargándolo en base de datos al guardar.
 
