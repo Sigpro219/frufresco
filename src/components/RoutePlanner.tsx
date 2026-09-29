@@ -690,10 +690,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             <head>
                 <title>Manifiesto de Despacho - Investments Cortes</title>
                 <script src="https://cdn.tailwindcss.com"></script>
-                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
                 <style>
                     @page { margin: 15mm 15mm; size: letter; }
-                    body { font-family: 'Inter', sans-serif; background: white !important; margin: 0; color: #1f2937; }
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: white !important; margin: 0; color: #1f2937; }
                     .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
                     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 </style>
@@ -741,9 +740,25 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 </div>
                 
                 <script>
-                    window.onload = function() {
-                        setTimeout(function() { window.print(); }, 600);
-                    }
+                    (function() {
+                        var printed = false;
+                        function doPrint() {
+                            if (printed) return;
+                            printed = true;
+                            try {
+                                window.focus();
+                                window.print();
+                            } catch (e) {
+                                console.error('Error al imprimir manifiesto:', e);
+                            }
+                        }
+                        if (document.readyState === 'complete') {
+                            setTimeout(doPrint, 200);
+                        } else {
+                            window.addEventListener('load', function() { setTimeout(doPrint, 150); });
+                            setTimeout(doPrint, 600);
+                        }
+                    })();
                 </script>
             </body>
             </html>

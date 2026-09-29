@@ -753,7 +753,7 @@ export default function AlistamientoSabanaPrintPage() {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
-            <GoldenPrintStyles />
+            <GoldenPrintStyles paperSize="legal" />
 
             {/* Estilos Oficiales Tamaño Oficio (Legal Landscape) y Optimización B&W Industrial */}
             <style jsx global>{`
@@ -767,10 +767,19 @@ export default function AlistamientoSabanaPrintPage() {
                         color: #000000 !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
-                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        min-height: auto !important;
                     }
                     .no-print {
                         display: none !important;
+                    }
+                    .print-doc-container {
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
                     }
                     .print-sheet {
                         page-break-after: always !important;
@@ -891,13 +900,10 @@ export default function AlistamientoSabanaPrintPage() {
                     {/* Botón Descargar PDF Oficio */}
                     <button
                         onClick={() => {
-                            printViaNewWindow({
-                                element: printDocRef.current,
-                                title: `Sabana_Alistamiento_Oficio_${selectedDate}`,
-                                paperSize: 'legal',
-                                orientation: 'landscape',
-                                margin: '0.8cm 1.0cm'
-                            });
+                            const prevTitle = document.title;
+                            document.title = `Sabana_Alistamiento_Oficio_${selectedDate}`;
+                            window.print();
+                            setTimeout(() => { document.title = prevTitle; }, 1000);
                         }}
                         style={{
                             display: 'inline-flex',
@@ -914,7 +920,7 @@ export default function AlistamientoSabanaPrintPage() {
                             boxShadow: '0 1px 3px rgba(2, 132, 199, 0.1)',
                             whiteSpace: 'nowrap'
                         }}
-                        title="Abre la vista limpia oficial para guardar como archivo PDF en formato Oficio"
+                        title="Abre la vista limpia para imprimir o guardar como archivo PDF en formato Oficio"
                     >
                         <Download size={14} /> PDF
                     </button>
@@ -922,13 +928,10 @@ export default function AlistamientoSabanaPrintPage() {
                     {/* Botón de Impresión en Oficio */}
                     <button
                         onClick={() => {
-                            printViaNewWindow({
-                                element: printDocRef.current,
-                                title: `Sábana de Alistamiento (Oficio) - ${selectedDate}`,
-                                paperSize: 'legal',
-                                orientation: 'landscape',
-                                margin: '0.8cm 1.0cm'
-                            });
+                            const prevTitle = document.title;
+                            document.title = `Sabana_Alistamiento_Oficio_${selectedDate}`;
+                            window.print();
+                            setTimeout(() => { document.title = prevTitle; }, 1000);
                         }}
                         style={{
                             display: 'inline-flex',
@@ -952,7 +955,7 @@ export default function AlistamientoSabanaPrintPage() {
             </div>
 
             {/* Contenedor del Documento (Proporción Oficio Landscape: 14in x 8.5in) */}
-            <div ref={printDocRef} style={{ maxWidth: '1350px', margin: '0.75rem auto', padding: '0 1rem' }}>
+            <div ref={printDocRef} className="print-doc-container" style={{ maxWidth: '1350px', margin: '0.75rem auto', padding: '0 1rem' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>
                         <p style={{ fontWeight: '700' }}>Cargando matriz de alistamiento nocturno...</p>

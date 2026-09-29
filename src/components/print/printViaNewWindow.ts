@@ -66,10 +66,8 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="${typeof window !== 'undefined' ? window.location.origin : ''}/">
     <title>${title}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         /* ========================================================= */
         /* GOLDEN PRINT VIA NEW WINDOW - ISOLATED DOCUMENT STYLES   */
@@ -88,7 +86,7 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             margin: 0 !important;
             padding: 0 !important;
             color: #0F172A;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 9pt;
             line-height: 1.3;
             -webkit-font-smoothing: antialiased;
@@ -236,13 +234,30 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
 <body>
     ${htmlContent}
     <script>
-        window.onload = function() {
-            setTimeout(function() {
-                window.focus();
-                window.print();
-                ${autoClose ? 'setTimeout(function() { window.close(); }, 300);' : ''}
-            }, ${printDelay});
-        };
+        (function() {
+            var printed = false;
+            function doPrint() {
+                if (printed) return;
+                printed = true;
+                try {
+                    window.focus();
+                    window.print();
+                    ${autoClose ? 'setTimeout(function() { window.close(); }, 300);' : ''}
+                } catch (err) {
+                    console.error('Error al imprimir:', err);
+                }
+            }
+
+            if (document.readyState === 'complete') {
+                setTimeout(doPrint, 150);
+            } else {
+                window.addEventListener('load', function() {
+                    setTimeout(doPrint, 100);
+                });
+                // Red de seguridad infalible: jamas esperar mas de 400ms incluso si recursos cuelgan
+                setTimeout(doPrint, ${Math.max(printDelay, 400)});
+            }
+        })();
     </script>
 </body>
 </html>`;
