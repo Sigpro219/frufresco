@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.24 (Semántica Dual de weight_kg: Venta por Peso vs Unidades Discretas y Calibración de Cubicaje en Modales)  
+> **Versión:** 1.9.25 (Estándar Canónico de Ordenamiento Jerárquico de Calibres Agrícolas: Cero > Mediana > Richy en Inventarios, Impresiones y Pantallas)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
@@ -2569,3 +2569,27 @@ sequenceDiagram
      - El cubicaje total de camión y transporte utiliza el peso físico real ($Q \times \text{product.weight_kg} = 25\text{ kg}$) sin distorsionar los totales contables ni los impuestos.
   5. **Paridad Canónica Transversal**:
      - Esta regla aplica uniformemente en la creación manual (`/admin/orders/create`), edición operativa (`/admin/orders/loading`) y borradores de correo (`EmailDraftsModule`).
+
+#### Escenario 54: Estándar Canónico de Ordenamiento Jerárquico de Calibres Agrícolas (Cero > Mediana > Richy) en Inventarios, Impresiones y Pantallas (SDD v1.9.25)
+- **Given** la existencia de productos matriz (padre) que agrupan múltiples variantes y calibres hijos en el catálogo maestro (`parent_id`, ej. Papa Sabanera, Papa Criolla, Papa Pastusa, Papa R-12, Aguacate, Fresa, etc.):
+- **When** el sistema renderiza, lista o imprime variantes hijas bajo su producto padre en cualquier módulo:
+  - Balance Diario Kardex de Inventarios (`InventoryDailyBalanceTab.tsx`)
+  - Planilla Oficial de Conteo Físico de Inventario (`physical-count-print/page.tsx`)
+  - Sábana de Alistamiento Nocturno (`alistamiento-print/page.tsx`)
+  - Sábana de Compras y Neteo Sugerido (`purchases-print/page.tsx` y `procurementNettingEngine.ts`)
+  - Torre de Control y Vistas de Selección de Productos
+- **Then**:
+  1. **Jerarquía Universal de Calibres de 5 Niveles (`productHierarchyUtils.ts`)**:
+     - Las variantes hijas se ordenan obligatoria y sistemáticamente mediante el algoritmo canónico `compareChildProducts` / `compareFamilyProducts`:
+       * **Nivel 1 (Mayor Calibre / Rango 10):** `Cero`, `Grande`, `Gruesa`, `Jumbo`, `Extra`, `Primera`, `Selecta`, o gramaje unitario alto ($\ge 100\text{g}$).
+       * **Nivel 2 (Calibre Comercial Estándar / Rango 20):** `Mediana`, `Lavada`, `Parveja`, `Churrasquera`, `Segunda`, `Estándar`, `Institucional`, o gramaje medio ($50\text{g} - 99\text{g}$).
+       * **Nivel 3 (Menor Calibre / Rango 30):** `Richy`, `Rychy`, `Pequeña`, `Mini`, `Tercera`, `Menudeo`, `Corriente`, o gramaje bajo ($< 50\text{g}$).
+       * **Nivel 4 (Procesados / Especiales / Rango 40-50):** `Pelada`, `Semi-pelada`, `En cubos`, `Picada`, `Porcionada`, etc.
+       * **Nivel 5 (Presentaciones Mayoristas / Rango 90):** `Bulto x 50 kg`, `Saco`, `Arroba` siempre al final.
+  2. **Resolución por Gramaje Decreciente**:
+     - Si dos productos pertenecen al mismo nivel o declaran gramajes específicos (ej. `x120gr` vs `x80gr` vs `x40gr`), se ordenan **de mayor a menor peso físico** ($120\text{g} > 80\text{g} > 40\text{g}$), garantizando coherencia absoluta con el tamaño del fruto.
+  3. **Prioridad de Enteros sobre Procesados**:
+     - Dentro del mismo calibre, las variantes enteras preceden a las variantes procesadas (ej. `Papa sabanera cero` antes que `Papa sabanera pelada cero`).
+  4. **Cohesión Familiar**:
+     - Al listar colecciones completas, las familias se mantienen contiguas (`familyKey`), anteponiendo el producto matriz base y desplegando inmediatamente sus hijos ordenados por la regla de calibres, erradicando la dispersión o el ordenamiento arbitrario por ID o alfabeto ciego.
+

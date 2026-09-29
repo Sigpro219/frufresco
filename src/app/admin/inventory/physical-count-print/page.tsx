@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Printer, ArrowLeft, ClipboardList, Layers, Sparkles, Truck } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
+import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 
 interface ProductItem {
     id: string;
@@ -16,6 +17,8 @@ interface ProductItem {
     category?: string;
     accounting_id?: number | string | null;
     current_stock?: number;
+    parent_id?: string | null;
+    familyKey?: string;
 }
 
 // Orden canónico oficial de los 6 folios del documento INVENTARIO.pdf
@@ -58,7 +61,7 @@ export default function PhysicalCountPrintPage() {
             const [prodRes, stockRes] = await Promise.all([
                 supabase
                     .from('products')
-                    .select('id, name, sku, unit_of_measure, inventory_group, category, accounting_id')
+                    .select('id, name, sku, unit_of_measure, inventory_group, category, accounting_id, parent_id')
                     .eq('is_active', true)
                     .order('name', { ascending: true }),
                 supabase
@@ -74,8 +77,13 @@ export default function PhysicalCountPrintPage() {
                 stockMap.set(st.product_id, Number(st.quantity) || 0);
             });
 
-            const enriched = (prodRes.data || []).map((p: any) => ({
+            const prodList = prodRes.data || [];
+            const prodNameMap = new Map<string, string>();
+            prodList.forEach((p: any) => prodNameMap.set(p.id, p.name));
+
+            const enriched = prodList.map((p: any) => ({
                 ...p,
+                familyKey: p.parent_id ? (prodNameMap.get(p.parent_id) || p.name) : p.name,
                 current_stock: stockMap.get(p.id) || 0
             }));
 
@@ -103,6 +111,12 @@ export default function PhysicalCountPrintPage() {
             if (!map[rawGroup]) map[rawGroup] = [];
             map[rawGroup].push(p);
         });
+
+        // Ordenar productos dentro de cada grupo por familia y calibre canónico (Cero > Mediana > Richy)
+        Object.keys(map).forEach(groupKey => {
+            map[groupKey].sort(compareFamilyProducts);
+        });
+
         return map;
     }, [visibleProducts]);
 

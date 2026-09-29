@@ -10,6 +10,7 @@ import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
 import * as XLSX from 'xlsx';
 import { formatStructuredSpecification } from '@/lib/orderUtils';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
+import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 
 
 
@@ -201,6 +202,15 @@ export default function PurchasesPrintPage() {
             if (!map[it.sublist]) map[it.sublist] = [];
             map[it.sublist].push(it);
         });
+
+        // Ordenar productos de compras por familia y calibre canónico (Cero > Mediana > Richy)
+        Object.keys(map).forEach(sublistKey => {
+            map[sublistKey].sort((a, b) => compareFamilyProducts(
+                { name: a.product_name, familyKey: a.parent_name || a.product_name },
+                { name: b.product_name, familyKey: b.parent_name || b.product_name }
+            ));
+        });
+
         return map;
     }, [items]);
 
