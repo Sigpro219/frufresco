@@ -5527,12 +5527,83 @@ function OrderLoadingContent() {
                         }
                     });
 
+                    // Prepare normalized options config for loading modal
+                    let rawLoadingOpts: any[] = (selectedProductForVariant.options_config || [])
+                        .map((opt: any) => {
+                            if (opt.name && opt.name.toLowerCase().trim() === 'gramaje frutas') {
+                                return { ...opt, name: 'Gramaje' };
+                            }
+                            return opt;
+                        });
+
+                    // Si el producto no tiene Gramaje pero tiene equivalencias o presentaciones < 1000 gr, derivarlo
+                    const hasGram = rawLoadingOpts.some((c: any) => (c.name || '').toLowerCase().trim() === 'gramaje');
+                    if (!hasGram) {
+                        const derivedGramajes = new Set<string>();
+                        const presConfig = rawLoadingOpts.find((c: any) => c.name && (c.name.toLowerCase().includes('presentaci') || c.name.toLowerCase().includes('unidad')));
+                        if (presConfig && Array.isArray(presConfig.values)) {
+                            presConfig.values.forEach((v: string) => {
+                                const m = v.match(/(\d+)\s*gr/i);
+                                if (m) {
+                                    const g = parseInt(m[1], 10);
+                                    if (g > 0 && g < 1000) derivedGramajes.add(`${g} gr`);
+                                }
+                            });
+                        }
+                        conversions.filter(c => c.product_id === selectedProductForVariant.id).forEach(c => {
+                            const factor = parseFloat(c.conversion_factor);
+                            if (factor > 0 && factor < 1) {
+                                const gr = Math.round(factor * 1000);
+                                derivedGramajes.add(`${gr} gr`);
+                            }
+                        });
+                        if (derivedGramajes.size > 0) {
+                            const sortedDer = Array.from(derivedGramajes).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+                            rawLoadingOpts.push({
+                                name: 'Gramaje',
+                                values: sortedDer,
+                                show_in_picking: true,
+                                show_on_web: false
+                            });
+                        }
+                    }
+
+                    // Ordenar: Presentación primero (0), Gramaje segundo (1), resto A-Z
+                    const normalizedLoadingOptions = rawLoadingOpts
+                        .slice()
+                        .sort((a: any, b: any) => {
+                            const nameA = (a.name || '').toLowerCase();
+                            const nameB = (b.name || '').toLowerCase();
+                            const isPresA = nameA.includes('presentaci') || nameA.includes('unidad');
+                            const isPresB = nameB.includes('presentaci') || nameB.includes('unidad');
+                            if (isPresA && !isPresB) return -1;
+                            if (!isPresA && isPresB) return 1;
+
+                            const isGramA = nameA.includes('gramaje');
+                            const isGramB = nameB.includes('gramaje');
+                            if (isGramA && !isGramB) return -1;
+                            if (!isGramA && isGramB) return 1;
+
+                            return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+                        })
+                        .map((opt: any) => {
+                            const isGram = (opt.name || '').toLowerCase().includes('gramaje');
+                            if (isGram) {
+                                const values = opt.values || [];
+                                const hasStd = values.some((v: string) => v.toLowerCase().includes('estandar') || v.toLowerCase().includes('estándar'));
+                                if (!hasStd) {
+                                    return { ...opt, values: ['Estándar', ...values] };
+                                }
+                            }
+                            return opt;
+                        });
+
                     // Determine dynamic unit label and factor from presentation / selectedOptions
                     let dynamicUnitLabel = selectedUnit || selectedProductForVariant.unit_of_measure || 'Kg';
                     let dynamicUnitFactor = selectedConversionFactor || (selectedProductForVariant.weight_kg ? Number(selectedProductForVariant.weight_kg) : 1);
                     const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
 
-                    selectedProductForVariant.options_config?.forEach((opt: any) => {
+                    normalizedLoadingOptions.forEach((opt: any) => {
                         if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
                             const optVal = selectedOptions[opt.name];
                             if (optVal) {
@@ -5724,8 +5795,26 @@ function OrderLoadingContent() {
                                 </div>
 
                                 {/* Options Rendering */}
-                                {selectedProductForVariant.options_config?.map((opt: any, index: number) => {
+                                {normalizedLoadingOptions.map((opt: any, index: number) => {
                                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                                    const isGram = opt.name.toLowerCase().includes('gramaje');
+                                    const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
+                                    const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+
+                                    // Determinar si la presentación seleccionada es Kg
+                                    const presOpt = normalizedLoadingOptions.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
+                                    const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (isKgProduct ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                                    const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
+                                    const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+
+                                    // POKA-YOKE CONDICIONAL: Si es Gramaje y la presentación NO es Kg (es por unidad/empaque discreto), ocultar Gramaje!
+                                    if (isGram && !isPresKg) {
+                                        return null;
+                                    }
+
+                                    const defaultVal = isPresentation && isKgProduct ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : (isGram ? 'Estándar' : ''));
+                                    const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
+
                                     return (
                                         <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -5733,10 +5822,24 @@ function OrderLoadingContent() {
                                             </label>
                                             <select
                                                 id={`modal-select-${index}`}
-                                                value={selectedOptions[opt.name] || ''}
+                                                value={selectVal}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
-                                                    setSelectedOptions(prev => ({ ...prev, [opt.name]: val }));
+                                                    setSelectedOptions(prev => {
+                                                        const next = { ...prev, [opt.name]: val };
+                                                        // Si se cambia la Presentación a una unidad discreta (no Kg), limpiar Gramaje
+                                                        if (isPresentation) {
+                                                            const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                                                            const defaultUnit = selectedProductForVariant.unit_of_measure || 'Kg';
+                                                            const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                            if (!isKgSel) {
+                                                                Object.keys(next).forEach(k => {
+                                                                    if (k.toLowerCase().includes('gramaje')) delete next[k];
+                                                                });
+                                                            }
+                                                        }
+                                                        return next;
+                                                    });
                                                     if (isPresentation) {
                                                         const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                         const defaultUnit = selectedProductForVariant.unit_of_measure || 'Kg';
@@ -5759,7 +5862,7 @@ function OrderLoadingContent() {
                                                         }
                                                     }
                                                 }}
-                                                onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForVariant.options_config.length)}
+                                                onKeyDown={(e) => handleSelectKeyDown(e, index, normalizedLoadingOptions.length)}
                                                 style={{
                                                     width: '100%',
                                                     padding: '0.8rem',
@@ -5781,7 +5884,7 @@ function OrderLoadingContent() {
                                                     e.target.style.boxShadow = 'none';
                                                 }}
                                             >
-                                                <option value="">Seleccionar {opt.name}...</option>
+                                                {!isPresentation && <option value="">Seleccionar {opt.name}...</option>}
                                                 {opt.values?.map((val: string) => {
                                                     const displayVal = val.includes('|') 
                                                         ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` 
@@ -5849,24 +5952,44 @@ function OrderLoadingContent() {
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                                                 Unidad de Medida
                                             </label>
-                                            {parsedVariantQty > 0 && dynamicUnitFactor > 0 && (
-                                                <span style={{
-                                                    backgroundColor: '#ECFDF5',
-                                                    color: '#065F46',
-                                                    border: '1px solid #A7F3D0',
-                                                    padding: '2px 8px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '800',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                }}>
-                                                    <Scale size={13} style={{ color: '#059669' }} />
-                                                    <span>Total: {formatNumber(calculatedTotalKg, 2)} kg</span>
-                                                </span>
-                                            )}
+                                            {parsedVariantQty > 0 && dynamicUnitFactor > 0 && (() => {
+                                                const selectedGramajeVal = selectedOptions['Gramaje'] || selectedOptions['Gramaje frutas'] || '';
+                                                let pieceWeightGr = 0;
+                                                if (selectedGramajeVal && selectedGramajeVal.toLowerCase() !== 'estándar' && selectedGramajeVal.toLowerCase() !== 'estandar') {
+                                                    const mg = String(selectedGramajeVal).match(/(\d+)\s*(?:gr|g)?/i);
+                                                    if (mg) pieceWeightGr = parseInt(mg[1], 10);
+                                                }
+
+                                                const presOpt = normalizedLoadingOptions.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
+                                                const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (baseUnitLower === 'kg' ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                                                const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
+                                                const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+
+                                                const approxUnits = pieceWeightGr > 0 ? Math.round(calculatedTotalKg / (pieceWeightGr / 1000)) : 0;
+
+                                                return (
+                                                    <span style={{
+                                                        backgroundColor: '#ECFDF5',
+                                                        color: '#065F46',
+                                                        border: '1px solid #A7F3D0',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '800',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                    }}>
+                                                        <Scale size={13} style={{ color: '#059669' }} />
+                                                        <span>
+                                                            {pieceWeightGr > 0 && isPresKg
+                                                                ? `Total: ${formatNumber(calculatedTotalKg, 2)} kg (~${approxUnits} und de ${pieceWeightGr} gr)`
+                                                                : `Total: ${formatNumber(calculatedTotalKg, 2)} kg`}
+                                                        </span>
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         <select
                                             id="modal-unit-select"

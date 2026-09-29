@@ -8501,7 +8501,8 @@ function CreateOrderContent() {
                 let baseConfigs: any[] = (selectedProductForModal.options_config || [])
                     .filter((opt: any) => {
                         const isPres = (opt.name || '').toLowerCase().includes('presentaci') || (opt.name || '').toLowerCase().includes('unidad');
-                        if (isPres) return true;
+                        const isGram = (opt.name || '').toLowerCase().includes('gramaje');
+                        if (isPres || isGram) return true;
                         
                         const master = masterAttributes.find(m => (m.name || '').toLowerCase() === (opt.name || '').toLowerCase());
                         if (master) {
@@ -8513,6 +8514,12 @@ function CreateOrderContent() {
                         if ((opt.name || '').toLowerCase().includes('tamaño') || (opt.name || '').toLowerCase().includes('tamano')) return false;
 
                         return true;
+                    })
+                    .map((opt: any) => {
+                        if (opt.name && opt.name.toLowerCase().trim() === 'gramaje frutas') {
+                            return { ...opt, name: 'Gramaje' };
+                        }
+                        return opt;
                     });
 
                 // Inyectar atributos maestros de alistamiento (show_in_picking) si aún no están en el producto
@@ -8529,13 +8536,60 @@ function CreateOrderContent() {
                     }
                 });
 
-                // Normalizar y ordenar alfabéticamente los atributos por su nombre (A-Z)
+                // Si el producto no tiene Gramaje pero tiene gramajes en Presentación o conversiones < 1 kg, derivar Gramaje
+                const hasGramajeConfig = baseConfigs.some((c: any) => (c.name || '').toLowerCase().trim() === 'gramaje');
+                if (!hasGramajeConfig) {
+                    const derivedGramajes = new Set<string>();
+                    const presConfig = baseConfigs.find((c: any) => c.name && (c.name.toLowerCase().includes('presentaci') || c.name.toLowerCase().includes('unidad')));
+                    if (presConfig && Array.isArray(presConfig.values)) {
+                        presConfig.values.forEach((v: string) => {
+                            const m = v.match(/(\d+)\s*gr/i);
+                            if (m) {
+                                const g = parseInt(m[1], 10);
+                                if (g > 0 && g < 1000) derivedGramajes.add(`${g} gr`);
+                            }
+                        });
+                    }
+                    const prodConvs = conversions.filter(c => c.product_id === selectedProductForModal.id);
+                    prodConvs.forEach(c => {
+                        if (c.factor && c.factor > 0 && c.factor < 1) {
+                            const gr = Math.round(c.factor * 1000);
+                            derivedGramajes.add(`${gr} gr`);
+                        }
+                    });
+                    if (derivedGramajes.size > 0) {
+                        const sortedDer = Array.from(derivedGramajes).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+                        baseConfigs.push({
+                            name: 'Gramaje',
+                            values: sortedDer,
+                            show_in_picking: true,
+                            show_on_web: false
+                        });
+                    }
+                }
+
+                // Normalizar y ordenar atributos: Presentación primero (0), Gramaje segundo (1), resto A-Z
                 const normalizedOptionsConfig = baseConfigs
                     .slice()
-                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .sort((a: any, b: any) => {
+                        const nameA = (a.name || '').toLowerCase();
+                        const nameB = (b.name || '').toLowerCase();
+                        const isPresA = nameA.includes('presentaci') || nameA.includes('unidad');
+                        const isPresB = nameB.includes('presentaci') || nameB.includes('unidad');
+                        if (isPresA && !isPresB) return -1;
+                        if (!isPresA && isPresB) return 1;
+
+                        const isGramA = nameA.includes('gramaje');
+                        const isGramB = nameB.includes('gramaje');
+                        if (isGramA && !isGramB) return -1;
+                        if (!isGramA && isGramB) return 1;
+
+                        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+                    })
                     .map((opt: any) => {
                     let values: string[] = opt.values || [];
                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                    const isGram = opt.name.toLowerCase().includes('gramaje');
                     const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
                     const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
 
@@ -8556,6 +8610,13 @@ function CreateOrderContent() {
                             }
                         } else if (values.length === 0) {
                             values = [selectedProductForModal.unit_of_measure || 'Unidad'];
+                        }
+                    }
+
+                    if (isGram) {
+                        const hasStd = values.some(v => v.toLowerCase().includes('estandar') || v.toLowerCase().includes('estándar'));
+                        if (!hasStd) {
+                            values = ['Estándar', ...values];
                         }
                     }
 
@@ -9004,9 +9065,22 @@ function CreateOrderContent() {
                             {/* RENDER OPTIONS DYNAMICALLY */}
                             {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => {
                                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                                const isGram = opt.name.toLowerCase().includes('gramaje');
                                 const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
                                 const isKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
-                                const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : '');
+
+                                // Evaluar presentación actual para regla condicional de Gramaje
+                                const presOpt = normalizedOptionsConfig.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
+                                const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (isKg ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                                const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
+                                const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+
+                                // POKA-YOKE CONDICIONAL: Si es Gramaje y la presentación NO es Kg (es por unidad/empaque discreto), ocultar Gramaje!
+                                if (isGram && !isPresKg) {
+                                    return null;
+                                }
+
+                                const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : (isGram ? 'Estándar' : ''));
                                 const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
 
                                 return (
@@ -9020,7 +9094,21 @@ function CreateOrderContent() {
                                         value={selectVal}
                                         onChange={(e) => {
                                             const val = e.target.value;
-                                            setSelectedOptions(prev => ({ ...prev, [opt.name]: val }));
+                                            setSelectedOptions(prev => {
+                                                const next = { ...prev, [opt.name]: val };
+                                                // Si se cambia la Presentación a una unidad discreta (no Kg), limpiar Gramaje
+                                                if (isPresentation) {
+                                                    const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                                                    const defaultUnit = selectedProductForModal.unit_of_measure || 'Kg';
+                                                    const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                    if (!isKgSel) {
+                                                        Object.keys(next).forEach(k => {
+                                                            if (k.toLowerCase().includes('gramaje')) delete next[k];
+                                                        });
+                                                    }
+                                                }
+                                                return next;
+                                            });
                                             
                                             if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
                                                 const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
@@ -9170,24 +9258,44 @@ function CreateOrderContent() {
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                                             Unidad de Medida
                                         </label>
-                                        {parsedModalQty > 0 && dynamicUnitFactor > 0 && (
-                                            <span style={{
-                                                backgroundColor: '#ECFDF5',
-                                                color: '#065F46',
-                                                border: '1px solid #A7F3D0',
-                                                padding: '2px 8px',
-                                                borderRadius: '12px',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '800',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}>
-                                                <Scale size={13} style={{ color: '#059669' }} />
-                                                <span>Total: {formatWeightKg(calculatedTotalKg)} kg</span>
-                                            </span>
-                                        )}
+                                        {parsedModalQty > 0 && dynamicUnitFactor > 0 && (() => {
+                                            const selectedGramajeVal = selectedOptions['Gramaje'] || selectedOptions['Gramaje frutas'] || '';
+                                            let pieceWeightGr = 0;
+                                            if (selectedGramajeVal && selectedGramajeVal.toLowerCase() !== 'estándar' && selectedGramajeVal.toLowerCase() !== 'estandar') {
+                                                const mg = String(selectedGramajeVal).match(/(\d+)\s*(?:gr|g)?/i);
+                                                if (mg) pieceWeightGr = parseInt(mg[1], 10);
+                                            }
+
+                                            const presOpt = normalizedOptionsConfig.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
+                                            const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (isKgProduct ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                                            const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
+                                            const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+
+                                            const approxUnits = pieceWeightGr > 0 ? Math.round(calculatedTotalKg / (pieceWeightGr / 1000)) : 0;
+
+                                            return (
+                                                <span style={{
+                                                    backgroundColor: '#ECFDF5',
+                                                    color: '#065F46',
+                                                    border: '1px solid #A7F3D0',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}>
+                                                    <Scale size={13} style={{ color: '#059669' }} />
+                                                    <span>
+                                                        {pieceWeightGr > 0 && isPresKg
+                                                            ? `Total: ${formatWeightKg(calculatedTotalKg)} kg (~${approxUnits} und de ${pieceWeightGr} gr)`
+                                                            : `Total: ${formatWeightKg(calculatedTotalKg)} kg`}
+                                                    </span>
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                     {optionsList.length > 1 ? (
                                         <select
