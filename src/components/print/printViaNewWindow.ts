@@ -50,8 +50,8 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
     const printDelay = options.printDelay ?? 500;
     const autoClose = options.autoClose ?? false;
 
-    // Márgenes por defecto optimizados (0.8cm a 1.2cm)
-    const margin = options.margin || (orientation === 'landscape' ? '0.8cm 1.0cm' : '1.1cm 1.3cm');
+    // Márgenes por defecto optimizados (0.6cm a 1.0cm)
+    const margin = options.margin || (orientation === 'landscape' ? '0.8cm 1.0cm' : paperSize === 'letter' ? '0.6cm 0.8cm' : '0.8cm 1.0cm');
 
     // 2. Abrir ventana limpia
     const printWindow = window.open('', '_blank');
@@ -92,7 +92,7 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             -webkit-font-smoothing: antialiased;
         }
         
-        /* Limpieza y posicionamiento del contenedor para expandirse y empujar el footer al fondo */
+        /* Limpieza y posicionamiento del contenedor para ajustarse naturalmente a la hoja sin desbordar */
         .letterhead-container {
             width: 100% !important;
             max-width: 100% !important;
@@ -100,14 +100,17 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            min-height: calc(100vh - 4px) !important;
+            min-height: 0 !important;
             height: auto !important;
+            overflow: visible !important;
             position: relative !important;
             background: transparent !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: flex-start !important;
             box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
         }
 
         .letterhead-container main {

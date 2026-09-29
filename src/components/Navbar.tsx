@@ -6,7 +6,7 @@ import { useCart } from '../lib/cartContext';
 import { useAuth, checkUserPermission } from '../lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
-import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare, ShieldCheck, Layers, CheckCircle2 } from 'lucide-react';
+import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare, ShieldCheck, Layers, CheckCircle2, Printer } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { config } from '@/lib/config';
 import { SYNC_METADATA } from '@/lib/sync-status';
@@ -461,6 +461,15 @@ export default function Navbar() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                     <CheckCircle2 size={15} strokeWidth={1.5} style={dropdownIconStyle} /> Conciliación Post-Despacho
+                                                </Link>
+                                            )}
+                                            {hasPermission('orders') && (
+                                                <Link href="/admin/orders/contingency-print?mode=remissions"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Printer size={15} strokeWidth={1.5} style={dropdownIconStyle} color="#0D7A57" /> Previsualización Impresión
                                                 </Link>
                                             )}
                                             {hasPermission('transport') && (
@@ -964,6 +973,11 @@ export default function Navbar() {
                             {(hasPermission('orders') || hasPermission('commercial')) && (
                                 <Link href="/admin/orders/loading" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                     <ClipboardList size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navOrders}
+                                </Link>
+                            )}
+                            {hasPermission('orders') && (
+                                <Link href="/admin/orders/contingency-print?mode=remissions" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Printer size={16} strokeWidth={1.5} color="#0D7A57" /> Previsualización Impresión
                                 </Link>
                             )}
                             {hasPermission('transport') && (

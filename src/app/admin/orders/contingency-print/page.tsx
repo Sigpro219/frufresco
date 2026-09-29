@@ -403,14 +403,16 @@ function resolveDeliverySlotInfo(order: OrderData): DeliverySlotResult {
 }
 
 /**
- * Paginador inteligente para Remisiones Físicas en tamaño Carta.
- * - Si el pedido tiene hasta 36 ítems, cabe perfectamente en 1 SOLA HOJA con totales, control de canastillas y firmas.
- * - Si supera 36 ítems, pagina llenando las hojas intermedias hasta 38 ítems y dejando el remanente en la última hoja con firmas.
+ * Paginador inteligente para Remisiones Físicas estrictamente en tamaño CARTA (Letter Portrait).
+ * - Si el pedido tiene hasta 18 ítems: 1 sola hoja Carta completa con Header, micro-grid cliente,
+ *   tabla, control de canastillas, liquidación de totales, firmas, sello y Footer.
+ * - Si supera 18 ítems: pagina de forma balanceada en 2 (o más) folios Carta independientes,
+ *   donde CADA folio tiene su propio encabezado oficial, Pág X de Y, y pie de página legal.
  */
 function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
-    const SINGLE_PAGE_MAX = 36;
-    const INTERMEDIATE_PAGE_MAX = 38;
-    const LAST_PAGE_MAX = 30;
+    const SINGLE_PAGE_MAX = 18;
+    const INTERMEDIATE_PAGE_MAX = 24;
+    const LAST_PAGE_MAX = 18;
 
     if (!items || items.length === 0) return [[]];
     if (items.length <= SINGLE_PAGE_MAX) return [items];
@@ -424,9 +426,15 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
             break;
         }
 
-        const count = Math.min(INTERMEDIATE_PAGE_MAX, remaining.length);
-        pages.push(remaining.slice(0, count));
-        remaining = remaining.slice(count);
+        if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
+            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.ceil(remaining.length / 2));
+            pages.push(remaining.slice(0, firstPageCount));
+            pages.push(remaining.slice(firstPageCount));
+            break;
+        }
+
+        pages.push(remaining.slice(0, INTERMEDIATE_PAGE_MAX));
+        remaining = remaining.slice(INTERMEDIATE_PAGE_MAX);
     }
 
     return pages.length > 0 ? pages : [[]];
@@ -595,7 +603,7 @@ export default function ContingencyPrintPage() {
                 }
                 @page {
                     size: ${mode === 'dispatch' ? 'legal portrait' : 'letter portrait'};
-                    margin: ${mode === 'dispatch' ? '8mm 10mm' : '8mm'};
+                    margin: ${mode === 'dispatch' ? '8mm 10mm' : '6mm 8mm'};
                 }
             ` }} />
 
@@ -737,7 +745,8 @@ export default function ContingencyPrintPage() {
                                 element: printDocRef.current,
                                 title: docName,
                                 paperSize: mode === 'dispatch' ? 'oficio' : 'letter',
-                                orientation: 'portrait'
+                                orientation: 'portrait',
+                                margin: mode === 'dispatch' ? '8mm 10mm' : '6mm 8mm'
                             });
                         }}
                         style={{
@@ -771,7 +780,8 @@ export default function ContingencyPrintPage() {
                                     ? `Remisiones de Entrega - ${orders.length} Pedidos (${orders.length * 2} Hojas)`
                                     : `Kit de Contingencia - ${orders.length} Pedidos (${mode.toUpperCase()})`,
                                 paperSize: mode === 'dispatch' ? 'oficio' : 'letter',
-                                orientation: 'portrait'
+                                orientation: 'portrait',
+                                margin: mode === 'dispatch' ? '8mm 10mm' : '6mm 8mm'
                             });
                         }}
                         style={{

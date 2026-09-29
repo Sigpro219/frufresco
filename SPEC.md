@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.28 (Pipeline de Notificaciones: Buffer de Gracia de 2 min, Remisión Oficial Editorial y Diff Cromático de Rectificación en Torre de Control)  
+> **Versión:** 1.9.29 (Calibración Estricta de Remisiones Físicas en Carta Letter Portrait, Erradicación de Desbordes y Enlace Directo en Navbar)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística & Arquitectura Backend Supabase
@@ -2660,3 +2660,16 @@ sequenceDiagram
      - En el modal de detalle del pedido se despliega la sección interactiva *«🔻 Productos Cancelados / Removidos del Pedido»* con vista de tachado suave y telemetría de auditoría.
      - Si la cancelación requiere ser revertida (ej. el cliente solicita nuevamente el producto), el operador dispone del botón **`[Restaurar]`** (`RotateCcw`), el cual reincorpora de inmediato el ítem a la lista activa de la orden recalculando pesos, totales y recargándolo en base de datos al guardar.
 
+
+#### Escenario 56: Calibración Estricta de Remisiones Físicas en Carta (Letter Portrait), Erradicación de Desbordes y Enlace Directo en Navbar (SDD v1.9.29)
+- **Given** la necesidad imperativa de emitir las Remisiones de Entrega impresas exclusivamente en papel tamaño **CARTA (Letter: 215.9 mm × 279.4 mm)**:
+- **When** el usuario genera o previsualiza remisiones desde cualquier punto del sistema (`/admin/orders/contingency-print?mode=remissions` o mediante el botón "PDF" / "Imprimir Remisiones"):
+- **Then**:
+  1. **Paginación Inteligente Estricta para Carta (`paginateRemissionItems`)**:
+     - **Pedidos de hasta 18 ítems:** Se compilan en **1 sola hoja Carta completa (Monofolio)** con encabezado corporativo oficial, micro-grid de cliente, tabla completa, canastillas, totales, firmas, sello y pie de página legal.
+     - **Pedidos de más de 18 ítems (19 a 40 ítems):** El paginador divide balanceadamente en **2 folios Carta independientes** con su propio `<Letterhead>`, garantizando que NUNCA se pierda el encabezado ni el pie de página.
+  2. **Erradicación de Restricciones Rígidas de Altura y Recorte (`overflow: visible` y `min-height: 0`)**:
+     - Se elimina `min-height: calc(100vh - 4px)` y se desactiva `overflow: hidden` en print.
+     - Márgenes de `@page` calibradas a `6mm 8mm` en Carta para maximizar el área imprimible (267.4 mm).
+  3. **Acceso Rápido Directo desde Navbar (`Navbar.tsx`)**:
+     - Incorporado el enlace directo **«Previsualización Impresión»** con icono `Printer` en el dropdown Operaciones y menú móvil.
