@@ -134,7 +134,7 @@ export default function BulkOrderPrintLabelsPage() {
                 if (ids.length > 0) {
                     ordersQuery = ordersQuery.in('id', ids).neq('status', 'cancelled');
                 } else {
-                    const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                    const OPERATIONAL_STATUSES = ['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
                     ordersQuery = ordersQuery.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
                 }
 

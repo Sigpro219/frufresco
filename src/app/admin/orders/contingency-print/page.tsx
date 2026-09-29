@@ -447,12 +447,18 @@ export default function ContingencyPrintPage() {
     const paramDate = searchParams.get('date');
     const mode = searchParams.get('mode') || 'remissions'; // 'remissions' (default) | 'dispatch' | 'picking' | 'purchases' | 'all'
 
-    const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || getBogotaDate(0));
+    const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || getBogotaDate(1));
 
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [stocks, setStocks] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const printDocRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (paramDate && paramDate !== selectedDate) {
+            setSelectedDate(paramDate);
+        }
+    }, [paramDate]);
 
     useEffect(() => {
         const fetchOrdersData = async () => {
@@ -476,7 +482,7 @@ export default function ContingencyPrintPage() {
                     }
                     query = query.in('id', ids);
                 } else if (selectedDate) {
-                    const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                    const OPERATIONAL_STATUSES = ['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
                     query = query.eq('delivery_date', selectedDate).in('status', OPERATIONAL_STATUSES);
                 } else {
                     setLoading(false);

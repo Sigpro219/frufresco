@@ -415,8 +415,8 @@ export default function AlistamientoSabanaPrintPage() {
     const fetchOrdersAndItems = async () => {
         setLoading(true);
         try {
-            // Compuerta Poka-Yoke de Alistamiento: Solo órdenes formalmente aprobadas/lanzadas a operaciones
-            const OPERATIONAL_STATUSES = ['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+            // Compuerta Poka-Yoke de Alistamiento: Órdenes activas (incluye pendientes y aprobadas)
+            const OPERATIONAL_STATUSES = ['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
 
             let orderQuery = supabase
                 .from('orders')
