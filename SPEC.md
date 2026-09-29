@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.20 (Paridad Canónica de Doble Unidad en Edición de Pedidos & Gobernanza de Pesos Nominales)  
+> **Versión:** 1.9.21 (Estándar Canónico de Gramaje Dinámico Condicional derivado de Equivalencias en Todos los Canales)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
@@ -2497,3 +2497,28 @@ sequenceDiagram
   3. **Cálculo Base Canónico**: Al confirmar la adición/modificación, el sistema computa `baseQty = 10 * 0.160 = 1.6 kg`, registrando exactamente $1.6 \times \text{precio}$ en lugar de $10 \times \text{precio}$.
   4. **Inyección de Metadatos de Doble Unidad**: Se construye el objeto canónico `buildDualUnitMetadata` integrando `_original_qty: 10`, `_unit_weight_gr: 160`, `_conversion_factor: 0.16` y `_physical_instruction: "10 Unidades 160 gr"`.
   5. **Preservación en Base de Datos**: Al guardar el pedido (`handleUpdateOrder`), `order_items` persiste `quantity: 1.6` y las opciones enriquecidas en `selected_options`, garantizando que las estaciones posteriores (Alistamiento, Picking en Báscula, Remisión y Facturación) operen con absoluta consistencia.
+
+#### Escenario 51: Estándar Canónico de Gramaje Dinámico Condicional derivado de Equivalencias en Todos los Canales (SDD v1.9.21)
+- **Given** la necesidad de unificar la captura, cálculo y edición de productos ponderables en todos los canales de entrada del sistema:
+  - Creación manual y staging de pedidos (`/admin/orders/create`)
+  - Torre de control y edición de pedidos existentes (`/admin/orders/loading`)
+  - Mesa de aprobación de borradores de correo (`EmailDraftsModule`)
+- **When** el usuario personaliza un producto o el motor interpreta una solicitud de cliente con gramaje o porción por pieza:
+- **Then**:
+  1. **Renombrado y Universalidad de la Variable**:
+     - La variable de atributo pasa de denominarse "GRAMAJE FRUTAS" a denominarse canónicamente **`Gramaje`**, aplicable de forma homogénea a cualquier SKU ponderable del catálogo (frutas, verduras, hortalizas, tubérculos o proteínas).
+  2. **Deducción Dinámica desde Equivalencias Parametrizadas (< 1000 gr)**:
+     - Las opciones del desplegable **`Gramaje`** no requieren configuración manual redundante en atributos de producto. Se alimentan reactivamente de las equivalencias activas del SKU en `product_conversions` cuyo factor sea menor a 1 kg (`factor < 1` o `< 1000 gr`, ej: `Unidad 100 gr`, `Unidad 130 gr`, `Unidad 140 gr`).
+  3. **Flujo Condicional y Poka-Yoke de Interfaz (Orden Natural)**:
+     - El orden de interacción prioriza la selección de la **Presentación**:
+       * **Si Presentación es por Unidad / Empaque Discreto (ej. `Unidad 140 gr`, `Bandeja 500 gr`):** El campo **`Gramaje` se oculta automáticamente**, eliminando redundancia visual puesto que la pieza ya está parametrizada. El campo `Cantidad` recibe el número entero de unidades (ej. 10 und) y el sistema proyecta y computa la masa neta ($10 \times 0.14 = 1.4\text{ kg}$).
+       * **Si Presentación es `Kg` (Kilogramo):** El campo **`Gramaje` se hace visible** (siempre que el producto cuente con equivalencias de porción menores a 1 kg). Permite elegir entre `Estándar / Granel` o los calibres específicos disponibles (`130 gr`, `140 gr`, etc.). El campo `Cantidad` recibe los kilogramos totales solicitados (ej. 20 kg) y el sistema deduce automáticamente las unidades resultantes ($20\text{ kg} / 0.13\text{ kg} \approx 154\text{ und}$).
+  4. **Paridad de Estructura de Datos en Base de Datos y Operación**:
+     - Ambos caminos (conteo fijo de unidades vs masa fija con gramaje unitario) generan **exactamente la misma estructura de metadatos canónicos** en `order_items`:
+       * `quantity`: La masa neta en Kilogramos para báscula de despacho, inventario y facturación.
+       * `unit`: `'Kg'`.
+       * `selected_options._unit_weight_gr`: Gramaje por fruto (ej: `130`).
+       * `selected_options._original_qty`: Conteo de piezas (ej: `154`).
+       * `selected_options._physical_instruction`: Instrucción física legible para alistamiento (ej: `"154 und de 130 gr; Maduro"`).
+  5. **Paridad Transversal Invariable**:
+     - Este flujo condicional, los cálculos matemáticos y la inyección de metadatos operan con idéntico comportamiento en `/admin/orders/create`, `/admin/orders/loading` y `EmailDraftsModule`.
