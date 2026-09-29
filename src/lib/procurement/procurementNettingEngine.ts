@@ -17,6 +17,7 @@
  */
 
 import { isRedundantAttribute } from '@/lib/orderUtils';
+import { compareChildProducts } from '@/lib/productHierarchyUtils';
 
 export interface ProductCatalogMeta {
     id: string;
@@ -421,11 +422,11 @@ export function calculateProcurementNetting(params: {
     Object.keys(familyGroups).forEach(familyKey => {
         const familyItems = familyGroups[familyKey];
 
-        // Ordenar: Línea estándar base primero (canonical_spec === ''), luego variantes alfabéticamente
+        // Ordenar: Línea estándar base primero (canonical_spec === ''), luego variantes por calibre canónico (Cero > Mediana > Richy)
         familyItems.sort((a, b) => {
             if (a.canonical_spec === '' && b.canonical_spec !== '') return -1;
             if (a.canonical_spec !== '' && b.canonical_spec === '') return 1;
-            return a.canonical_spec.localeCompare(b.canonical_spec);
+            return compareChildProducts({ name: a.product_name }, { name: b.product_name });
         });
 
         // Stock disponible para toda la familia

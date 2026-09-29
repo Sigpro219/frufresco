@@ -1951,17 +1951,22 @@ function OrderLoadingContent() {
         setVariantQuantity(String(displayQty));
         
         const defaultUnit = product?.unit_of_measure || 'Kg';
+        const isKg = (defaultUnit || 'kg').toLowerCase() === 'kg' || (defaultUnit || 'kg').toLowerCase() === 'kilo';
+        const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
         let initUnit = opts._original_unit || defaultUnit;
-        let initFactor = opts._conversion_factor || 1;
+        let initFactor = opts._conversion_factor || nominalBaseWeight;
         
         Object.entries(opts).forEach(([optName, optVal]) => {
             if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
                 const baseUnitLower = (defaultUnit || 'kg').toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
                     initUnit = defaultUnit;
                     initFactor = 1;
+                } else if (clean === baseUnitLower) {
+                    initUnit = defaultUnit;
+                    initFactor = nominalBaseWeight;
                 } else if (strVal.includes('|')) {
                     const [base, gr] = strVal.split('|');
                     initUnit = `${base} de ${gr} gr`;
@@ -2002,19 +2007,23 @@ function OrderLoadingContent() {
         // Always open the sub-modal to input quantity/variants (just like create page!)
         setSelectedProductForVariant(product);
 
-        // Find default unit conversions
         const defaultUnit = product.unit_of_measure || 'Kg';
+        const isKg = (defaultUnit || 'kg').toLowerCase() === 'kg' || (defaultUnit || 'kg').toLowerCase() === 'kilo';
+        const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
         let initUnit = defaultUnit;
-        let initFactor = 1;
+        let initFactor = nominalBaseWeight;
 
         Object.entries(initialOptions).forEach(([optName, optVal]) => {
             if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
                 const baseUnitLower = (defaultUnit || 'kg').toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
                     initUnit = defaultUnit;
                     initFactor = 1;
+                } else if (clean === baseUnitLower) {
+                    initUnit = defaultUnit;
+                    initFactor = nominalBaseWeight;
                 } else if (strVal.includes('|')) {
                     const [base, gr] = strVal.split('|');
                     initUnit = `${base} de ${gr} gr`;
@@ -2043,17 +2052,25 @@ function OrderLoadingContent() {
         
         const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
         
-        let resolvedUnit = selectedUnit || selectedProductForVariant.unit_of_measure || 'Kg';
-        let resolvedFactor = selectedConversionFactor || (selectedProductForVariant.weight_kg ? Number(selectedProductForVariant.weight_kg) : 1);
         const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
+        const isMasterKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+        const nominalBaseWeight = !isMasterKg && selectedProductForVariant.weight_kg && Number(selectedProductForVariant.weight_kg) > 0
+            ? Number(selectedProductForVariant.weight_kg)
+            : 1;
+
+        let resolvedUnit = selectedUnit || selectedProductForVariant.unit_of_measure || 'Kg';
+        let resolvedFactor = selectedConversionFactor || nominalBaseWeight;
 
         Object.entries(selectedOptions).forEach(([optName, optVal]) => {
             if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
                     resolvedUnit = selectedProductForVariant.unit_of_measure || 'Kg';
                     resolvedFactor = 1;
+                } else if (clean === baseUnitLower) {
+                    resolvedUnit = selectedProductForVariant.unit_of_measure || 'Kg';
+                    resolvedFactor = nominalBaseWeight;
                 } else if (strVal.includes('|')) {
                     const [base, gr] = strVal.split('|');
                     resolvedUnit = `${base} de ${gr} gr`;
@@ -2067,7 +2084,7 @@ function OrderLoadingContent() {
             }
         });
 
-        const baseQty = parseFloat((qtyVal * resolvedFactor).toFixed(3));
+        const baseQty = isMasterKg ? parseFloat((qtyVal * resolvedFactor).toFixed(3)) : qtyVal;
 
         // ── Dual-unit metadata: preserve physical count alongside billing Kg ──
         const dual = buildDualUnitMetadata({
@@ -5506,10 +5523,14 @@ function OrderLoadingContent() {
                     // Build options list for unit selection (strictly base units & operational conversions, excluding ecommerce units)
                     const optionsList: { unit: string; factor: number; label: string }[] = [];
                     const baseUnit = selectedProductForVariant.unit_of_measure || 'Kg';
+                    const isKgProd = baseUnit.toLowerCase() === 'kg' || baseUnit.toLowerCase() === 'kilo';
+                    const nominalBaseWeight = !isKgProd && selectedProductForVariant.weight_kg && Number(selectedProductForVariant.weight_kg) > 0
+                        ? Number(selectedProductForVariant.weight_kg)
+                        : 1;
                     
                     optionsList.push({
                         unit: baseUnit,
-                        factor: 1,
+                        factor: nominalBaseWeight,
                         label: `${baseUnit} (Base)`
                     });
                     
@@ -5598,10 +5619,11 @@ function OrderLoadingContent() {
                             return opt;
                         });
 
+                    const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
+
                     // Determine dynamic unit label and factor from presentation / selectedOptions
                     let dynamicUnitLabel = selectedUnit || selectedProductForVariant.unit_of_measure || 'Kg';
-                    let dynamicUnitFactor = selectedConversionFactor || (selectedProductForVariant.weight_kg ? Number(selectedProductForVariant.weight_kg) : 1);
-                    const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
+                    let dynamicUnitFactor = selectedConversionFactor || nominalBaseWeight;
 
                     normalizedLoadingOptions.forEach((opt: any) => {
                         if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
@@ -5609,9 +5631,12 @@ function OrderLoadingContent() {
                             if (optVal) {
                                 const strVal = String(optVal);
                                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
-                                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
                                     dynamicUnitLabel = selectedProductForVariant.unit_of_measure || 'Kg';
                                     dynamicUnitFactor = 1;
+                                } else if (clean === baseUnitLower) {
+                                    dynamicUnitLabel = selectedProductForVariant.unit_of_measure || 'Kg';
+                                    dynamicUnitFactor = nominalBaseWeight;
                                 } else if (strVal.includes('|')) {
                                     const [base, gr] = strVal.split('|');
                                     dynamicUnitLabel = `${base} de ${gr} gr`;
@@ -5843,10 +5868,15 @@ function OrderLoadingContent() {
                                                     if (isPresentation) {
                                                         const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                         const defaultUnit = selectedProductForVariant.unit_of_measure || 'Kg';
-                                                        const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                        const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo';
+                                                        const isDefaultUnit = cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+
                                                         if (isKgSel) {
-                                                            setSelectedUnit(defaultUnit);
+                                                            setSelectedUnit('Kg');
                                                             setSelectedConversionFactor(1);
+                                                        } else if (isDefaultUnit) {
+                                                            setSelectedUnit(defaultUnit);
+                                                            setSelectedConversionFactor(nominalBaseWeight);
                                                         } else {
                                                             const matchedUnit = optionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
                                                             if (matchedUnit) {

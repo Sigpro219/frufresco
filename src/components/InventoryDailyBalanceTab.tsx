@@ -59,6 +59,7 @@ import {
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { WorkCell } from '@/types/workCells';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { compareChildProducts } from '@/lib/productHierarchyUtils';
 
 const renderCellLucideIcon = (cell?: WorkCell | null, size = 12) => {
     if (!cell) return <Layers size={size} />;
@@ -803,9 +804,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             processedIds.add(row.productId);
 
             const hasChildren = childrenByParent.has(row.productId);
-            const children = (childrenByParent.get(row.productId) || []).sort(
-                (a, b) => (Number(a.colB_idProducto) || 0) - (Number(b.colB_idProducto) || 0)
-            );
+            const children = (childrenByParent.get(row.productId) || []).sort(compareChildProducts);
 
             // Calcular consolidado de la familia para las 24 columnas
             const consolidated: InventoryDailyRow = hasChildren ? {

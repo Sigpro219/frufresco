@@ -3023,8 +3023,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       initialQtyStr = Number(origQtyNum.toFixed(2)).toString().replace('.', ',');
     }
     const defaultUnit = product.unit_of_measure || 'Kg';
+    const isKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
+    const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
     let unit = (item.conversion_factor && item.conversion_factor !== 1) ? (item.originalUnit || item.unit || defaultUnit) : defaultUnit;
-    let factor = item.conversion_factor || 1;
+    let factor = item.conversion_factor || nominalBaseWeight;
     const opts = { ...(item.selected_options || {}) };
 
     // Pre-populate structured preferred options if exist
@@ -3052,9 +3054,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if (optVal) {
           const clean = (optVal.includes('|') ? optVal.split('|')[0] : optVal).trim();
           const cleanLower = clean.toLowerCase();
-          if (cleanLower === 'kg' || cleanLower === 'kilo' || cleanLower === defaultUnit.toLowerCase()) {
+          if (cleanLower === 'kg' || cleanLower === 'kilo') {
             unit = defaultUnit;
             factor = 1;
+          } else if (cleanLower === defaultUnit.toLowerCase()) {
+            unit = defaultUnit;
+            factor = nominalBaseWeight;
           } else {
             unit = clean;
             const pw = getParsedWeight(optVal);
@@ -11074,7 +11079,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </label>
                   {(() => {
                     const parsedQty = parseQuantity(variantQuantity) || 0;
-                    const factor = selectedConversionFactor || 1;
+                    const isProdKg = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase().includes('kg');
+                    const nominalBaseWeight = !isProdKg && selectedProductForVariant.weight_kg && Number(selectedProductForVariant.weight_kg) > 0
+                        ? Number(selectedProductForVariant.weight_kg)
+                        : 1;
+                    const factor = selectedConversionFactor || nominalBaseWeight;
                     const calcTotalKg = parsedQty * factor;
                     const selectedGramajeVal = selectedOptions['Gramaje'] || selectedOptions['Gramaje frutas'] || '';
                     let pieceWeightGr = 0;
@@ -11698,9 +11707,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         const modalOptionsList: { unit: string; factor: number; label: string }[] = [];
         const baseUnit = product.unit_of_measure || 'Kg';
+        const isKgProd = baseUnit.toLowerCase() === 'kg' || baseUnit.toLowerCase() === 'kilo';
+        const nominalBaseWeight = !isKgProd && product.weight_kg && Number(product.weight_kg) > 0
+          ? Number(product.weight_kg)
+          : 1;
         modalOptionsList.push({
           unit: baseUnit,
-          factor: 1,
+          factor: nominalBaseWeight,
           label: `${baseUnit} (Base)`
         });
         
@@ -12093,6 +12106,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                 const baseUnitLower = (product.unit_of_measure || 'Kg').toLowerCase();
                 const isKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
                 const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : '');
                 const selectVal = options[opt.name] !== undefined && options[opt.name] !== '' ? options[opt.name] : defaultVal;
 
@@ -12113,10 +12127,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
                           const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                           const defaultUnit = product.unit_of_measure || 'Kg';
-                          const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                          const isMasterKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
+                          const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo';
+                          const isDefaultUnit = cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+
                           if (isKgSel) {
                             newUnit = defaultUnit;
                             newFactor = 1;
+                          } else if (isDefaultUnit) {
+                            newUnit = defaultUnit;
+                            newFactor = nominalBaseWeight;
                           } else {
                             const matchedUnit = modalOptionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
                             if (matchedUnit) {

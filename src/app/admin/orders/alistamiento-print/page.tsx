@@ -8,6 +8,7 @@ import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
+import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 
 interface OrderItem {
     id: string;
@@ -689,23 +690,8 @@ export default function AlistamientoSabanaPrintPage() {
             const cellData = cellGroups[cellName];
             if (!cellData) return;
 
-            // Ordenar columnas por Familia (Padre) contiguo + Producto Base primero + Variantes alfabéticas
-            const productsList = Array.from(cellData.productsMap.values()).sort((a, b) => {
-                // 1. Criterio Primario: Familia / Producto Padre (Estiba física contigua en bodega)
-                const famA = a.familyKey || a.name;
-                const famB = b.familyKey || b.name;
-                const famCompare = famA.localeCompare(famB);
-                if (famCompare !== 0) return famCompare;
-
-                // 2. Criterio Secundario: El producto base de la familia primero
-                const aIsBase = a.name.toLowerCase() === famA.toLowerCase();
-                const bIsBase = b.name.toLowerCase() === famB.toLowerCase();
-                if (aIsBase && !bIsBase) return -1;
-                if (!aIsBase && bIsBase) return 1;
-
-                // 3. Criterio Terciario: Variantes hijas ordenadas alfabéticamente
-                return a.name.localeCompare(b.name);
-            });
+            // Ordenar columnas por Familia (Padre) contiguo + Producto Base primero + Variantes por Calibre Canónico (Cero > Mediana > Richy)
+            const productsList = Array.from(cellData.productsMap.values()).sort(compareFamilyProducts);
             const allActiveOrders = cellData.activeOrders;
 
             // Capacidad de columnas optimizada para Oficio Landscape (10 por defecto, configurable)

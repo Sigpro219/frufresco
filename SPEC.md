@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.23 (Gobernanza Canónica de Gramaje Condicional y Paridad Transversal en Creación y Edición de Pedidos)  
+> **Versión:** 1.9.24 (Semántica Dual de weight_kg: Venta por Peso vs Unidades Discretas y Calibración de Cubicaje en Modales)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
@@ -2548,3 +2548,24 @@ sequenceDiagram
   4. **Estilización Limpia de Células y Hojas de Alistamiento (`.print-sheet`)**:
      - Las reglas CSS embebidas en la ventana secundaria anulan automáticamente bordes de previsualización (`border: none !important`), sombras (`box-shadow: none !important`) y márgenes externos (`margin: 0 !important`), forzando `page-break-after: always !important` para cada matriz de célula y `page-break-after: avoid !important` en la última hoja.
 
+
+#### Escenario 53: Semántica Dual de `weight_kg` (Venta por Peso vs Unidades Discretas) y Calibración del Cubicaje en Modales de Pedidos (SDD v1.9.24)
+- **Given** la existencia en el catálogo maestro (`products`) de dos arquetipos fundamentales de producto:
+  1. **Productos Ponderables por Peso (`unit_of_measure === 'Kg'`):** Donde `weight_kg` representa la **cantidad mínima de venta / fraccionamiento** permitida (ej: `0.1 kg` o `0.5 kg`), y el precio base es por kilogramo.
+  2. **Productos por Unidades Discretas (`unit_of_measure !== 'Kg'`, ej: `'Unidad'`, `'Bulto'`, `'Lata'`, `'Botella'`):** Donde `weight_kg` representa el **peso físico real en kilogramos por unidad de empaque** (ej: Salvado de trigo bulto x 25 kg $\rightarrow$ `weight_kg = 25`), y el precio base es por cada unidad/bulto.
+- **When** el usuario abre el modal de personalización/adición de pedidos en cualquier canal (`/admin/orders/create`, `/admin/orders/loading`, `EmailDraftsModule`):
+- **Then**:
+  1. **Factor de Conversión Base Nominal (`nominalBaseWeight`)**:
+     - Para productos discretos (`!isKgProduct`), la unidad base hereda como factor logístico su peso nominal: `nominalBaseWeight = product.weight_kg > 0 ? Number(product.weight_kg) : 1`.
+     - En `optionsList`, la opción base se registra con `factor: nominalBaseWeight`.
+     - El estado inicial de `modalFactor` / `selectedConversionFactor` se inicializa con `nominalBaseWeight` (no se fuerza ciegamente a `1`).
+  2. **Cálculo Reactivo de Masa en la Píldora de Medida (`calculatedTotalKg`)**:
+     - Al digitar una cantidad $Q$ de unidades discretas (ej: `1 Bulto` o `2 Unidades`), la masa proyectada es $Q \times \text{nominalBaseWeight}$ (ej: $1 \times 25 = 25\text{ kg}$; $2 \times 25 = 50\text{ kg}$).
+     - El badge visual muestra fielmente `Total: 25 kg` (o `50 kg`), eliminando la anomalía donde erróneamente se proyectaba `1 kg`.
+  3. **Preservación Invariable de la Facturación Financiera (`baseQty` vs `price`)**:
+     - Para productos discretos, la cantidad a facturar en el carrito/pedido (`baseQty` / `quantity`) es el número entero de unidades pedidas ($Q$), **NUNCA multiplicado por los kilos**.
+     - El precio unitario aplica por unidad (`$58,800 × 1 = $58,800`, jamás `$58,800 × 25`).
+  4. **Cubicación Logística Transversal (`total_weight_kg`)**:
+     - El cubicaje total de camión y transporte utiliza el peso físico real ($Q \times \text{product.weight_kg} = 25\text{ kg}$) sin distorsionar los totales contables ni los impuestos.
+  5. **Paridad Canónica Transversal**:
+     - Esta regla aplica uniformemente en la creación manual (`/admin/orders/create`), edición operativa (`/admin/orders/loading`) y borradores de correo (`EmailDraftsModule`).
