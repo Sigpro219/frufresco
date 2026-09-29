@@ -368,33 +368,13 @@ export default function OrderDetailPage() {
         try {
             const newTotal = editItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
 
-            // Update Order
-            const { error: orderUpdateError } = await supabase
-                .from('orders')
-                .update({
-                    delivery_date: editForm.delivery_date,
-                    delivery_slot: editForm.delivery_slot,
-                    shipping_address: editForm.shipping_address,
-                    admin_notes: editForm.admin_notes !== undefined ? editForm.admin_notes : order?.admin_notes,
-                    total: newTotal,
-                    total_weight_kg: editForm.total_weight_kg,
-                    status: editForm.status
-                })
-                .eq('id', id);
-
-            if (orderUpdateError) throw orderUpdateError;
-
             // Sync Items
             const originalIds = items.map(i => i.id).filter((item_id): item_id is string => item_id !== null);
             const currentIds = editItems.map(i => i.id).filter((item_id): item_id is string => item_id !== null);
             const toDelete = originalIds.filter(id => !currentIds.includes(id));
 
-            if (toDelete.length > 0) {
-                await supabase.from('order_items').delete().in('id', toDelete);
-            }
-
             const upsertPayload = editItems.map(item => ({
-                id: item.id,
+                ...(item.id ? { id: item.id } : {}),
                 order_id: id as string,
                 product_id: item.product_id,
                 quantity: item.quantity,
@@ -403,12 +383,36 @@ export default function OrderDetailPage() {
                 variant_label: item.variant_label || item.nickname || null
             }));
 
-            // Split
-            const toUpdate = upsertPayload.filter(i => i.id);
-            const toInsert = upsertPayload.filter(i => !i.id).map(({ id, ...rest }) => rest);
+            const { data: { user: authUser } } = await supabase.auth.getUser();
 
-            if (toUpdate.length > 0) await supabase.from('order_items').upsert(toUpdate);
-            if (toInsert.length > 0) await supabase.from('order_items').insert(toInsert);
+            // Llamada segura al backend para actualización atómica sin bloqueo de RLS
+            const response = await fetch('/api/orders/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: id,
+                    updates: {
+                        delivery_date: editForm.delivery_date,
+                        delivery_slot: editForm.delivery_slot,
+                        shipping_address: editForm.shipping_address,
+                        admin_notes: editForm.admin_notes !== undefined ? editForm.admin_notes : order?.admin_notes,
+                        total: newTotal,
+                        total_weight_kg: editForm.total_weight_kg,
+                        status: editForm.status
+                    },
+                    idsToDelete: toDelete,
+                    itemsToUpsert: upsertPayload,
+                    auditLog: {
+                        changed_by: authUser?.id || null,
+                        reason: `Edición manual en detalle de orden por ${userEmail || 'Usuario'}`
+                    }
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Error al persistir cambios');
+            }
 
             alert(`✅ Cambios guardados exitosamente por ${userEmail || 'Usuario'}`);
 

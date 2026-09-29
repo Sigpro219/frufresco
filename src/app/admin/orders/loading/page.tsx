@@ -2239,35 +2239,13 @@ function OrderLoadingContent() {
         console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
         
         try {
-            // 1. Actualizar cabecera del pedido con nota de auditoría en admin_notes
+            // 1. Preparar nota de auditoría en admin_notes
             const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
             const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
             const auditStamp = ` [Audit ${nowTimeStr}: Edición por ${userTag}]`;
             const updatedAdminNotes = `${selectedOrder.admin_notes || ''}${exceptionStamp}${auditStamp}`.trim();
 
-            const { error: orderError } = await supabase
-                .from('orders')
-                .update({
-                    status: editStatus,
-                    delivery_date: editDeliveryDate,
-                    shipping_address: editShippingAddress,
-                    latitude: editLatitude,
-                    longitude: editLongitude,
-                    geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
-                    total: currentTotal,
-                    total_weight_kg: currentWeight,
-                    subtotal: currentSubtotal,
-                    tax: currentTax,
-                    admin_notes: updatedAdminNotes
-                })
-                .eq('id', selectedOrder.id);
-
-            if (orderError) {
-                console.error('❌ Error actualizando cabecera:', orderError);
-                throw new Error(`Error en orders: ${orderError.message}`);
-            }
-
-            // 2. Sincronizar ítems
+            // 2. Consultar ítems originales para detectar eliminaciones reales
             const { data: originalItems, error: fetchErr } = await supabase
                 .from('order_items')
                 .select('*')
@@ -2279,16 +2257,7 @@ function OrderLoadingContent() {
             const currentIds = orderItems.filter(item => !item.isNew).map(item => item.id);
             const idsToDelete = originalIds.filter(id => !currentIds.includes(id));
 
-            // Operaciones en paralelo para mayor velocidad
-            const operations = [];
-
-            // Eliminaciones
-            if (idsToDelete.length > 0) {
-                console.log('<Trash2 size={16} strokeWidth={1.5} /> Eliminando ítems:', idsToDelete.length);
-                operations.push(supabase.from('order_items').delete().in('id', idsToDelete));
-            }
-
-            // Consolidador de Ítems (Bulk Upsert para Nuevos y Modificados)
+            // 3. Preparar ítems para Upsert (Nuevos o Modificados)
             const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
                 const baseItem: any = {
                     order_id: selectedOrder.id,
@@ -2300,30 +2269,15 @@ function OrderLoadingContent() {
                     nickname: item.nickname || item.variant_label || null,
                     unit: item.unit || item.products?.unit_of_measure || 'Kg'
                 };
-                if (!item.isNew) {
+                if (!item.isNew && item.id) {
                     baseItem.id = item.id;
                 }
                 return baseItem;
             });
 
-            if (itemsToUpsert.length > 0) {
-                console.log('⚡ Sincronizando ítems en lote (Upsert):', itemsToUpsert.length);
-                operations.push(supabase.from('order_items').upsert(itemsToUpsert));
-            }
-
-            if (operations.length > 0) {
-                const results = await Promise.all(operations);
-                const errors = results.filter(r => r.error).map(r => r.error?.message);
-                if (errors.length > 0) {
-                    console.error('❌ Errores en operaciones de ítems:', errors);
-                    throw new Error(`Error en ítems: ${errors.join(', ')}`);
-                }
-            }
-            
-            // --- INYECCIÓN DE AUDITORÍA MÓDULO 3.7 ---
+            // 4. Solicitar razón de modificación de auditoría
             const auditReason = window.prompt("Razón de la modificación (opcional para justificar cambios de precios o cantidades al equipo Logístico):");
             const auditLog = {
-                order_id: selectedOrder.id,
                 changed_by: currentUser?.id || null,
                 change_type: 'modification',
                 reason: auditReason || 'Edición manual en Control Tower',
@@ -2340,13 +2294,43 @@ function OrderLoadingContent() {
                     items: orderItems 
                 }
             };
-            const { error: auditError } = await supabase.from('order_audit_logs').insert([auditLog]);
-            if (auditError) {
-                console.warn('⚠️ No se pudo guardar el registro de auditoría:', auditError);
-            }
-            // -----------------------------------------
 
-            // Refrescar estado local
+            // 5. Llamada segura al backend (inmune a restricciones RLS de clientes o líderes)
+            const response = await fetch('/api/orders/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: selectedOrder.id,
+                    updates: {
+                        status: editStatus,
+                        delivery_date: editDeliveryDate,
+                        shipping_address: editShippingAddress,
+                        latitude: editLatitude,
+                        longitude: editLongitude,
+                        geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
+                        total: currentTotal,
+                        total_weight_kg: currentWeight,
+                        subtotal: currentSubtotal,
+                        tax: currentTax,
+                        admin_notes: updatedAdminNotes
+                    },
+                    idsToDelete,
+                    itemsToUpsert,
+                    auditLog
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Error al persistir cambios en el servidor');
+            }
+
+            // 6. Actualizar ítems locales con la confirmación fidedigna de la BD
+            if (Array.isArray(result.items)) {
+                setOrderItems(result.items);
+            }
+
+            // 7. Refrescar pedidos y pedido seleccionado
             setOrders(orders.map(o => o.id === selectedOrder.id ? { 
                 ...o, 
                 status: editStatus, 
@@ -2358,7 +2342,8 @@ function OrderLoadingContent() {
                 total: currentTotal,
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
-                tax: currentTax
+                tax: currentTax,
+                admin_notes: updatedAdminNotes
             } : o));
             
             setSelectedOrder({ 
@@ -2372,7 +2357,8 @@ function OrderLoadingContent() {
                 total: currentTotal,
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
-                tax: currentTax
+                tax: currentTax,
+                admin_notes: updatedAdminNotes
             });
             
             setEditMode(false);
@@ -2400,15 +2386,17 @@ function OrderLoadingContent() {
 
         setUpdateLoading(true);
         try {
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
+            const deleteReason = `Eliminación completa del pedido por ${userTag} a las ${nowTimeStr}`;
+
             // 1. Registro de auditoría
             try {
-                const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-                const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
                 await supabase.from('order_audit_logs').insert([{
                     order_id: selectedOrder.id,
                     changed_by: currentUser?.id || null,
                     change_type: 'deletion',
-                    reason: `Eliminación completa del pedido por ${userTag} a las ${nowTimeStr}`,
+                    reason: deleteReason,
                     old_data: {
                         id: selectedOrder.id,
                         sequence_id: selectedOrder.sequence_id,
@@ -2422,23 +2410,24 @@ function OrderLoadingContent() {
                 console.warn('No se pudo registrar log de eliminación:', auditErr);
             }
 
-            // 2. Eliminar ítems asociados
-            const { error: itemsErr } = await supabase
-                .from('order_items')
-                .delete()
-                .eq('order_id', selectedOrder.id);
-            if (itemsErr) {
-                console.warn('Error eliminando order_items:', itemsErr);
+            // 2. Llamada segura al backend para eliminación atómica (sin bloqueo RLS de cliente)
+            const response = await fetch('/api/orders/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: selectedOrder.id,
+                    reason: deleteReason,
+                    deletedBy: currentUser?.id || null,
+                    friendlyId
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Error al eliminar el pedido en el servidor');
             }
 
-            // 3. Eliminar pedido de la tabla orders
-            const { error: orderErr } = await supabase
-                .from('orders')
-                .delete()
-                .eq('id', selectedOrder.id);
-            if (orderErr) throw orderErr;
-
-            // 4. Actualizar estado local y cerrar modal
+            // 3. Actualizar estado local y cerrar modal
             setOrders(prev => prev.filter(o => o.id !== selectedOrder.id));
             setSelectedOrder(null);
             setEditMode(false);

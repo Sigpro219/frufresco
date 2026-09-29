@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.25 (Estándar Canónico de Ordenamiento Jerárquico de Calibres Agrícolas: Cero > Mediana > Richy en Inventarios, Impresiones y Pantallas)  
+> **Versión:** 1.9.26 (Persistencia Atómica Garantizada en Modificación y Eliminación de Ítems en Mesa de Control: `/api/orders/update` y `/api/orders/delete`)  
 > **Fecha:** 29 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección General, Operaciones, Abastecimiento & Compras Mayoristas Corabastos
+> **Área:** Dirección de Operaciones, Mesa de Control Logística & Arquitectura Backend Supabase
 
 ---
 
@@ -2592,4 +2592,17 @@ sequenceDiagram
      - Dentro del mismo calibre, las variantes enteras preceden a las variantes procesadas (ej. `Papa sabanera cero` antes que `Papa sabanera pelada cero`).
   4. **Cohesión Familiar**:
      - Al listar colecciones completas, las familias se mantienen contiguas (`familyKey`), anteponiendo el producto matriz base y desplegando inmediatamente sus hijos ordenados por la regla de calibres, erradicando la dispersión o el ordenamiento arbitrario por ID o alfabeto ciego.
+
+#### Escenario 55: Persistencia Atómica Garantizada en Modificación y Eliminación de Ítems en Mesa de Control (SDD v1.9.26)
+- **Given** un pedido registrado en el sistema que requiere ajustes operativos (ej. eliminación de ítems cancelados por el cliente, adición de nuevos productos, o recálculo de cantidades y precios en el modal de detalle de pedido `/admin/orders/loading` o `/admin/orders/[id]`):
+- **When** el operador logístico o comercial (incluso con roles con permisos delegados como `LIDER DE CARTERA`, `COORDINADOR ADMINISTRATIVO`, `OPERACIONES` o `GESTION DE PEDIDOS`) modifica el pedido y elimina uno o varios productos de la orden:
+- **Then**:
+  1. **Aislamiento de Seguridad RLS mediante Endpoints Backend Seguros (`/api/orders/update` y `/api/orders/delete`)**:
+     - Las mutaciones de cabecera (`orders`), sincronizaciones atómicas de ítems (`order_items`) y registros de auditoría (`order_audit_logs`) se delegan exclusivamente a endpoints del backend (`POST /api/orders/update` y `POST /api/orders/delete`) ejecutados con `SUPABASE_SERVICE_ROLE_KEY`.
+     - Se erradica por completo la vulnerabilidad donde las llamadas directas `supabase.from('order_items').delete()` en el cliente del navegador eran bloqueadas de forma silenciosa por las políticas RLS de PostgreSQL para roles que no fueran exclusivamente `admin`, devolviendo HTTP 200 con 0 filas borradas y reapareciendo los ítems al recargar.
+  2. **Persistencia y Validación Bidireccional**:
+     - El endpoint `/api/orders/update` valida los UUIDs a eliminar (`idsToDelete`), ejecuta el borrado efectivo en base de datos, aplica el `upsert` consolidado de ítems nuevos y modificados (`itemsToUpsert`), actualiza la cabecera de la orden y retorna la lista confirmada de ítems directamente desde la BD.
+     - El cliente local actualiza de inmediato su estado (`setOrderItems(result.items)`), garantizando que lo que ve el usuario en pantalla coincida uno a uno y en tiempo real con la base de datos física.
+  3. **Trazabilidad & Auditoría Invariable (`order_audit_logs`)**:
+     - Toda modificación o eliminación genera un registro persistente con el usuario responsable (`changed_by`), marca de tiempo y snapshot del estado anterior (`old_data`) y nuevo (`new_data`), preservando la trazabilidad operativa y financiera.
 
