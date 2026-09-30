@@ -5676,13 +5676,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const itemsData: any[] = [];
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
+      let hasOpenConsumption = false;
 
       for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
-            const resolvedPrice = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : prod.base_price;
-            if (!resolvedPrice || parseFloat(resolvedPrice.toString()) === 0) {
+            const isContractPriceDefined = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null;
+            const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : (Number(prod.base_price) || 0);
+            const isExplicitContractZero = isContractPriceDefined && resolvedPrice === 0;
+
+            if (isExplicitContractZero) {
+              hasOpenConsumption = true;
+            }
+
+            if (resolvedPrice === 0 && !isExplicitContractZero) {
               hasZeroPriceItem = true;
               zeroPriceItemName = prod.name;
               break;
@@ -5733,6 +5741,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         setConfirmingOrder(false);
         showToast(`Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Por favor asigne precio manualmente antes de aprobar.`, 'error');
         return;
+      }
+
+      if (hasOpenConsumption && !finalAdminNotes.includes('CONSUMO ABIERTO')) {
+        finalAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${finalAdminNotes}`.trim();
       }
 
       // 2. Create the order

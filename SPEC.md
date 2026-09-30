@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.51 (Protocolo de Inmunidad Anti-SafeLinks en Recuperación Supabase Auth, Plantilla Dual OTP 6-Dígitos + TokenHash, Arquitectura de Rendimiento Web Ultra-Rápido con Zero-Blocking Fonts, DOM Virtualization en Carruseles, Blindaje de Latencia SSR Stale-While-Revalidate, Escenarios BDD 88 y 89)
+> **Versión:** 1.9.53 (Acuerdo Genérico Abierto a Consumo con Precio Cero $0, Ingesta Sin Bloqueo Tarifario, Emisión de Remisión de Entrega y Liquidación Posterior a Costo Vigente en Facturación, Escenario BDD 91)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -920,17 +920,20 @@ El submódulo de Acuerdos Comerciales gobierna la formalización jurídica y fin
    - **Nomenclatura Canónica:** Generación determinista del nombre de la lista: `[NIT] - [RAZÓN SOCIAL] - [VIGENCIA]`.
    - **Fechas & Vigencia:** Configuración de `start_date` y `valid_until` con presets directos.
 
-2. **Paso 2: Ingestor Inteligente de Hojas de Cálculo (`extractRowsFromExcelSheet` & `parsePriceValue`):**
-   - **Detección Heurística de Columnas:** Escanea automáticamente las primeras 25 filas del archivo buscando columnas de:
-     * *Código:* `accounting_id`, `cod`, `sku`, `ref`, `id`.
-     * *Nombre:* `producto`, `nombre`, `descripcion`, `detalle`, `articulo`.
-     * *Precio:* `precio`, `valor`, `tarifa`, `costo`, `unitario`, `acordado`.
-   - **Sanitización Numérica Financiera (`parsePriceValue`):** Maneja formatos mixtos con signos de pesos (`$`), identificadores (`COP`, `EUR`), espacios, y distingue entre separadores de miles y decimales con coma o punto (`12.500,50` vs `12,500.50`).
-   - **Matching Fuzzy con Catálogo Maestro:** Vincula cada fila con el `product_id` correspondiente en la base de datos `products`.
-   - **Detección de SKUs Inactivos:** Identifica productos dados de baja en bodega (`is_active = false`), advirtiendo al operador y permitiendo su reactivación en lote.
+2. **Paso 2: Ingestor Inteligente de Hojas de Cálculo & Digestor IA Gemini 3.8 Flash (`/api/commercial/digest-agreement-file`):**
+   - **Ingesta Polimórfica Multimodal:** Acepta archivos en formato Excel (`.xlsx`, `.xls`), `.csv` y documentos `.pdf` de listas aprobadas enviadas por el cliente con formatos libres o descripciones no estructuradas.
+   - **Extracción Asistida por IA (Gemini 3.8 Flash + Cascada Canónica):** Extrae automáticamente el nombre del cliente, vigencia propuesta, descripciones comerciales del comprador, unidades de medida y precios acordados.
+   - **Matching Semántico & Fuzzy con Catálogo Maestro (`findBestProductMatchDetails`):** Cruza las descripciones del cliente contra la base de datos `products`, asignando un índice de certeza (`confidence: 'high' | 'medium' | 'low' | 'unmatched'`).
+   - **Sanitización Numérica Financiera (`parsePriceValue`):** Maneja formatos monetarios complejos (`$12.500 COP`, `12,500.50`, decimales europeos/americanos).
 
-3. **Paso 3: Validación Financiera & Persistencia Atómica:**
-   - Guarda el encabezado en `quotes` con `status = 'agreement'`, `quote_number` consecutivo, y los renglones detallados en `quote_items` con `cost_basis`, `margin_percent`, `unit_price`, `iva_rate`, e `iva_amount`.
+3. **Paso 3: Mesa de Reconciliación Inteligente con Paridad de Pedidos (`EmailDraftsModule` UX):**
+   - **Fila con Match Exitoso (Certeza $\ge 70\%$):** Muestra el producto oficial de FruFresco (`Accounting ID`), unidad, precio acordado, costo base y margen bruto calculado en caliente con semáforo cromático (🟢 $\ge 20\%$, 🟡 $12-20\%$, 🔴 $< 12\%$).
+   - **Fila "Sin Coincidencia" (No Match o Certeza $< 70\%$):** Fondo ámbar suave `#FEF3C7` con badge `⚠️ Sin Coincidencia`. Dispone de 3 acciones directas in-situ:
+     * 🔍 **Dropdown Predictivo en Celda:** Buscador con autocompletado para asignar el producto en 2 segundos, guardando el alias en `document_learning_memory`.
+     * ➕ **Micro-Modal `[+ Crear Nuevo Producto]`:** Permite dar de alta un producto nuevo en `products` sin abandonar el asistente (precarga nombre y unidad, solicitando categoría, costo base estimado e IVA).
+     * 🗑️ **Botón `[Descartar / Eliminar Fila]`:** Retira filas de flete, servicios o ruido del documento.
+   - **Poka-Yoke de Seguridad (Bloqueo de Activación):** El botón `[Crear y Activar Acuerdo Comercial]` permanece deshabilitado en gris (`cursor: not-allowed`) mientras existan filas sin asignar (`hasUnmatchedItems`), garantizando cero registros huérfanos.
+   - **Persistencia Transaccional:** Al estar 100% resuelto, persiste atómicamente la cabecera en `quotes` (`status = 'agreement'`), los renglones en `quote_items`, registra la auditoría y dispara el Modal HITL (`EVT-08`).
 
 #### D. Drawer Lateral de Detalle & Operaciones In-Situ (`selectedAgreement`)
 1. **Telemetría Lateral:** Despliegue sin navegación que muestra resumen fiscal del cliente, NIT, dirección, teléfono y cuenta regresiva de días hasta la expiración.
@@ -1877,6 +1880,40 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
   2. El comercial selecciona la justificación *"🌧️ Menor ingreso de fruta fresca; oferta limitada en cosecha / clima"* y pulsa `[⚡ Aplicar a todos los modificados]`.
   3. Los 6 productos adoptan la justificación simultáneamente.
   4. Al pulsar `[Aplicar Adenda y Despachar Notificación (Diff)]`, se persisten los cambios y se abre el módulo de despacho con los 6 productos listos para enviar al cliente.
+
+### 11.11 Estándar de Identidad Documental Oficial a Terceros (Universal Letterhead) & Propuestas Comerciales Ordenadas por Categoría A-Z (SDD v1.9.51)
+
+1. **Gobernanza de Documentos Imprimibles y Entregables a Terceros:**
+   - Se establece formalmente que el componente **`UniversalLetterhead` / `Letterhead.tsx`** es el estándar canónico e inalterable de FruFresco (*Investments Cortés S.A.S.*) para **todas las comunicaciones formales emitidas, impresas o exportadas en PDF a terceros** (clientes institucionales B2B, proveedores, mesas de compras, auditores de calidad y entidades regulatorias).
+   - Documentos gobernados bajo esta norma:
+     - 🚚 **Remisiones de Entrega Oficiales** (`REMISIÓN DE ENTREGA`).
+     - 📑 **Propuestas Comerciales & Acuerdos de Precios** (`PROPUESTA COMERCIAL DE PRECIOS` / `LISTA OFICIAL DE PRECIOS CONTRACTUALES`).
+     - 🧾 **Facturas de Venta & Cortes de Facturación** (`FACTURA DE VENTA`).
+     - 📦 **Hojas de Picking & Sábanas de Despacho** (`HOJA DE ALISTAMIENTO`).
+
+2. **Propuesta Comercial de Precios bajo el Estándar de Hoja Membreteada:**
+   - **Membrete Corporativo Oficial:** Logotipo de alta fidelidad, razón social *Investments Cortés S.A.S.*, NIT 901.393.217-5, Régimen Común, atención comercial (*301 542 1761*, `pedidos@frufresco.com`).
+   - **Ficha Contractual del Cliente:** Razón social, NIT, dirección de entrega, vigencia pactada (`Fecha Inicio` al `Fecha Fin`) y Asesor Comercial responsable.
+   - **Agrupación y Ordenamiento Canónico Dual Automatizado:**
+     $$\text{Categorías (A-Z)} \longrightarrow \text{Productos (A-Z)}$$
+     - Las categorías se ordenan alfabéticamente (ej. *Congelados*, *Despensa*, *Frutas*, *Hortalizas*, *Lácteos*, *Procesados*, *Tubérculos*, *Verduras*).
+     - Dentro de cada categoría, los productos se ordenan alfabéticamente por su nombre (ej. *Aguacate*, *Fresa*, *Limón*, *Mango*...).
+   - **Rejilla Oficial de Columnas:**
+     `CÓDIGO` | `PRODUCTO` | `PRESENTACIÓN` | `PRECIO PACTADO (COP)` | `IVA`
+   - **Cierre Legal y Aceptación:**
+     - Cláusula de vigencia y compromiso de suministro.
+     - Bloque de aceptación formal y firma del cliente.
+   - **Motor de Salida e Impresión:** Se renderiza mediante `printViaNewWindow`, garantizando papel Carta (Letter) portrait con márgenes de 1.0cm, saltos de página limpios y marca de agua institucional.
+
+#### Escenario 11: Generación de Propuesta Comercial Membreteada con Agrupación Alfabética por Categoría
+- **Given** un acuerdo comercial activo con el cliente "Carnicolas SAS" con 31 productos que incluyen frutas, verduras, tubérculos y abarrotes.
+- **When** el asesor comercial pulsa el botón `[🖨️ Vista Imprimible]` en el panel del acuerdo.
+- **Then**:
+  1. El sistema carga la Hoja Membreteada Oficial de *Investments Cortés S.A.S.* con su logotipo, NIT y ficha del cliente.
+  2. Los 31 productos se agrupan automáticamente bajo sus respectivas categorías ordenadas de la A a la Z (ej. *Despensa*, *Frutas*, *Hortalizas*, *Tubérculos*).
+  3. Dentro de cada categoría, los productos se presentan en estricto orden alfabético A-Z (ej. en *Frutas*: *Aguacate*, *Ajo*, *Fresa*, *Limón*...).
+  4. La propuesta presenta las columnas `Cód.`, `Producto`, `Presentación`, `Precio Pactado COP` e `IVA`.
+  5. Al presionar `[Imprimir / Guardar PDF]`, el documento se exporta mediante `printViaNewWindow` con calidad tipográfica y membrete sin deformaciones.
 
 ---
 
@@ -3819,7 +3856,7 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
 
 ---
 
-### 22.7 Escenarios BDD de Aceptación (Escenarios 76 a 82)
+### 22.7 Escenarios BDD de Aceptación (Escenarios 76 a 90)
 
 #### Escenario 76: Aprobación de Pedido con Buffer de Gracia de 2 Minutos y Cancelación por Corrección Rápida
 - **Given** un borrador de pedido aprobado para "Restaurante Fogón & Cava" por valor de $435.500 COP.
@@ -3953,3 +3990,25 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
   1. Todas las tipografías corporativas (`Inter`, `Outfit`, `Instrument_Serif`) se sirven directamente desde el bundle optimizado de Next.js (`next/font/google`) con `display: 'swap'`, eliminando bloqueos de red por `@import` externos.
   2. El carrusel de productos destacados limita la duplicación de nodos DOM a 2x y suspende su ciclo de animación `requestAnimationFrame` mediante `IntersectionObserver` cuando el contenedor está fuera del viewport, reduciendo el consumo de GPU/CPU al 0%.
   3. La consulta de productos visibles y configuraciones opera con `unstable_cache` y revalidación de fondo (Stale-While-Revalidate), garantizando un tiempo de respuesta de primer byte (TTFB) inferior a 150 ms incluso ante degradación de latencia en la base de datos PostgreSQL.
+
+#### Escenario 90: Ingesta Polimórfica de Acuerdos con Gemini Flash, Reconciliación con Paridad de Pedidos y Poka-Yoke de Activación
+- **Given** una lista de precios aprobada enviada por un cliente en formato no estandarizado (archivo Excel con columnas libres, CSV o PDF).
+- **When** el analista comercial ingresa a `/admin/commercial?tab=clients&clientTab=agreements`, presiona `[Nuevo Acuerdo Comercial]`, selecciona el cliente o matriz y carga el archivo en el Asistente (Paso 2).
+- **And** el sistema invoca el motor multimodal `/api/commercial/digest-agreement-file` asistido por Gemini Flash.
+- **Then**:
+  1. El motor extrae las líneas de productos y ejecuta el emparejamiento semántico (`findBestProductMatchDetails`) contra la base de datos `products`.
+  2. En el Paso 3 (Mesa de Reconciliación), los ítems con coincidencia sólida se presentan con su nombre oficial, costo base y margen en verde o amarillo.
+  3. Los ítems sin correspondencia directa se marcan en ámbar con el badge `⚠️ Sin Coincidencia`, mostrando el dropdown predictivo en celda y el botón micro-modal `[+ Crear Nuevo Producto en Catálogo]`.
+  4. El botón `[Crear y Activar Acuerdo Comercial]` permanece bloqueado (`disabled`) con aviso Poka-Yoke mientras existan productos sin asignar o resolver (`hasUnmatchedItems`).
+  5. El analista puede buscar y seleccionar el SKU correcto en el dropdown (registrando el alias en `document_learning_memory`), crear el SKU faltante sin salir del asistente o descartar filas residuales con `[🗑️]`.
+  6. Una vez resuelto el 100% de los renglones, el botón de activación se desbloquea en gradiente esmeralda, persistiendo atómicamente el acuerdo en `quotes` y `quote_items` y abriendo el modal de notificación HITL (`EVT-08`).
+
+#### Escenario 91: Ingesta y Despacho sobre Lista Abierta a Consumo ($0), Emisión de Remisión y Liquidación a Costo Vigente en Facturación
+- **Given** un cliente B2B institucional (ej. Casino Corporativo o Evento Especial) que requiere despachos diarios sin lista de precios fija previa.
+- **When** el área comercial crea un Acuerdo Comercial presionando `[🛒 Cargar Todo el Catálogo a $0 (Lista Abierta)]` y activándolo con vigencia mensual.
+- **And** se monta un pedido manual (`orders/create`) o se procesa un borrador de correo (`EmailDraftsModule`) seleccionando productos del catálogo general.
+- **Then**:
+  1. El sistema no bloquea la confirmación con el error de tarifa cero; reconoce el acuerdo abierto y guarda el pedido en estado `approved` / `loading` con `unit_price: 0` y subtotal `$0`.
+  2. En el piso de operaciones, la Sábana de Alistamiento y el kit de contingencia (`/admin/orders/contingency-print?mode=remissions`) imprimen la **Remisión de Entrega** completa con cantidades, unidades y notas de bodega para el despacho y firma del cliente.
+  3. Al llegar a la Mesa de Facturación (`/admin/commercial/billing`), el pedido exhibe el badge ámbar `⚠️ Por Liquidar Tarifa`.
+  4. El facturador presiona **`[⚡ Liquidar Precios a Costo Vigente]`**, actualizando automáticamente cada producto al costo base de `commercial_cost_matrix` vigente en la fecha de facturación, calculando IVA y totalizando la orden antes de emitir la Factura Electrónica y exportar a World Office.

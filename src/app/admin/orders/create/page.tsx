@@ -1273,7 +1273,7 @@ function CreateOrderContent() {
                         .eq('model_id', GENERAL_INSTITUCIONAL_ID);
                     
                     genPrices?.forEach((p: any) => {
-                        if (!map[p.product_id] && p.price > 0) {
+                        if (map[p.product_id] === undefined && p.price > 0) {
                             map[p.product_id] = p.price;
                         }
                     });
@@ -1353,7 +1353,7 @@ function CreateOrderContent() {
     useEffect(() => {
         if (Object.keys(contractPrices).length > 0) {
             setCart(prev => prev.map(item => {
-                const resolvedPrice = (contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null && contractPrices[item.product.id] > 0)
+                const resolvedPrice = (contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null)
                     ? contractPrices[item.product.id]
                     : (item.product.base_price || 0);
                 return {
@@ -4324,8 +4324,13 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
-        // Block Zero Margin / Zero Price
-        const zeroPriceItem = cart.find(item => !item.price || parseFloat(item.price.toString()) === 0);
+        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement
+        const zeroPriceItem = cart.find(item => {
+            const isZero = !item.price || parseFloat(item.price.toString()) === 0;
+            if (!isZero) return false;
+            const isCoveredByAgreement = agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0;
+            return !isCoveredByAgreement;
+        });
         if (zeroPriceItem) {
             return showToast(`❌ No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`, 'error');
         }
@@ -4383,6 +4388,12 @@ function CreateOrderContent() {
             
             if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
                 finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.targetDayName})]\n${finalAdminNotes}`.trim();
+            }
+
+            // Anotar si contiene ítems sobre Lista Abierta a Consumo ($0 COP)
+            const hasOpenConsumptionItems = cart.some(item => agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0);
+            if (hasOpenConsumptionItems && !finalAdminNotes.includes('CONSUMO ABIERTO')) {
+                finalAdminNotes = `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]\n${finalAdminNotes}`.trim();
             }
 
             // Append Payment Method to Admin Notes if B2C

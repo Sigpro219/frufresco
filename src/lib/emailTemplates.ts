@@ -37,7 +37,10 @@ const LUCIDE_ICONS = {
   clock: `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   mapPin: `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
   plus: `<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:2px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg>`,
-  minus: `<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:2px;"><path d="M5 12h14"/></svg>`
+  minus: `<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:2px;"><path d="M5 12h14"/></svg>`,
+  layers: `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.9a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.9a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-8.58 3.9a2 2 0 0 1-1.66 0L2 17.5"/></svg>`,
+  trendingUp: `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`,
+  trendingDown: `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`
 };
 
 export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData): string {
@@ -363,6 +366,7 @@ export interface AgreementEmailItem {
   priceDiff?: number;
   priceDiffPercent?: number;
   justification?: string;
+  category?: string;
 }
 
 export interface AgreementNotificationEmailData {
@@ -395,13 +399,14 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
     ? `Actualización de tarifas de precios pactadas para ${clientName}. ${items.length} productos modificados con vigencia al ${validUntil}.`
     : `Activación de nuevo Acuerdo Comercial de Precios para ${clientName}. Vigencia desde ${validFrom} hasta ${validUntil}.`;
 
-  const itemsRowsHtml = items.map((item, idx) => {
-    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9';
-    const unitStr = item.unit || 'Und/Kg';
-    const currentPriceNum = typeof item.price === 'number' ? item.price : parseFloat(String(item.price).replace(/[^0-9.-]+/g, '')) || 0;
-    const currentPriceStr = currentPriceNum.toLocaleString('es-CO');
+  let itemsRowsHtml = '';
 
-    if (isDiff) {
+  if (isDiff) {
+    itemsRowsHtml = items.map((item, idx) => {
+      const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9';
+      const unitStr = item.unit || 'Und/Kg';
+      const currentPriceNum = typeof item.price === 'number' ? item.price : parseFloat(String(item.price).replace(/[^0-9.-]+/g, '')) || 0;
+      const currentPriceStr = currentPriceNum.toLocaleString('es-CO');
       const oldPriceNum = typeof item.oldPrice === 'number' ? item.oldPrice : (item.oldPrice ? parseFloat(String(item.oldPrice).replace(/[^0-9.-]+/g, '')) : undefined);
       const diffVal = oldPriceNum !== undefined ? (currentPriceNum - oldPriceNum) : (item.priceDiff || 0);
       const diffStr = Math.abs(diffVal).toLocaleString('es-CO');
@@ -426,7 +431,7 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
           </td>
           <td style="padding: 10px 8px; text-align: center; vertical-align: middle; white-space: nowrap;">
             <span style="display: inline-block; background-color: ${badgeBg}; color: ${badgeColor}; font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; letter-spacing: 0.3px;">
-              ${isUp ? '🔴 ' : isDown ? '🟢 ' : ''}${varText}
+              ${isUp ? LUCIDE_ICONS.trendingUp : isDown ? LUCIDE_ICONS.trendingDown : ''}${varText}
             </span>
           </td>
           <td style="padding: 10px 12px; vertical-align: middle; font-size: 11.5px; color: #334155; line-height: 1.35;">
@@ -434,23 +439,51 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
           </td>
         </tr>
       `;
-    }
+    }).join('');
+  } else {
+    // Modo NEW_AGREEMENT: Agrupación canónica por Categoría (A-Z) y Productos dentro de cada categoría (A-Z)
+    const catGroups: Record<string, AgreementEmailItem[]> = {};
+    items.forEach(it => {
+      const cat = it.category || 'Portafolio General';
+      if (!catGroups[cat]) catGroups[cat] = [];
+      catGroups[cat].push(it);
+    });
 
-    // NEW_AGREEMENT row format
-    return `
-      <tr style="background-color: ${rowBg}; border-bottom: 1px solid #E2E8F0;">
-        <td style="padding: 11px 14px; font-weight: 600; color: #1E293B; font-size: 13px; vertical-align: middle;">
-          ${item.name}
-        </td>
-        <td style="padding: 11px 10px; text-align: center; color: #475569; font-size: 12px; font-weight: 600; white-space: nowrap; vertical-align: middle;">
-          ${unitStr}
-        </td>
-        <td style="padding: 11px 14px; text-align: right; font-weight: 800; color: #0D7A57; font-size: 13.5px; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle;">
-          $${currentPriceStr} <span style="font-size: 10.5px; font-weight: 600; color: #64748B;">COP</span>
-        </td>
-      </tr>
-    `;
-  }).join('');
+    const sortedCatNames = Object.keys(catGroups).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+    itemsRowsHtml = sortedCatNames.map(catName => {
+      const sortedCatItems = [...catGroups[catName]].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+      const headerRow = `
+        <tr style="background-color: #0F172A; color: #FFFFFF;">
+          <td colspan="3" style="padding: 8px 14px; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-family: 'Outfit', sans-serif;">
+            ${LUCIDE_ICONS.layers}CATEGORÍA: ${catName.toUpperCase()} (${sortedCatItems.length} ${sortedCatItems.length === 1 ? 'producto' : 'productos'})
+          </td>
+        </tr>
+      `;
+      const itemRows = sortedCatItems.map((item, idx) => {
+        const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9';
+        const unitStr = item.unit || 'Und/Kg';
+        const currentPriceNum = typeof item.price === 'number' ? item.price : parseFloat(String(item.price).replace(/[^0-9.-]+/g, '')) || 0;
+        const currentPriceStr = currentPriceNum.toLocaleString('es-CO');
+
+        return `
+          <tr style="background-color: ${rowBg}; border-bottom: 1px solid #E2E8F0;">
+            <td style="padding: 10px 14px; font-weight: 600; color: #1E293B; font-size: 13px; vertical-align: middle;">
+              ${item.name}
+            </td>
+            <td style="padding: 10px 10px; text-align: center; color: #475569; font-size: 12px; font-weight: 600; white-space: nowrap; vertical-align: middle;">
+              ${unitStr}
+            </td>
+            <td style="padding: 10px 14px; text-align: right; font-weight: 800; color: #0D7A57; font-size: 13.5px; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle;">
+              $${currentPriceStr} <span style="font-size: 10.5px; font-weight: 600; color: #64748B;">COP</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      return headerRow + itemRows;
+    }).join('');
+  }
 
   return `
 <!DOCTYPE html>
@@ -677,15 +710,30 @@ export function generateAgreementNotificationText(data: AgreementNotificationEma
   const validUntil = data.valid_until || 'Indefinida';
   const items = data.items || [];
 
-  const itemsList = items.map(it => {
-    if (isDiff) {
+  let itemsList = '';
+  if (isDiff) {
+    itemsList = items.map(it => {
       const isUp = (Number(it.price) || 0) > (Number(it.oldPrice) || 0);
-      const varTag = isUp ? '🔴 Sube' : '🟢 Baja';
+      const varTag = isUp ? '[SUBE]' : '[BAJA]';
       const justTag = it.justification ? ` | Motivo: ${it.justification}` : '';
-      return `• *${it.name}* (${it.unit || 'Kg'}): Antes $${it.oldPrice || '-'} -> *Nuevo $${it.price} COP* [${varTag}]${justTag}`;
-    }
-    return `• *${it.name}* (${it.unit || 'Und/Kg'}): *$${it.price} COP*`;
-  }).join('\n');
+      return `• *${it.name}* (${it.unit || 'Kg'}): Antes $${it.oldPrice || '-'} -> *Nuevo $${it.price} COP* ${varTag}${justTag}`;
+    }).join('\n');
+  } else {
+    const catGroups: Record<string, AgreementEmailItem[]> = {};
+    items.forEach(it => {
+      const cat = it.category || 'Portafolio General';
+      if (!catGroups[cat]) catGroups[cat] = [];
+      catGroups[cat].push(it);
+    });
+
+    const sortedCatNames = Object.keys(catGroups).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    itemsList = sortedCatNames.map(catName => {
+      const sortedCatItems = [...catGroups[catName]].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+      const header = `\n--- CATEGORÍA: ${catName.toUpperCase()} ---`;
+      const rows = sortedCatItems.map(it => `• *${it.name}* (${it.unit || 'Und/Kg'}): *$${typeof it.price === 'number' ? it.price.toLocaleString('es-CO') : it.price} COP*`).join('\n');
+      return `${header}\n${rows}`;
+    }).join('\n');
+  }
 
   return `${isDiff ? 'ACTUALIZACIÓN DE PRECIOS • ADENDA' : 'NUEVO ACUERDO COMERCIAL'} - FRUFRESCO
 

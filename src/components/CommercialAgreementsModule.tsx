@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { 
@@ -45,16 +45,30 @@ import {
     ShieldCheck,
     TrendingUp,
     ClipboardList,
-    Sliders
+    Sliders,
+    Loader2,
+    Wand2,
+    Zap,
+    CheckCheck,
+    Layers,
+    FolderTree,
+    Tag,
+    PackageCheck,
+    ShoppingCart,
+    FileSpreadsheet
 } from 'lucide-react';
 import { searchIncludes } from '@/lib/locationNorm';
 import { useAuth } from '@/lib/authContext';
+import { recordLearningMemory } from '@/lib/orders/order-parser-engine';
 import { 
     generateAgreementNotificationHtml, 
     generateAgreementNotificationText, 
     AgreementNotificationEmailData, 
     AgreementEmailItem 
 } from '@/lib/emailTemplates';
+import { CATEGORY_MAP } from '@/lib/constants';
+import Letterhead from './Letterhead';
+import { printViaNewWindow } from './print';
 
 interface Agreement {
     id: string;
@@ -97,6 +111,7 @@ interface AgreementItem {
         accounting_id?: string;
         unit_of_measure?: string;
         is_active?: boolean;
+        category?: string;
     };
 }
 
@@ -305,6 +320,7 @@ export default function CommercialAgreementsModule() {
     const [hoveredAuditItemId, setHoveredAuditItemId] = useState<string | null>(null);
     const [latestAgreementLog, setLatestAgreementLog] = useState<any | null>(null);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+    const printAgreementDocRef = useRef<HTMLDivElement>(null);
 
     // Partial Batch Adjustment Modal State (Adendas Cosecha/Consumo)
     const [isPartialBatchModalOpen, setIsPartialBatchModalOpen] = useState(false);
@@ -400,12 +416,15 @@ export default function CommercialAgreementsModule() {
     const [excelPreviewData, setExcelPreviewData] = useState<{
         items: Array<{
             accounting_id: string;
+            client_product_name?: string;
             product_name: string;
+            unit?: string;
             unit_price: number;
             matched_product: any | null;
             cost_basis: number;
             margin_percent: number;
             iva_rate: number;
+            confidence?: 'high' | 'medium' | 'low' | 'unmatched';
             is_inactive?: boolean;
         }>;
         matchedCount: number;
@@ -421,6 +440,25 @@ export default function CommercialAgreementsModule() {
     const [savingAgreement, setSavingAgreement] = useState(false);
     const [isKpiCollapsed, setIsKpiCollapsed] = useState(false);
     const [isMainKpiCollapsed, setIsMainKpiCollapsed] = useState(false);
+
+    // AI Ingestion & Reconciliation Workbench State
+    const [digestMode, setDigestMode] = useState<'ai' | 'standard'>('ai');
+    const [isDigestingWithAI, setIsDigestingWithAI] = useState(false);
+    const [digestingStatusText, setDigestingStatusText] = useState('');
+    const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+    const [activeCellSearchRowIdx, setActiveCellSearchRowIdx] = useState<number | null>(null);
+    const [activeCellSearchQuery, setActiveCellSearchQuery] = useState('');
+    const [focusedCellOptionIdx, setFocusedCellOptionIdx] = useState(0);
+
+    // Quick Product In-Situ Modal State
+    const [isQuickProductModalOpen, setIsQuickProductModalOpen] = useState(false);
+    const [quickProductRowIdx, setQuickProductRowIdx] = useState<number | null>(null);
+    const [quickProductName, setQuickProductName] = useState('');
+    const [quickProductUnit, setQuickProductUnit] = useState('Kg');
+    const [quickProductCategory, setQuickProductCategory] = useState('FR');
+    const [quickProductCostBasis, setQuickProductCostBasis] = useState('');
+    const [quickProductIvaRate, setQuickProductIvaRate] = useState(0);
+    const [isCreatingQuickProduct, setIsCreatingQuickProduct] = useState(false);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -459,9 +497,9 @@ export default function CommercialAgreementsModule() {
     const [activatingDrawerSkus, setActivatingDrawerSkus] = useState(false);
 
     // Notification State
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
 
-    const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 4000);
     };
@@ -805,10 +843,25 @@ export default function CommercialAgreementsModule() {
         }
     };
 
+    const fetchCatalogProducts = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('products')
+                .select('id, name, accounting_id, sku, unit_of_measure, is_active, base_price, iva_rate')
+                .order('name');
+            if (!error && data) {
+                setCatalogProducts(data);
+            }
+        } catch (err) {
+            console.warn('Error fetching catalog products for autocomplete:', err);
+        }
+    };
+
     useEffect(() => {
         fetchAgreements();
         fetchB2bClients();
         fetchMasterTemplate();
+        fetchCatalogProducts();
     }, []);
 
     const computeDefaultAgreementName = (clientObj?: any, isMulti?: boolean, startD?: string) => {
@@ -895,6 +948,68 @@ export default function CommercialAgreementsModule() {
         });
 
         showToast(`⚡ Precios del Modelo Institucional General (${previewItems.length} SKUs) cargados con éxito`, 'success');
+    };
+
+    const handleApplyOpenConsumptionToCreateFlow = async () => {
+        try {
+            setParsing(true);
+            const { data: allProds, error } = await supabase
+                .from('products')
+                .select('id, name, accounting_id, sku, unit_of_measure, is_active, base_price, iva_rate')
+                .order('name');
+
+            if (error || !allProds || allProds.length === 0) {
+                showToast('No se pudieron cargar los productos del catálogo', 'error');
+                return;
+            }
+
+            const mappedUploadedItems = allProds.map(p => ({
+                accounting_id: p.accounting_id ? String(p.accounting_id) : p.sku || p.id,
+                unit_price: 0,
+                product_name: p.name
+            }));
+
+            const previewItems = allProds.map(p => ({
+                accounting_id: p.accounting_id ? String(p.accounting_id) : p.sku || 'N/A',
+                client_product_name: p.name,
+                product_name: p.name,
+                unit: p.unit_of_measure || 'Kg',
+                unit_price: 0,
+                matched_product: p,
+                cost_basis: Number(p.base_price) || 0,
+                margin_percent: 0,
+                iva_rate: Number(p.iva_rate) || 0,
+                confidence: 'high' as const,
+                is_inactive: p.is_active === false
+            }));
+
+            const inactiveCount = previewItems.filter(it => it.is_inactive).length;
+
+            setUploadedItems(mappedUploadedItems);
+            setExcelPreviewData({
+                items: previewItems,
+                matchedCount: previewItems.length,
+                unmatchedCount: 0,
+                inactiveCount: inactiveCount,
+                avgMargin: 0,
+                totalSubtotal: 0
+            });
+
+            // Asignar nombre sugerido canónico si no ha sido editado
+            const clientObj = b2bClients.find(c => c.id === selectedClientId);
+            const today = startDate || new Date().toISOString().split('T')[0];
+            const parts = today.split('-');
+            const dateTag = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0].slice(-2)}` : today;
+            const clientName = isMultiClientMode ? 'Multicliente' : (clientObj?.company_name || 'Cliente');
+            setAgreementName(`[CONSUMO ABIERTO] ${clientName} - ${dateTag}`);
+
+            showToast(`🛒 Lista Abierta a Consumo generada (${previewItems.length} SKUs a $0 COP)`, 'success');
+        } catch (err: any) {
+            console.error('Error generating open consumption template:', err);
+            showToast('Error al generar lista abierta a consumo: ' + err.message, 'error');
+        } finally {
+            setParsing(false);
+        }
     };
 
     const handleApplyMasterToAgreement = async (agreement: Agreement) => {
@@ -1100,7 +1215,7 @@ export default function CommercialAgreementsModule() {
         try {
             const { data, error } = await supabase
                 .from('quote_items')
-                .select('*, products:product_id (accounting_id, unit_of_measure, is_active)')
+                .select('*, products:product_id (accounting_id, unit_of_measure, is_active, category)')
                 .eq('quote_id', agreement.id);
 
             if (error) throw error;
@@ -1582,6 +1697,8 @@ export default function CommercialAgreementsModule() {
                         const latestLog = logs[0];
                         const oldPrice = oldestLog?.details?.old_price || item.unit_price;
                         const justification = itemJustifications[item.id] || latestLog?.details?.justification || 'Ajuste periódico de cosecha / mercado';
+                        const rawCat = item.products?.category || '';
+                        const catName = CATEGORY_MAP[rawCat] || rawCat || 'Portafolio General';
                         emailItems.push({
                             name: item.product_name,
                             unit: item.products?.unit_of_measure || 'Kg',
@@ -1589,27 +1706,38 @@ export default function CommercialAgreementsModule() {
                             oldPrice: oldPrice,
                             isModified: true,
                             priceDiff: item.unit_price - oldPrice,
-                            justification: justification
+                            justification: justification,
+                            category: catName
                         });
                     }
                 });
 
                 if (emailItems.length === 0) {
-                    emailItems = agreementItems.slice(0, 10).map(it => ({
+                    emailItems = agreementItems.slice(0, 10).map(it => {
+                        const rawCat = it.products?.category || '';
+                        const catName = CATEGORY_MAP[rawCat] || rawCat || 'Portafolio General';
+                        return {
+                            name: it.product_name,
+                            unit: it.products?.unit_of_measure || 'Kg',
+                            price: it.unit_price,
+                            oldPrice: it.unit_price,
+                            isModified: true,
+                            justification: itemJustifications[it.id] || 'Ajuste periódico de cosecha / mercado',
+                            category: catName
+                        };
+                    });
+                }
+            } else {
+                emailItems = agreementItems.map(it => {
+                    const rawCat = it.products?.category || '';
+                    const catName = CATEGORY_MAP[rawCat] || rawCat || 'Portafolio General';
+                    return {
                         name: it.product_name,
                         unit: it.products?.unit_of_measure || 'Kg',
                         price: it.unit_price,
-                        oldPrice: it.unit_price,
-                        isModified: true,
-                        justification: itemJustifications[it.id] || 'Ajuste periódico de cosecha / mercado'
-                    }));
-                }
-            } else {
-                emailItems = agreementItems.map(it => ({
-                    name: it.product_name,
-                    unit: it.products?.unit_of_measure || 'Kg',
-                    price: it.unit_price
-                }));
+                        category: catName
+                    };
+                });
             }
 
             const authorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
@@ -1792,7 +1920,7 @@ export default function CommercialAgreementsModule() {
                         iva_amount: ivaAmount,
                         total_price: totalPrice
                     })
-                    .select('*, products:product_id (accounting_id, unit_of_measure, is_active)')
+                    .select('*, products:product_id (accounting_id, unit_of_measure, is_active, category)')
                     .single();
 
                 if (insErr) throw insErr;
@@ -1898,100 +2026,324 @@ export default function CommercialAgreementsModule() {
         }
     };
 
+    const handleExportAgreementExcel = async () => {
+        if (!selectedAgreement || agreementItems.length === 0) {
+            showToast('No hay productos cargados en este acuerdo para exportar', 'warning');
+            return;
+        }
+        try {
+            const XLSX = await import('xlsx');
+            
+            // 1. Agrupar por categoría
+            const groups: Record<string, AgreementItem[]> = {};
+            agreementItems.forEach(item => {
+                const rawCat = item.products?.category || '';
+                const catName = CATEGORY_MAP[rawCat] || rawCat || 'Portafolio General';
+                if (!groups[catName]) groups[catName] = [];
+                groups[catName].push(item);
+            });
+
+            // 2. Ordenar categorías alfabéticamente (A-Z)
+            const sortedCategories = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+            const rows: any[] = [];
+            const clientName = selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Cliente';
+            const refCode = formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at);
+            const validFrom = selectedAgreement.start_date ? new Date(selectedAgreement.start_date.includes('T') ? selectedAgreement.start_date : selectedAgreement.start_date + 'T12:00:00').toLocaleDateString('es-CO') : 'Inmediata';
+            const validUntil = selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until.includes('T') ? selectedAgreement.valid_until : selectedAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO') : 'Indefinida';
+
+            sortedCategories.forEach(catName => {
+                const catItems = [...groups[catName]].sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'es', { sensitivity: 'base' }));
+                
+                catItems.forEach(it => {
+                    rows.push({
+                        'Categoría': catName.toUpperCase(),
+                        'Código Contable': it.products?.accounting_id || '---',
+                        'Producto / Insumo': it.product_name,
+                        'Presentación': it.products?.unit_of_measure || 'Kg',
+                        'Precio Pactado (COP)': it.unit_price,
+                        'Tarifa IVA (%)': it.iva_rate || 0,
+                        'Cliente': clientName,
+                        'NIT / CC': selectedAgreement.profiles?.nit || 'N/A',
+                        'Referencia': refCode,
+                        'Vigencia Desde': validFrom,
+                        'Vigencia Hasta': validUntil
+                    });
+                });
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            
+            // Adjust column widths for clean readability
+            worksheet['!cols'] = [
+                { wch: 18 }, // Categoría
+                { wch: 18 }, // Código Contable
+                { wch: 38 }, // Producto / Insumo
+                { wch: 15 }, // Presentación
+                { wch: 22 }, // Precio Pactado (COP)
+                { wch: 15 }, // Tarifa IVA (%)
+                { wch: 35 }, // Cliente
+                { wch: 18 }, // NIT / CC
+                { wch: 20 }, // Referencia
+                { wch: 16 }, // Vigencia Desde
+                { wch: 16 }  // Vigencia Hasta
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Propuesta de Precios');
+            
+            const cleanClient = clientName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
+            const cleanRef = refCode.replace(/\s+/g, '_');
+            const fileName = `Propuesta_Precios_${cleanRef}_${cleanClient}.xlsx`;
+            
+            XLSX.writeFile(workbook, fileName);
+            showToast('📊 Lista de precios exportada a Excel (.xlsx) con éxito', 'success');
+        } catch (err: any) {
+            console.error('Error exportando Excel de propuesta:', err);
+            showToast('Error al exportar a Excel: ' + err.message, 'error');
+        }
+    };
+
+    const handleDigestAgreementFile = async (file: File) => {
+        if (!file) return;
+        setParsedFile(file);
+        setParsing(true);
+        setIsDigestingWithAI(true);
+        setDigestingStatusText(
+            digestMode === 'ai' || file.name.toLowerCase().endsWith('.pdf')
+                ? '🤖 Gemini 3.8 Flash analizando archivo, interpretando precios y cruzando con catálogo maestro...'
+                : '📊 Procesando archivo de tarifas y pre-validando catálogo...'
+        );
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('mode', digestMode);
+            if (selectedClientId) {
+                formData.append('clientProfileId', selectedClientId);
+            }
+
+            const res = await fetch('/api/commercial/digest-agreement-file', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await res.json();
+            if (!res.ok) {
+                throw new Error(result.error || 'Error al procesar el archivo con el motor comercial');
+            }
+
+            if (!result.items || result.items.length === 0) {
+                throw new Error('No se identificaron productos con precio mayor a cero en el archivo.');
+            }
+
+            setExcelPreviewData({
+                items: result.items,
+                matchedCount: result.stats.matchedCount,
+                unmatchedCount: result.stats.unmatchedCount,
+                inactiveCount: result.stats.inactiveCount,
+                avgMargin: result.stats.avgMargin,
+                totalSubtotal: result.stats.totalSubtotal
+            });
+
+            setUploadedItems(result.items.map((it: any) => ({
+                accounting_id: it.accounting_id,
+                product_name: it.product_name,
+                unit_price: it.unit_price
+            })));
+
+            if (result.validityStart && (!startDate || startDate === new Date().toISOString().split('T')[0])) {
+                setStartDate(result.validityStart);
+            }
+
+            if (result.stats.unmatchedCount > 0) {
+                showToast(`Archivo procesado (${result.modelUsed || 'IA'}): ${result.stats.matchedCount} reconocidos, ${result.stats.unmatchedCount} pendientes de asignar`, 'warning');
+            } else {
+                showToast(`✅ Archivo interpretado con éxito (${result.modelUsed || 'IA'}): ${result.stats.matchedCount} productos cruzados al 100%`, 'success');
+            }
+        } catch (err: any) {
+            console.error('[CommercialAgreementsModule] Error digesting file:', err);
+            showToast(err.message || 'Error al procesar archivo', 'error');
+            setParsedFile(null);
+            setUploadedItems([]);
+            setExcelPreviewData(null);
+        } finally {
+            setParsing(false);
+            setIsDigestingWithAI(false);
+            setDigestingStatusText('');
+        }
+    };
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        
-        setParsedFile(file);
-        setParsing(true);
-        
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                const bstr = evt.target?.result;
-                const XLSX = await import('xlsx');
-                const wb = XLSX.read(bstr, { type: 'binary' });
-                const wsname = wb.SheetNames[0];
-                const ws = wb.Sheets[wsname];
-                
-                const parsedItems = extractRowsFromExcelSheet(ws, XLSX);
-                
-                // Query full database catalogue with pagination to pre-validate matches and margins in real time
-                const productMap = await fetchAllProductsMap();
+        handleDigestAgreementFile(file);
+    };
 
-                let matchCount = 0;
-                let unmatchedCount = 0;
-                let inactiveCount = 0;
-                let totalMarginSum = 0;
-                let totalSubtotal = 0;
+    const handleAssignProductToRow = (rowIdx: number, product: any) => {
+        if (!excelPreviewData) return;
+        const currentItem = excelPreviewData.items[rowIdx];
+        const costBasis = product.base_price || 0;
+        const margin = currentItem.unit_price > 0
+            ? Math.round(((currentItem.unit_price - costBasis) / currentItem.unit_price) * 10000) / 100
+            : 0;
 
-                const enrichedItems = parsedItems.map(item => {
-                    const matched = findProductInMap(productMap, item.accounting_id, item.product_name);
-                    if (matched) {
-                        matchCount++;
-                        const isInactive = matched.is_active === false;
-                        if (isInactive) {
-                            inactiveCount++;
-                        }
-                        const costBasis = matched.base_price || 0;
-                        const margin = item.unit_price > 0 
-                            ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 
-                            : 0;
-                        totalMarginSum += margin;
-                        totalSubtotal += item.unit_price;
-
-                        return {
-                            accounting_id: matched.accounting_id || item.accounting_id,
-                            product_name: matched.name || item.product_name,
-                            unit_price: item.unit_price,
-                            matched_product: matched,
-                            cost_basis: costBasis,
-                            margin_percent: margin,
-                            iva_rate: matched.iva_rate || 0,
-                            is_inactive: isInactive
-                        };
-                    } else {
-                        unmatchedCount++;
-                        return {
-                            accounting_id: item.accounting_id,
-                            product_name: item.product_name || 'No identificado',
-                            unit_price: item.unit_price,
-                            matched_product: null,
-                            cost_basis: 0,
-                            margin_percent: 0,
-                            iva_rate: 0
-                        };
-                    }
-                });
-
-                const avgMargin = matchCount > 0 ? totalMarginSum / matchCount : 0;
-
-                setUploadedItems(parsedItems);
-                setExcelPreviewData({
-                    items: enrichedItems,
-                    matchedCount: matchCount,
-                    unmatchedCount: unmatchedCount,
-                    inactiveCount: inactiveCount,
-                    avgMargin: Math.round(avgMargin * 10) / 10,
-                    totalSubtotal
-                });
-
-                if (inactiveCount > 0) {
-                    showToast(`Excel procesado: ${matchCount} reconocidos (${inactiveCount} inactivos en catálogo), ${unmatchedCount} no reconocidos`, 'warning');
-                } else {
-                    showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
-                }
-            } catch (err: any) {
-                console.error(err);
-                showToast(err.message || 'Error al procesar archivo Excel', 'error');
-                setParsedFile(null);
-                setUploadedItems([]);
-                setExcelPreviewData(null);
-            } finally {
-                setParsing(false);
-            }
+        const newItems = [...excelPreviewData.items];
+        newItems[rowIdx] = {
+            ...currentItem,
+            accounting_id: product.accounting_id ? String(product.accounting_id) : (product.sku || ''),
+            product_name: product.name,
+            matched_product: product,
+            cost_basis: costBasis,
+            margin_percent: margin,
+            iva_rate: product.iva_rate || 0,
+            confidence: 'high',
+            is_inactive: product.is_active === false
         };
-        reader.readAsBinaryString(file);
+
+        const matchedCount = newItems.filter(it => Boolean(it.matched_product)).length;
+        const unmatchedCount = newItems.length - matchedCount;
+        const inactiveCount = newItems.filter(it => it.matched_product && it.is_inactive).length;
+        const totalMarginSum = newItems.filter(it => Boolean(it.matched_product)).reduce((acc, it) => acc + it.margin_percent, 0);
+        const avgMargin = matchedCount > 0 ? Math.round((totalMarginSum / matchedCount) * 10) / 10 : 0;
+        const totalSubtotal = newItems.reduce((acc, it) => acc + it.unit_price, 0);
+
+        setExcelPreviewData({
+            items: newItems,
+            matchedCount,
+            unmatchedCount,
+            inactiveCount,
+            avgMargin,
+            totalSubtotal
+        });
+
+        setUploadedItems(newItems.map(it => ({
+            accounting_id: it.accounting_id,
+            product_name: it.product_name,
+            unit_price: it.unit_price
+        })));
+
+        if (selectedClientId && currentItem.client_product_name) {
+            recordLearningMemory(supabase, selectedClientId, currentItem.client_product_name, product.id, product.unit_of_measure);
+        }
+
+        setActiveCellSearchRowIdx(null);
+        setActiveCellSearchQuery('');
+        showToast(`Asignado: ${product.name}`, 'success');
+    };
+
+    const handleDiscardRow = (rowIdx: number) => {
+        if (!excelPreviewData) return;
+        const newItems = excelPreviewData.items.filter((_, idx) => idx !== rowIdx);
+        const matchedCount = newItems.filter(it => Boolean(it.matched_product)).length;
+        const unmatchedCount = newItems.length - matchedCount;
+        const inactiveCount = newItems.filter(it => it.matched_product && it.is_inactive).length;
+        const totalMarginSum = newItems.filter(it => Boolean(it.matched_product)).reduce((acc, it) => acc + it.margin_percent, 0);
+        const avgMargin = matchedCount > 0 ? Math.round((totalMarginSum / matchedCount) * 10) / 10 : 0;
+        const totalSubtotal = newItems.reduce((acc, it) => acc + it.unit_price, 0);
+
+        setExcelPreviewData({
+            items: newItems,
+            matchedCount,
+            unmatchedCount,
+            inactiveCount,
+            avgMargin,
+            totalSubtotal
+        });
+
+        setUploadedItems(newItems.map(it => ({
+            accounting_id: it.accounting_id,
+            product_name: it.product_name,
+            unit_price: it.unit_price
+        })));
+
+        showToast('Fila descartada de la lista', 'info');
+    };
+
+    const handleOpenQuickProductModal = (rowIdx: number) => {
+        if (!excelPreviewData) return;
+        const item = excelPreviewData.items[rowIdx];
+        setQuickProductRowIdx(rowIdx);
+        setQuickProductName(item.client_product_name || item.product_name || '');
+        setQuickProductUnit(item.unit || 'Kg');
+        setQuickProductCostBasis(item.cost_basis ? String(item.cost_basis) : '');
+        setQuickProductIvaRate(0);
+
+        const n = (item.client_product_name || '').toLowerCase();
+        if (/papa|cebolla|tomate|lechuga|zanahoria|brocoli|apio|espinaca|cilantro|perejil|pimenton|pepino|aguacate/i.test(n)) {
+            setQuickProductCategory('VE');
+        } else if (/queso|leche|crema|mantequilla|yogurt|cuajada/i.test(n)) {
+            setQuickProductCategory('LA');
+        } else if (/arroz|aceite|azucar|harina|sal|frijol|lenteja|garbanzo/i.test(n)) {
+            setQuickProductCategory('AB');
+        } else if (/pollo|carne|res|cerdo|pescado|lomo|pechuga/i.test(n)) {
+            setQuickProductCategory('CA');
+        } else {
+            setQuickProductCategory('FR');
+        }
+
+        setIsQuickProductModalOpen(true);
+    };
+
+    const handleSaveQuickProduct = async () => {
+        if (!quickProductName.trim()) {
+            showToast('El nombre del producto es obligatorio', 'error');
+            return;
+        }
+        setIsCreatingQuickProduct(true);
+        try {
+            const rawCost = parsePriceValue(quickProductCostBasis);
+
+            const { data: maxIdData } = await supabase
+                .from('products')
+                .select('accounting_id')
+                .order('accounting_id', { ascending: false })
+                .limit(1);
+
+            const nextAccId = maxIdData && maxIdData[0]?.accounting_id ? Number(maxIdData[0].accounting_id) + 1 : 9000;
+            const cleanSku = `${quickProductCategory}-${String(nextAccId).padStart(5, '0')}`;
+
+            const { data: newProd, error: createErr } = await supabase
+                .from('products')
+                .insert({
+                    name: quickProductName.trim(),
+                    sku: cleanSku,
+                    accounting_id: nextAccId,
+                    category: quickProductCategory,
+                    unit_of_measure: quickProductUnit || 'Kg',
+                    base_price: rawCost,
+                    iva_rate: quickProductIvaRate,
+                    is_active: true,
+                    show_on_web: true,
+                    weight_kg: quickProductUnit.toLowerCase() === 'kg' ? 1 : 0.5
+                })
+                .select()
+                .single();
+
+            if (createErr) throw createErr;
+
+            if (rawCost > 0) {
+                await supabase.from('commercial_cost_matrix').upsert({
+                    product_id: newProd.id,
+                    manual_cost: rawCost,
+                    is_active: true
+                }, { onConflict: 'product_id' } as any).catch((e: any) => console.warn('Cost matrix notice:', e));
+            }
+
+            setCatalogProducts(prev => [newProd, ...prev]);
+
+            if (quickProductRowIdx !== null) {
+                handleAssignProductToRow(quickProductRowIdx, newProd);
+            }
+
+            setIsQuickProductModalOpen(false);
+            showToast(`✅ Producto "${newProd.name}" creado y vinculado exitosamente`, 'success');
+        } catch (err: any) {
+            console.error('Error creating quick product:', err);
+            showToast('Error al crear producto: ' + err.message, 'error');
+        } finally {
+            setIsCreatingQuickProduct(false);
+        }
     };
 
     const handleCreateAgreementSubmit = async (e: React.FormEvent) => {
@@ -2008,11 +2360,16 @@ export default function CommercialAgreementsModule() {
             }
         }
 
-        if (uploadedItems.length === 0) {
-            showToast('Por favor, carga un archivo Excel con precios', 'error');
+        if (!excelPreviewData || excelPreviewData.items.length === 0) {
+            showToast('Por favor, carga un archivo con precios', 'error');
             return;
         }
-        
+
+        if (excelPreviewData.unmatchedCount > 0) {
+            showToast(`⚠️ Tienes ${excelPreviewData.unmatchedCount} ítem(s) sin coincidencia. Debes asignarlos con el buscador, crearlos o descartarlos con [🗑️] antes de activar.`, 'error');
+            return;
+        }
+
         setSavingAgreement(true);
         try {
             const targetClients = isMultiClientMode 
@@ -2033,28 +2390,23 @@ export default function CommercialAgreementsModule() {
             }
             const calculatedValidUntil = expiry.toISOString();
             
-            // Query full database catalogue with pagination
-            const productMap = await fetchAllProductsMap();
-            
             // Calculate negotiated totals dynamically with actual product IVA rates
             const itemsTemplate: any[] = [];
             const inactiveProducts: any[] = [];
-            let matchCount = 0;
             let subtotal = 0;
             let totalTax = 0;
             
-            uploadedItems.forEach(item => {
-                const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
+            excelPreviewData.items.forEach(item => {
+                const dbProduct = item.matched_product;
                 if (dbProduct) {
-                    matchCount++;
-                    if (dbProduct.is_active === false) {
+                    if (dbProduct.is_active === false || item.is_inactive) {
                         inactiveProducts.push(dbProduct);
                     }
-                    const basePrice = dbProduct.base_price || 0;
+                    const basePrice = item.cost_basis || dbProduct.base_price || 0;
                     const negotiatedPrice = item.unit_price;
-                    const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
+                    const marginPercent = item.margin_percent !== undefined ? item.margin_percent : (negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0);
                     
-                    const ivaRate = dbProduct.iva_rate || 0;
+                    const ivaRate = item.iva_rate !== undefined ? item.iva_rate : (dbProduct.iva_rate || 0);
                     const ivaAmount = negotiatedPrice * (ivaRate / 100);
                     
                     subtotal += negotiatedPrice;
@@ -2166,7 +2518,7 @@ export default function CommercialAgreementsModule() {
                 }
             }
             
-            showToast(`🎉 ¡Acuerdo comercial activado con éxito para ${targetClients.length} ${targetClients.length === 1 ? 'cliente' : 'clientes'} (${matchCount} productos asociados)!`, 'success');
+            showToast(`🎉 ¡Acuerdo comercial activado con éxito para ${targetClients.length} ${targetClients.length === 1 ? 'cliente' : 'clientes'} (${itemsTemplate.length} productos asociados)!`, 'success');
             setIsCreateModalOpen(false);
             
             // Reset modal states
@@ -3186,6 +3538,19 @@ export default function CommercialAgreementsModule() {
                                                                 </span>
                                                             );
                                                         })()}
+                                                        {(agreement.model_snapshot_name?.includes('[CONSUMO ABIERTO]') || agreement.subtotal_amount === 0) && (
+                                                            <span style={{ 
+                                                                fontSize: '0.66rem', 
+                                                                backgroundColor: '#F5F3FF', 
+                                                                color: '#6D28D9', 
+                                                                border: '1px solid #C4B5FD', 
+                                                                padding: '1px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontWeight: '800' 
+                                                            }}>
+                                                                🔓 Consumo Abierto ($0)
+                                                            </span>
+                                                        )}
                                                         {agreement.profiles?.parent_id ? (
                                                             <span style={{ 
                                                                 fontSize: '0.66rem', 
@@ -4872,7 +5237,7 @@ export default function CommercialAgreementsModule() {
                 </div>
             )}
 
-            {/* MODAL VISTA IMPRIMIBLE / DOCUMENTO DE LISTA DE PRECIOS TAL COMO EN LA FOTOGRAFÍA */}
+            {/* MODAL VISTA IMPRIMIBLE / DOCUMENTO OFICIAL DE LISTA DE PRECIOS • PROPUESTA COMERCIAL */}
             {isPrintModalOpen && selectedAgreement && (
                 <div style={{ 
                     position: 'fixed', 
@@ -4887,9 +5252,9 @@ export default function CommercialAgreementsModule() {
                 }}>
                     <div style={{ 
                         backgroundColor: 'white', 
-                        borderRadius: '12px', 
+                        borderRadius: '16px', 
                         width: '100%', 
-                        maxWidth: '1200px', 
+                        maxWidth: '960px', 
                         maxHeight: '94vh', 
                         display: 'flex', 
                         flexDirection: 'column', 
@@ -4903,42 +5268,70 @@ export default function CommercialAgreementsModule() {
                             display: 'flex', 
                             justifyContent: 'space-between', 
                             alignItems: 'center', 
-                            backgroundColor: '#F8FAFC' 
+                            backgroundColor: '#0F172A',
+                            color: 'white'
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Printer size={18} color="#0D7A57" />
-                                <span style={{ fontWeight: '800', fontSize: '0.95rem', color: '#0F172A' }}>
-                                    Vista de Impresión / Lista Oficial de Precios
-                                </span>
-                                <span style={{ 
-                                    fontSize: '0.75rem', 
-                                    backgroundColor: '#ECFDF5', 
-                                    color: '#047857', 
-                                    border: '1px solid #A7F3D0', 
-                                    padding: '2px 8px', 
-                                    borderRadius: '6px', 
-                                    fontWeight: '700' 
-                                }}>
-                                    Formato Compacto 2 Columnas
-                                </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Printer size={18} color="#10B981" />
+                                <div>
+                                    <span style={{ fontWeight: '800', fontSize: '0.95rem', color: '#FFFFFF', display: 'block' }}>
+                                        Documento Oficial de Propuesta Comercial & Lista de Precios
+                                    </span>
+                                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                                        Estándar Hoja Membreteada Oficial • Ordenado por Categoría (A-Z)
+                                    </span>
+                                </div>
                             </div>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                                 <button
                                     type="button"
-                                    onClick={() => window.print()}
+                                    onClick={handleExportAgreementExcel}
                                     style={{
-                                        padding: '0.5rem 1.2rem',
-                                        backgroundColor: '#0D7A57',
-                                        color: 'white',
-                                        border: 'none',
+                                        padding: '0.55rem 1.15rem',
+                                        backgroundColor: '#1E293B',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #334155',
                                         borderRadius: '8px',
-                                        fontWeight: 'bold',
+                                        fontWeight: '800',
                                         fontSize: '0.82rem',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: '6px',
-                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)'
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    title="Descargar matriz de precios organizada por categoría en formato Excel (.xlsx)"
+                                >
+                                    <FileSpreadsheet size={15} color="#34D399" /> Descargar Excel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (printAgreementDocRef.current && selectedAgreement) {
+                                            const refCode = formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at);
+                                            printViaNewWindow({
+                                                element: printAgreementDocRef.current,
+                                                title: `Propuesta_Precios_${refCode}_${(selectedAgreement.profiles?.company_name || selectedAgreement.client_name || '').replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+                                                paperSize: 'letter',
+                                                orientation: 'portrait',
+                                                margin: '1.0cm 1.2cm'
+                                            });
+                                        }
+                                    }}
+                                    style={{
+                                        padding: '0.55rem 1.2rem',
+                                        backgroundColor: '#10B981',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontWeight: '800',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)'
                                     }}
                                 >
                                     <Printer size={15} /> Imprimir / Guardar PDF
@@ -4947,10 +5340,10 @@ export default function CommercialAgreementsModule() {
                                     type="button"
                                     onClick={() => setIsPrintModalOpen(false)}
                                     style={{
-                                        padding: '0.5rem 1rem',
-                                        backgroundColor: '#F1F5F9',
-                                        color: '#475569',
-                                        border: '1px solid #CBD5E1',
+                                        padding: '0.55rem 1rem',
+                                        backgroundColor: 'rgba(255,255,255,0.1)',
+                                        color: '#E2E8F0',
+                                        border: '1px solid rgba(255,255,255,0.2)',
                                         borderRadius: '8px',
                                         fontWeight: '600',
                                         fontSize: '0.82rem',
@@ -4966,177 +5359,249 @@ export default function CommercialAgreementsModule() {
                         </div>
 
                         {/* Área Imprimible del Documento */}
-                        <div id="printable-agreement-area" style={{ 
+                        <div style={{ 
                             flex: 1, 
                             overflowY: 'auto', 
-                            padding: '2.5rem 2rem', 
-                            backgroundColor: 'white' 
+                            padding: '2rem', 
+                            backgroundColor: '#F8FAFC' 
                         }}>
-                            <style dangerouslySetInnerHTML={{ __html: `
-                                @media print {
-                                    @page {
-                                        size: letter portrait;
-                                        margin: 1.1cm 1.3cm 1.3cm 1.3cm;
-                                    }
-                                    body * { visibility: hidden !important; }
-                                    #printable-agreement-area, #printable-agreement-area * { 
-                                        visibility: visible !important; 
-                                        -webkit-print-color-adjust: exact !important;
-                                        print-color-adjust: exact !important;
-                                    }
-                                    #printable-agreement-area {
-                                        position: absolute !important;
-                                        left: 0 !important;
-                                        top: 0 !important;
-                                        width: 100% !important;
-                                        margin: 0 !important;
-                                        padding: 0 !important;
-                                        background: white !important;
-                                        z-index: 999999 !important;
-                                    }
-                                    .no-print { display: none !important; }
-                                    table { page-break-inside: auto; width: 100%; border-collapse: collapse; }
-                                    thead { display: table-header-group; }
-                                    tfoot { display: table-footer-group; }
-                                    tr { page-break-inside: avoid; page-break-after: auto; }
-                                }
-                            `}} />
-
-                            {/* Encabezado del Documento - Idéntico a la fotografía */}
-                            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                                <h1 style={{ 
-                                    margin: '0 0 6px', 
-                                    fontSize: '1.25rem', 
-                                    fontWeight: '900', 
-                                    color: '#000', 
-                                    letterSpacing: '-0.02em',
-                                    textTransform: 'uppercase'
-                                }}>
-                                    Lista de precios {selectedAgreement.model_snapshot_name || selectedAgreement.profiles?.company_name || selectedAgreement.client_name} ({agreementItems.length} productos)
-                                </h1>
+                            <div ref={printAgreementDocRef} style={{ backgroundColor: '#FFFFFF', padding: '0.5rem', borderRadius: '8px' }}>
                                 {(() => {
-                                    const lastUpdate = getLastUpdateInfo();
+                                    // 1. Agrupar productos por categoría
+                                    const groups: Record<string, { categoryName: string; items: AgreementItem[] }> = {};
+                                    (agreementItems || []).forEach(item => {
+                                        const rawCat = item.products?.category || '';
+                                        const catName = CATEGORY_MAP[rawCat] || rawCat || 'Portafolio General';
+                                        if (!groups[catName]) {
+                                            groups[catName] = { categoryName: catName, items: [] };
+                                        }
+                                        groups[catName].items.push(item);
+                                    });
+
+                                    // 2. Ordenar categorías alfabéticamente (A-Z)
+                                    const sortedCategories = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+                                    const formattedDate = selectedAgreement.created_at
+                                        ? new Date(selectedAgreement.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
+                                        : new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+
+                                    const refNumber = formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at);
+
+                                    const validFromStr = selectedAgreement.start_date
+                                        ? new Date(selectedAgreement.start_date.includes('T') ? selectedAgreement.start_date : selectedAgreement.start_date + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : 'Inmediata';
+
+                                    const validUntilStr = selectedAgreement.valid_until
+                                        ? new Date(selectedAgreement.valid_until.includes('T') ? selectedAgreement.valid_until : selectedAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : 'Indefinida (Sujeta a Renovación)';
+
                                     return (
-                                        <div style={{ 
-                                            fontSize: '1rem', 
-                                            fontWeight: '700', 
-                                            color: '#000',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}>
-                                            <span>Actualizada por {lastUpdate.author}</span>
-                                            <span style={{ 
-                                                backgroundColor: '#FEF08A', 
-                                                color: '#854D0E', 
-                                                padding: '1px 6px', 
-                                                borderRadius: '3px',
-                                                border: '1.5px solid #EAB308',
-                                                fontWeight: '800'
+                                        <Letterhead
+                                            title="PROPUESTA COMERCIAL DE PRECIOS"
+                                            subtitle={selectedAgreement.model_snapshot_name || 'Convenio Institucional B2B • FruFresco'}
+                                            date={formattedDate}
+                                            reference={refNumber}
+                                            badge="ACUERDO VIGENTE"
+                                            badgeVariant="emerald"
+                                            showWatermark={false}
+                                        >
+                                            {/* 1. FICHA CONTRACTUAL DEL CLIENTE & VIGENCIA */}
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                                gap: '0.85rem',
+                                                backgroundColor: '#F8FAFC',
+                                                padding: '0.9rem 1.15rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid #E2E8F0',
+                                                marginBottom: '1.25rem'
                                             }}>
-                                                ({lastUpdate.formatted})
-                                            </span>
-                                        </div>
+                                                <div>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.04em' }}>
+                                                        <Building2 size={12} color="#0D7A57" /> Cliente Institucional
+                                                    </span>
+                                                    <div style={{ fontSize: '0.90rem', fontWeight: '800', color: '#0F172A', marginTop: '3px', letterSpacing: '-0.01em' }}>
+                                                        {selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Cliente Registrado'}
+                                                    </div>
+                                                    {selectedAgreement.profiles?.nit && (
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
+                                                            NIT: <span style={{ color: '#0F172A', fontFamily: 'monospace' }}>{selectedAgreement.profiles.nit}</span>
+                                                        </div>
+                                                    )}
+                                                    {selectedAgreement.profiles?.address && (
+                                                        <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '1px' }}>
+                                                            Sede: {selectedAgreement.profiles.address}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.04em' }}>
+                                                        <Calendar size={12} color="#0D7A57" /> Vigencia Pactada
+                                                    </span>
+                                                    <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0F172A', marginTop: '3px' }}>
+                                                        {validFromStr} al {validUntilStr}
+                                                    </div>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#047857', fontWeight: '700', fontSize: '0.68rem', marginTop: '2px' }}>
+                                                        <ShieldCheck size={12} color="#10B981" /> Tarifa Institucional Garantizada
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.04em' }}>
+                                                        <FileText size={12} color="#0D7A57" /> Portafolio Formalizado
+                                                    </span>
+                                                    <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0D7A57', marginTop: '3px' }}>
+                                                        {agreementItems.length} Productos Negociados
+                                                    </div>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#64748B', fontWeight: '600', fontSize: '0.68rem', marginTop: '2px' }}>
+                                                        <CheckCircle2 size={12} color="#0D7A57" /> {sortedCategories.length} Categorías (A-Z)
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* 2. TABLAS POR CATEGORÍA EN ORDEN ALFABÉTICO (A-Z) Y PRODUCTOS (A-Z) */}
+                                            {sortedCategories.map((catName, groupIdx) => {
+                                                const catItems = [...groups[catName].items].sort((a, b) => 
+                                                    (a.product_name || '').localeCompare(b.product_name || '', 'es', { sensitivity: 'base' })
+                                                );
+
+                                                return (
+                                                    <div key={catName || groupIdx} style={{ marginBottom: '1.25rem', pageBreakInside: 'avoid' }}>
+                                                        {/* Category Header Ribbon (Skin 1 Precision Slate & Emerald accent) */}
+                                                        <div style={{
+                                                            backgroundColor: '#F8FAFC',
+                                                            border: '1px solid #E2E8F0',
+                                                            borderLeft: '4px solid #0D7A57',
+                                                            padding: '6px 12px',
+                                                            borderRadius: '6px 6px 0 0',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <Layers size={13} color="#0D7A57" />
+                                                                <span>CATEGORÍA: {catName.toUpperCase()}</span>
+                                                            </span>
+                                                            <span style={{ 
+                                                                fontSize: '0.60rem', 
+                                                                backgroundColor: '#ECFDF5', 
+                                                                color: '#065F46', 
+                                                                border: '1px solid #A7F3D0', 
+                                                                padding: '2px 8px', 
+                                                                borderRadius: '100px', 
+                                                                fontWeight: '800', 
+                                                                letterSpacing: '0.04em',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}>
+                                                                <Tag size={10} color="#059669" /> {catItems.length} {catItems.length === 1 ? 'ÍTEM' : 'ÍTEMS'} • A-Z
+                                                            </span>
+                                                        </div>
+
+                                                        <table style={{
+                                                            width: '100%',
+                                                            borderCollapse: 'collapse',
+                                                            border: '1px solid #E2E8F0',
+                                                            borderTop: 'none',
+                                                            borderRadius: '0 0 6px 6px',
+                                                            overflow: 'hidden',
+                                                            fontSize: '0.70rem'
+                                                        }}>
+                                                            <thead>
+                                                                <tr style={{ backgroundColor: '#FFFFFF', borderBottom: '1.5px solid #CBD5E1', color: '#475569', fontSize: '0.62rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                                    <th style={{ padding: '4px 6px', textAlign: 'center', width: '9%' }}>Cód.</th>
+                                                                    <th style={{ padding: '4px 8px', textAlign: 'left', width: '47%' }}>Producto / Insumo</th>
+                                                                    <th style={{ padding: '4px 6px', textAlign: 'center', width: '14%' }}>Presentación</th>
+                                                                    <th style={{ padding: '4px 8px', textAlign: 'right', width: '20%' }}>Precio Pactado (COP)</th>
+                                                                    <th style={{ padding: '4px 6px', textAlign: 'center', width: '10%' }}>IVA</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {catItems.map((it, idx) => {
+                                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+                                                                    const pCode = it.products?.accounting_id || '---';
+                                                                    const pUnit = it.products?.unit_of_measure || 'Kg';
+                                                                    const pPrice = `$${formatNumber(it.unit_price)}`;
+                                                                    const pIva = `${it.iva_rate || 0}%`;
+
+                                                                    return (
+                                                                        <tr key={it.id || idx} style={{ backgroundColor: rowBg, borderBottom: '1px solid #F1F5F9' }}>
+                                                                            <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: '700', color: '#64748B', fontFamily: 'monospace', fontSize: '0.66rem' }}>
+                                                                                {pCode}
+                                                                            </td>
+                                                                            <td style={{ padding: '4px 8px', textAlign: 'left', fontWeight: '700', color: '#0F172A' }}>
+                                                                                {it.product_name}
+                                                                            </td>
+                                                                            <td style={{ padding: '4px 6px', textAlign: 'center', color: '#475569', fontWeight: '600' }}>
+                                                                                {pUnit}
+                                                                            </td>
+                                                                            <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: '800', color: '#0D7A57', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                {pPrice}
+                                                                            </td>
+                                                                            <td style={{ padding: '4px 6px', textAlign: 'center', color: '#64748B', fontSize: '0.66rem' }}>
+                                                                                {pIva}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* 3. CONDICIONES COMERCIALES DE SERVICIO */}
+                                            <div style={{
+                                                backgroundColor: '#F8FAFC',
+                                                padding: '0.85rem 1rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid #E2E8F0',
+                                                fontSize: '0.68rem',
+                                                color: '#64748B',
+                                                lineHeight: '1.45',
+                                                marginTop: '1rem',
+                                                pageBreakInside: 'avoid'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '800', color: '#0F172A', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                                                    <Info size={12} color="#0D7A57" /> Condiciones Comerciales & Compromiso de Suministro
+                                                </div>
+                                                <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
+                                                    <li>Los precios pactados en la presente propuesta aplican a todas las órdenes generadas dentro del Portal B2B FruFresco.</li>
+                                                    <li>Horario de corte oficial: pedidos radicados antes de las 5:00 PM aplican para entrega garantizada al día siguiente en franja matutina.</li>
+                                                    <li>Inspección de calidad rigurosa en plataforma agro-logística bajo protocolos de inocuidad, frescura y calibración de báscula digital.</li>
+                                                </ul>
+                                            </div>
+
+                                            {/* 4. CASILLAS FORMALES DE FIRMA */}
+                                            <div style={{
+                                                marginTop: '2.5rem',
+                                                paddingTop: '1.25rem',
+                                                borderTop: '1px solid #CBD5E1',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                gap: '2.5rem',
+                                                pageBreakInside: 'avoid'
+                                            }}>
+                                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                                    <div style={{ height: '35px', borderBottom: '1px dashed #94A3B8', marginBottom: '6px' }}></div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0F172A' }}>Investments Cortés S.A.S.</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B' }}>Dirección Comercial & Operaciones FruFresco</div>
+                                                </div>
+
+                                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                                    <div style={{ height: '35px', borderBottom: '1px dashed #94A3B8', marginBottom: '6px' }}></div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0F172A' }}>
+                                                        {selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Cliente Institucional'}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B' }}>Aceptación de Propuesta / Representación de Compras</div>
+                                                </div>
+                                            </div>
+                                        </Letterhead>
                                     );
                                 })()}
                             </div>
-
-                            {/* Tabla en 2 Columnas Paralelas - Idéntica a la fotografía */}
-                            {(() => {
-                                const sortedItems = [...agreementItems].sort((a, b) => {
-                                    const codA = Number(a.products?.accounting_id) || 999999;
-                                    const codB = Number(b.products?.accounting_id) || 999999;
-                                    return codA - codB;
-                                });
-
-                                const half = Math.ceil(sortedItems.length / 2);
-                                const leftCol = sortedItems.slice(0, half);
-                                const rightCol = sortedItems.slice(half);
-
-                                return (
-                                    <table style={{ 
-                                        width: '100%', 
-                                        borderCollapse: 'collapse', 
-                                        border: '1.5px solid #000', 
-                                        fontFamily: 'Arial, sans-serif',
-                                        fontSize: '0.78rem'
-                                    }}>
-                                        <thead>
-                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #000' }}>
-                                                <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'center', width: '5%' }}>Cod.</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 8px', textAlign: 'left', width: '19%' }}>Producto</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'right', width: '10%' }}>Precio/KG</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '12%' }}>Fecha/Hora</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '8%' }}>Usuario</th>
-                                                
-                                                <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'center', width: '5%', borderLeft: '2px solid #000' }}>Cod.</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 8px', textAlign: 'left', width: '19%' }}>Producto</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'right', width: '10%' }}>Precio/KG</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '12%' }}>Fecha/Hora</th>
-                                                <th style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'center', width: '8%' }}>Usuario</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {Array.from({ length: half }).map((_, idx) => {
-                                                const leftItem = leftCol[idx];
-                                                const rightItem = rightCol[idx];
-                                                const leftAudit = leftItem ? getItemAuditInfo(leftItem) : null;
-                                                const rightAudit = rightItem ? getItemAuditInfo(rightItem) : null;
-
-                                                return (
-                                                    <tr key={idx} style={{ borderBottom: '1px solid #000' }}>
-                                                        {/* LADO IZQUIERDO */}
-                                                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>
-                                                            {leftItem?.products?.accounting_id || '---'}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>
-                                                            {leftItem?.product_name || ''}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 'bold' }}>
-                                                            {leftItem ? `$${formatNumber(leftItem.unit_price)}` : ''}
-                                                        </td>
-                                                        <td style={{ 
-                                                            border: '1px solid #000', 
-                                                            padding: '4px 4px', 
-                                                            textAlign: 'center', 
-                                                            fontSize: '0.72rem', 
-                                                            backgroundColor: leftAudit?.isModified ? '#FEF9C3' : 'transparent' 
-                                                        }}>
-                                                            {leftAudit?.formatted || ''}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: '0.72rem' }}>
-                                                            {leftAudit?.author || ''}
-                                                        </td>
-
-                                                        {/* LADO DERECHO */}
-                                                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 'bold', borderLeft: '2px solid #000' }}>
-                                                            {rightItem?.products?.accounting_id || ''}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>
-                                                            {rightItem?.product_name || ''}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 'bold' }}>
-                                                            {rightItem ? `$${formatNumber(rightItem.unit_price)}` : ''}
-                                                        </td>
-                                                        <td style={{ 
-                                                            border: '1px solid #000', 
-                                                            padding: '4px 4px', 
-                                                            textAlign: 'center', 
-                                                            fontSize: '0.72rem', 
-                                                            backgroundColor: rightAudit?.isModified ? '#FEF9C3' : 'transparent' 
-                                                        }}>
-                                                            {rightAudit?.formatted || ''}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: '0.72rem' }}>
-                                                            {rightAudit?.author || ''}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                );
-                            })()}
                         </div>
                     </div>
                 </div>
@@ -5998,38 +6463,90 @@ export default function CommercialAgreementsModule() {
                                 </div>
                             )}
 
-                            {/* ================= STEP 3: EXCEL UPLOAD & LIVE PRE-VALIDATION ================= */}
+                            {/* ================= STEP 3: AI DIGESTOR & INTERACTIVE RECONCILIATION WORKBENCH ================= */}
                             {createStep === 3 && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                    {/* Action bar and instructions */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                    {/* Action bar, Mode Switcher and instructions */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                                         <div>
-                                            <h4 style={{ margin: '0 0 2px', fontSize: '0.9rem', color: THEME.colors.textMain, fontWeight: '700' }}>
-                                                Paso 3: Carga Masiva de Precios por Accounting ID
-                                            </h4>
-                                            <p style={{ margin: 0, fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
-                                                El sistema cruzará automáticamente los códigos contables con el catálogo y calculará los márgenes brutos.
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h4 style={{ margin: 0, fontSize: '0.95rem', color: THEME.colors.textMain, fontWeight: '800' }}>
+                                                    Paso 3: Mesa de Reconciliación & Ingesta Inteligente
+                                                </h4>
+                                                <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Sparkles size={11} color="#16A34A" /> IA Gemini 3.8 Flash
+                                                </span>
+                                            </div>
+                                            <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                                Carga listas de precios aprobadas en Excel, CSV o PDF. El sistema cruzará descripciones con el catálogo maestro y te permitirá reconciliar en caliente.
                                             </p>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={downloadTemplate}
-                                            style={{
-                                                padding: '0.5rem 1rem',
-                                                borderRadius: '8px',
-                                                border: `1.5px solid ${THEME.colors.primary}`,
-                                                backgroundColor: THEME.colors.primaryLight,
-                                                color: THEME.colors.primary,
-                                                fontSize: '0.8rem',
-                                                fontWeight: 'bold',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px'
-                                            }}
-                                        >
-                                            <Download size={14} /> Descargar Plantilla Oficial (.xlsx)
-                                        </button>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            {/* Mode Switcher Pill */}
+                                            <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDigestMode('ai')}
+                                                    style={{
+                                                        padding: '5px 12px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        fontSize: '0.74rem',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        backgroundColor: digestMode === 'ai' ? '#0D7A57' : 'transparent',
+                                                        color: digestMode === 'ai' ? 'white' : '#64748B',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                >
+                                                    <Sparkles size={13} /> Asistente IA Gemini
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDigestMode('standard')}
+                                                    style={{
+                                                        padding: '5px 12px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        fontSize: '0.74rem',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        backgroundColor: digestMode === 'standard' ? '#0D7A57' : 'transparent',
+                                                        color: digestMode === 'standard' ? 'white' : '#64748B',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                >
+                                                    <FileText size={13} /> Directo Excel
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={downloadTemplate}
+                                                style={{
+                                                    padding: '0.45rem 0.85rem',
+                                                    borderRadius: '8px',
+                                                    border: `1.5px solid ${THEME.colors.primary}`,
+                                                    backgroundColor: THEME.colors.primaryLight,
+                                                    color: THEME.colors.primary,
+                                                    fontSize: '0.76rem',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px'
+                                                }}
+                                            >
+                                                <Download size={13} /> Plantilla Oficial (.xlsx)
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* ⚡ Cargar Precios del Modelo Institucional General */}
@@ -6038,7 +6555,7 @@ export default function CommercialAgreementsModule() {
                                             background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
                                             border: '1.5px solid #86EFAC',
                                             borderRadius: '12px',
-                                            padding: '14px 18px',
+                                            padding: '12px 16px',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
@@ -6046,103 +6563,152 @@ export default function CommercialAgreementsModule() {
                                             boxShadow: '0 2px 8px rgba(22, 101, 52, 0.08)'
                                         }}>
                                             <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#166534', fontSize: '0.92rem' }}>
-                                                    <Sparkles size={18} color="#16A34A" />
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#166534', fontSize: '0.88rem' }}>
+                                                    <Sparkles size={16} color="#16A34A" />
                                                     Modelo Institucional General Activo ({masterTemplate.items.length} SKUs)
                                                 </div>
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#15803D' }}>
-                                                    {masterTemplate.model_snapshot_name || 'Lista de Precios Base Institucional'}. Puedes cargar estos precios con 1 clic para este cliente manteniendo sus fechas individuales.
+                                                <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: '#15803D' }}>
+                                                    {masterTemplate.model_snapshot_name || 'Lista Base Institucional'}. Carga estos precios con 1 clic manteniendo las fechas individuales de este cliente.
                                                 </p>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={handleApplyMasterToCreateFlow}
                                                 style={{
-                                                    padding: '9px 16px',
+                                                    padding: '8px 14px',
                                                     backgroundColor: '#16A34A',
                                                     color: 'white',
                                                     borderRadius: '8px',
                                                     border: 'none',
                                                     fontWeight: 'bold',
-                                                    fontSize: '0.82rem',
+                                                    fontSize: '0.78rem',
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '6px',
+                                                    gap: '5px',
                                                     whiteSpace: 'nowrap',
-                                                    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)'
+                                                    boxShadow: '0 3px 10px rgba(22, 163, 74, 0.22)'
                                                 }}
                                             >
-                                                <Sparkles size={14} />
-                                                Cargar Precios del Modelo General
+                                                <Sparkles size={13} />
+                                                Cargar Precios Modelo Base
                                             </button>
                                         </div>
                                     )}
 
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '2px 0' }}>
-                                        <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
-                                        <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                                            O sube un archivo Excel específico
-                                        </span>
-                                        <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
+                                    {/* 🛒 Cargar Lista Genérica Abierta a Consumo ($0 COP) */}
+                                    <div style={{
+                                        background: 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)',
+                                        border: '1.5px solid #C4B5FD',
+                                        borderRadius: '12px',
+                                        padding: '12px 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '16px',
+                                        boxShadow: '0 2px 8px rgba(109, 40, 217, 0.08)'
+                                    }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#5B21B6', fontSize: '0.88rem' }}>
+                                                <ShoppingCart size={16} color="#7C3AED" />
+                                                Lista Genérica Abierta a Consumo (Precio $0 COP)
+                                            </div>
+                                            <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: '#6D28D9' }}>
+                                                Carga todo el catálogo activo a $0 COP. Permite ingresar pedidos sin acuerdo fijo, despachar con remisión física y liquidar a precio costo vigente en facturación.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleApplyOpenConsumptionToCreateFlow}
+                                            style={{
+                                                padding: '8px 14px',
+                                                backgroundColor: '#7C3AED',
+                                                color: 'white',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.78rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                whiteSpace: 'nowrap',
+                                                boxShadow: '0 3px 10px rgba(124, 58, 237, 0.25)'
+                                            }}
+                                        >
+                                            <ShoppingCart size={13} />
+                                            Cargar Todo el Catálogo a $0
+                                        </button>
                                     </div>
 
-                                    {/* Drag-drop or File Input */}
+                                    {/* Polymorphic Drag-drop or File Input */}
                                     <div style={{
-                                        border: `2px dashed ${parsedFile ? THEME.colors.primary : '#CBD5E1'}`,
-                                        backgroundColor: parsedFile ? '#F0FDF4' : '#F8FAFC',
+                                        border: `2px dashed ${isDigestingWithAI ? '#2563EB' : parsedFile ? THEME.colors.primary : '#CBD5E1'}`,
+                                        backgroundColor: isDigestingWithAI ? '#EFF6FF' : parsedFile ? '#F0FDF4' : '#F8FAFC',
                                         borderRadius: '12px',
-                                        padding: parsedFile ? '1rem 1.5rem' : '1.75rem',
+                                        padding: isDigestingWithAI ? '1.5rem' : parsedFile ? '1rem 1.5rem' : '1.5rem',
                                         textAlign: 'center',
-                                        cursor: 'pointer',
+                                        cursor: isDigestingWithAI ? 'wait' : 'pointer',
                                         position: 'relative',
-                                        transition: 'all 0.2s'
+                                        transition: 'all 0.2s ease'
                                     }}>
                                         <input 
                                             type="file" 
-                                            accept=".xlsx, .xls"
+                                            accept=".xlsx, .xls, .csv, .pdf"
+                                            disabled={isDigestingWithAI || parsing}
                                             onChange={handleFileUpload}
                                             style={{
                                                 position: 'absolute',
                                                 inset: 0,
                                                 opacity: 0,
-                                                cursor: 'pointer'
+                                                cursor: isDigestingWithAI ? 'wait' : 'pointer'
                                             }}
                                         />
-                                        <UploadCloud size={parsedFile ? 26 : 34} style={{ color: parsedFile ? THEME.colors.primary : '#94A3B8', margin: '0 auto 6px auto' }} />
-                                        {parsedFile ? (
+
+                                        {isDigestingWithAI ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                <Loader2 size={32} className="animate-spin" style={{ color: '#2563EB' }} />
+                                                <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#1E3A8A' }}>
+                                                    {digestingStatusText || 'Analizando documento con IA Gemini 3.8 Flash...'}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#3B82F6' }}>
+                                                    Extrayendo productos, unidades y cruzando semánticamente contra el catálogo maestro de FruFresco...
+                                                </div>
+                                            </div>
+                                        ) : parsedFile ? (
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <div style={{ textAlign: 'left' }}>
                                                     <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <FileText size={16} color={THEME.colors.primary} /> {parsedFile.name}
                                                     </div>
                                                     <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
-                                                        Tamaño: {Math.round(parsedFile.size / 1024)} KB — Haz clic o arrastra otro archivo para reemplazarlo
+                                                        Tamaño: {Math.round(parsedFile.size / 1024)} KB — Haz clic o arrastra otro archivo (.xlsx, .csv, .pdf) para reemplazarlo
                                                     </div>
                                                 </div>
                                                 <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '20px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Check size={13} strokeWidth={2.5} /> Archivo Analizado
+                                                    <Check size={13} strokeWidth={2.5} /> Archivo Analizado con Éxito
                                                 </span>
                                             </div>
                                         ) : (
                                             <div>
+                                                <UploadCloud size={32} style={{ color: '#94A3B8', margin: '0 auto 6px auto' }} />
                                                 <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
-                                                    Arrastra y suelta tu archivo Excel de Tarifas aquí, o haz clic para examinar
+                                                    Arrastra y suelta tu archivo de lista de precios aquí (Excel, CSV o PDF)
                                                 </div>
                                                 <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '4px' }}>
-                                                    Columnas requeridas: <strong>ID Producto (Accounting ID)</strong> y <strong>Precio Acordado</strong>
+                                                    Formatos compatibles: <strong>.xlsx, .xls, .csv, .pdf</strong> — El motor de IA interpretará automáticamente la estructura y los precios.
                                                 </div>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* PREVIEW & PRE-VALIDATION SECTION */}
+                                    {/* PREVIEW & INTERACTIVE RECONCILIATION WORKBENCH */}
                                     {excelPreviewData && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '4px' }}>
-                                             {/* Header with Collapsible Toggle */}
+                                            {/* Header with Collapsible Toggle */}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                    Resumen de Validación y Tarifas
+                                                    Mesa de Reconciliación & Pre-Validación ({excelPreviewData.items.length} ítems)
                                                 </span>
                                                 <button
                                                     type="button"
@@ -6170,6 +6736,46 @@ export default function CommercialAgreementsModule() {
                                                 </button>
                                             </div>
 
+                                            {/* Poka-Yoke Alert Banner for Unmatched Items */}
+                                            {excelPreviewData.unmatchedCount > 0 && (
+                                                <div style={{
+                                                    padding: '10px 14px',
+                                                    backgroundColor: '#FEF2F2',
+                                                    border: '1.5px solid #FCA5A5',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.78rem',
+                                                    color: '#991B1B',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: '12px'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <AlertCircle size={20} color="#DC2626" style={{ flexShrink: 0 }} />
+                                                        <div>
+                                                            <strong>Poka-Yoke Activo ({excelPreviewData.unmatchedCount} productos sin coincidencia):</strong> Para activar este acuerdo comercial es obligatorio asignar cada ítem con el buscador, crearlo con <em>[+ Crear]</em> o descartar la fila con <em>[🗑️]</em> si no corresponde a un producto.
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExcelPreviewFilter('unmatched')}
+                                                        style={{
+                                                            padding: '4px 10px',
+                                                            backgroundColor: '#DC2626',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        Ver Pendientes ({excelPreviewData.unmatchedCount})
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             {/* Poka-Yoke Alert Banner for Inactive SKUs */}
                                             {excelPreviewData.inactiveCount > 0 && (
                                                 <div style={{
@@ -6185,7 +6791,7 @@ export default function CommercialAgreementsModule() {
                                                 }}>
                                                     <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0 }} />
                                                     <div>
-                                                        <strong>Alerta Poka-Yoke ({excelPreviewData.inactiveCount} SKUs inactivos en catálogo):</strong> Estos productos coinciden pero están desactivados en la base de datos. Al guardar, el sistema te solicitará confirmación para <em>reactivarlos automáticamente</em> y así poder usarlos en pedidos.
+                                                        <strong>Alerta ({excelPreviewData.inactiveCount} SKUs inactivos en catálogo):</strong> Estos productos coinciden pero están desactivados en bodega. Al activar el acuerdo, se te solicitará confirmación para reactivarlos automáticamente.
                                                     </div>
                                                 </div>
                                             )}
@@ -6194,13 +6800,13 @@ export default function CommercialAgreementsModule() {
                                             {!isKpiCollapsed ? (
                                                 <div style={{ display: 'grid', gridTemplateColumns: excelPreviewData.inactiveCount > 0 ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '10px' }}>
                                                     <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                        <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas Excel</span>
+                                                        <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Ítems</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
                                                             {excelPreviewData.items.length}
                                                         </div>
                                                     </div>
                                                     <div style={{ backgroundColor: '#F0FDF4', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
-                                                        <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>En Catálogo (OK)</span>
+                                                        <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>Reconocidos (OK)</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#16A34A', marginTop: '2px' }}>
                                                             {excelPreviewData.matchedCount}
                                                         </div>
@@ -6214,14 +6820,14 @@ export default function CommercialAgreementsModule() {
                                                         </div>
                                                     )}
                                                     <div style={{ backgroundColor: excelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${excelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
-                                                        <span style={{ fontSize: '0.68rem', color: excelPreviewData.unmatchedCount > 0 ? '#991B1B' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Reconocidos</span>
+                                                        <span style={{ fontSize: '0.68rem', color: excelPreviewData.unmatchedCount > 0 ? '#991B1B' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Sin Coincidencia</span>
                                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: excelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', marginTop: '2px' }}>
                                                             {excelPreviewData.unmatchedCount}
                                                         </div>
                                                     </div>
                                                     <div style={{ backgroundColor: '#EFF6FF', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
                                                         <span style={{ fontSize: '0.68rem', color: '#1E40AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Margen Promedio</span>
-                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: excelPreviewData.avgMargin >= 50 ? '#059669' : excelPreviewData.avgMargin >= 20 ? '#D97706' : '#DC2626', marginTop: '2px' }}>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: excelPreviewData.avgMargin >= 20 ? '#059669' : excelPreviewData.avgMargin >= 12 ? '#D97706' : '#DC2626', marginTop: '2px' }}>
                                                             {excelPreviewData.avgMargin}%
                                                         </div>
                                                     </div>
@@ -6246,11 +6852,11 @@ export default function CommercialAgreementsModule() {
                                                             </span>
                                                         )}
                                                         {excelPreviewData.unmatchedCount > 0 ? (
-                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}><AlertTriangle size={13} color="#DC2626" /> {excelPreviewData.unmatchedCount} No Reconocidos</span>
+                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}><AlertTriangle size={13} color="#DC2626" /> {excelPreviewData.unmatchedCount} Sin Coincidencia</span>
                                                         ) : (
-                                                            <span style={{ color: '#64748B' }}>0 No reconocidos</span>
+                                                            <span style={{ color: '#64748B' }}>0 Sin coincidencia</span>
                                                         )}
-                                                        <span>Margen Prom.: <strong style={{ color: excelPreviewData.avgMargin >= 50 ? '#059669' : excelPreviewData.avgMargin >= 20 ? '#D97706' : '#DC2626' }}>{excelPreviewData.avgMargin}%</strong></span>
+                                                        <span>Margen Prom.: <strong style={{ color: excelPreviewData.avgMargin >= 20 ? '#059669' : excelPreviewData.avgMargin >= 12 ? '#D97706' : '#DC2626' }}>{excelPreviewData.avgMargin}%</strong></span>
                                                     </div>
                                                     <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
                                                         (Vista compacta activada)
@@ -6275,19 +6881,19 @@ export default function CommercialAgreementsModule() {
                                                                     fontSize: '0.75rem',
                                                                     fontWeight: 'bold',
                                                                     cursor: 'pointer',
-                                                                    backgroundColor: excelPreviewFilter === flt ? (flt === 'inactive' ? '#D97706' : THEME.colors.primary) : '#E2E8F0',
+                                                                    backgroundColor: excelPreviewFilter === flt ? (flt === 'unmatched' ? '#DC2626' : flt === 'inactive' ? '#D97706' : THEME.colors.primary) : '#E2E8F0',
                                                                     color: excelPreviewFilter === flt ? 'white' : '#475569'
                                                                 }}
                                                             >
                                                                 {flt === 'all' && `Todos (${excelPreviewData.items.length})`}
                                                                 {flt === 'matched' && `Reconocidos (${excelPreviewData.matchedCount})`}
-                                                                {flt === 'unmatched' && `No Reconocidos (${excelPreviewData.unmatchedCount})`}
+                                                                {flt === 'unmatched' && `⚠️ Sin Coincidencia (${excelPreviewData.unmatchedCount})`}
                                                                 {flt === 'inactive' && `⚠️ Inactivos (${excelPreviewData.inactiveCount})`}
                                                             </button>
                                                         );
                                                     })}
                                                 </div>
-                                                <div style={{ position: 'relative', width: '240px' }}>
+                                                <div style={{ position: 'relative', width: '260px' }}>
                                                     <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                                                     <input 
                                                         type="text"
@@ -6306,25 +6912,25 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             </div>
 
-                                            {/* Preview Table with Expanded Height and Sticky Headers */}
+                                            {/* Preview Table with Expanded Height and In-Cell Predictive Reconciliation (Orders Module UX Parity) */}
                                             <div style={{ 
-                                                maxHeight: isKpiCollapsed ? '460px' : '320px', 
+                                                maxHeight: isKpiCollapsed ? '480px' : '340px', 
                                                 overflowY: 'auto', 
                                                 border: '1.5px solid #E2E8F0', 
                                                 borderRadius: '8px',
                                                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                                transition: 'max-height 0.25s ease'
+                                                position: 'relative'
                                             }}>
                                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
                                                     <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                                                         <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Accounting ID</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Producto en Archivo</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Match en Catálogo</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Costo Base FruFresco</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Precio Acordado</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Margen %</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Estado</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '60px' }}>#</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '28%' }}>Producto en Documento</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '38%' }}>Match Catálogo Maestro (Buscador Predictivo)</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '12%' }}>Costo Base</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '12%' }}>Precio Acordado</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '10%' }}>Margen %</th>
+                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '60px' }}>Acción</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -6336,53 +6942,291 @@ export default function CommercialAgreementsModule() {
                                                                 if (!excelPreviewSearch.trim()) return true;
                                                                 const q = excelPreviewSearch.toLowerCase().trim();
                                                                 return (
-                                                                    item.accounting_id.toLowerCase().includes(q) ||
-                                                                    item.product_name.toLowerCase().includes(q) ||
+                                                                    (item.accounting_id || '').toLowerCase().includes(q) ||
+                                                                    (item.client_product_name || item.product_name || '').toLowerCase().includes(q) ||
                                                                     (item.matched_product?.name || '').toLowerCase().includes(q)
                                                                 );
                                                             })
-                                                            .map((item, idx) => (
-                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : item.is_inactive ? '#FFFBEB' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                                                                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#334155' }}>
-                                                                        {item.accounting_id}
-                                                                    </td>
-                                                                    <td style={{ padding: '6px 10px', color: '#1E293B' }}>
-                                                                        {item.product_name}
-                                                                    </td>
-                                                                    <td style={{ padding: '6px 10px', fontWeight: item.matched_product ? '600' : 'normal', color: item.matched_product ? THEME.colors.primary : '#EF4444' }}>
-                                                                        {item.matched_product ? item.matched_product.name : '— No encontrado en catálogo —'}
-                                                                    </td>
-                                                                    <td style={{ padding: '6px 10px', textAlign: 'right', color: '#64748B' }}>
-                                                                        {item.matched_product ? formatMoney(item.cost_basis) : '—'}
-                                                                    </td>
-                                                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary }}>
-                                                                        {formatMoney(item.unit_price)}
-                                                                    </td>
-                                                                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 'bold', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626' }}>
-                                                                        {item.matched_product ? `${item.margin_percent}%` : '—'}
-                                                                    </td>
-                                                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                                                                        {item.matched_product ? (
-                                                                            item.is_inactive ? (
-                                                                                <span 
-                                                                                    title="Producto INACTIVO en catálogo maestro"
-                                                                                    style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEF3C7', color: '#B45309', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                                                >
-                                                                                    <AlertTriangle size={11} /> Inactivo
+                                                            .map((item, rowIdx) => {
+                                                                const isMatched = Boolean(item.matched_product);
+                                                                const isSearchingInCell = activeCellSearchRowIdx === rowIdx;
+                                                                const currentQuery = isSearchingInCell ? activeCellSearchQuery : (item.client_product_name || item.product_name);
+                                                                const searchCandidates = catalogProducts
+                                                                    .filter(p => {
+                                                                        if (!currentQuery.trim()) return true;
+                                                                        const q = currentQuery.toLowerCase().trim();
+                                                                        const isNum = /^\d+$/.test(q);
+                                                                        if (isNum && p.accounting_id && String(p.accounting_id).includes(q)) return true;
+                                                                        if (p.sku && p.sku.toLowerCase().includes(q)) return true;
+                                                                        if (p.name && p.name.toLowerCase().includes(q)) return true;
+                                                                        return false;
+                                                                    })
+                                                                    .slice(0, 10);
+
+                                                                return (
+                                                                    <tr 
+                                                                        key={rowIdx} 
+                                                                        style={{ 
+                                                                            borderBottom: '1px solid #F1F5F9', 
+                                                                            backgroundColor: isSearchingInCell ? '#FFFFFF' : (!isMatched ? '#FEF3C7' : item.is_inactive ? '#FFFBEB' : rowIdx % 2 === 0 ? 'white' : '#FAFAFA'),
+                                                                            borderLeft: !isMatched ? '4px solid #F59E0B' : '4px solid transparent',
+                                                                            transition: 'all 0.15s ease'
+                                                                        }}
+                                                                    >
+                                                                        {/* Row index & accounting ID */}
+                                                                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#64748B', fontSize: '0.74rem' }}>
+                                                                            {rowIdx + 1}
+                                                                        </td>
+
+                                                                        {/* Client product name in document */}
+                                                                        <td style={{ padding: '8px 10px', color: '#1E293B' }}>
+                                                                            <div style={{ fontWeight: '700', fontSize: '0.82rem' }}>
+                                                                                {item.client_product_name || item.product_name}
+                                                                            </div>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                                                                                <span style={{ fontSize: '0.66rem', backgroundColor: '#F1F5F9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                    {item.unit || 'Kg'}
+                                                                                </span>
+                                                                                {item.accounting_id && (
+                                                                                    <span style={{ fontSize: '0.66rem', color: '#94A3B8', fontFamily: 'monospace' }}>
+                                                                                        Doc ID: {item.accounting_id}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+
+                                                                        {/* Match in master catalog / In-cell predictive search */}
+                                                                        <td style={{ padding: '6px 10px', position: 'relative' }}>
+                                                                            {isMatched && !isSearchingInCell ? (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                                                    <div>
+                                                                                        <div style={{ fontWeight: '700', color: THEME.colors.primary, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                            {item.matched_product.name}
+                                                                                            <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal', fontFamily: 'monospace' }}>
+                                                                                                (ID: {item.matched_product.accounting_id || item.matched_product.sku})
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                                                                                            <span style={{ fontSize: '0.64rem', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                                <Check size={10} strokeWidth={2.5} /> Match
+                                                                                            </span>
+                                                                                            {item.is_inactive && (
+                                                                                                <span style={{ fontSize: '0.64rem', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#FEF3C7', color: '#B45309', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                                    <AlertTriangle size={10} /> Inactivo en Bodega
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setActiveCellSearchRowIdx(rowIdx);
+                                                                                            setActiveCellSearchQuery('');
+                                                                                            setFocusedCellOptionIdx(0);
+                                                                                        }}
+                                                                                        title="Cambiar producto asociado"
+                                                                                        style={{
+                                                                                            padding: '3px 7px',
+                                                                                            backgroundColor: '#F1F5F9',
+                                                                                            border: '1px solid #CBD5E1',
+                                                                                            borderRadius: '5px',
+                                                                                            fontSize: '0.68rem',
+                                                                                            fontWeight: '600',
+                                                                                            color: '#475569',
+                                                                                            cursor: 'pointer'
+                                                                                        }}
+                                                                                    >
+                                                                                        <Edit3 size={11} /> Cambiar
+                                                                                    </button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                                    {!isMatched && (
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                                                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#B45309', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                                <AlertTriangle size={12} color="#D97706" /> Sin Coincidencia
+                                                                                            </span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => handleOpenQuickProductModal(rowIdx)}
+                                                                                                style={{
+                                                                                                    padding: '2px 7px',
+                                                                                                    backgroundColor: '#0D7A57',
+                                                                                                    color: 'white',
+                                                                                                    border: 'none',
+                                                                                                    borderRadius: '4px',
+                                                                                                    fontSize: '0.68rem',
+                                                                                                    fontWeight: 'bold',
+                                                                                                    cursor: 'pointer',
+                                                                                                    display: 'inline-flex',
+                                                                                                    alignItems: 'center',
+                                                                                                    gap: '3px'
+                                                                                                }}
+                                                                                            >
+                                                                                                <Plus size={11} /> Crear en Catálogo
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Predictive search input */}
+                                                                                    <div style={{ position: 'relative' }}>
+                                                                                        <input 
+                                                                                            type="text"
+                                                                                            placeholder="🔍 Escribe nombre o ID para buscar..."
+                                                                                            value={isSearchingInCell ? activeCellSearchQuery : ''}
+                                                                                            onFocus={() => {
+                                                                                                setActiveCellSearchRowIdx(rowIdx);
+                                                                                                setActiveCellSearchQuery('');
+                                                                                                setFocusedCellOptionIdx(0);
+                                                                                            }}
+                                                                                            onChange={(e) => {
+                                                                                                setActiveCellSearchRowIdx(rowIdx);
+                                                                                                setActiveCellSearchQuery(e.target.value);
+                                                                                                setFocusedCellOptionIdx(0);
+                                                                                            }}
+                                                                                            onKeyDown={(e) => {
+                                                                                                if (e.key === 'ArrowDown') {
+                                                                                                    e.preventDefault();
+                                                                                                    setFocusedCellOptionIdx(prev => Math.min(prev + 1, searchCandidates.length - 1));
+                                                                                                } else if (e.key === 'ArrowUp') {
+                                                                                                    e.preventDefault();
+                                                                                                    setFocusedCellOptionIdx(prev => Math.max(prev - 1, 0));
+                                                                                                } else if (e.key === 'Enter') {
+                                                                                                    e.preventDefault();
+                                                                                                    if (searchCandidates[focusedCellOptionIdx]) {
+                                                                                                        handleAssignProductToRow(rowIdx, searchCandidates[focusedCellOptionIdx]);
+                                                                                                    }
+                                                                                                } else if (e.key === 'Escape') {
+                                                                                                    setActiveCellSearchRowIdx(null);
+                                                                                                }
+                                                                                            }}
+                                                                                            style={{
+                                                                                                width: '100%',
+                                                                                                padding: '5px 8px',
+                                                                                                borderRadius: '6px',
+                                                                                                border: isSearchingInCell ? '2px solid #2563EB' : '1.5px solid #F59E0B',
+                                                                                                backgroundColor: 'white',
+                                                                                                fontSize: '0.78rem',
+                                                                                                fontWeight: '600',
+                                                                                                outline: 'none',
+                                                                                                boxShadow: isSearchingInCell ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : 'none'
+                                                                                            }}
+                                                                                        />
+
+                                                                                        {/* Floating predictive dropdown */}
+                                                                                        {isSearchingInCell && searchCandidates.length > 0 && (
+                                                                                            <div style={{
+                                                                                                position: 'absolute',
+                                                                                                top: '100%',
+                                                                                                left: 0,
+                                                                                                right: 0,
+                                                                                                marginTop: '4px',
+                                                                                                backgroundColor: 'white',
+                                                                                                borderRadius: '8px',
+                                                                                                border: '1.5px solid #CBD5E1',
+                                                                                                boxShadow: '0 12px 28px rgba(0,0,0,0.2)',
+                                                                                                zIndex: 9999,
+                                                                                                maxHeight: '220px',
+                                                                                                overflowY: 'auto'
+                                                                                            }}>
+                                                                                                {searchCandidates.map((cand, candIdx) => {
+                                                                                                    const isCandFocused = candIdx === focusedCellOptionIdx;
+                                                                                                    return (
+                                                                                                        <div
+                                                                                                            key={cand.id}
+                                                                                                            onMouseDown={(e) => {
+                                                                                                                e.preventDefault();
+                                                                                                                handleAssignProductToRow(rowIdx, cand);
+                                                                                                            }}
+                                                                                                            onMouseMove={() => {
+                                                                                                                if (focusedCellOptionIdx !== candIdx) {
+                                                                                                                    setFocusedCellOptionIdx(candIdx);
+                                                                                                                }
+                                                                                                            }}
+                                                                                                            style={{
+                                                                                                                padding: '6px 10px',
+                                                                                                                cursor: 'pointer',
+                                                                                                                backgroundColor: isCandFocused ? '#DBEAFE' : 'white',
+                                                                                                                borderBottom: '1px solid #F1F5F9',
+                                                                                                                display: 'flex',
+                                                                                                                justifyContent: 'space-between',
+                                                                                                                alignItems: 'center',
+                                                                                                                fontSize: '0.78rem'
+                                                                                                            }}
+                                                                                                        >
+                                                                                                            <div>
+                                                                                                                <span style={{ fontWeight: 'bold', color: isCandFocused ? '#1E40AF' : '#0F172A' }}>
+                                                                                                                    {cand.name}
+                                                                                                                </span>
+                                                                                                                <span style={{ color: '#64748B', fontSize: '0.7rem', marginLeft: '6px' }}>
+                                                                                                                    ({cand.accounting_id || cand.sku} — {cand.unit_of_measure})
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                            <span style={{ color: '#0D7A57', fontWeight: 'bold', fontSize: '0.72rem' }}>
+                                                                                                                Base: {formatMoney(cand.base_price || 0)}
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+
+                                                                        {/* Cost Basis */}
+                                                                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#64748B', fontSize: '0.78rem' }}>
+                                                                            {isMatched ? formatMoney(item.cost_basis) : '—'}
+                                                                        </td>
+
+                                                                        {/* Negotiated Price */}
+                                                                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.84rem' }}>
+                                                                            {formatMoney(item.unit_price)}
+                                                                        </td>
+
+                                                                        {/* Margin % Badge */}
+                                                                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                                                            {isMatched ? (
+                                                                                <span style={{
+                                                                                    fontSize: '0.74rem',
+                                                                                    padding: '2px 8px',
+                                                                                    borderRadius: '12px',
+                                                                                    fontWeight: '800',
+                                                                                    backgroundColor: item.margin_percent >= 20 ? '#DCFCE7' : item.margin_percent >= 12 ? '#FEF3C7' : '#FEE2E2',
+                                                                                    color: item.margin_percent >= 20 ? '#166534' : item.margin_percent >= 12 ? '#B45309' : '#991B1B'
+                                                                                }}>
+                                                                                    {item.margin_percent}%
                                                                                 </span>
                                                                             ) : (
-                                                                                <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
-                                                                                    OK
-                                                                                </span>
-                                                                            )
-                                                                        ) : (
-                                                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
-                                                                                Omitir
-                                                                            </span>
-                                                                        )}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
+                                                                                <span style={{ color: '#94A3B8', fontSize: '0.74rem' }}>—</span>
+                                                                            )}
+                                                                        </td>
+
+                                                                        {/* Row actions */}
+                                                                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleDiscardRow(rowIdx)}
+                                                                                title="Descartar fila (no comercial)"
+                                                                                style={{
+                                                                                    backgroundColor: 'transparent',
+                                                                                    border: 'none',
+                                                                                    cursor: 'pointer',
+                                                                                    color: '#EF4444',
+                                                                                    padding: '4px',
+                                                                                    borderRadius: '4px',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center'
+                                                                                }}
+                                                                            >
+                                                                                <Trash2 size={14} />
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -6392,7 +7236,7 @@ export default function CommercialAgreementsModule() {
                             )}
                         </div>
 
-                        {/* Modal Footer - Step Navigation Buttons */}
+                        {/* Modal Footer - Step Navigation Buttons & Poka-Yoke Blocking */}
                         <div style={{ padding: '1.25rem 2rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
                             <div>
                                 {createStep > 1 ? (
@@ -6441,7 +7285,7 @@ export default function CommercialAgreementsModule() {
                                 )}
                             </div>
 
-                            <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                                 {createStep === 1 && (
                                     (() => {
                                         const isStep1Disabled = isMultiClientMode ? selectedClientIds.length === 0 : !selectedClientId;
@@ -6500,34 +7344,52 @@ export default function CommercialAgreementsModule() {
                                     </button>
                                 )}
 
-                                {createStep === 3 && (
-                                    <button 
-                                        type="submit" 
-                                        disabled={savingAgreement || parsing || uploadedItems.length === 0 || (excelPreviewData?.matchedCount === 0)}
-                                        style={{ 
-                                            padding: '10px 24px', 
-                                            borderRadius: THEME.radius.md, 
-                                            border: 'none', 
-                                            backgroundColor: (uploadedItems.length === 0 || savingAgreement || excelPreviewData?.matchedCount === 0) ? '#CBD5E1' : THEME.colors.primary, 
-                                            color: 'white', 
-                                            fontWeight: 'bold',
-                                            fontSize: '0.85rem',
-                                            cursor: (uploadedItems.length === 0 || savingAgreement || excelPreviewData?.matchedCount === 0) ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            boxShadow: (uploadedItems.length === 0 || savingAgreement) ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
-                                        }}
-                                    >
-                                        {savingAgreement ? (
-                                            <>Guardando Acuerdo...</>
-                                        ) : (
-                                            <>
-                                                <Check size={16} strokeWidth={2.5} /> Crear y Activar Acuerdo Comercial
-                                            </>
-                                        )}
-                                    </button>
-                                )}
+                                {createStep === 3 && (() => {
+                                    const hasItems = Boolean(excelPreviewData && excelPreviewData.items.length > 0);
+                                    const hasUnmatched = Boolean(excelPreviewData && excelPreviewData.unmatchedCount > 0);
+                                    const isSubmitDisabled = savingAgreement || parsing || isDigestingWithAI || !hasItems || hasUnmatched;
+
+                                    return (
+                                        <button 
+                                            type="submit" 
+                                            disabled={isSubmitDisabled}
+                                            title={hasUnmatched ? `Hay ${excelPreviewData?.unmatchedCount} ítems sin coincidencia pendientes.` : undefined}
+                                            style={{ 
+                                                padding: '10px 24px', 
+                                                borderRadius: THEME.radius.md, 
+                                                border: 'none', 
+                                                backgroundColor: isSubmitDisabled 
+                                                    ? (hasUnmatched ? '#F87171' : '#CBD5E1') 
+                                                    : '#0D7A57',
+                                                backgroundImage: isSubmitDisabled 
+                                                    ? 'none' 
+                                                    : 'linear-gradient(135deg, #0D7A57 0%, #059669 100%)',
+                                                color: 'white', 
+                                                fontWeight: 'bold', 
+                                                fontSize: '0.85rem', 
+                                                cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '8px', 
+                                                boxShadow: isSubmitDisabled ? 'none' : '0 4px 14px rgba(13, 122, 87, 0.35)',
+                                                opacity: isSubmitDisabled && !hasUnmatched ? 0.7 : 1,
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            {savingAgreement ? (
+                                                <><Loader2 size={16} className="animate-spin" /> Guardando Acuerdo...</>
+                                            ) : hasUnmatched ? (
+                                                <><AlertCircle size={16} /> {excelPreviewData?.unmatchedCount} Sin Coincidencia — Resuelve para Activar</>
+                                            ) : !hasItems ? (
+                                                <>Carga un archivo de precios para continuar</>
+                                            ) : (
+                                                <>
+                                                    <Check size={16} strokeWidth={2.5} /> Crear y Activar Acuerdo Comercial ({excelPreviewData?.matchedCount} SKUs)
+                                                </>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </form>
@@ -8401,13 +9263,259 @@ export default function CommercialAgreementsModule() {
                 </div>
             )}
 
+            {/* IN-SITU QUICK PRODUCT CREATION MODAL */}
+            {isQuickProductModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(5px)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '520px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden',
+                        border: '1px solid #E2E8F0',
+                        animation: 'slideUp 0.2s ease-out'
+                    }}>
+                        <div style={{
+                            padding: '1.25rem 1.5rem',
+                            borderBottom: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#DCFCE7',
+                                    color: '#15803D',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: '800', color: '#0F172A' }}>
+                                        Crear Nuevo Producto en Catálogo Maestro
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: '0.74rem', color: '#64748B' }}>
+                                        Se registrará en la base de datos y se vinculará a esta fila de forma inmediata.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsQuickProductModalOpen(false)}
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: '4px',
+                                    borderRadius: '6px'
+                                }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                    Nombre Oficial del Producto *
+                                </label>
+                                <input 
+                                    type="text"
+                                    value={quickProductName}
+                                    onChange={(e) => setQuickProductName(e.target.value)}
+                                    placeholder="Ej. Aguacate Hass Extra"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #CBD5E1',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '600',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                        Unidad de Medida *
+                                    </label>
+                                    <select
+                                        value={quickProductUnit}
+                                        onChange={(e) => setQuickProductUnit(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.82rem',
+                                            backgroundColor: 'white',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value="Kg">Kilogramo (Kg)</option>
+                                        <option value="Und">Unidad (Und)</option>
+                                        <option value="Bolsa">Bolsa</option>
+                                        <option value="Atado">Atado</option>
+                                        <option value="Canastilla">Canastilla</option>
+                                        <option value="Gramos">Gramos (g)</option>
+                                        <option value="Litro">Litro (Lt)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                        Categoría *
+                                    </label>
+                                    <select
+                                        value={quickProductCategory}
+                                        onChange={(e) => setQuickProductCategory(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.82rem',
+                                            backgroundColor: 'white',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value="FR">Frutas (FR)</option>
+                                        <option value="VE">Verduras (VE)</option>
+                                        <option value="LA">Lácteos (LA)</option>
+                                        <option value="AB">Abarrotes (AB)</option>
+                                        <option value="CA">Carnes (CA)</option>
+                                        <option value="PR">Procesados (PR)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                        Costo Base Estimado (COP)
+                                    </label>
+                                    <input 
+                                        type="text"
+                                        value={quickProductCostBasis}
+                                        onChange={(e) => setQuickProductCostBasis(e.target.value)}
+                                        placeholder="Ej. 3500"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.85rem',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                                        Tarifa IVA (%)
+                                    </label>
+                                    <select
+                                        value={quickProductIvaRate}
+                                        onChange={(e) => setQuickProductIvaRate(Number(e.target.value))}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #CBD5E1',
+                                            fontSize: '0.82rem',
+                                            backgroundColor: 'white',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value={0}>0% (Exento / Agropecuario)</option>
+                                        <option value={5}>5% (Bienes Especiales)</option>
+                                        <option value={19}>19% (Tarifa General)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            borderTop: '1px solid #E2E8F0',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '10px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsQuickProductModalOpen(false)}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#64748B',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveQuickProduct}
+                                disabled={isCreatingQuickProduct || !quickProductName.trim()}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: !quickProductName.trim() || isCreatingQuickProduct ? '#CBD5E1' : '#0D7A57',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.82rem',
+                                    cursor: !quickProductName.trim() || isCreatingQuickProduct ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                }}
+                            >
+                                {isCreatingQuickProduct ? (
+                                    <><Loader2 size={14} className="animate-spin" /> Creando...</>
+                                ) : (
+                                    <><Check size={14} strokeWidth={2.5} /> Crear y Asignar a Fila</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* TOAST NOTIFICATION */}
             {toast && (
                 <div style={{ 
                     position: 'fixed', 
                     bottom: '24px', 
                     right: '24px', 
-                    backgroundColor: toast.type === 'success' ? '#0D7A57' : toast.type === 'warning' ? '#D97706' : '#EF4444', 
+                    backgroundColor: toast.type === 'success' ? '#0D7A57' : toast.type === 'warning' ? '#D97706' : toast.type === 'info' ? '#2563EB' : '#EF4444', 
                     color: 'white', 
                     padding: '0.75rem 1.5rem', 
                     borderRadius: '8px', 
@@ -8420,7 +9528,7 @@ export default function CommercialAgreementsModule() {
                     fontSize: '0.85rem',
                     animation: 'slideUp 0.2s ease'
                 }}>
-                    {toast.type === 'success' ? <Check size={16} /> : toast.type === 'warning' ? <AlertTriangle size={16} /> : <X size={16} />}
+                    {toast.type === 'success' ? <Check size={16} /> : toast.type === 'warning' ? <AlertTriangle size={16} /> : toast.type === 'info' ? <Info size={16} /> : <X size={16} />}
                     {toast.message}
                 </div>
             )}

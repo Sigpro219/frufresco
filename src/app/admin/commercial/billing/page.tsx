@@ -65,7 +65,8 @@ import {
     Gift,
     Banknote,
     MapPin,
-    Phone
+    Phone,
+    Zap
 } from 'lucide-react';
 import { downloadWorldOfficeExcel } from '@/lib/worldOfficeExport';
 
@@ -1075,6 +1076,58 @@ export default function BillingDashboard() {
         }
     }, [selectedBillingDate, includeAllStatuses]);
 
+    const handleLiquidateOpenOrder = async (orderId: string) => {
+        setIsProcessing(true);
+        try {
+            const res = await fetch('/api/commercial/billing/liquidate-open-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Error al liquidar pedido');
+            alert(json.message || 'Pedido liquidado a costo vigente exitosamente.');
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error liquidating order:', err);
+            alert('Error al liquidar pedido: ' + err.message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleLiquidateSelectedOrAllOpenOrders = async () => {
+        const targetIds = selectedOrderIds.length > 0 
+            ? selectedOrderIds 
+            : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO')).map(o => o.id);
+
+        if (targetIds.length === 0) {
+            alert('No hay pedidos con tarifa $0 o sobre lista abierta a consumo para liquidar.');
+            return;
+        }
+
+        const confirmMsg = `¿Deseas liquidar ${targetIds.length} pedido(s) actualizando sus productos al costo base comercial vigente?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setIsProcessing(true);
+        try {
+            const res = await fetch('/api/commercial/billing/liquidate-open-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderIds: targetIds })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Error al liquidar pedidos');
+            alert(json.message || 'Pedidos liquidados a costo vigente con éxito.');
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error in batch liquidation:', err);
+            alert('Error al liquidar pedidos en lote: ' + err.message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     useEffect(() => {
         if (permissionsLoaded && (hasInvoicingAccess || hasPortfolioAccess || hasConfigAccess)) {
             fetchData();
@@ -1100,6 +1153,9 @@ export default function BillingDashboard() {
     }, [pendingOrders, graceMinutes]);
 
     const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount } = pendingGraceCounts;
+    const openConsumptionCount = useMemo(() => {
+        return pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO')).length;
+    }, [pendingOrders]);
 
     // Filter & Sort Pending Orders
     const filteredPendingOrders = useMemo(() => {
@@ -2697,6 +2753,32 @@ export default function BillingDashboard() {
                                             )}
                                         </div>
 
+                                        {openConsumptionCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={handleLiquidateSelectedOrAllOpenOrders}
+                                                disabled={isProcessing}
+                                                style={{
+                                                    backgroundColor: '#7C3AED',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    padding: '0.4rem 0.8rem',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.74rem',
+                                                    cursor: isProcessing ? 'wait' : 'pointer',
+                                                    opacity: isProcessing ? 0.7 : 1,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)'
+                                                }}
+                                                title="Liquidar precios de pedidos en lista abierta aplicando el costo vigente actual"
+                                            >
+                                                <Zap size={13} className={isProcessing ? "animate-spin" : ""} /> {isProcessing ? 'Liquidando...' : `Liquidar Costo Vigente (${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`})`}
+                                            </button>
+                                        )}
+
                                         <button
                                             type="button"
                                             onClick={() => handleOpenCutPreview('AM')}
@@ -3197,17 +3279,54 @@ export default function BillingDashboard() {
 
                                                         {/* 8. Total Pedido */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
-                                                                {formatMoney(order.total || 0)}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.62rem', color: '#64748B' }}>
-                                                                Tarifa {order.profiles?.iva_responsible ? '19% IVA' : '0% IVA'}
-                                                            </div>
+                                                            {order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO') ? (
+                                                                <div>
+                                                                    <div style={{ fontWeight: '800', color: '#D97706', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                                        <Zap size={11} className="text-amber-500 animate-pulse" />
+                                                                        {formatMoney(order.total || 0)}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.60rem', color: '#B45309', fontWeight: '700', backgroundColor: '#FEF3C7', padding: '1px 4px', borderRadius: '3px', display: 'inline-block', marginTop: '2px' }}>
+                                                                        ⚠️ Consumo Abierto
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                                                        {formatMoney(order.total || 0)}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.62rem', color: '#64748B' }}>
+                                                                        Tarifa {order.profiles?.iva_responsible ? '19% IVA' : '0% IVA'}
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </td>
 
                                                         {/* 9. Acciones Rápidas */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                {(order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO')) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleLiquidateOpenOrder(order.id)}
+                                                                        disabled={isProcessing}
+                                                                        title="Liquidar precios de este pedido con el costo vigente actual"
+                                                                        style={{
+                                                                            backgroundColor: '#FAF5FF',
+                                                                            color: '#7C3AED',
+                                                                            border: '1px solid #DDD6FE',
+                                                                            padding: '0.25rem 0.45rem',
+                                                                            borderRadius: '5px',
+                                                                            cursor: isProcessing ? 'wait' : 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px',
+                                                                            fontSize: '0.70rem',
+                                                                            fontWeight: '700'
+                                                                        }}
+                                                                    >
+                                                                        <Zap size={11} style={{ color: '#7C3AED' }} /> Liquidar
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleOpenOrderDetail(order)}
