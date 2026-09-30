@@ -39,10 +39,19 @@ import {
     Save,
     Sparkles,
     Printer,
-    User
+    User,
+    Mail,
+    Send,
+    ShieldCheck
 } from 'lucide-react';
 import { searchIncludes } from '@/lib/locationNorm';
 import { useAuth } from '@/lib/authContext';
+import { 
+    generateAgreementNotificationHtml, 
+    generateAgreementNotificationText, 
+    AgreementNotificationEmailData, 
+    AgreementEmailItem 
+} from '@/lib/emailTemplates';
 
 interface Agreement {
     id: string;
@@ -281,6 +290,13 @@ export default function CommercialAgreementsModule() {
     const [hoveredAuditItemId, setHoveredAuditItemId] = useState<string | null>(null);
     const [latestAgreementLog, setLatestAgreementLog] = useState<any | null>(null);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+    
+    // HITL Email Dispatch Modal State
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
+    const [emailModalMode, setEmailModalMode] = useState<'NEW_AGREEMENT' | 'PRICE_UPDATE_DIFF'>('PRICE_UPDATE_DIFF');
+    const [emailRecipients, setEmailRecipients] = useState<Array<{ email: string; label: string; selected: boolean }>>([]);
+    const [isAuthorizedChecked, setIsAuthorizedChecked] = useState<boolean>(true);
+    const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
 
     // In-Drawer Add Product Modal State
     const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
@@ -1203,7 +1219,7 @@ export default function CommercialAgreementsModule() {
             } : null);
 
             fetchAgreements();
-            fetchAgreementAuditLogs(selectedAgreement.id);
+            await fetchAgreementAuditLogs(selectedAgreement.id);
 
             showToast(`Precio actualizado para ${item.product_name}: $${formatNumber(newPrice)}`, 'success');
             setEditingItemId(null);
@@ -1212,6 +1228,143 @@ export default function CommercialAgreementsModule() {
             showToast('Error al actualizar precio: ' + err.message, 'error');
         } finally {
             setSavingPriceItemId(null);
+        }
+    };
+
+    const handleOpenNotificationModal = (forcedMode?: 'NEW_AGREEMENT' | 'PRICE_UPDATE_DIFF') => {
+        if (!selectedAgreement) return;
+
+        const clientProfile = selectedAgreement.profiles;
+        const mainEmail = (selectedAgreement as any).client_email || (clientProfile as any)?.email || '';
+        const additionalEmails = (clientProfile as any)?.additional_billing_emails || [];
+        
+        const initialRecipients: Array<{ email: string; label: string; selected: boolean }> = [];
+        if (mainEmail) {
+            initialRecipients.push({
+                email: mainEmail,
+                label: `Receptor Principal (${selectedAgreement.client_name})`,
+                selected: true
+            });
+        }
+        if (Array.isArray(additionalEmails)) {
+            additionalEmails.forEach((em: string) => {
+                if (em && em !== mainEmail && !initialRecipients.some(r => r.email === em)) {
+                    initialRecipients.push({
+                        email: em,
+                        label: 'Facturación / Economato',
+                        selected: true
+                    });
+                }
+            });
+        }
+
+        const hasModifiedLogs = Object.keys(agreementAuditLogs).length > 0;
+        const mode = forcedMode || (hasModifiedLogs ? 'PRICE_UPDATE_DIFF' : 'NEW_AGREEMENT');
+        
+        setEmailModalMode(mode);
+        setEmailRecipients(initialRecipients.length > 0 ? initialRecipients : [
+            { email: 'pedidos@frufresco.com', label: 'Copia Administrativa', selected: true }
+        ]);
+        setIsAuthorizedChecked(true);
+        setIsEmailModalOpen(true);
+    };
+
+    const handleDispatchAgreementEmail = async () => {
+        if (!selectedAgreement) return;
+        if (!isAuthorizedChecked) {
+            showToast('Debe autorizar expresamente el despacho de la notificación.', 'warning');
+            return;
+        }
+
+        const selectedEmails = emailRecipients.filter(r => r.selected && r.email).map(r => r.email.trim());
+        if (selectedEmails.length === 0) {
+            showToast('Seleccione al menos un destinatario de correo.', 'warning');
+            return;
+        }
+
+        setIsSendingEmail(true);
+        try {
+            const isDiff = emailModalMode === 'PRICE_UPDATE_DIFF';
+            
+            let emailItems: AgreementEmailItem[] = [];
+            if (isDiff) {
+                agreementItems.forEach(item => {
+                    const logs = agreementAuditLogs[item.id];
+                    if (logs && logs.length > 0) {
+                        const oldestLog = logs[logs.length - 1];
+                        const oldPrice = oldestLog?.details?.old_price || item.unit_price;
+                        emailItems.push({
+                            name: item.product_name,
+                            unit: item.products?.unit_of_measure || 'Kg',
+                            price: item.unit_price,
+                            oldPrice: oldPrice,
+                            isModified: true,
+                            priceDiff: item.unit_price - oldPrice
+                        });
+                    }
+                });
+
+                if (emailItems.length === 0) {
+                    emailItems = agreementItems.slice(0, 10).map(it => ({
+                        name: it.product_name,
+                        unit: it.products?.unit_of_measure || 'Kg',
+                        price: it.unit_price,
+                        oldPrice: it.unit_price,
+                        isModified: true
+                    }));
+                }
+            } else {
+                emailItems = agreementItems.map(it => ({
+                    name: it.product_name,
+                    unit: it.products?.unit_of_measure || 'Kg',
+                    price: it.unit_price
+                }));
+            }
+
+            const authorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
+            const payload: AgreementNotificationEmailData = {
+                mode: emailModalMode,
+                agreement_name: selectedAgreement.model_snapshot_name || 'Acuerdo Comercial FruFresco',
+                agreement_code: `ACU-${selectedAgreement.quote_number || selectedAgreement.id.slice(0, 6)}`,
+                client_name: selectedAgreement.client_name,
+                client_nit: selectedAgreement.profiles?.nit,
+                valid_from: selectedAgreement.start_date ? new Date(selectedAgreement.start_date).toLocaleDateString('es-CO') : 'Inmediata',
+                valid_until: selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida',
+                items: emailItems,
+                responsible_agent: authorName,
+                modified_at: new Date().toLocaleDateString('es-CO') + ' ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+            };
+
+            const htmlContent = generateAgreementNotificationHtml(payload);
+            const textContent = generateAgreementNotificationText(payload);
+            const subject = isDiff
+                ? `Actualización de Precios • ${selectedAgreement.client_name} (${payload.agreement_code})`
+                : `Nuevo Acuerdo Comercial de Precios • ${selectedAgreement.client_name} (${payload.agreement_code})`;
+
+            for (const email of selectedEmails) {
+                const { error: mailErr } = await supabase.from('mail').insert({
+                    to_email: email,
+                    subject: subject,
+                    message: { html: htmlContent, text: textContent },
+                    template: { name: isDiff ? 'agreement_price_diff' : 'agreement_new', data: payload },
+                    status: 'pending',
+                    inbox_type: 'commercial'
+                });
+
+                if (mailErr) console.warn('Error encolando mail para ' + email, mailErr);
+            }
+
+            try {
+                fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
+            } catch (e) {}
+
+            showToast(`🎉 ¡Notificación formal despachada con éxito a ${selectedEmails.length} destinatario(s)!`, 'success');
+            setIsEmailModalOpen(false);
+        } catch (err: any) {
+            console.error('Error dispatching agreement email:', err);
+            showToast('Error al despachar el correo: ' + err.message, 'error');
+        } finally {
+            setIsSendingEmail(false);
         }
     };
 
@@ -3144,6 +3297,34 @@ export default function CommercialAgreementsModule() {
                                 <Printer size={15} color="#475569" />
                                 Vista Imprimible
                             </button>
+                            {(() => {
+                                const modifiedLogsCount = Object.keys(agreementAuditLogs).length;
+                                return (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenNotificationModal(modifiedLogsCount > 0 ? 'PRICE_UPDATE_DIFF' : 'NEW_AGREEMENT')}
+                                        style={{
+                                            padding: '0.55rem 0.95rem',
+                                            borderRadius: '8px',
+                                            backgroundColor: modifiedLogsCount > 0 ? '#FEF3C7' : '#EFF6FF',
+                                            color: modifiedLogsCount > 0 ? '#92400E' : '#1D4ED8',
+                                            border: modifiedLogsCount > 0 ? '1.5px solid #FCD34D' : '1.5px solid #93C5FD',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: modifiedLogsCount > 0 ? '0 2px 6px rgba(217, 119, 6, 0.18)' : '0 1px 2px rgba(29, 78, 216, 0.08)'
+                                        }}
+                                        title="Notificar formalmente por correo electrónico al cliente o sucursales sobre las tarifas de este acuerdo comercial"
+                                    >
+                                        <Mail size={15} color={modifiedLogsCount > 0 ? '#D97706' : '#2563EB'} />
+                                        {modifiedLogsCount > 0 ? `Notificar Novedades (${modifiedLogsCount} ${modifiedLogsCount === 1 ? 'modificado' : 'modificados'})` : 'Notificar por Correo'}
+                                    </button>
+                                );
+                            })()}
                             <button
                                 type="button"
                                 onClick={handleOpenAddProductModal}
@@ -3177,6 +3358,76 @@ export default function CommercialAgreementsModule() {
                                 }).length} de {agreementItems.length}
                             </span>
                         </div>
+
+                        {/* BANNER DE ALTA VISIBILIDAD PARA NOVEDADES DE PRECIOS PENDIENTES DE NOTIFICAR */}
+                        {(() => {
+                            const modifiedLogsCount = Object.keys(agreementAuditLogs).length;
+                            if (modifiedLogsCount === 0) return null;
+                            return (
+                                <div style={{
+                                    margin: '0.75rem 1.5rem 0 1.5rem',
+                                    padding: '0.9rem 1.25rem',
+                                    backgroundColor: '#EFF6FF',
+                                    border: '2px solid #93C5FD',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '14px',
+                                    boxShadow: '0 3px 10px rgba(37, 99, 235, 0.12)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '8px',
+                                            backgroundColor: '#DBEAFE',
+                                            border: '1px solid #BFDBFE',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#2563EB',
+                                            flexShrink: 0
+                                        }}>
+                                            <Mail size={20} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.84rem', fontWeight: 900, color: '#1E3A8A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span>Novedades de Precios Registradas ({modifiedLogsCount} {modifiedLogsCount === 1 ? 'producto modificado' : 'productos modificados'})</span>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '2px 7px', borderRadius: '100px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
+                                                    ● Pendiente Notificar
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.74rem', color: '#3B82F6', marginTop: '2px' }}>
+                                                Los cambios ya rigen en el sistema. Puedes despachar la notificación formal con la tabla comparativa Diff de precios.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenNotificationModal('PRICE_UPDATE_DIFF')}
+                                        style={{
+                                            backgroundColor: '#2563EB',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '8px 18px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.82rem',
+                                            fontWeight: 900,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        <Send size={15} /> Notificar al Cliente
+                                    </button>
+                                </div>
+                            );
+                        })()}
 
                         {/* Drawer Inactive SKUs Poka-Yoke Warning */}
                         {(() => {
@@ -3879,6 +4130,354 @@ export default function CommercialAgreementsModule() {
                                 Guardar en Acuerdo
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL HITL DE VALIDACIÓN Y DESPACHO DE NOTIFICACIÓN DE PRECIOS POR CORREO */}
+            {isEmailModalOpen && selectedAgreement && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 2600,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    padding: '1.25rem',
+                    overflowY: 'auto'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '820px',
+                        maxHeight: '92vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                        border: '1px solid #E2E8F0'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            backgroundColor: '#0F172A',
+                            color: 'white',
+                            padding: '1.2rem 1.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            borderBottom: '1px solid #1E293B'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#34D399'
+                                }}>
+                                    <Mail size={18} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: 'white' }}>
+                                            Despacho Asistido de Notificación al Cliente
+                                        </h2>
+                                        <span style={{
+                                            fontSize: '0.65rem',
+                                            fontWeight: 800,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.5px',
+                                            padding: '2px 8px',
+                                            borderRadius: '100px',
+                                            backgroundColor: emailModalMode === 'PRICE_UPDATE_DIFF' ? '#FEF3C7' : '#DCFCE7',
+                                            color: emailModalMode === 'PRICE_UPDATE_DIFF' ? '#92400E' : '#166534',
+                                            border: '1px solid currentColor'
+                                        }}>
+                                            {emailModalMode === 'PRICE_UPDATE_DIFF' ? 'EVT-09: Diff de Precios' : 'EVT-08: Nuevo Acuerdo'}
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: '#94A3B8' }}>
+                                        Validación previa obligatoria (Human-in-the-Loop) antes de despachar el correo transaccional.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsEmailModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', backgroundColor: '#F8FAFC' }}>
+                            
+                            {/* 1. Audit Trail Banner */}
+                            <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <History size={13} color="#15803D" />
+                                        Trazabilidad Forense & Auditoría
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEmailModalMode(emailModalMode === 'PRICE_UPDATE_DIFF' ? 'NEW_AGREEMENT' : 'PRICE_UPDATE_DIFF')}
+                                            style={{
+                                                fontSize: '0.7rem',
+                                                fontWeight: 'bold',
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #CBD5E1',
+                                                backgroundColor: '#F1F5F9',
+                                                color: '#334155',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Cambiar Modo a: {emailModalMode === 'PRICE_UPDATE_DIFF' ? 'Lista Completa (Nuevo Acuerdo)' : 'Solo Modificados (Diff)'}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.75rem' }}>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '8px', border: '1px solid #F1F5F9' }}>
+                                        <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.7rem' }}>Cliente / Razón Social:</span>
+                                        <strong style={{ color: '#0F172A' }}>{selectedAgreement.client_name}</strong>
+                                    </div>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '8px', border: '1px solid #F1F5F9' }}>
+                                        <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.7rem' }}>Vigencia Contractual:</span>
+                                        <strong style={{ color: '#0F172A' }}>
+                                            {selectedAgreement.start_date ? new Date(selectedAgreement.start_date).toLocaleDateString('es-CO') : 'Inmediata'} al {selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}
+                                        </strong>
+                                    </div>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '8px', border: '1px solid #F1F5F9' }}>
+                                        <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.7rem' }}>Asesor Comercial:</span>
+                                        <strong style={{ color: '#0F172A' }}>{user?.email || (profile as any)?.company_name || 'Comercial FruFresco'}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. Destinatarios */}
+                            <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                                <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '0.5rem' }}>
+                                    Destinatarios Seleccionados para el Despacho:
+                                </label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.78rem' }}>
+                                    {emailRecipients.map((rec, idx) => (
+                                        <label key={idx} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '0.6rem 0.85rem',
+                                            borderRadius: '8px',
+                                            border: rec.selected ? '1.5px solid #86EFAC' : '1px solid #E2E8F0',
+                                            backgroundColor: rec.selected ? '#F0FDF4' : '#FFFFFF',
+                                            cursor: 'pointer'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={rec.selected}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setEmailRecipients(prev => prev.map((r, i) => i === idx ? { ...r, selected: checked } : r));
+                                                    }}
+                                                    style={{ width: '16px', height: '16px', accentColor: '#16A34A', cursor: 'pointer' }}
+                                                />
+                                                <strong style={{ color: '#0F172A' }}>{rec.email}</strong>
+                                                <span style={{ color: '#64748B', fontSize: '0.72rem' }}>({rec.label})</span>
+                                            </div>
+                                            <span style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: rec.selected ? '#166534' : '#94A3B8' }}>
+                                                {rec.selected ? '✓ Incluido' : 'Omitido'}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 3. Previsualización de la Tabla de Precios */}
+                            <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        {emailModalMode === 'PRICE_UPDATE_DIFF' ? 'Tabla Comparativa Diff a Despachar (Sin SKU):' : 'Catálogo Completo a Despachar (Sin SKU):'}
+                                    </span>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '4px' }}>
+                                        ✓ Membrete Remisión Sincronizado
+                                    </span>
+                                </div>
+                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', maxHeight: '220px', overflowY: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', textAlign: 'left' }}>
+                                        <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 800 }}>
+                                            <tr>
+                                                <th style={{ padding: '8px 12px' }}>Producto</th>
+                                                {emailModalMode === 'PRICE_UPDATE_DIFF' ? (
+                                                    <>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Antes</th>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Nuevo Precio</th>
+                                                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>Variación</th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th style={{ padding: '8px 10px', textAlign: 'center' }}>Presentación</th>
+                                                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>Precio Pactado</th>
+                                                    </>
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(() => {
+                                                const diffItems = agreementItems.filter(it => {
+                                                    const logs = agreementAuditLogs[it.id];
+                                                    return logs && logs.length > 0;
+                                                });
+                                                const itemsToRender = emailModalMode === 'PRICE_UPDATE_DIFF' 
+                                                    ? (diffItems.length > 0 ? diffItems : agreementItems.slice(0, 15))
+                                                    : agreementItems.slice(0, 40);
+
+                                                return itemsToRender.map((item, idx) => {
+                                                    const logs = agreementAuditLogs[item.id];
+                                                    const hasLog = logs && logs.length > 0;
+                                                    const oldPrice = hasLog ? logs[logs.length - 1]?.details?.old_price || item.unit_price : item.unit_price;
+                                                    const diff = item.unit_price - oldPrice;
+                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9';
+
+                                                    return (
+                                                        <tr key={item.id} style={{ backgroundColor: hasLog ? '#FEF9C3' : rowBg, borderBottom: '1px solid #F1F5F9' }}>
+                                                            <td style={{ padding: '8px 12px', fontWeight: 600, color: '#1E293B' }}>
+                                                                {item.product_name}
+                                                            </td>
+                                                            {emailModalMode === 'PRICE_UPDATE_DIFF' ? (
+                                                                <>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        ${formatNumber(oldPrice)}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        ${formatNumber(item.unit_price)}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 'bold', color: diff >= 0 ? '#B91C1C' : '#047857' }}>
+                                                                        {diff > 0 ? `+ $${formatNumber(diff)}` : (diff < 0 ? `- $${formatNumber(Math.abs(diff))}` : '$0')}
+                                                                    </td>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'center', color: '#64748B' }}>
+                                                                        {item.products?.unit_of_measure || 'Kg'}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        ${formatNumber(item.unit_price)} COP
+                                                                    </td>
+                                                                </>
+                                                            )}
+                                                        </tr>
+                                                    );
+                                                });
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* 4. Checkbox de Autorización Explícita */}
+                            <div style={{
+                                backgroundColor: '#F0FDF4',
+                                border: '1.5px solid #86EFAC',
+                                borderRadius: '12px',
+                                padding: '0.85rem 1rem',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '10px'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    id="auth-agreement-dispatch"
+                                    checked={isAuthorizedChecked}
+                                    onChange={(e) => setIsAuthorizedChecked(e.target.checked)}
+                                    style={{ width: '18px', height: '18px', accentColor: '#16A34A', marginTop: '2px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="auth-agreement-dispatch" style={{ fontSize: '0.78rem', color: '#14532D', cursor: 'pointer' }}>
+                                    <strong style={{ display: 'block', fontSize: '0.82rem', color: '#064E3B' }}>
+                                        Autorizo el despacho formal de esta notificación por correo electrónico.
+                                    </strong>
+                                    He validado que las tarifas y vigencias reflejan fielmente las condiciones comerciales pactadas con el cliente.
+                                </label>
+                            </div>
+
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            backgroundColor: 'white',
+                            borderTop: '1px solid #E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsEmailModalOpen(false)}
+                                style={{
+                                    padding: '0.55rem 1rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#F8FAFC',
+                                    color: '#475569',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Guardar Sin Notificar
+                            </button>
+
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEmailModalOpen(false)}
+                                    style={{
+                                        padding: '0.55rem 1rem',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        color: '#64748B',
+                                        fontSize: '0.78rem',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!isAuthorizedChecked || isSendingEmail}
+                                    onClick={handleDispatchAgreementEmail}
+                                    style={{
+                                        padding: '0.55rem 1.3rem',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: (!isAuthorizedChecked || isSendingEmail) ? '#94A3B8' : '#16A34A',
+                                        color: 'white',
+                                        fontSize: '0.82rem',
+                                        fontWeight: 800,
+                                        cursor: (!isAuthorizedChecked || isSendingEmail) ? 'not-allowed' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(22, 163, 74, 0.25)'
+                                    }}
+                                >
+                                    {isSendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                                    Aprobar y Despachar Notificación
+                                </button>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             )}

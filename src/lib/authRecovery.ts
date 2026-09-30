@@ -33,10 +33,10 @@ export function validateRecoveryInput(
     const cleanPassword = String(newPassword ?? '').trim();
     const cleanConfirm = String(confirmPassword ?? '').trim();
 
-    if (cleanOtp.length !== 6) {
+    if (cleanOtp.length < 6 || cleanOtp.length > 8) {
         return {
             isValid: false,
-            error: '⚠️ El código de verificación debe tener exactamente 6 dígitos.',
+            error: '⚠️ El código de verificación debe tener entre 6 y 8 dígitos.',
         };
     }
 

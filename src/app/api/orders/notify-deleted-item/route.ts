@@ -63,7 +63,7 @@ export async function POST(req: Request) {
 
     const deletedItemsHtml = deletedItemsArray.map(item => `
       <div style="background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; padding: 12px 16px; margin: 8px 0; display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 18px; color: #ef4444;">⚠️</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <span style="font-size: 14px; font-weight: 700; color: #991b1b;">${item} (Agotado / No disponible)</span>
       </div>
     `).join('');
@@ -125,7 +125,8 @@ export async function POST(req: Request) {
         
         <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0;">
         <center>
-          <p style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; margin: 0;">Investments Cortés SAS • Del Campo a tu Negocio</p>
+          <p style="font-size: 11px; color: #64748b; font-weight: 700; margin: 0 0 2px 0;">Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común</p>
+          <p style="font-size: 10px; color: #0D7A57; font-weight: 600; margin: 0;">Gestión Pedidos: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com</p>
         </center>
       </div>
     `;

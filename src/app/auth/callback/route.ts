@@ -133,5 +133,7 @@ export async function GET(request: Request) {
         }
     }
 
-    return NextResponse.redirect(`${origin}/login?error=invalid_link`)
+    // 3. Si no hay parámetros en query string (ej: implicit flow donde los tokens viajan en el hash del navegador),
+    // redirigir limpiamente a la ruta de destino (ej: /login?mode=recovery) preservando el hash client-side.
+    return NextResponse.redirect(`${origin}${next}`)
 }

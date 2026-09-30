@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import nodemailer from 'nodemailer';
 
@@ -31,7 +31,9 @@ export async function POST(req: Request) {
         <td style="padding: 10px 10px; text-align: center; color: #64748B;">${item.unit || 'Kg'}</td>
         <td style="padding: 10px 14px; text-align: right; font-weight: 800; color: #16A34A;">${formatCop(item.client_proposed_price)}</td>
         <td style="padding: 10px 14px; text-align: center;">
-          <span style="background-color: #DCFCE7; color: #15803D; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 800;">✓ ACEPTADO</span>
+          <span style="background-color: #DCFCE7; color: #15803D; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 800;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><polyline points="20 6 9 17 4 12"/></svg>ACEPTADO
+          </span>
         </td>
       </tr>
     `).join('');
@@ -93,7 +95,7 @@ export async function POST(req: Request) {
 
       ${counterOfferedItems.length > 0 ? `
         <h3 style="font-size: 15px; color: #9A3412; margin: 28px 0 8px 0; font-weight: 800;">
-          ⚠️ Contrapropuesta de Precios en ${counterOfferedItems.length} Producto(s)
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A3412" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Contrapropuesta de Precios en ${counterOfferedItems.length} Producto(s)
         </h3>
         <p style="font-size: 13px; color: #64748B; margin: 0 0 10px 0;">
           Para los siguientes ítems, debido a las condiciones y costos de abastecimiento en campo, nos permitimos presentarle nuestra mejor tarifa posible:
@@ -144,8 +146,8 @@ export async function POST(req: Request) {
     </div>
 
     <div class="footer">
-      Investments Cortés S.A.S • NIT 901.393.217<br>
-      Del Campo a tu Negocio • Tel: +57 320 814 3557 • contacto@investmentscortes.com
+      Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común<br>
+      Operador Agro-Logístico • FruFresco Institucional • Tel: +57 301 542 1761 • contacto@investmentscortes.com • www.frufresco.com
     </div>
   </div>
 </body>

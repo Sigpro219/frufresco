@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.42 (PQRS Proactivas por Quiebre en Plaza con Auto-Liberación Poka-Yoke & Anexión D+1, Auditoría con Checkboxes Selectivos y Cortes AM/PM, Doble Consecutivo Fiscal FAC/NC, Exportación Contable World Office, Cartera B2B con Pagarés & Dossiers, Dashboard Lean con KPIs FTR/CoQ/MTTR/CRI/VQR/CDR/PAR, Run-Chart Histórico y RNC Físico)
+> **Versión:** 1.9.49 (Adendas de Modificación Parcial de Precios por Cosecha/Consumo con Justificación Agronómica & Despacho Unificado Diff Email/WhatsApp, Protocolo HITL de Notificaciones Transaccionales B2B, Banner de Alta Visibilidad, Audit Trail Forense)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -212,10 +212,11 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
   1. **Desacople Cloud de Ingesta (Anti-Rebote):** Queda prohibido el uso de reglas locales en clientes de correo de escritorio. La ingesta de `pedidos@frufresco.com` se gobierna en la nube mediante **Worker IMAP SSL No Destructivo** (o Mail Flow Rule en el centro de administración de Exchange), leyendo el buzón sin alterar cabeceras ni disparar auto-reenvíos.
   2. **Buffer de Gracia de Dos (2) Minutos:** Al aprobar un pedido en la Mesa de Trabajo, el acuse de confirmación se encola en `mail` con `scheduled_at = now() + interval '2 minutes'`. Si el operador realiza una corrección dentro de esta ventana, la remisión se actualiza sin enviar correos intermedios obsoletos al cliente.
   3. **Paridad Editorial con Remisión de Entrega Oficial:** El cuerpo del correo (y anexo descargable) utiliza estrictamente el diseño de la **Remisión Oficial de FruFresco** ([`Letterhead`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/commercial/billing/print/%5Bid%5D/page.tsx)):
-     - Membrete legal Investments Cortés S.A.S. con NIT.
+     - Membrete legal *Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común* con atención directa *301 542 1761*, `pedidos@frufresco.com` y `www.frufresco.com` (sin publicar la dirección física de la sede administrativa).
+     - Iconografía 100% vectorial **Lucide SVG** integrada inline (cero emojis unicode para evitar fallos de renderizado en clientes de escritorio).
      - Identificador `#PED-XXXX` y referencia de Orden de Compra del cliente (OC/OCC).
      - Razón social, sede de destino, fecha programada de despacho y franja horaria.
-     - Tabla canónica: `REF / SKU` | `PRODUCTO (con presentación y gramaje)` | `CANT` | `VALOR UNIT.` | `TOTAL` | `IVA`.
+     - Tabla canónica orientada al cliente: `PRODUCTO (descripción comercial completa, sin columna ni códigos internos SKU)` | `CANT.` | `VALOR UNIT.` | `TOTAL`.
      - Subtotal, IVA discriminado y Total oficial liquidado.
   4. **Diff Visual de Rectificación en Modificaciones Posteriores:**
      - Al guardar cambios en un pedido existente desde `/admin/orders/[id]` ([page.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/%5Bid%5D/page.tsx)), el endpoint `/api/orders/update` compara la versión anterior (`old_data`) contra la nueva (`new_data`).
@@ -729,6 +730,225 @@ Para salvaguardar la estricta concordancia fiscal con la DIAN y World Office Des
 
 ---
 
+
+### 7.10 Submódulo de Campañas Promocionales B2B (`commercial_campaigns`)
+
+#### A. Misión & Mecánica Promocional
+El submódulo de campañas (`/admin/commercial` pestaña Operaciones $\to$ Campañas Temporales) permite programar ajustes temporales de precios y ofertas por volumen para dinamizar la venta de cosechas pico o fidelizar cuentas corporativas.
+
+#### B. Modelo de Datos & Focalización (`commercial_campaigns`, `campaign_targets`, `campaign_items`)
+1. **Entidad `commercial_campaigns`:**
+   - `id`: UUID identificador.
+   - `name`: Título comercial de la campaña (ej. *"Semana del Aguacate Hass 15% OFF"*).
+   - `type`: Modalidad de liquidación:
+     * `'margin_adjustment'`: Ajuste porcentual sobre el precio base/modelo (descuento o recargo).
+     * `'fixed_price'`: Precio fijo promocional exacto ($ COP).
+   - `start_date` / `end_date`: Rango temporal estricto de vigencia.
+   - `status`: `'active'` | `'scheduled'` | `'expired'` | `'archived'`.
+2. **Focalización Granular por Cliente (`campaign_targets`):**
+   - `campaign_id` $\to$ `commercial_campaigns.id`.
+   - `profile_id` $\to$ `profiles.id` (asociación a clientes B2B seleccionados o masivo).
+3. **Productos en Promoción (`campaign_items`):**
+   - `campaign_id`, `product_id`, `value` (monto $ o % descuento), `value_type`.
+
+#### C. Interacción con la Jerarquía de Precios e Inmunidad de Acuerdos
+- Las campañas aplican en el **Nivel 3** de prevalencia tarifaria.
+- **Regla Inviolable de Inmunidad Contractual:** Si un cliente cuenta con un Acuerdo Comercial formal activo (`status = 'agreement'`), **la campaña jamás modifica ni perfora los precios de los SKUs pactados en dicho acuerdo**. La campaña solo modula productos de catálogo libre no cobijados por el contrato.
+
+---
+
+### 7.11 Submódulo de Modelos de Precios & Preformas de Cotización (`pricing_models`, `quote_templates`)
+
+#### A. Modelos Semilla Intocables & Estructura de Márgenes
+El sistema gobierna la fijación de tarifas institucionales mediante modelos de margen bruto (`/admin/commercial` pestaña Operaciones $\to$ Modelos de Precios):
+1. **Modelos Semilla Canónicos:**
+   - **General Institucional** (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`): Modelo base para el 100% de clientes B2B sin acuerdo especial (Margen promedio: ~20%).
+   - **Clientes Hogar / B2C** (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`): Tarifa minorista base mapeada en `products.base_price`.
+2. **Matriz de Sobrescritura por Producto (`pricing_rules`):**
+   - Permite ajustar el margen específico de un SKU dentro de un modelo (`margin_adjustment`) para productos ancla o de alta sensibilidad comercial.
+3. **Materialización & Sincronización Masiva (`pricing_model_prices`):**
+   - La función `batchRecalculateAndSyncPrices` regenera los precios proyectados aplicando Gross Margin $\frac{\text{Costo}}{1 - M}$, merma teórica y redondeo a $50 COP.
+
+#### B. Preformas & Plantillas de Cotización Rápida (`quote_templates`, `quote_template_items`)
+Para acelerar la emisión de propuestas a prospectos institucionales:
+1. **Plantillas por Segmento Gastronómico:**
+   - Listas maestras pre-configuradas (ej. *Preforma Restaurante Italiano*, *Preforma Hotel Desayunos*, *Preforma Casino 500 Pax*).
+2. **Estructura de Ítems:**
+   - `template_id`, `product_id`, `default_quantity`, `default_unit`, `presentation_override`.
+3. **Importación / Exportación Excel (.xlsx):**
+   - El equipo comercial puede descargar plantillas en Excel, ajustar gramajes o variedades en masa y subirlas en 1 clic.
+
+---
+
+### 7.12 Submódulo de Dashboard Comercial, Business Intelligence & Georreferenciación Zonal (`CommercialUnifiedDashboard`)
+
+#### A. Misión & Telemetría en Tiempo Real
+El Dashboard Comercial centraliza la inteligencia de negocios (BI) de ventas, rentabilidad real y cobertura territorial (`/admin/commercial` pestaña Dashboard Comercial BI).
+
+#### B. Mapa Georreferenciado de Nodos Comerciales (Bogotá & Sabana)
+1. **Mapeo de Zonas / Localidades:**
+   - Integra visualmente con Google Maps (`@vis.gl/react-google-maps`) la distribución de clientes y entregas en 10 cuadrantes logísticos:
+     * *Bogotá Norte:* Usaquén, Suba.
+     * *Bogotá Nororiente / Gourmet:* Chapinero, Teusaquillo, Barrios Unidos.
+     * *Bogotá Occidente / Sur:* Engativá, Fontibón, Kennedy, Puente Aranda, Bosa, Ciudad Bolívar.
+     * *Sabana Norte & Occidente:* Chía, Cota, Funza, Mosquera, Soacha.
+2. **Cálculo de Densidad & Centroide Operativo:**
+   - Referencia espacial de todas las rutas respecto al **Hub Central Corabastos** (`lat: 4.6280, lng: -74.1534`).
+
+#### C. Métricas Clave de Negocio (KPIs)
+1. **Ventas Brutas & Netas ($ COP):** Con desglose por canal (B2B Institucional vs B2C Hogar).
+2. **Margen Bruto Ponderado (%):** Evaluación en caliente del Gross Margin global.
+3. **Alertas de Erosión de Margen (Andon Comercial):** Detección de productos vendidos por debajo del umbral mínimo de rentabilidad ($le 12\%$).
+4. **Desempeño de KAMs & Cumplimiento de Cuotas:** Trazabilidad de cuentas asignadas, volumen facturado y tasa de retención por ejecutivo de cuenta.
+5. **Filtros Temporales Reactivos:** `Hoy`, `7 días`, `15 días`, `30 días`, `Mes en curso`, `Histórico total`.
+
+---
+
+### 7.13 Submódulo de Pipeline de Ingesta Comercial, Digestor de Licitaciones RFQ & Matching IA (`CommercialInboxModule`)
+
+#### A. Misión del Digestor de Licitaciones
+El Inbox Comercial (`/admin/commercial` pestaña Buzón Comercial / Ingesta) automatiza la recepción de correos con pliegos de licitación, solicitudes de cotización (RFQ) y listas de compra de clientes institucionales.
+
+#### B. Arquitectura del Procesamiento de Licitaciones (`/api/commercial/analyze-proposal`)
+1. **Extracción Multimodal de Adjuntos:**
+   - Detecta y extrae archivos Excel (`.xlsx`, `.xls`, `.csv`) y documentos PDF adjuntos en el correo (`mail` con `inbox_type = 'commercial'`).
+2. **Visor de Hojas de Cálculo Embebido:**
+   - Permite al analista comercial previsualizar las pestañas y filas del Excel del cliente sin descargar archivos locales, con selector de zoom (75% a 125%).
+3. **Matching Inteligente con Catálogo FruFresco:**
+   - El motor de IA compara las descripciones del cliente (ej. *"Cebolla cabezona limpia x bulto 50kg"*) y las vincula con el SKU canónico, unidad de medida y factor de conversión correspondiente.
+4. **Simulador de Doble Versión (Versión 1 vs Versión 2):**
+   - Genera dos escenarios de propuesta comercial:
+     * *Versión 1 (Estándar):* Precios calculados con el margen institucional del 20%.
+     * *Versión 2 (Agresiva / Volumen):* Precios optimizados con descuento por volumen ($ge 15\%$ margen de contención).
+5. **Activación de Acuerdo en 1 Clic (`/api/commercial/activate-agreement`):**
+   - Al acordar los términos, el analista pulsa `[Activar Acuerdo Comercial]`, creando de inmediato el contrato en `quotes` (`status = 'agreement'`) con sus ítems tarifados y vigencia formal.
+6. **Contraoferta Humanizada por Email (`/api/mail/send-reply`):**
+   - Redacta y envía la respuesta formal con el desglose de precios cotizados, tiempos de entrega y condiciones comerciales directamente al buzón del comprador.
+
+---
+
+### 7.14 Submódulo de Maestro de Clientes CRM B2B, Relación Matriz-Sucursal & Expedientes Digitales (`ClientsModule`)
+
+#### A. Arquitectura de Cuentas B2B & Jerarquía Matriz-Sucursal
+El CRM Maestro (`/admin/commercial` pestaña Gestión de Clientes / CRM) gobierna la estructura de empresas y sucursales:
+1. **Jerarquía Corporativa:**
+   - **Empresa Matriz (`is_corporate_parent = true`):** Razón social principal, NIT matriz, cupo de crédito global consolidado y modelo de precios institucional.
+   - **Sucursales / Sedes de Entrega (`parent_id = matriz.id`):** Puntos físicos de despacho (ej. *Restaurante La Casona - Sede Chicó*), con dirección, coordenadas geográficas (`latitude`, `longitude`), ventana de recepción y contacto del ecónomo en sitio.
+2. **Prevalencia de Precios y Acuerdos:**
+   - Si la sucursal tiene acuerdo propio, rige sobre el de la matriz.
+   - Si no tiene acuerdo propio, hereda automáticamente los precios del acuerdo de la matriz o su modelo asignado.
+
+#### B. Expediente Digital B2B (Dossier Tributario & Crediticio)
+Toda cuenta institucional cuenta con su expediente estructurado:
+1. **Datos Legales & Tributarios:** RUT digital (`rut_url`), Cámara de Comercio (`mercantile_registry_url`), Código CIIU (`economic_activity_code`), y banderas fiscales (`iva_responsible`, `is_gran_contribuyente`, `is_autorretenedor`, `is_regimen_simple`).
+2. **Contactos Operativos & Administrativos:**
+   - Encargado de Compras / Ecónomo.
+   - Responsable de Tesorería / Pagos (`collection_responsible_name`, `email`, `phone`).
+   - Correos de facturación electrónica (`additional_billing_emails`).
+3. **Referencias Comerciales:** Registro de 2 proveedores comerciales auditados (`comm_ref_1_*`, `comm_ref_2_*`).
+4. **Pagaré en Blanco con Carta de Instrucciones:** Soporte legal firmado que respalda el cupo de crédito otorgado.
+
+#### C. Parámetros de Operación Logística por Sede
+- **Ventana Horaria de Entrega:** Franja permitida de descarga (ej. `06:30 - 10:00`).
+- **Manejo de Canastillas (`needs_crates`):** Indicador de intercambio de canastillas plásticas en muelle.
+- **Copias de Remisión (`remission_copies`):** Número de tantos impresos requeridos en entrega física.
+- **Tipo de Documento (`document_requirement`):** `'remision_post_entrega'` (90% clientes) vs `'factura_pre_despacho'`.
+
+#### D. Pipeline de Prospectos / Leads (`leads`)
+- Registro ágil de prospectos comerciales con origen de contacto, estado de negociación y conversión determinista a perfil B2B activo (`profiles`) sin pérdida de trazabilidad.
+
+---
+
+### 7.15 Submódulo de Acuerdos Comerciales B2B, Listas de Precios Contractuales & Ingestor Excel (`CommercialAgreementsModule`)
+
+> **Ruta Canónica:** `/admin/commercial?tab=clients&clientTab=agreements` ([ClientsModule.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/components/ClientsModule.tsx) y [CommercialAgreementsModule.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/components/CommercialAgreementsModule.tsx))  
+> **Ruta de Impresión Oficial:** `/b2b/agreements/[id]/print` ([page.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/b2b/agreements/%5Bid%5D/print/page.tsx))  
+> **Tablas Nucleares:** `quotes` (`status = 'agreement'`), `quote_items`, `profiles`, `products`, `agreement_audit_logs`.
+
+#### A. Misión del Dominio de Acuerdos Comerciales
+El submódulo de Acuerdos Comerciales gobierna la formalización jurídica y financiera de convenios de precios congelados para cuentas B2B institucionales. Constituye el **Nivel 1 y Nivel 2 de prevalencia de precios** del ecosistema FruFresco: toda orden de compra ingresada por correo o vía manual hereda automáticamente las tarifas pactadas en el acuerdo activo del cliente o su casa matriz, blindando la rentabilidad y garantizando el cumplimiento contractual.
+
+#### B. Telemetría en Tiempo Real & KPIs del Portafolio de Contratos
+1. **Contador de Acuerdos por Estado:**
+   - 🟢 **Activos:** Contratos vigentes (`valid_until >= now()`).
+   - 🟡 **Por Vencer ($\le 7$ días):** Alertas de semáforo ámbar para iniciar renegociación o prórroga antes de la expiración.
+   - 🔴 **Vencidos:** Contratos cuya fecha límite expiró (`valid_until < now()`), donde el cliente revierte a modelo de precios base salvo renovación.
+2. **Margen Bruto Ponderado del Portafolio:**
+   - Promedio de rentabilidad calculado en base a todos los ítems de contratos activos:
+     $$\text{Margen Ponderado} = \frac{\sum (\text{Precio Unitario} - \text{Costo Base})}{\sum \text{Precio Unitario}} \times 100$$
+3. **Valorización Total de Contratos Activos:** Sumatoria monetaria de las listas institucionales vigentes.
+4. **Acordeón Poka-Yoke:** Control de colapso y expansión (`isMainKpiCollapsed`) para maximizar la superficie de trabajo en pantallas de alta densidad.
+
+#### C. Asistente de Creación de Acuerdos en 3 Pasos (`isCreateModalOpen`)
+
+```
+ [PASO 1: CLIENTE & VIGENCIA]       [PASO 2: INGESTA & MATCHING EXCEL]       [PASO 3: CONFIRMACIÓN & PERSISTENCIA]
+ ┌───────────────────────────┐      ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
+ │ • Selección B2B o Matriz  │      │ • Drag & Drop Excel / CSV         │    │ • Resumen de Margen Promedio      │
+ │ • Nomenclatura Automática │ ───► │ • Parser extractRowsFromExcelSheet│───►│ • Alerta de SKUs Inactivos        │
+ │ • Presets de Duración     │      │ • Fuzzy Matching con Catálogo     │    │ • Inserción Transaccional Atómica │
+ │   (2 sem, 1 m, 3 m, pers) │      │ • Cálculo Costo Base vs Margen    │    │   quotes + quote_items            │
+ └───────────────────────────┘      └───────────────────────────────────┘    └───────────────────────────────────┘
+```
+
+1. **Paso 1: Selección de Cliente & Replicación Multi-Sucursal:**
+   - **Modo Individual:** Asignación directa a una cuenta o sede.
+   - **Modo Multi-Sucursal (Casas Matrices):** Permite replicar de forma simultánea e idéntica la lista de precios a todas las sedes asociadas a una matriz corporativa (`parent_id = matriz.id`), generando contratos independientes pero sincronizados.
+   - **Nomenclatura Canónica:** Generación determinista del nombre de la lista: `[NIT] - [RAZÓN SOCIAL] - [VIGENCIA]`.
+   - **Fechas & Vigencia:** Configuración de `start_date` y `valid_until` con presets directos.
+
+2. **Paso 2: Ingestor Inteligente de Hojas de Cálculo (`extractRowsFromExcelSheet` & `parsePriceValue`):**
+   - **Detección Heurística de Columnas:** Escanea automáticamente las primeras 25 filas del archivo buscando columnas de:
+     * *Código:* `accounting_id`, `cod`, `sku`, `ref`, `id`.
+     * *Nombre:* `producto`, `nombre`, `descripcion`, `detalle`, `articulo`.
+     * *Precio:* `precio`, `valor`, `tarifa`, `costo`, `unitario`, `acordado`.
+   - **Sanitización Numérica Financiera (`parsePriceValue`):** Maneja formatos mixtos con signos de pesos (`$`), identificadores (`COP`, `EUR`), espacios, y distingue entre separadores de miles y decimales con coma o punto (`12.500,50` vs `12,500.50`).
+   - **Matching Fuzzy con Catálogo Maestro:** Vincula cada fila con el `product_id` correspondiente en la base de datos `products`.
+   - **Detección de SKUs Inactivos:** Identifica productos dados de baja en bodega (`is_active = false`), advirtiendo al operador y permitiendo su reactivación en lote.
+
+3. **Paso 3: Validación Financiera & Persistencia Atómica:**
+   - Guarda el encabezado en `quotes` con `status = 'agreement'`, `quote_number` consecutivo, y los renglones detallados en `quote_items` con `cost_basis`, `margin_percent`, `unit_price`, `iva_rate`, e `iva_amount`.
+
+#### D. Drawer Lateral de Detalle & Operaciones In-Situ (`selectedAgreement`)
+1. **Telemetría Lateral:** Despliegue sin navegación que muestra resumen fiscal del cliente, NIT, dirección, teléfono y cuenta regresiva de días hasta la expiración.
+2. **Edición In-Situ de Precios:**
+   - Permite al analista hacer clic sobre cualquier celda de precio acordado para modificarla en tiempo real.
+   - Al presionar `Enter` o el botón de confirmación, se actualiza `unit_price`, se recalcula el margen bruto porcentual, y se registra la traza inmutable en `agreement_audit_logs` con el autor (`user.id`), precio previo, nuevo precio y timestamp.
+3. **Adición de Productos en Caliente (`isAddProductModalOpen`):**
+   - Modal interno para buscar productos del catálogo maestro, cotizar su precio acordado validando el costo base y margen en vivo, e insertarlo de inmediato en el acuerdo sin recrear la lista.
+4. **Reactivación Automática de SKUs Inactivos (`handleBulkActivateInactiveSkus`):**
+   - Poka-yoke para activar con un clic todos los productos inactivos en bodega que estén incluidos en el acuerdo contractual.
+
+#### E. Prórroga, Renovación & Plantilla Maestra Institucional
+1. **Prórroga / Extensión Rápida de Vigencia (`renewTarget`):**
+   - Modal asistido para actualizar `valid_until` de contratos vencidos o en alerta, conservando intactos los precios pactados y el histórico.
+2. **Plantilla Maestra Institucional (`masterTemplate`):**
+   - Banco de precios maestro corporativo que permite cargar un Excel base y aplicarlo en bloque a cualquier cliente o conjunto de contratos.
+
+#### F. Formato de Impresión Ejecutiva & Exportación
+1. **Documento de Acuerdo Formal (`/b2b/agreements/[id]/print`):**
+   - Formato Carta (*Letter Portrait*) con membrete de *Investments Cortés S.A.S. (NIT 901.393.217-5)*, tabla completa de ítems pactados, unidad de medida, tarifa acordada, IVA y casillas de firma del representante comercial y el cliente.
+2. **Exportación Excel:** Descarga instantánea de la matriz de precios a hoja `.xlsx` para auditoría externa o entrega al economato del cliente.
+
+#### G. Protocolo de Notificaciones Transaccionales & Banner de Alta Visibilidad (HITL)
+1. **Flujo de Trabajo por Lotes (Zero Interruption Workflow):**
+   - La edición in-situ de precios en la tabla no dispara popups o modales intrusivos fila por fila. Cada guardado persiste atómicamente el cambio en `quote_items` y registra la traza forense en `audit_logs` manteniendo al operador en su flujo natural de captura.
+2. **Banner de Alta Visibilidad de Novedades de Precios:**
+   - Apenas se registra 1 o más productos modificados en la sesión, se activa un banner azul corporativo destacado sobre la tabla:
+     * Telemetría reactiva: `Novedades de Precios Registradas (N productos modificados) ● Pendiente Notificar`.
+     * Botón primario de acción: **`[✉ Notificar al Cliente]`**.
+3. **Botón Dinámico de Cabecera:**
+   - La barra superior sincroniza el botón con badge ámbar: `✉ Notificar Novedades (N modificados)`.
+4. **Modal Asistido de Despacho HITL (`AgreementEmailDispatchModal`):**
+   - Muestra el consolidado de auditoría (responsable, fecha/hora, cliente/sucursal).
+   - Selector dinámico de destinatarios (`profiles.email`, `additional_billing_emails`).
+   - Previsualización de la tabla comparativa Diff (precios anteriores tachados, nuevos precios pactados, variación $\Delta$ en COP, sin códigos SKU).
+   - Checkbox obligatorio: `[x] Autorizo el despacho formal de esta notificación por correo electrónico`.
+   - Botón primario: `[Aprobar y Despachar Notificación]` (encolado asíncrono en `mail` + worker `/api/mail/process`).
+   - Botón secundario: `[Guardar Sin Notificar]` (permite conservar los cambios en base de datos sin emitir correos).
+
+---
+
 ## 8. Módulo de Inventario: Balance Diario de Masa (24 Columnas), Kardex & Células de Trabajo
 
 ### 8.1 Misión del Sistema & Principio de Masa Cerrada
@@ -1183,21 +1403,47 @@ Para subsanar registros históricos de abarrotes configurados erróneamente en `
 
 ---
 
-## 10. Módulo de Autenticación, Seguridad Multi-Rol, Gobernanza de Idioma & Modelos de IA (SDD v1.9.1)
+## 10. Módulo de Autenticación, Seguridad Multi-Rol, Gobernanza de Idioma & Modelos de IA (SDD v2.0 - Estado Ideal Industrial)
 
-### 10.1 Principios Rectores del Ciclo de Vida de Identidad
+### 10.1 Principios Rectores del Ciclo de Vida de Identidad & Autenticación
 
 1. **Gobernanza Incondicional de Idioma (Español Canónico):**
    - La plataforma FruFresco es un sistema de origen y operación nacional colombiana. **El idioma por defecto en todas las rutas es inalterablemente Español (`es`)**.
    - Bajo ninguna circunstancia el sistema debe conmutar a inglés por variables de entorno, configuración regional del navegador o fallbacks vacíos.
    - El idioma Inglés (`en`) se activa **única y exclusivamente** si el usuario presiona de manera explícita el botón `[EN]` en el conmutador de la barra de navegación.
 
-2. **Autoservicio Seguro de Recuperación de Contraseña (Self-Service Password Reset):**
-   - Todo usuario (colaborador o cliente) tiene derecho a restablecer su credencial de acceso de forma 100% autónoma sin recurrir a soporte técnico ni a administradores de base de datos.
-   - El flujo se canaliza vía `supabase.auth.resetPasswordForEmail()` con un token temporal de un solo uso despachado al correo registrado (ej. Gmail).
-   - Al abrir el enlace seguro, el sistema expone el formulario de actualización de clave (`supabase.auth.updateUser({ password })`), restablece la sesión y redirige al usuario según su rol.
+2. **Protocolo Canónico de Recuperación de Contraseñas (Motor OTP de 6 Dígitos & Enlace Seguro Dual):**
+   - Todo usuario (colaborador interno o cliente institucional B2B/B2C) tiene derecho a restablecer su credencial de acceso de forma 100% autónoma y en autoservicio.
+   - **Flujo Principal (Código OTP Numérico de 6 Dígitos):**
+     - La interfaz de `/login` solicita el correo y despacha un código OTP efímero de 6 dígitos mediante `supabase.auth.resetPasswordForEmail()`.
+     - El usuario digita el código en una caja de entrada monoespaciada optimizada para móviles (`inputMode="numeric"`, `maxLength={6}`).
+     - La validación y cambio de clave se ejecutan atómicamente mediante `supabase.auth.verifyOtp({ email, token, type: 'recovery' })` (con fallback transparente a `type: 'email'`) seguido de `supabase.auth.updateUser({ password })`.
+     - Al completarse con éxito, el sistema limpia la bandera `needs_password_change = false` en `profiles` y confirma con feedback visual inmediato.
+   - **Flujo Secundario (Enlace Mágico PKCE / Token Hash):**
+     - Si el usuario hace clic directo en el enlace del correo, `/auth/callback` procesa el código PKCE o hash token en el servidor (`@supabase/ssr`), establece la sesión segura y lo deposita en `/login?mode=recovery` listo para digitar su nueva clave.
 
-3. **Arquitectura Multi-Rol: Selector de Espacio de Trabajo (Identity Switcher):**
+3. **Aprovisionamiento Just-In-Time Garantizado (Zero-Orphan Auth Protocol):**
+   - **Problema Estructural Prevenido:** Ningún colaborador o cliente institucional registrado en la base de datos de negocio (`profiles` / `clients`) puede quedar huérfano ni recibir errores de *«Usuario no encontrado»* al intentar recuperar su contraseña.
+   - **Mecanismo de Despacho Garantizado:**
+     - Al solicitar la recuperación de contraseña (o al registrar un usuario desde el panel de administración), el backend verifica la existencia del registro en `auth.users`.
+     - Si el usuario existe en `profiles` pero aún no ha sido sincronizado en `auth.users`, el motor de autenticación lo aprovisiona automáticamente con entropía criptográfica segura (`crypto.randomUUID()`) mediante el Admin SDK de Supabase antes de despachar el código OTP.
+     - **Garantía Operativa:** Tasa de éxito del 100% en solicitudes de autoservicio sin intervención humana de soporte técnico.
+
+4. **Blindaje contra Enumeración de Cuentas (Estándar OWASP Top 10):**
+   - Por principio estricto de ciberseguridad industrial, la interfaz pública de login **nunca revela si un correo electrónico existe o no en la base de datos**.
+   - Al presionar *"Enviar Código de Recuperación"*, la pantalla siempre avanza al paso de verificación con un mensaje neutro de confirmación:
+     > *«Si tu correo electrónico está registrado en la plataforma, recibirás un código de verificación de 6 dígitos para restablecer tu clave privada.»*
+   - Previene que atacantes o competidores mapeen cuentas corporativas o correos de ejecutivos mediante ataques de fuerza bruta.
+
+5. **Protección Anti-Spam & Rate Limiting en Cliente (Cooldown de 60 Segundos):**
+   - Al disparar una solicitud de recuperación, el botón de reenvío se desactiva e inicia un temporizador regresivo de **60 segundos** (`resendCooldown`).
+   - Evita la saturación de cuotas de correo transaccional y previene que el usuario sobreescriba tokens en su bandeja con clics repetidos.
+
+6. **Forzado de Cambio de Contraseña Inicial (`needs_password_change`):**
+   - Toda cuenta nueva creada administrativamente o restablecida con clave temporal posee la bandera `needs_password_change: true`.
+   - Al iniciar sesión, el sistema intercepta la navegación, bloquea el acceso a cualquier módulo operativo o comercial y despliega obligatoriamente la pantalla de *Configuración de Contraseña Privada*.
+
+7. **Arquitectura Multi-Rol: Selector de Espacio de Trabajo (Identity Switcher):**
    - Cuando un correo electrónico está asociado a más de un perfil en la tabla `profiles` (ej. colaboradores internos que a su vez son clientes corporativos B2B o administran múltiples razones sociales/sucursales):
      - El login autentica las credenciales maestras y detecta la multiplicidad de perfiles.
      - En lugar de forzar una redirección arbitraria, despliega el **Selector de Espacio de Trabajo ("Workspace Switcher")**:
@@ -1205,27 +1451,37 @@ Para subsanar registros históricos de abarrotes configurados erróneamente en `
        - `[ 🛒 Portal Institucional (Razón Social) ]` $\rightarrow$ Enruta a `/b2b/dashboard` y restringe la vista estrictamente a los precios, pedidos y facturas de la empresa seleccionada.
    - Si el correo posee un único perfil (comportamiento estándar), el enrutamiento es instantáneo sin pasos intermedios.
 
-4. **Aislamiento Categórico de Permisos (RBAC):**
+8. **Aislamiento Categórico de Permisos (RBAC):**
    - Los clientes (`role IN ('b2b_client', 'b2c_client', 'client')`) **NUNCA** tienen acceso a la barra de herramientas de "Operaciones", rutas administrativas (`/admin/*`) ni operativas (`/ops/*`), independientemente del valor del campo legacy `profile_type`.
    - Su experiencia está confinada al **Portal Institucional** (`/b2b/dashboard`), donde los datos se filtran estrictamente por su `profile.id` y `parent_id`.
 
 ### 10.2 Criterios de Aceptación Gherkin
 
-#### Escenario 1: Olvido de Contraseña con Recuperación Autónoma
+#### Escenario 1: Olvido de Contraseña con Recuperación Autónoma por Código OTP de 6 Dígitos
 - **Given** que un colaborador o cliente introduce su correo en `/login` pero no recuerda su contraseña.
-- **When** hace clic en *"¿Olvidaste tu contraseña?"*, digita su correo y presiona *"Enviar enlace de recuperación"*.
+- **When** hace clic en *"¿Olvidó su contraseña?"*, digita su correo y presiona *"Enviar código de verificación"*.
 - **Then**:
-  1. Supabase Auth despacha un correo con enlace seguro a la bandeja del usuario.
-  2. Al pulsar el enlace, la interfaz muestra el modal de *Nueva Contraseña* en perfecto español.
-  3. El usuario define su clave y el sistema actualiza su perfil sin intervención humana de soporte.
+  1. El sistema muestra la confirmación neutra de despacho e inicia el cooldown de 60 segundos.
+  2. Si el usuario existía solo en `profiles`, el motor de autenticación lo aprovisiona al vuelo en `auth.users`.
+  3. Supabase Auth despacha un código de 6 dígitos al correo del usuario.
+  4. El usuario introduce los 6 dígitos y su nueva clave de mínimo 6 caracteres en la pantalla de login.
+  5. El sistema valida el OTP, actualiza la contraseña, apaga `needs_password_change` y confirma el éxito visualmente.
 
-#### Escenario 2: Ingreso de Usuario con Doble Identidad (Yina / Camilo)
-- **Given** un usuario autenticado cuyo correo posee un perfil de colaborador (`LIDER DE INVENTARIO`) y dos perfiles de cliente B2B (`YINA CORTES AMAYA`).
+#### Escenario 2: Ingreso de Usuario con Doble Identidad (Colaborador + Cliente B2B)
+- **Given** un usuario autenticado cuyo correo posee un perfil de colaborador (`LIDER DE INVENTARIO`) y dos perfiles de cliente B2B (`RESTAURANTE EL PORTAL`).
 - **When** completa exitosamente su usuario y contraseña.
 - **Then**:
   1. El sistema no lo redirige de golpe; despliega la tarjeta interactiva de selección de rol.
   2. Si elige *FruFresco Operaciones*, ingresa al ERP con acceso restringido a su módulo de inventarios.
-  3. Si elige *Portal Institucional (Yina Cortes Amaya)*, ingresa al `/b2b/dashboard` viendo únicamente la cartera, pedidos y acuerdos de dicha sucursal.
+  3. Si elige *Portal Institucional (Restaurante El Portal)*, ingresa al `/b2b/dashboard` viendo únicamente la cartera, pedidos y acuerdos de dicha sucursal.
+
+#### Escenario 3: Forzado de Cambio de Contraseña en Primer Acceso
+- **Given** un colaborador recién contratado al que se le asignó una clave temporal.
+- **When** inicia sesión por primera vez con su clave temporal.
+- **Then**:
+  1. El sistema detecta `profile.needs_password_change === true`.
+  2. Bloquea el acceso a `/admin/*` y muestra el formulario de cambio obligatorio de clave.
+  3. Tras guardar una clave segura de mínimo 6 caracteres, `needs_password_change` pasa a `false` y se habilita la navegación al ERP.
 
 ### 10.3 Centinela de Gobernanza de Modelos IA & Detección de Obsolescencia (SDD v1.9.1 / gemini-3.8-flash)
 
@@ -1545,6 +1801,34 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
   1. El sistema ejecuta la paginación secuencial en bloques de 1.000 registros.
   2. El mapa en memoria de acuerdos `agreementPrices` registra el 100% de los acuerdos sin omisiones.
   3. Ningún contrato ubicado después de la fila 1.000 queda huérfano de precios en el cliente web.
+
+### 11.10 Adendas de Modificación Parcial de Precios por Cosecha/Consumo con Justificación Agronómica & Despacho Unificado Diff (SDD v1.9.49)
+
+1. **Principio de Ajuste Parcial sin Destrucción Contractual:**
+   - En contratos institucionales (HORECA / Food Service), los acuerdos comerciales congelan más de 100-200 productos. Ante fluctuaciones climáticas, de cosecha o de plaza, el sistema permite realizar **modificaciones parciales de precios exclusivamente para el subconjunto de productos afectados** (ej. 5 a 15 SKUs), preservando inalterados todos los demás precios y condiciones del acuerdo.
+
+2. **Justificación Obligatoria de Abastecimiento (Compliance de Compras):**
+   - Toda variación de precio (al alza o a la baja) debe capturar o seleccionar una **Justificación de Abastecimiento** formal orientada a los auditores y gerentes de compras del cliente:
+     - 🌧️ *Menor ingreso de fruta fresca; oferta limitada en cosecha / clima.*
+     - 📉 *Escasez temporal por clima; baja disponibilidad.*
+     - 🌾 *Pico de cosecha; abundancia de producto nacional (Baja de precio).*
+     - ❄️ *Disminución en cosechas de zonas frías; menor oferta en mercado.*
+     - 🚜 *Variación regional de flete o insumos agrícolas.*
+     - ✍️ *Justificación personalizada libre.*
+
+3. **Reuso Unificado del Motor de Notificación Diff (`PRICE_UPDATE_DIFF`):**
+   - Las modificaciones parciales se integran nativamente con el motor de notificaciones existente (`src/lib/emailTemplates.ts`).
+   - La plantilla de correo y el texto transaccional de WhatsApp incorporan la **quinta columna de Justificación de Abastecimiento** junto con los badges automáticos de variación (`🔴 +$X Sube` / `🟢 -$X Baja`).
+   - El banner de alta visibilidad en el Drawer de acuerdos detecta los productos modificados y permite al comercial revisar las justificaciones y despachar la notificación formal en 1 solo clic.
+
+#### Escenario 9: Modificación Parcial de Precios con Justificación Agronómica y Despacho Diff
+- **Given** un acuerdo comercial activo con el cliente "Diplomat Embajada Hotel Tryp" con 148 productos.
+- **When** el ejecutivo comercial abre el acuerdo y modifica el precio de "Fresa Richy" de \$5.200 a \$5.900 con justificación "Menor ingreso de fruta fresca; oferta limitada en cosecha", y "Limón Tahití" de \$5.400 a \$4.900 con justificación "Pico de cosecha; abundancia de producto".
+- **Then**:
+  1. El sistema persiste los nuevos precios en `quote_items` y registra en `audit_logs` la acción `UPDATE_quote_item_price` con la justificación agronómica en `details.justification`.
+  2. El banner reactivo en el Drawer indica: `Novedades de Precios Registradas (2 productos modificados) ● Pendiente Notificar`.
+  3. Al pulsar `[✈️ Notificar al Cliente]`, el modal de despacho precarga los 2 ítems con sus precios anteriores, nuevos, variación (`Sube`/`Baja`) y la justificación de abastecimiento respectiva.
+  4. El correo HTML y el mensaje de WhatsApp se generan con la tabla de 5 columnas oficial lista para autorizar por la mesa de compras del cliente.
 
 ---
 
@@ -3293,3 +3577,305 @@ Para erradicar la fricción y el colapso operativo en cocinas HORECA cuando un p
   3. **Caso A (Respuesta a Tiempo a las 04:45 AM):** El cliente acepta la sustitución; el sistema reemplaza el SKU en `order_items` y bodega empaca 20 kg de Papa Sabanera.
   4. **Caso B (Timeout sin Respuesta a las 05:00 AM):** Al vencer el temporizador, el sistema ejecuta la Auto-Liberación Poka-Yoke: retira los 20 kg de Papa R-12, recalcula la remisión sin cobro, asienta los 20 kg en la Columna K de Inventarios y libera el despacho para salida puntual a las 06:00 AM.
   5. **Caso C (Respuesta Tardía a las 09:30 AM):** El cliente solicita que le envíen la papa; el sistema no desvía el camión y anexa automáticamente los 20 kg al pedido programado de mañana ($D+1$) del restaurante.
+
+
+#### Escenario 69: Campañas Promocionales B2B y Blindaje de Inmunidad de Acuerdos
+- **Given** el cliente corporativo "Club El Nogal" con un Acuerdo Comercial formal activo que pacta la "Fresa Selección" a $8.000 COP/kg.
+- **And** el área comercial lanza la campaña "Semana de la Fresa 20% OFF" (`commercial_campaigns`) que fija el precio promocional en $6.500 COP/kg para clientes generales.
+- **When** se procesa un pedido de 50 kg de Fresa Selección para "Club El Nogal".
+- **Then**:
+  1. El motor de resolución de precios evalúa la jerarquía tarifaria (Nivel 1 Acuerdo vs Nivel 3 Campaña).
+  2. Por el principio inviolable de Inmunidad Contractual, el pedido liquida la Fresa a **$8.000 COP/kg** (precio contractual acordado).
+  3. Los clientes sin acuerdo comercial activo reciben el precio promocional de la campaña de $6.500 COP/kg.
+
+#### Escenario 70: Modelos de Precios Dinámicos y Preformas de Cotización por Segmento
+- **Given** la necesidad de cotizar el suministro mensual de frutas y verduras para un nuevo hotel con 3 restaurantes.
+- **When** el ejecutivo comercial abre `/admin/commercial/quotes/create`, selecciona el cliente y elige la Preforma "Hotel Gourmet Buffet".
+- **Then**:
+  1. El formulario pre-carga automáticamente los 45 SKUs típicos de hotelería con sus unidades y calibres predeterminados.
+  2. Los precios unitarios se calculan reactivamente sobre el Modelo "General Institucional" aplicando la fórmula de Gross Margin $\frac{\text{Costo}}{1 - 0.20}$ y redondeo a $50 COP.
+  3. El comercial genera la cotización formal con consecutivo `COT DDMM XXXX` y vigencia legal de 8 días en menos de 60 segundos.
+
+#### Escenario 71: Dashboard Comercial BI, Georreferenciación Zonal y Alertas de Margen
+- **Given** una jornada comercial con 60 pedidos institucionales distribuidos en Bogotá y Sabana Norte.
+- **When** la gerencia comercial consulta el Dashboard BI (`/admin/commercial` pestaña Dashboard Comercial).
+- **Then**:
+  1. El mapa interactivo dibuja los nodos de entrega agrupados por las 10 zonas logísticas con indicadores de volumen y ticket promedio.
+  2. El sistema alerta visualmente si algún SKU presenta erosión de margen ($le 12\%$) debido a fluctuaciones no autorizadas en Corabastos.
+  3. Se despliegan las cuotas de venta y cumplimiento de los KAMs asignados con datos consolidados en tiempo real.
+
+#### Escenario 72: Ingesta Comercial de RFQ/Licitaciones con Visor Excel y Matching IA
+- **Given** la recepción de un correo electrónico en `mail` (`inbox_type = 'commercial'`) de "Colegio San Carlos" con un archivo adjunto "Licitacion_Frutas_2026.xlsx".
+- **When** el analista comercial abre el correo en el Inbox Comercial y pulsa `[Analizar Licitación / Propuesta]`.
+- **Then**:
+  1. El visor embebido despliega las hojas de cálculo del archivo Excel con control de zoom sin necesidad de descargas locales.
+  2. El endpoint `/api/commercial/analyze-proposal` extrae los 30 ítems solicitados y los vincula automáticamente con los SKUs canónicos de FruFresco.
+  3. El sistema pre-calcula los costos efectivos y presenta la matriz de propuesta para revisión del analista.
+
+#### Escenario 73: Negociación Multi-Versión y Conversión Directa de Propuesta a Acuerdo Comercial
+- **Given** una propuesta de licitación analizada con dos versiones proyectadas (Versión 1 Estándar al 20% vs Versión 2 Competitiva al 16%).
+- **When** el cliente acepta los términos de la Versión 2 y el analista pulsa `[Activar Acuerdo Comercial]`.
+- **Then**:
+  1. El endpoint `/api/commercial/activate-agreement` genera atómicamente el registro en `quotes` con `status = 'agreement'`, fecha de inicio y vigencia.
+  2. Se persisten los ítems con sus precios congelados en `quote_items` y el nombre canónico `[Razón Social] - [DD-MM-AA]`.
+  3. A partir de ese instante, toda orden ingresada por el colegio toma automáticamente estos precios pactados en el Nivel 1 de la jerarquía.
+
+#### Escenario 74: Gestión de Jerarquía Matriz-Sucursal y Herencia Tarifaria en CRM B2B
+- **Given** la cadena gastronómica "Grupo Restaurantero SAS" (Matriz) con 4 sucursales activas (Sede Parque 93, Sede Zona G, Sede Santa Bárbara, Sede Chía).
+- **And** existe un Acuerdo Comercial asignado a la Matriz con precio especial para Aguacate Hass de $7.200 COP/kg, excepto la Sede Chía que tiene un acuerdo local de $6.900 COP/kg por flete directo de finca.
+- **When** se cargan órdenes simultáneas para la Sede Zona G y la Sede Chía.
+- **Then**:
+  1. La Sede Zona G liquida el Aguacate a **$7.200 COP/kg** por herencia de su matriz (Nivel 2).
+  2. La Sede Chía liquida el Aguacate a **$6.900 COP/kg** por prevalencia de su acuerdo local de sucursal (Nivel 1).
+
+#### Escenario 75: Interlock de Crédito, Dossier Digital y Bloqueo de Pedidos por Mora en Cartera
+- **Given** el cliente B2B "Restaurante El Mirador" con cupo de crédito aprobado de $5.000.000 COP y plazo de 30 días.
+- **And** el cliente acumula facturas vencidas con más de 30 días de mora en `billing_invoices`.
+- **When** el asesor comercial intenta radicar un nuevo pedido por $1.200.000 COP en `/admin/orders/create`.
+- **Then**:
+  1. La función `checkClientCreditStatus` bloquea la confirmación del pedido desplegando la alerta roja de cartera vencida.
+  2. La orden solo puede ser liberada mediante una excepción explícita autorizada por la Gerencia Financiera, la cual se audita con timestamp y responsable en `audit_logs` (`CREDIT_LIMIT_EXCEPTION_AUTHORIZED`).
+
+---
+
+## 22. PROTOCOLO CANÓNICO DE COMUNICACIONES AUTOMÁTICAS, INGESTA Y DESPACHO TRANSACCIONAL (SDD v1.9.44)
+
+> **Versión del Protocolo:** 1.0.0 (Consolidado Maestro de Comunicaciones Multi-Canal)  
+> **Fecha de Entrada en Vigor:** 30 de Septiembre, 2026  
+> **Estado:** 🟢 Aprobado & Activo en Contrato  
+> **Rutas & Componentes Nucleares:**  
+> - Motor de Cola y Worker: `/api/mail/process` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/mail/process/route.ts))  
+> - Generador Canónico de Plantillas: `src/lib/emailTemplates.ts` ([emailTemplates.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/emailTemplates.ts))  
+> - Notificación de Ítems Eliminados / Agotados: `/api/orders/notify-deleted-item` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/orders/notify-deleted-item/route.ts))  
+> - Rechazo Tipificado de Solicitudes: `/api/orders/reject-draft` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/orders/reject-draft/route.ts))  
+> - Contraofertas Comerciales B2B: `/api/commercial/send-counter-offer` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/commercial/send-counter-offer/route.ts))  
+> - Bandeja de Salida y Auditoría: `src/components/EmailOutboxModule.tsx` ([EmailOutboxModule.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/components/EmailOutboxModule.tsx))  
+> - Tabla Base de Datos: `public.mail` con soporte de retry backoff, scheduled buffer y metadatos de auditoría.
+
+### 22.1 Misión del Dominio de Comunicaciones & Principios Rectores
+El sistema de mensajería y notificaciones transaccionales de FruFresco gobierna el flujo bidireccional de correos corporativos entre la plataforma operativa y los clientes B2B/B2C. Opera bajo cinco principios rectores inviolables:
+1. **Invarianza y Cero Falsos Positivos:** Ningún correo de confirmación de pedido o rectificación sale hacia el cliente final sin pasar por el **Buffer de Gracia de 2 minutos** o sin validación de modo de operación (`live`, `sandbox`, `disabled`).
+2. **Paridad Editorial Absoluta:** Toda comunicación oficial de remisión utiliza estrictamente la estructura canónica de la **Remisión Oficial de Entrega FruFresco** ([`Letterhead`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/emailTemplates.ts)), incluyendo membrete legal de *Investments Cortés S.A.S. (NIT 901.393.217-5 • Régimen Común)*, tabla detallada de productos y totales liquidados.
+3. **Trazabilidad Inmutable del Disparador (Trigger Attribution):** Cada correo enviado o programado debe registrar la identidad física del usuario que activó el trigger (`triggered_by_user_id`, `triggered_by_name`, `triggered_by_role`), el módulo de origen y la marca temporal ISO-8601.
+4. **Gobernanza Human-in-the-Loop (HITL):** En eventos destructivos o sensibles (rechazo de pedidos, escasez crítica, contraofertas de precios), el sistema obliga al operador a revisar la previsualización del correo y autorizar explícitamente el envío antes de despacharlo.
+5. **Resiliencia de Transporte Dual:** Despacho primario vía **Resend API (HTTPS REST)** con failover automático a **Nodemailer SMTP** (Gmail / Exchange corporativo) y política de reintentos exponenciales (+1 min, +5 min, +15 min).
+
+---
+
+### 22.2 Matriz Canónica de Triggers, Eventos y Destinatarios
+
+| ID Evento | Evento Operativo | Módulo / Ruta Origen | Condición / Criterio de Activación | Destinatario Principal | Modo de Despacho |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **EVT-01** | **Confirmación de Pedido (Remisión)** | Mesa de Borradores / `/admin/orders/create` | Borrador aprobado o pedido creado en estado `approved`. | `profiles.email` / `customer_email` | Buffer Silencioso (2 min) |
+| **EVT-02** | **Rectificación de Pedido (Diff)** | Torre de Control (`/admin/orders/[id]`) | Modificación de cantidades, adición o retiro de SKUs en pedido vigente. | `profiles.email` | Buffer Silencioso (2 min, cancela anterior) |
+| **EVT-03** | **Rechazo Tipificado de Solicitud** | Mesa de Borradores (`/admin/orders`) | Descarte de orden por causales: Cobertura, Monto Mínimo, Cartera, etc. | Remitente original (`sourceEmail`) | Modal Asistido HITL (Autorización explícita) |
+| **EVT-04** | **Novedad de Agotado / Escasez** | Mesa de Borradores / Calidad SAC | Retiro de SKU no disponible o reporte de quiebre en Corabastos. | Contacto de compras / Chef | Modal Asistido HITL (Autorización explícita) |
+| **EVT-05** | **Contraoferta Comercial B2B** | Buzón Comercial (`/admin/commercial`) | Respuesta a RFQ con tabla de precios aceptados vs contrapropuestos. | Contacto comercial / Compras | Modal Asistido HITL (Autorización explícita) |
+| **EVT-06** | **Facturación y Remisión Valorizada** | Facturación (`/admin/commercial/billing`) | Generación y emisión de Factura Electrónica / Remisión Fiscal. | `additional_billing_emails` + Tesorería | Envío Asistido / Masivo |
+| **EVT-07** | **Código OTP de Recuperación** | Pantalla de Autenticación (`/login`) | Solicitud de restablecimiento de contraseña. | Correo de la cuenta | Instantáneo con Cooldown (60 seg) |
+| **EVT-08** | **Activación de Acuerdo Comercial B2B** | Acuerdos Comerciales (`/admin/commercial?tab=clients&clientTab=agreements`) | Creación o réplica de nuevo acuerdo institucional con vigencia formalizada. | `profiles.email` / Contacto Compras / Sucursales | Modal Asistido HITL (Autorización explícita + Vista Previa) |
+| **EVT-09** | **Actualización de Precios en Acuerdo Vigente** | Acuerdos Comerciales (Drawer In-Situ / Batch) | Modificación de 1 o varios precios unitarios de productos pactados. | `profiles.email` / `additional_billing_emails` | Modal Asistido HITL (Visual Diff con precios anteriores vs nuevos) |
+
+---
+
+### 22.3 Estándar Editorial, Exclusión de SKU & Semántica Cromática
+
+Las comunicaciones transaccionales implementan la jerarquía visual de FruFresco / Investments Cortés ([`emailTemplates.ts`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/emailTemplates.ts)):
+
+1. **Membrete Legal Canónico (Preset Remisión Física):**
+   - Logotipo oficial de Investments Cortés S.A.S. alojado en CDN seguro con renderizado nítido (`max-height: 54px`).
+   - Identificación fiscal: *Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común*.
+   - Línea de negocio: *Operador Agro-Logístico • FruFresco Institucional*.
+   - Canales de contacto y atención directa: Línea móvil/WhatsApp *301 542 1761*, correo `pedidos@frufresco.com` y portal `www.frufresco.com` (se excluye deliberadamente la dirección física administrativa para evitar confusiones logísticas y resguardar la sede corporativa).
+
+2. **Regla de Cero SKU en Vistas de Cliente:**
+   - En las comunicaciones transaccionales dirigidas a clientes B2B/B2C, la columna de la tabla se titula exclusivamente **"Producto"** (se suprime la etiqueta `/ SKU`).
+   - Los códigos internos de inventario (`sku`) se omiten de la vista del cliente para evitar ruido visual, priorizando el nombre comercial completo, gramajes, unidades y badges de novedad (`MODIFICADO`, `+ AGREGADO`, `- RETIRADO`).
+
+3. **Código Cromático Semántico:**
+   - 🟢 **Verde Esmeralda (`linear-gradient(135deg, #081c15 0%, #1a4d2e 100%)`):** Confirmación estándar de pedidos y acuerdos aceptados.
+   - 🟡 **Ámbar Terracota (`linear-gradient(135deg, #78350F 0%, #B45309 100%)`):** Rectificación y actualización de remisión con **Diff Visual**:
+     * Badge `MODIFICADO` en fondo `#FEF3C7` con texto tachado `Antes: X [und]`.
+     * Badge `+ AGREGADO` en fondo `#ECFDF5` con texto verde `#059669`.
+     * Badge `- RETIRADO` en fondo `#FEF2F2` con texto rojo tachado `#991B1B`.
+   - 🔴 **Rojo Carmesí (`#991B1B` / `#DC2626`):** Novedades de Agotados, Quiebres en Plaza Corabastos y Rechazos Operativos.
+   - 🔵 **Dark Slate (`#111827` / `#1E293B`):** Negociaciones comerciales B2B, contraofertas y acuerdos formales de precios.
+
+3. **Arquitectura Multipart & Anti-Spam:**
+   - Todo despacho transaccional emite simultáneamente `html` enriquecido responsivo y `text` plano estructurado.
+   - Inclusión obligatoria de cabeceras RFC `Auto-Submitted: auto-generated` y `X-Auto-Response-Suppress: All` para evitar bucles de rebote (*NDR rate-limiting*).
+
+---
+
+### 22.4 Trazabilidad Inmutable del Disparador (Audit Trail)
+
+Todo registro insertado en la tabla `mail` debe contener obligatoriamente el contexto de autoría y ejecución:
+```typescript
+interface MailAuditPayload {
+  triggered_by_user_id: string;      // UUID del usuario autenticado en Supabase
+  triggered_by_name: string;         // Nombre legible (ej. "German Higuera", "Julissa Arévalo")
+  triggered_by_role: string;         // Rol RBAC: 'admin' | 'commercial_agent' | 'inventory_leader' | 'quality_inspector' | 'system_worker'
+  source_module: string;             // 'order_drafts' | 'commercial_inbox' | 'order_control_tower' | 'billing_dispatch' | 'auth_recovery'
+  triggered_at: string;              // ISO-8601 Timestamp
+  client_ip?: string;                // IP del cliente o sesión web
+  reason_code?: string;              // Causal de rechazo o motivo de rectificación
+}
+```
+La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/components/EmailOutboxModule.tsx) expone estos campos permitiendo a la dirección auditar con precisión de milisegundos quién autorizó cada mensaje.
+
+---
+
+### 22.5 Gobernanza de Despacho: Modo HITL vs Buffer de Seguridad Silencioso (2 min)
+
+```
+                            [ACCIÓN OPERATIVA EN SISTEMA]
+                                         │
+                 ┌───────────────────────┴───────────────────────┐
+                 ▼                                               ▼
+     [EVENTO SENSIBLE / DESTRUCTIVO]                  [EVENTO DE RUTINA OPERATIVA]
+  (Rechazo, Ítem Agotado, Contraoferta)             (Aprobación Pedido, Rectificación)
+                 │                                               │
+                 ▼                                               ▼
+    [MODAL HITL CON PREVIEW VIVO]                 [INSERCIÓN CON BUFFER DE GRACIA]
+   Operador revisa texto y marca:                 next_retry_at = now() + interval '2 min'
+   [x] Enviar correo formal al cliente                           │
+   [ ] Proceder silenciosamente                                  ▼
+                 │                                   [TOAST INFORMATIVO EN PANTALLA]
+                 ▼                               "Remisión encolada. Se enviará en 2 min"
+     [AUTORIZACIÓN EXPLÍCITA]                                    │
+   Se despacha inmediatamente vía API                            ▼
+                                                    [VENTANA DE EDICIÓN / CANCELACIÓN]
+                                                  Si el operador corrige antes de 2 min:
+                                                  Cancela correo previo y reprograma versión.
+```
+
+---
+
+### 22.6 Infraestructura de Despacho, Resiliencia Dual y Modos de Operación
+
+#### Modos de Notificación Globales (`app_settings`):
+- `live`: Envío real al destinatario final a través de la infraestructura productiva.
+- `sandbox`: Redirección automática de todos los correos generados hacia el buzón de auditoría (`email_sandbox_recipient`, por defecto `auditoria.investment@gmail.com`) con prefijo `[PRUEBAS - Para: ...]`, salvaguardando a los clientes reales.
+- `disabled`: Modo silencioso donde los correos se registran en `mail` con estado `simulated` y `error_message = 'Modo Silencioso'`, sin emitir tráfico de red.
+
+#### Transporte Dual y Política de Reintentos:
+1. **Intento Primario:** HTTP REST Request hacia `https://api.resend.com/emails` con autorización `Bearer RESEND_API_KEY`.
+2. **Fallback Secundario:** En ausencia de Resend o error HTTP 5xx, transfiere a transporte SMTP Nodemailer autenticado con `SMTP_USER` y `SMTP_PASS`.
+3. **Retry Backoff Exponencial:**
+   - Intento 1 fallido: Reprograma `next_retry_at = now() + 1 minuto`.
+   - Intento 2 fallido: Reprograma `next_retry_at = now() + 5 minutos`.
+   - Intento 3 fallido: Reprograma `next_retry_at = now() + 15 minutos`.
+   - Agotados los 3 intentos: Marca el estado permanentemente como `failed` y genera alerta en la bitácora administrativa.
+4. **Filtro Anti-Spam Corporativo:** Correos dirigidos a dominios propios (`@frufresco.com`, `@frufresco.co`, `frufrescodigital@gmail.com`) se marcan como simulados para no saturar las bandejas internas de la empresa.
+
+---
+
+### 22.7 Escenarios BDD de Aceptación (Escenarios 76 a 82)
+
+#### Escenario 76: Aprobación de Pedido con Buffer de Gracia de 2 Minutos y Cancelación por Corrección Rápida
+- **Given** un borrador de pedido aprobado para "Restaurante Fogón & Cava" por valor de $435.500 COP.
+- **When** el operador presiona `[Confirmar y Crear Pedido Inmediato]`.
+- **Then**:
+  1. La orden se crea en estado `approved` y se inserta un registro en la tabla `mail` con `status = 'pending'` y `next_retry_at = now() + 2 minutes`.
+  2. La interfaz despliega un Toast: *"Pedido confirmado. Remisión encolada (despacho en 2 minutos)"*.
+  3. Si dentro de los 90 segundos siguientes el operador detecta un error de cantidad y corrige el pedido en `/admin/orders/[id]`:
+     - El endpoint `/api/orders/update` cancela el registro de correo anterior (`status = 'cancelled'`).
+     - Se inserta una nueva remisión rectificativa `[PEDIDO CORREGIDO]` programada para 2 minutos después con los datos actualizados.
+     - El cliente final recibe una única remisión correcta y nunca un correo intermedio con datos erróneos.
+
+#### Escenario 77: Rectificación Posterior con Diff Visual Cromático
+- **Given** un pedido #PED-8492 previamente confirmado y entregado al cliente por correo.
+- **When** el cliente solicita por teléfono modificar la Papa Pastusa de 50 Kg a 70 Kg, adicionar 10 Kg de Limón Tahití y retirar 15 Kg de Aguacate Hass.
+- **And** el operador guarda los cambios en `/admin/orders/[id]`.
+- **Then**:
+  1. El endpoint `/api/orders/update` detecta las diferencias entre `prevItems` y `finalItems`.
+  2. Genera el correo con asunto `[PEDIDO CORREGIDO] Remisión Nº #PED-8492 - FruFresco` y encabezado ámbar terracota.
+  3. La tabla de productos (columna "Producto", sin códigos SKU) resalta la Papa Pastusa en ámbar con el texto `Antes: 50 Kg`, el Limón Tahití en verde con `+ AGREGADO` y el Aguacate Hass en rojo tachado con `- RETIRADO`.
+  4. El total de la remisión se recalcula y visualiza en $305.000 COP.
+
+#### Escenario 78: Rechazo Tipificado de Borrador con Modal HITL y Selección de Notificación
+- **Given** un borrador de pedido recibido por correo con dirección en el municipio de Fusagasugá (fuera de la cobertura operativa de Bogotá).
+- **When** el operador selecciona la opción `[Rechazar Borrador]` en la Mesa de Borradores.
+- **Then**:
+  1. Se despliega una ventana modal interactiva con la lista de causales tipificadas (Cobertura, Monto Mínimo, Fuera de Horario, Cartera, etc.).
+  2. Al seleccionar *"Fuera de Zona de Cobertura"*, el modal muestra la previsualización del correo explicativo con el membrete institucional.
+  3. El operador marca `[x] Notificar al cliente por correo electrónico` y presiona `[Confirmar Rechazo]`.
+  4. El endpoint `/api/orders/reject-draft` actualiza el estado del borrador a `rejected` y despacha el correo transaccional registrando en `mail` el autor y la causal seleccionada.
+
+#### Escenario 79: Notificación Proactiva de Ítems Agotados / Desabastecimiento en Corabastos
+- **Given** una orden de compra en borrador que solicita 50 Kg de Papa Pastusa que el comprador reportó como no disponible en Corabastos.
+- **When** el analista de mesa de trabajo elimina la Papa Pastusa del borrador.
+- **Then**:
+  1. El modal asistido solicita confirmación: *"¿Deseas notificar al cliente la falta de disponibilidad de este producto?"*.
+  2. Al confirmar, `/api/orders/notify-deleted-item` actualiza los ítems del borrador y envía un correo con encabezado carmesí alertando que la Papa Pastusa fue retirada para no retrasar la ruta.
+  3. El correo incluye el detalle de los productos que sí se entregarán y el nuevo total estimado de la factura.
+
+#### Escenario 80: Despacho de Contraoferta Comercial B2B con Precios Aceptados vs Contrapropuestos
+- **Given** una solicitud de cotización (RFQ) de "Hoteles Plaza Real" procesada en el Buzón Comercial.
+- **When** el asesor comercial aprueba los precios para Cebolla Cabezona ($2.100 COP) pero contrapropone la Zanahoria a $1.650 COP por calidad de campo.
+- **And** presiona `[Enviar Contraoferta por Correo]`.
+- **Then**:
+  1. `/api/commercial/send-counter-offer` construye la plantilla Dark Slate con el membrete de Investments Cortés.
+  2. La sección de precios aceptados muestra badge verde `✓ ACEPTADO`.
+  3. La sección de contrapropuesta resalta la tarifa del cliente tachada ($1.400) contra la oferta de FruFresco ($1.650 COP) y especifica la vigencia mensual pactada.
+  4. Se almacena el registro en `mail` con `inbox_type = 'commercial'` y el usuario comercial responsable.
+
+#### Escenario 81: Conmutación Segura en Modo Sandbox / Pruebas
+- **Given** la plataforma operando con la variable `email_notifications_mode = 'sandbox'` en `app_settings`.
+- **When** se aprueba cualquier pedido, se rectifica una orden o se envía una contraoferta dirigida a un cliente real (`cliente@restaurante.com`).
+- **Then**:
+  1. El worker `/api/mail/process` intercepta el destinatario y lo reemplaza por `auditoria.investment@gmail.com`.
+  2. Modifica el asunto agregando el prefijo: `[PRUEBAS - Para: cliente@restaurante.com] [PEDIDO CONFIRMADO]...`.
+  3. La tabla `mail` registra el estado `sandbox_sent` indicando que el correo fue redirigido a auditoría, protegiendo al cliente de recibir mensajes en entornos de prueba o staging.
+
+#### Escenario 82: Resiliencia ante Fallos de Red y Backoff Exponencial de Reintentos
+- **Given** un correo encolado en `mail` cuya conexión con Resend API genera un error HTTP 500 / Network Timeout.
+- **When** el worker procesa el registro.
+- **Then**:
+  1. El sistema captura la excepción y verifica `retry_count` (actualmente 0).
+  2. Incrementa `retry_count = 1`, actualiza `status = 'pending'` y programa `next_retry_at = now() + 1 minute`.
+  3. En el siguiente ciclo, si Resend vuelve a fallar, intenta el envío por fallback Nodemailer SMTP.
+  4. Si persiste la falla hasta el intento 3, marca `status = 'failed'` y deja registrado el mensaje de error completo en `error_message` para auditoría administrativa.
+
+#### Escenario 83: Creación de Acuerdo Comercial B2B con Ingesta Heurística de Excel y Replicación Multi-Sucursal
+- **Given** un archivo Excel de tarifas institucionales recibido de "Grupo Gastronómico El Nogal" con 45 productos.
+- **When** el analista comercial ingresa a `/admin/commercial?tab=clients&clientTab=agreements`, presiona `[Nuevo Acuerdo Comercial]`, activa el modo Multi-Sucursal seleccionando la Casa Matriz y arrastra el archivo Excel al asistente.
+- **Then**:
+  1. La función `extractRowsFromExcelSheet` detecta automáticamente las columnas de Código, Nombre y Precio, sanitizando los valores monetarios con `parsePriceValue`.
+  2. El sistema empareja los 45 ítems con el catálogo maestro (`products`), calcula el margen bruto individual y alerta si 2 de los SKUs están actualmente inactivos en bodega (`is_active = false`).
+  3. Al confirmar la persistencia en el Paso 3, se crean registros independientes pero idénticos en `quotes` (`status = 'agreement'`) y `quote_items` para cada una de las 3 sucursales vinculadas a la matriz.
+  4. Los pedidos posteriores montados para cualquiera de estas sucursales consumen de forma inmediata y automática las tarifas congeladas del convenio.
+
+#### Escenario 84: Edición In-Situ de Precios en Drawer Lateral con Trazabilidad en Audit Log y Prórroga de Vigencia
+- **Given** un Acuerdo Comercial activo #ACU-2026-088 para "Restaurante Fogón & Cava" con fecha de vencimiento en 3 días (semáforo ámbar `warning`).
+- **When** el analista hace clic sobre el acuerdo en la tabla, abriendo el drawer lateral de detalle.
+- **And** modifica in-situ el precio del Tomate Chonto de $3.500 a $3.800 COP presionando `Enter`.
+- **And** presiona `[Prorrogar / Renovar]` seleccionando la extensión a 1 mes adicional.
+- **Then**:
+  1. El precio en `quote_items` se actualiza instantáneamente y el margen bruto de la fila se recalcula.
+  2. Se inserta un registro en `audit_logs` con el `user_id` del analista, `old_price = 3500`, `new_price = 3800` y timestamp.
+  3. La fecha `valid_until` en `quotes` se extiende 30 días en el futuro y el badge de estado del acuerdo cambia automáticamente de ámbar (`warning`) a verde (`active`).
+
+#### Escenario 85: Notificación Asistida HITL al Activar Nuevo Acuerdo Comercial Institucional (EVT-08)
+- **Given** la creación y activación exitosa de un Acuerdo Comercial Institucional para el cliente "Club El Nogal" con vigencia del 01/10/2026 al 31/10/2026.
+- **When** se completa la persistencia del acuerdo en `/admin/commercial?tab=clients&clientTab=agreements`.
+- **Then**:
+  1. Se despliega automáticamente el Modal HITL de Notificación de Acuerdo con la previsualización del correo formal (`EVT-08`).
+  2. La interfaz permite seleccionar los destinatarios (`compras@elnogal.com`, `economato@elnogal.com`, `facturacion@elnogal.com`) y seleccionar si se notifica a la Matriz y/o a sus sedes dependientes.
+  3. El correo incluye el membrete canónico de Investments Cortés S.A.S. (sin dirección física de sede administrativa), banner verde esmeralda, píldoras de vigencia, conteo de productos y botones de consulta.
+  4. El operador debe marcar explícitamente `[x] Autorizo el despacho formal de esta notificación por correo electrónico` y hacer clic en `[Aprobar y Despachar Notificación]`.
+  5. Se inserta el mensaje en `mail` con `status = 'pending'`, registrando la autoría del analista comercial.
+
+#### Escenario 86: Notificación Asistida HITL por Modificación de Precios en Lote con Banner de Alta Visibilidad y Visual Diff (EVT-09)
+- **Given** un Acuerdo Comercial vigente con "Cadena Restaurantes Wok" donde el asesor comercial modifica el precio del Aguacate Hass ($6.800 -> $7.200) y la Cebolla Cabezona ($2.100 -> $2.350).
+- **When** el asesor guarda los precios in-situ en la tabla (sin interrupciones por popups).
+- **Then**:
+  1. El sistema persiste los cambios en base de datos y despliega de inmediato un **Banner Azul Corporativo de Alta Visibilidad** sobre la tabla indicando: `Novedades de Precios Registradas (2 productos modificados) ● Pendiente Notificar`.
+  2. La barra superior sincroniza el botón con badge ámbar: `✉ Notificar Novedades (2 modificados)`.
+  3. Al presionar `[Revisar y Notificar al Cliente]` en el banner o en la cabecera, se abre el Modal HITL con la tabla comparativa Diff consolidando los 2 productos afectados.
+  4. La tabla muestra los nombres comerciales limpios sin códigos SKU, el precio anterior tachado en gris, el nuevo precio en negrita esmeralda (`font-variant-numeric: tabular-nums`) y el badge de variación (`+$400 COP`, `+$250 COP`).
+  5. El sistema identifica y muestra en la cabecera del correo al asesor responsable del cambio y la fecha/hora exacta de vigencia.
+  6. Tras la autorización explícita del operador (`[x] Autorizo el despacho formal...`), el correo se encola en `mail` asegurando trazabilidad forense completa y emitiendo un único correo consolidado al cliente.
+
+
+

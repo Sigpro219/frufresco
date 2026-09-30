@@ -278,15 +278,11 @@ export default function LoginPage() {
         }
 
         try {
-            const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
-            const isLocal = typeof window !== 'undefined' && 
-                (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            const baseOrigin = (typeof window !== 'undefined' && window.location.origin)
+                ? window.location.origin
+                : (process.env.NEXT_PUBLIC_SITE_URL || 'https://frufresco-liard.vercel.app');
 
-            const baseOrigin = configuredUrl 
-                ? configuredUrl.replace(/\/$/, '') 
-                : (isLocal ? 'https://frufresco-liard.vercel.app' : window.location.origin);
-
-            const redirectUrl = `${baseOrigin}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
+            const redirectUrl = `${baseOrigin.replace(/\/$/, '')}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
             console.log('📨 Solicitando código OTP de recuperación con redirectUrl:', redirectUrl);
 
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
@@ -326,15 +322,11 @@ export default function LoginPage() {
         }
 
         try {
-            const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
-            const isLocal = typeof window !== 'undefined' && 
-                (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            const baseOrigin = (typeof window !== 'undefined' && window.location.origin)
+                ? window.location.origin
+                : (process.env.NEXT_PUBLIC_SITE_URL || 'https://frufresco-liard.vercel.app');
 
-            const baseOrigin = configuredUrl 
-                ? configuredUrl.replace(/\/$/, '') 
-                : (isLocal ? 'https://frufresco-liard.vercel.app' : window.location.origin);
-
-            const redirectUrl = `${baseOrigin}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
+            const redirectUrl = `${baseOrigin.replace(/\/$/, '')}/auth/callback?next=${encodeURIComponent('/login?mode=recovery')}`;
             console.log('📨 Reenviando código OTP de recuperación con redirectUrl:', redirectUrl);
 
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
@@ -771,11 +763,11 @@ export default function LoginPage() {
                                                         type="text"
                                                         inputMode="numeric"
                                                         pattern="[0-9]*"
-                                                        maxLength={6}
+                                                        maxLength={8}
                                                         autoComplete="one-time-code"
                                                         value={otpCode}
                                                         onChange={(e) => {
-                                                            setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                                            setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8));
                                                             if (forgotError) setForgotError('');
                                                             if (forgotSuccess) setForgotSuccess('');
                                                         }}
