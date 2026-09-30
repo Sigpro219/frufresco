@@ -607,11 +607,12 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
       <table role="presentation" width="100%" style="border-collapse: collapse; font-size: 13px; border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden;">
         <thead>
           <tr class="box-bg" style="background-color: #F8FAFC; border-bottom: 2px solid #E2E8F0; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-            <th style="padding: 10px 14px; text-align: left; font-weight: 800; font-family: 'Outfit', sans-serif;">Producto</th>
+            <th style="padding: 10px 12px; text-align: left; font-weight: 800; font-family: 'Outfit', sans-serif;">Producto</th>
             ${isDiff ? `
-              <th style="padding: 10px 10px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">Antes</th>
-              <th style="padding: 10px 12px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">Nuevo Precio</th>
-              <th style="padding: 10px 14px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">Variación</th>
+              <th style="padding: 10px 8px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">Antes</th>
+              <th style="padding: 10px 10px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">$Nuevo</th>
+              <th style="padding: 10px 8px; text-align: center; font-weight: 800; font-family: 'Outfit', sans-serif;">Variación</th>
+              <th style="padding: 10px 12px; text-align: left; font-weight: 800; font-family: 'Outfit', sans-serif;">Justificación Abastecimiento</th>
             ` : `
               <th style="padding: 10px 10px; text-align: center; font-weight: 800; font-family: 'Outfit', sans-serif;">Presentación</th>
               <th style="padding: 10px 14px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">Precio Pactado</th>
@@ -633,7 +634,7 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
 
     <!-- 5. BANNER DE SOPORTE & CANAL DE PEDIDOS -->
     <div style="margin: 10px 28px 24px;">
-      <table role="presentation" width="100%" class="box-bg" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 18px; font-size: 12px; color: #475569; line-height: 1.5;">
+      <table role="presentation" width="100%" class="box-bg" style="background-color: #F8FAFC; border-width: 1px; border-style: solid; border-color: #E2E8F0; border-radius: 12px; padding: 14px 18px; font-size: 12px; color: #475569; line-height: 1.5;">
         <tr>
           <td>
             <strong>¿Preguntas sobre este acuerdo o necesitas radicar un pedido especial?</strong><br>
@@ -678,16 +679,19 @@ export function generateAgreementNotificationText(data: AgreementNotificationEma
 
   const itemsList = items.map(it => {
     if (isDiff) {
-      return `- ${it.name} (${it.unit || 'Und'}): Antes $${it.oldPrice || '-'} -> Nuevo $${it.price} COP`;
+      const isUp = (Number(it.price) || 0) > (Number(it.oldPrice) || 0);
+      const varTag = isUp ? '🔴 Sube' : '🟢 Baja';
+      const justTag = it.justification ? ` | Motivo: ${it.justification}` : '';
+      return `• *${it.name}* (${it.unit || 'Kg'}): Antes $${it.oldPrice || '-'} -> *Nuevo $${it.price} COP* [${varTag}]${justTag}`;
     }
-    return `- ${it.name} (${it.unit || 'Und'}): $${it.price} COP`;
+    return `• *${it.name}* (${it.unit || 'Und/Kg'}): *$${it.price} COP*`;
   }).join('\n');
 
-  return `${isDiff ? 'ACTUALIZACIÓN DE PRECIOS' : 'NUEVO ACUERDO COMERCIAL'} - FRUFRESCO
+  return `${isDiff ? 'ACTUALIZACIÓN DE PRECIOS • ADENDA' : 'NUEVO ACUERDO COMERCIAL'} - FRUFRESCO
 
 Estimado(a) ${clientName},
 
-Se ha ${isDiff ? 'actualizado la lista de tarifas' : 'formalizado un nuevo acuerdo de precios'} correspondiente a: "${agreementName}".
+Se ha ${isDiff ? 'actualizado la lista de tarifas con justificación de abastecimiento' : 'formalizado un nuevo acuerdo de precios'} correspondiente a: "${agreementName}".
 Vigencia: ${validFrom} al ${validUntil}
 
 Detalle de Ítems (${items.length} productos):

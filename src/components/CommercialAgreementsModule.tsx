@@ -42,7 +42,10 @@ import {
     User,
     Mail,
     Send,
-    ShieldCheck
+    ShieldCheck,
+    TrendingUp,
+    ClipboardList,
+    Sliders
 } from 'lucide-react';
 import { searchIncludes } from '@/lib/locationNorm';
 import { useAuth } from '@/lib/authContext';
@@ -265,6 +268,16 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
     return parsedItems;
 }
 
+export const SUPPLY_JUSTIFICATION_PRESETS = [
+    { label: '🌧️ Menor ingreso de fruta fresca; oferta limitada en cosecha / clima', value: 'Menor ingreso de fruta fresca; oferta limitada en cosecha.' },
+    { label: '📉 Escasez temporal por clima; baja disponibilidad en plaza', value: 'Escasez temporal por clima; baja disponibilidad.' },
+    { label: '🌾 Pico de cosecha; abundancia de producto nacional (Baja de precio)', value: 'Pico de cosecha; abundancia de producto.' },
+    { label: '❄️ Disminución en cosechas frías; menor oferta en mercado', value: 'Disminución en cosechas frías; menor oferta en mercado.' },
+    { label: '🚜 Reducción de cosecha regional; menor abastecimiento', value: 'Reducción de cosecha regional; menor abastecimiento.' },
+    { label: '🌱 Mayor ingreso nacional; oferta estable y abundante (Baja)', value: 'Mayor ingreso nacional; abundancia de producto.' },
+    { label: '✍️ Otra justificación personalizada...', value: 'CUSTOM' }
+];
+
 export default function CommercialAgreementsModule() {
     const { user, profile } = useAuth();
     const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -285,11 +298,28 @@ export default function CommercialAgreementsModule() {
     // In-situ price editing in drawer
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [editingPriceValue, setEditingPriceValue] = useState<string>('');
+    const [editingJustification, setEditingJustification] = useState<string>('');
+    const [itemJustifications, setItemJustifications] = useState<Record<string, string>>({});
     const [savingPriceItemId, setSavingPriceItemId] = useState<string | null>(null);
     const [agreementAuditLogs, setAgreementAuditLogs] = useState<Record<string, any[]>>({});
     const [hoveredAuditItemId, setHoveredAuditItemId] = useState<string | null>(null);
     const [latestAgreementLog, setLatestAgreementLog] = useState<any | null>(null);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+
+    // Partial Batch Adjustment Modal State (Adendas Cosecha/Consumo)
+    const [isPartialBatchModalOpen, setIsPartialBatchModalOpen] = useState(false);
+    const [partialBatchSearch, setPartialBatchSearch] = useState('');
+    const [partialBatchItems, setPartialBatchItems] = useState<Array<{
+        itemId: string;
+        productId: string;
+        name: string;
+        unit: string;
+        costBasis: number;
+        oldPrice: number;
+        newPrice: string;
+        justification: string;
+    }>>([]);
+    const [isSavingPartialBatch, setIsSavingPartialBatch] = useState(false);
     
     // HITL Email Dispatch Modal State
     const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
@@ -1178,6 +1208,7 @@ export default function CommercialAgreementsModule() {
             // 3. Register audit trail in audit_logs
             const collaboratorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
             const collaboratorId = user?.id || null;
+            const effectiveJustification = editingJustification.trim() || 'Ajuste periódico de cosecha / mercado';
 
             try {
                 await supabase.from('audit_logs').insert({
@@ -1195,12 +1226,16 @@ export default function CommercialAgreementsModule() {
                         old_margin: item.margin_percent,
                         new_margin: newMarginPercent,
                         cost_basis: costBasis,
+                        justification: effectiveJustification,
                         changed_at: new Date().toISOString()
                     }
                 });
             } catch (auditErr) {
                 console.warn('Audit log insert warning:', auditErr);
             }
+
+            // Save justification in memory
+            setItemJustifications(prev => ({ ...prev, [item.id]: effectiveJustification }));
 
             // 4. Update local state
             setAgreementItems(prev => prev.map(it => it.id === item.id ? {
@@ -1223,11 +1258,118 @@ export default function CommercialAgreementsModule() {
 
             showToast(`Precio actualizado para ${item.product_name}: $${formatNumber(newPrice)}`, 'success');
             setEditingItemId(null);
+            setEditingJustification('');
         } catch (err: any) {
             console.error('Error saving single price:', err);
             showToast('Error al actualizar precio: ' + err.message, 'error');
         } finally {
             setSavingPriceItemId(null);
+        }
+    };
+
+    const handleOpenPartialBatchModal = () => {
+        if (!selectedAgreement) return;
+        
+        // Build items for batch modal
+        const initialBatch = agreementItems.map(it => {
+            const logs = agreementAuditLogs[it.id];
+            const hasLogs = logs && logs.length > 0;
+            const oldestLog = hasLogs ? logs[logs.length - 1] : null;
+            const latestLog = hasLogs ? logs[0] : null;
+            const oldP = oldestLog?.details?.old_price || it.unit_price;
+            const just = itemJustifications[it.id] || latestLog?.details?.justification || '';
+
+            return {
+                itemId: it.id,
+                productId: it.product_id,
+                name: it.product_name,
+                unit: it.products?.unit_of_measure || 'Kg',
+                costBasis: Number(it.cost_basis) || 0,
+                oldPrice: oldP,
+                newPrice: String(it.unit_price),
+                justification: just
+            };
+        });
+
+        setPartialBatchItems(initialBatch);
+        setPartialBatchSearch('');
+        setIsPartialBatchModalOpen(true);
+    };
+
+    const handleSavePartialBatch = async () => {
+        if (!selectedAgreement) return;
+        setIsSavingPartialBatch(true);
+        try {
+            const modified = partialBatchItems.filter(p => {
+                const num = Number(p.newPrice);
+                return num > 0 && num !== p.oldPrice;
+            });
+
+            if (modified.length === 0) {
+                showToast('No se detectaron variaciones de precio en este lote.', 'warning');
+                setIsPartialBatchModalOpen(false);
+                return;
+            }
+
+            const collaboratorName = user?.email || (profile as any)?.company_name || 'Comercial FruFresco';
+            const collaboratorId = user?.id || null;
+            let subtotalDelta = 0;
+
+            for (const mod of modified) {
+                const newPriceNum = Number(mod.newPrice);
+                const costBasis = mod.costBasis;
+                const newMarginPercent = newPriceNum > 0 ? Math.round(((newPriceNum - costBasis) / newPriceNum) * 10000) / 100 : 0;
+                const diff = newPriceNum - mod.oldPrice;
+                subtotalDelta += diff;
+
+                await supabase.from('quote_items').update({
+                    unit_price: newPriceNum,
+                    margin_percent: newMarginPercent,
+                    total_price: newPriceNum
+                }).eq('id', mod.itemId);
+
+                const just = mod.justification.trim() || 'Ajuste periódico de cosecha / abastecimiento';
+                setItemJustifications(prev => ({ ...prev, [mod.itemId]: just }));
+
+                await supabase.from('audit_logs').insert({
+                    action: 'UPDATE_quote_item_price',
+                    module: 'COMMERCIAL',
+                    collaborator_id: collaboratorId,
+                    collaborator_name: collaboratorName,
+                    details: {
+                        quote_id: selectedAgreement.id,
+                        quote_item_id: mod.itemId,
+                        product_id: mod.productId,
+                        product_name: mod.name,
+                        old_price: mod.oldPrice,
+                        new_price: newPriceNum,
+                        old_margin: 0,
+                        new_margin: newMarginPercent,
+                        cost_basis: costBasis,
+                        justification: just,
+                        changed_at: new Date().toISOString()
+                    }
+                });
+            }
+
+            const updatedSubtotal = Math.max(0, (selectedAgreement.subtotal_amount || 0) + subtotalDelta);
+            await supabase.from('quotes').update({
+                subtotal_amount: updatedSubtotal,
+                total_amount: updatedSubtotal + (selectedAgreement.total_tax_amount || 0)
+            }).eq('id', selectedAgreement.id);
+
+            showToast(`✓ Adenda parcial aplicada: ${modified.length} productos actualizados`, 'success');
+            setIsPartialBatchModalOpen(false);
+            
+            await handleViewPrices(selectedAgreement);
+            await fetchAgreements();
+
+            handleOpenNotificationModal('PRICE_UPDATE_DIFF');
+        } catch (err: any) {
+            console.error('Error saving partial batch:', err);
+            showToast('Error al guardar adenda: ' + err.message, 'error');
+        } finally {
+            setIsSavingPartialBatch(false);
         }
     };
 
@@ -1292,14 +1434,17 @@ export default function CommercialAgreementsModule() {
                     const logs = agreementAuditLogs[item.id];
                     if (logs && logs.length > 0) {
                         const oldestLog = logs[logs.length - 1];
+                        const latestLog = logs[0];
                         const oldPrice = oldestLog?.details?.old_price || item.unit_price;
+                        const justification = itemJustifications[item.id] || latestLog?.details?.justification || 'Ajuste periódico de cosecha / mercado';
                         emailItems.push({
                             name: item.product_name,
                             unit: item.products?.unit_of_measure || 'Kg',
                             price: item.unit_price,
                             oldPrice: oldPrice,
                             isModified: true,
-                            priceDiff: item.unit_price - oldPrice
+                            priceDiff: item.unit_price - oldPrice,
+                            justification: justification
                         });
                     }
                 });
@@ -1310,7 +1455,8 @@ export default function CommercialAgreementsModule() {
                         unit: it.products?.unit_of_measure || 'Kg',
                         price: it.unit_price,
                         oldPrice: it.unit_price,
-                        isModified: true
+                        isModified: true,
+                        justification: itemJustifications[it.id] || 'Ajuste periódico de cosecha / mercado'
                     }));
                 }
             } else {
@@ -3327,6 +3473,29 @@ export default function CommercialAgreementsModule() {
                             })()}
                             <button
                                 type="button"
+                                onClick={handleOpenPartialBatchModal}
+                                style={{
+                                    padding: '0.55rem 0.95rem',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#F0FDF4',
+                                    color: '#166534',
+                                    border: '1.5px solid #86EFAC',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 1px 3px rgba(22, 101, 52, 0.08)'
+                                }}
+                                title="Abrir asistente de modificación parcial de precios por cosecha o abastecimiento"
+                            >
+                                <ClipboardList size={15} color="#16A34A" />
+                                Adenda / Ajuste Parcial
+                            </button>
+                            <button
+                                type="button"
                                 onClick={handleOpenAddProductModal}
                                 style={{
                                     padding: '0.55rem 0.95rem',
@@ -3477,6 +3646,26 @@ export default function CommercialAgreementsModule() {
                                 </div>
                             );
                         })()}
+
+                        {/* Educational banner for partial price adjustments */}
+                        <div style={{
+                            margin: '0.75rem 1.5rem 0.5rem 1.5rem',
+                            padding: '0.65rem 1rem',
+                            backgroundColor: '#F0FDF4',
+                            border: '1px solid #BBF7D0',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#166534' }}>
+                                <Sliders size={16} color="#16A34A" style={{ flexShrink: 0 }} />
+                                <span>
+                                    <strong>Modificaciones Parciales:</strong> Puedes ajustar precios individuales directamente con el lápiz ✏️ o usar el botón <strong>[Adenda / Ajuste Parcial]</strong> para variaciones masivas por cosecha/clima con justificación y despacho unificado.
+                                </span>
+                            </div>
+                        </div>
 
                         {/* Drawer List Content */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: '0 1.5rem 1.5rem 1.5rem' }}>
@@ -3638,32 +3827,53 @@ export default function CommercialAgreementsModule() {
                                                             </td>
                                                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.85rem' }}>
                                                                 {isEditingThis ? (
-                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>$</span>
-                                                                        <input 
-                                                                            type="number" 
-                                                                            autoFocus
-                                                                            min="1"
-                                                                            step="1"
-                                                                            value={editingPriceValue} 
-                                                                            onChange={(e) => setEditingPriceValue(e.target.value)}
-                                                                            onKeyDown={(e) => {
-                                                                                if (e.key === 'Enter') handleSaveSinglePrice(item);
-                                                                                if (e.key === 'Escape') setEditingItemId(null);
+                                                                    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>$</span>
+                                                                            <input 
+                                                                                type="number" 
+                                                                                autoFocus
+                                                                                min="1"
+                                                                                step="1"
+                                                                                value={editingPriceValue} 
+                                                                                onChange={(e) => setEditingPriceValue(e.target.value)}
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter') handleSaveSinglePrice(item);
+                                                                                    if (e.key === 'Escape') setEditingItemId(null);
+                                                                                }}
+                                                                                style={{ 
+                                                                                    width: '95px', 
+                                                                                    padding: '4px 6px', 
+                                                                                    borderRadius: '6px', 
+                                                                                    border: `2px solid ${THEME.colors.primary}`, 
+                                                                                    fontSize: '0.85rem', 
+                                                                                    fontWeight: 'bold', 
+                                                                                    textAlign: 'right',
+                                                                                    color: THEME.colors.textMain,
+                                                                                    outline: 'none',
+                                                                                    backgroundColor: 'white'
+                                                                                }} 
+                                                                            />
+                                                                        </div>
+                                                                        <select
+                                                                            value={editingJustification}
+                                                                            onChange={(e) => setEditingJustification(e.target.value)}
+                                                                            style={{
+                                                                                fontSize: '0.68rem',
+                                                                                padding: '2px 4px',
+                                                                                borderRadius: '4px',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                maxWidth: '170px',
+                                                                                color: '#334155',
+                                                                                backgroundColor: '#F8FAFC'
                                                                             }}
-                                                                            style={{ 
-                                                                                width: '95px', 
-                                                                                padding: '4px 6px', 
-                                                                                borderRadius: '6px', 
-                                                                                border: `2px solid ${THEME.colors.primary}`, 
-                                                                                fontSize: '0.85rem', 
-                                                                                fontWeight: 'bold', 
-                                                                                textAlign: 'right',
-                                                                                color: THEME.colors.textMain,
-                                                                                outline: 'none',
-                                                                                backgroundColor: 'white'
-                                                                            }} 
-                                                                        />
+                                                                            title="Justificación de variación de precio por cosecha/abastecimiento"
+                                                                        >
+                                                                            <option value="">-- Motivo (Opcional) --</option>
+                                                                            {SUPPLY_JUSTIFICATION_PRESETS.map((preset, pIdx) => (
+                                                                                <option key={pIdx} value={preset.value === 'CUSTOM' ? '' : preset.value}>{preset.label}</option>
+                                                                            ))}
+                                                                        </select>
                                                                     </div>
                                                                 ) : (
                                                                     formatMoney(item.unit_price)
@@ -3762,6 +3972,8 @@ export default function CommercialAgreementsModule() {
                                                                         onClick={() => {
                                                                             setEditingItemId(item.id);
                                                                             setEditingPriceValue(String(item.unit_price));
+                                                                            const latestLog = agreementAuditLogs[item.id]?.[0];
+                                                                            setEditingJustification(itemJustifications[item.id] || latestLog?.details?.justification || '');
                                                                         }}
                                                                         style={{
                                                                             backgroundColor: 'transparent',
@@ -4320,7 +4532,8 @@ export default function CommercialAgreementsModule() {
                                                     <>
                                                         <th style={{ padding: '8px 10px', textAlign: 'right' }}>Antes</th>
                                                         <th style={{ padding: '8px 10px', textAlign: 'right' }}>Nuevo Precio</th>
-                                                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>Variación</th>
+                                                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>Variación</th>
+                                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>Justificación Abastecimiento</th>
                                                     </>
                                                 ) : (
                                                     <>
@@ -4346,6 +4559,7 @@ export default function CommercialAgreementsModule() {
                                                     const oldPrice = hasLog ? logs[logs.length - 1]?.details?.old_price || item.unit_price : item.unit_price;
                                                     const diff = item.unit_price - oldPrice;
                                                     const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9';
+                                                    const currentJust = itemJustifications[item.id] ?? (logs && logs[0]?.details?.justification) ?? '';
 
                                                     return (
                                                         <tr key={item.id} style={{ backgroundColor: hasLog ? '#FEF9C3' : rowBg, borderBottom: '1px solid #F1F5F9' }}>
@@ -4360,8 +4574,39 @@ export default function CommercialAgreementsModule() {
                                                                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>
                                                                         ${formatNumber(item.unit_price)}
                                                                     </td>
-                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 'bold', color: diff >= 0 ? '#B91C1C' : '#047857' }}>
-                                                                        {diff > 0 ? `+ $${formatNumber(diff)}` : (diff < 0 ? `- $${formatNumber(Math.abs(diff))}` : '$0')}
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: 'bold' }}>
+                                                                        <span style={{
+                                                                            padding: '2px 8px',
+                                                                            borderRadius: '100px',
+                                                                            fontSize: '0.68rem',
+                                                                            backgroundColor: diff > 0 ? '#FEE2E2' : (diff < 0 ? '#DCFCE7' : '#F1F5F9'),
+                                                                            color: diff > 0 ? '#991B1B' : (diff < 0 ? '#166534' : '#64748B'),
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px'
+                                                                        }}>
+                                                                            {diff > 0 ? `🔴 Sube +$${formatNumber(diff)}` : (diff < 0 ? `🟢 Baja -$${formatNumber(Math.abs(diff))}` : 'Sin cambio')}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px' }}>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={currentJust}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                setItemJustifications(prev => ({ ...prev, [item.id]: val }));
+                                                                            }}
+                                                                            placeholder="Ej. Clima / lluvias, oferta limitada..."
+                                                                            style={{
+                                                                                width: '100%',
+                                                                                padding: '4px 8px',
+                                                                                fontSize: '0.74rem',
+                                                                                borderRadius: '6px',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                backgroundColor: 'white',
+                                                                                color: '#334155'
+                                                                            }}
+                                                                        />
                                                                     </td>
                                                                 </>
                                                             ) : (
@@ -7395,6 +7640,390 @@ export default function CommercialAgreementsModule() {
                                 <Sparkles size={14} />
                                 {isApplyingMasterToAgreement ? 'Aplicando Precios...' : 'Sí, Cargar Precios del Modelo'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ================= MODAL: MODIFICACIÓN PARCIAL DE PRECIOS POR COSECHA / CONSUMO (ADENDAS) ================= */}
+            {isPartialBatchModalOpen && selectedAgreement && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 2150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '95%',
+                        maxWidth: '980px',
+                        maxHeight: '92vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                        border: '1px solid #E2E8F0'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            backgroundColor: '#0F172A',
+                            color: 'white',
+                            padding: '1.2rem 1.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            borderBottom: '1px solid #1E293B'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '10px',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#34D399'
+                                }}>
+                                    <ClipboardList size={20} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: 'white' }}>
+                                            Modificación Parcial de Precios por Cosecha / Consumo
+                                        </h2>
+                                        <span style={{
+                                            fontSize: '0.65rem',
+                                            fontWeight: 800,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.5px',
+                                            padding: '2px 8px',
+                                            borderRadius: '100px',
+                                            backgroundColor: '#DCFCE7',
+                                            color: '#166534',
+                                            border: '1px solid currentColor'
+                                        }}>
+                                            📋 Adenda Parcial
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: '#94A3B8' }}>
+                                        Cliente: <strong style={{ color: 'white' }}>{selectedAgreement.profiles?.company_name || selectedAgreement.client_name}</strong> • Modifica puntualmente los SKUs con variación y asocia su justificación agronómica.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsPartialBatchModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Search & Tool Bar */}
+                        <div style={{
+                            padding: '0.85rem 1.5rem',
+                            backgroundColor: '#F8FAFC',
+                            borderBottom: '1px solid #E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            flexWrap: 'wrap'
+                        }}>
+                            <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
+                                <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar producto a modificar en la lista..."
+                                    value={partialBatchSearch}
+                                    onChange={(e) => setPartialBatchSearch(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '7px 10px 7px 32px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.82rem',
+                                        outline: 'none',
+                                        backgroundColor: 'white'
+                                    }}
+                                />
+                            </div>
+
+                            {(() => {
+                                const modified = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice);
+                                const upCount = partialBatchItems.filter(p => Number(p.newPrice) > p.oldPrice).length;
+                                const downCount = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) < p.oldPrice).length;
+
+                                return (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                        <span style={{
+                                            padding: '4px 10px',
+                                            borderRadius: '6px',
+                                            backgroundColor: modified.length > 0 ? '#EFF6FF' : '#F1F5F9',
+                                            color: modified.length > 0 ? '#1D4ED8' : '#64748B',
+                                            border: '1px solid #CBD5E1'
+                                        }}>
+                                            {modified.length} {modified.length === 1 ? 'producto modificado' : 'productos modificados'} de {partialBatchItems.length}
+                                        </span>
+                                        {upCount > 0 && (
+                                            <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                                                🔴 {upCount} Sube
+                                            </span>
+                                        )}
+                                        {downCount > 0 && (
+                                            <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534' }}>
+                                                🟢 {downCount} Baja
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Informational Guidance Notice */}
+                        <div style={{
+                            padding: '0.6rem 1.5rem',
+                            backgroundColor: '#F0FDF4',
+                            borderBottom: '1px solid #BBF7D0',
+                            fontSize: '0.74rem',
+                            color: '#166534',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            <Info size={15} color="#16A34A" style={{ flexShrink: 0 }} />
+                            <span>
+                                <strong>Flujo Automatizado:</strong> Al presionar <em>"Aplicar Adenda y Despachar Notificación"</em>, se actualizarán los precios en el acuerdo comercial, se registrará el log forense y se abrirá directamente el despachador de correo con la <strong>tabla comparativa de 5 columnas</strong> (Producto, Antes, Nuevo, Variación, Justificación).
+                            </span>
+                        </div>
+
+                        {/* Items Table */}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+                                <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', position: 'sticky', top: 0, zIndex: 10, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 800 }}>
+                                    <tr>
+                                        <th style={{ padding: '10px 14px' }}>Producto</th>
+                                        <th style={{ padding: '10px 10px', textAlign: 'center' }}>Presentación</th>
+                                        <th style={{ padding: '10px 10px', textAlign: 'right' }}>Costo Base</th>
+                                        <th style={{ padding: '10px 10px', textAlign: 'right' }}>Precio Pactado Actual</th>
+                                        <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>Nuevo Precio COP</th>
+                                        <th style={{ padding: '10px 10px', textAlign: 'center' }}>Variación</th>
+                                        <th style={{ padding: '10px 14px', textAlign: 'left', minWidth: '220px' }}>Justificación Abastecimiento</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(() => {
+                                        const filtered = partialBatchItems.filter(p => {
+                                            if (!partialBatchSearch.trim()) return true;
+                                            return p.name.toLowerCase().includes(partialBatchSearch.toLowerCase().trim());
+                                        });
+
+                                        if (filtered.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                        No se encontraron productos coincidentes con "{partialBatchSearch}".
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return filtered.map((item, idx) => {
+                                            const numNew = Number(item.newPrice);
+                                            const hasChanged = !isNaN(numNew) && numNew > 0 && numNew !== item.oldPrice;
+                                            const diff = hasChanged ? numNew - item.oldPrice : 0;
+                                            const margin = numNew > 0 ? Math.round(((numNew - item.costBasis) / numNew) * 100) : 0;
+                                            const rowBg = hasChanged ? '#FEF9C3' : (idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9');
+
+                                            return (
+                                                <tr key={item.itemId} style={{ backgroundColor: rowBg, borderBottom: '1px solid #F1F5F9', transition: 'background-color 0.15s ease' }}>
+                                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#1E293B' }}>
+                                                        {item.name}
+                                                    </td>
+                                                    <td style={{ padding: '10px 10px', textAlign: 'center', color: '#64748B' }}>
+                                                        {item.unit}
+                                                    </td>
+                                                    <td style={{ padding: '10px 10px', textAlign: 'right', color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
+                                                        ${formatNumber(item.costBasis)}
+                                                    </td>
+                                                    <td style={{ padding: '10px 10px', textAlign: 'right', color: hasChanged ? '#94A3B8' : '#334155', textDecoration: hasChanged ? 'line-through' : 'none', fontVariantNumeric: 'tabular-nums' }}>
+                                                        ${formatNumber(item.oldPrice)}
+                                                    </td>
+                                                    <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    step="1"
+                                                                    value={item.newPrice}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setPartialBatchItems(prev => prev.map(p => p.itemId === item.itemId ? { ...p, newPrice: val } : p));
+                                                                    }}
+                                                                    style={{
+                                                                        width: '95px',
+                                                                        padding: '4px 6px',
+                                                                        borderRadius: '6px',
+                                                                        border: hasChanged ? '2px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                        fontSize: '0.84rem',
+                                                                        fontWeight: 'bold',
+                                                                        textAlign: 'right',
+                                                                        color: hasChanged ? '#0D7A57' : '#1E293B',
+                                                                        backgroundColor: 'white',
+                                                                        outline: 'none'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            {numNew > 0 && (
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: margin >= 50 ? '#059669' : (margin >= 20 ? '#D97706' : '#DC2626') }}>
+                                                                    Margen: {margin}%
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '10px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                        {hasChanged ? (
+                                                            <span style={{
+                                                                padding: '3px 8px',
+                                                                borderRadius: '100px',
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 800,
+                                                                backgroundColor: diff > 0 ? '#FEE2E2' : '#DCFCE7',
+                                                                color: diff > 0 ? '#991B1B' : '#166534',
+                                                                border: diff > 0 ? '1px solid #FCA5A5' : '1px solid #86EFAC'
+                                                            }}>
+                                                                {diff > 0 ? `🔴 Sube +$${formatNumber(diff)}` : `🟢 Baja -$${formatNumber(Math.abs(diff))}`}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ color: '#94A3B8', fontSize: '0.72rem' }}>Sin cambio</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                            <select
+                                                                value={item.justification}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setPartialBatchItems(prev => prev.map(p => p.itemId === item.itemId ? { ...p, justification: val } : p));
+                                                                }}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '4px 6px',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    fontSize: '0.72rem',
+                                                                    backgroundColor: 'white',
+                                                                    color: '#334155'
+                                                                }}
+                                                            >
+                                                                <option value="">-- Seleccionar Justificación --</option>
+                                                                {SUPPLY_JUSTIFICATION_PRESETS.map((pres, pIdx) => (
+                                                                    <option key={pIdx} value={pres.value === 'CUSTOM' ? '' : pres.value}>{pres.label}</option>
+                                                                ))}
+                                                            </select>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="O escribe motivo personalizado..."
+                                                                value={item.justification}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setPartialBatchItems(prev => prev.map(p => p.itemId === item.itemId ? { ...p, justification: val } : p));
+                                                                }}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '3px 6px',
+                                                                    borderRadius: '4px',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    fontSize: '0.7rem',
+                                                                    color: '#475569',
+                                                                    backgroundColor: '#FAFAFA'
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        });
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            backgroundColor: '#F8FAFC',
+                            borderTop: '1px solid #E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px'
+                        }}>
+                            {(() => {
+                                const modified = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice);
+                                return (
+                                    <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                                        {modified.length === 0 ? (
+                                            <span style={{ color: '#94A3B8' }}>Edita los precios deseados arriba para habilitar la aplicación de la adenda.</span>
+                                        ) : (
+                                            <span>
+                                                Se aplicará adenda con <strong>{modified.length} {modified.length === 1 ? 'producto modificado' : 'productos modificados'}</strong>.
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPartialBatchModalOpen(false)}
+                                    disabled={isSavingPartialBatch}
+                                    style={{
+                                        padding: '9px 16px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        backgroundColor: 'white',
+                                        color: '#475569',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isSavingPartialBatch || partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice).length === 0}
+                                    onClick={handleSavePartialBatch}
+                                    style={{
+                                        padding: '9px 20px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: '#0D7A57',
+                                        color: 'white',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.82rem',
+                                        cursor: isSavingPartialBatch || partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice).length === 0 ? 'not-allowed' : 'pointer',
+                                        opacity: partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice).length === 0 ? 0.6 : 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                    }}
+                                >
+                                    {isSavingPartialBatch ? (
+                                        <>
+                                            <RefreshCw size={15} className="animate-spin" />
+                                            Guardando Adenda...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send size={15} />
+                                            Aplicar Adenda y Despachar Notificación (Diff)
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
