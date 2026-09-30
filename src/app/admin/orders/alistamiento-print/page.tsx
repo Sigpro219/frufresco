@@ -7,7 +7,7 @@ import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUt
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
-import { printViaNewWindow, PrintDocumentSwitcher } from '@/components/print';
+import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 
 interface OrderItem {
@@ -385,7 +385,7 @@ export default function AlistamientoSabanaPrintPage() {
 
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         if (paramDate) return paramDate;
-        return getTomorrowDateStr();
+        return getBogotaDate(0);
     });
 
     const [selectedCellFilter, setSelectedCellFilter] = useState<string>('ALL');

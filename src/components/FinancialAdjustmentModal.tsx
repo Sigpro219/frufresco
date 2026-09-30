@@ -37,6 +37,13 @@ interface FinancialAdjustmentModalProps {
     defaultRcaCategory?: string;
     defaultRcaSubtype?: string;
     defaultRcaResponsible?: string;
+    defaultImputedEntities?: any[];
+    defaultImputedTargetType?: string;
+    defaultImputedEntityId?: string;
+    defaultImputedEntityName?: string;
+    defaultImputedEvidenceNotes?: string;
+    providersList?: any[];
+    collaboratorsList?: any[];
     activeTaxonomy?: DefectCategoryL1[];
     onSuccess: (message: string, redirectUrl?: string) => void;
 }
@@ -50,6 +57,13 @@ export default function FinancialAdjustmentModal({
     defaultRcaCategory = 'dano_mecanico',
     defaultRcaSubtype = 'aplastamiento_sobreestiba',
     defaultRcaResponsible = 'transporte',
+    defaultImputedEntities = [],
+    defaultImputedTargetType = 'none',
+    defaultImputedEntityId = '',
+    defaultImputedEntityName = '',
+    defaultImputedEvidenceNotes = '',
+    providersList = [],
+    collaboratorsList = [],
     activeTaxonomy = RCA_CATEGORIES_L1,
     onSuccess
 }: FinancialAdjustmentModalProps) {
@@ -60,6 +74,8 @@ export default function FinancialAdjustmentModal({
     const [rcaCategoryL1, setRcaCategoryL1] = useState(defaultRcaCategory);
     const [rcaSubtypeL2, setRcaSubtypeL2] = useState(defaultRcaSubtype);
     const [rcaResponsible, setRcaResponsible] = useState<string>(defaultRcaResponsible);
+    const [imputedEntities, setImputedEntities] = useState<any[]>(defaultImputedEntities);
+    const [imputedTargetType, setImputedTargetType] = useState<string>(defaultImputedTargetType);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -231,10 +247,23 @@ export default function FinancialAdjustmentModal({
                 `• ${i.product_name}: ${i.affected_quantity} ${i.unit_of_measure} @ ${formatMoney(i.unit_price)} = ${formatMoney(i.affected_quantity * i.unit_price)} (${i.novelty_type.toUpperCase()})`
             ).join('\n');
 
+            const primaryEntity = imputedEntities && imputedEntities.length > 0 ? imputedEntities[0] : null;
+            const primaryEntityId = primaryEntity?.id || defaultImputedEntityId || null;
+            const primaryEntityName = primaryEntity?.name || defaultImputedEntityName || null;
+            const entitiesFormatted = imputedEntities && imputedEntities.length > 0 
+                ? imputedEntities.map(e => `${e.name} (${e.role || 'Responsable'} - ${e.sharePercent}%)`).join(', ')
+                : primaryEntityName;
+
             const rcaTag = buildRcaMetadataTag({
                 categoryL1: rcaCategoryL1,
                 subtypeL2: rcaSubtypeL2,
-                responsible: rcaResponsible as any
+                responsible: rcaResponsible as any,
+                imputedTargetType: imputedTargetType,
+                imputedEntities: imputedEntities,
+                imputedEntityId: primaryEntityId || undefined,
+                imputedEntityName: primaryEntityName || undefined,
+                imputedEvidenceNotes: defaultImputedEvidenceNotes || notes,
+                deductionAmount: calculatedCreditAmount
             });
 
             if (mode === 'credit_note') {
@@ -251,25 +280,19 @@ export default function FinancialAdjustmentModal({
                                 quantity_returned: item.affected_quantity,
                                 reason: `[NOTA CRÉDITO PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`,
                                 status: 'approved',
-                                defect_category_l1: rcaCategoryL1,
-                                defect_subtype_l2: rcaSubtypeL2,
-                                imputed_responsible: rcaResponsible,
-                                is_replacement_rejection: Boolean(pqr.is_replacement_rejection)
+                                notes: `RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}`
                             }]);
                     }
                 }
 
-                const finalNotes = `${notes}\n\n[CONCEPTO: Opción 3 - Nota Crédito Comercial Emitida]\n-> Valor Acreditado a Favor del Cliente: ${formatMoney(calculatedCreditAmount)}\n-> Desglose de Ítems:\n${itemsSummary || `• Ajuste comercial directo por ${formatMoney(calculatedCreditAmount)}`}\n${rcaTag}`;
+                const finalNotes = `${notes}\n\n[CONCEPTO: Opción 3 - Nota Crédito Comercial Emitida]\n-> Valor Acreditado a Favor del Cliente: ${formatMoney(calculatedCreditAmount)}\n-> Desglose de Ítems:\n${itemsSummary || `• Ajuste comercial directo por ${formatMoney(calculatedCreditAmount)}`}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}`;
 
                 const { error: pqrUpdateErr } = await supabase
                     .from('customer_service_pqrs')
                     .update({
                         status: 'resolved',
                         resolved_at: nowIso,
-                        resolution_notes: finalNotes,
-                        defect_category_l1: rcaCategoryL1,
-                        defect_subtype_l2: rcaSubtypeL2,
-                        imputed_responsible: rcaResponsible
+                        resolution_notes: finalNotes
                     })
                     .eq('id', pqr.id);
 
@@ -304,10 +327,7 @@ export default function FinancialAdjustmentModal({
                             quantity_returned: item.affected_quantity,
                             reason: `[AJUSTE FACTURA PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`,
                             status: 'approved',
-                            defect_category_l1: rcaCategoryL1,
-                            defect_subtype_l2: rcaSubtypeL2,
-                            imputed_responsible: rcaResponsible,
-                            is_replacement_rejection: Boolean(pqr.is_replacement_rejection)
+                            notes: `RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}`
                         }]);
                 }
 
@@ -332,7 +352,7 @@ export default function FinancialAdjustmentModal({
                 if (invoiceData) {
                     const { data: orderProf } = await supabase
                         .from('orders')
-                        .select('profiles(iva_responsible)')
+                        .select('profiles:profile_id(iva_responsible)')
                         .eq('id', orderId)
                         .single();
                     const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
@@ -350,17 +370,14 @@ export default function FinancialAdjustmentModal({
                 }
 
                 // 4. Update PQR status and notes
-                const finalNotes = `${notes}\n\n[CONCEPTO: Opción 4 - Factura Ajustada con Cantidad Recibida]\n-> Total Anterior: ${formatMoney(previousTotal)} | Nuevo Total Final: ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)})\n-> Ítems Ajustados en Pedido:\n${itemsSummary}\n${rcaTag}`;
+                const finalNotes = `${notes}\n\n[CONCEPTO: Opción 4 - Factura Ajustada con Cantidad Recibida]\n-> Total Anterior: ${formatMoney(previousTotal)} | Nuevo Total Final: ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)})\n-> Ítems Ajustados en Pedido:\n${itemsSummary}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}`;
 
                 const { error: pqrUpdateErr } = await supabase
                     .from('customer_service_pqrs')
                     .update({
                         status: 'resolved',
                         resolved_at: nowIso,
-                        resolution_notes: finalNotes,
-                        defect_category_l1: rcaCategoryL1,
-                        defect_subtype_l2: rcaSubtypeL2,
-                        imputed_responsible: rcaResponsible
+                        resolution_notes: finalNotes
                     })
                     .eq('id', pqr.id);
 

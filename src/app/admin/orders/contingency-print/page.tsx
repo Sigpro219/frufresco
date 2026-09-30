@@ -447,7 +447,7 @@ export default function ContingencyPrintPage() {
     const paramDate = searchParams.get('date');
     const mode = searchParams.get('mode') || 'remissions'; // 'remissions' (default) | 'dispatch' | 'picking' | 'purchases' | 'all'
 
-    const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || getBogotaDate(1));
+    const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || getBogotaDate(0));
 
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [stocks, setStocks] = useState<Record<string, number>>({});
@@ -817,8 +817,51 @@ export default function ContingencyPrintPage() {
                 {orders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3.5rem 2rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #CBD5E1', maxWidth: '650px', margin: '2rem auto', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                         <ShieldAlert size={44} color="#64748B" style={{ margin: '0 auto 1rem' }} />
-                        <h3 style={{ margin: '0 0 0.5rem', fontWeight: '800', fontSize: '1.1rem', color: '#0F172A' }}>No hay pedidos para el Kit de Contingencia en esta fecha</h3>
-                        <p style={{ margin: 0, color: '#64748B', fontSize: '0.85rem' }}>Selecciona otra fecha con pedidos operacionales o utiliza el selector de fecha superior.</p>
+                        <h3 style={{ margin: '0 0 0.5rem', fontWeight: '800', fontSize: '1.1rem', color: '#0F172A' }}>No hay pedidos registrados para el {selectedDate}</h3>
+                        <p style={{ margin: '0 0 1.25rem', color: '#64748B', fontSize: '0.85rem' }}>Verifica si los pedidos corresponden a otra jornada de entrega o utiliza los accesos rápidos:</p>
+                        <div style={{ display: 'inline-flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const todayStr = getBogotaDate(0);
+                                    setSelectedDate(todayStr);
+                                    router.replace(`/admin/orders/contingency-print?date=${todayStr}&mode=${mode}`);
+                                }}
+                                style={{
+                                    padding: '6px 14px',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#0D7A57',
+                                    color: '#FFFFFF',
+                                    border: 'none',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)'
+                                }}
+                            >
+                                Ver tanda de Hoy ({getBogotaDate(0)})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const yestStr = getBogotaDate(-1);
+                                    setSelectedDate(yestStr);
+                                    router.replace(`/admin/orders/contingency-print?date=${yestStr}&mode=${mode}`);
+                                }}
+                                style={{
+                                    padding: '6px 14px',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#F1F5F9',
+                                    color: '#334155',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Ver tanda de Ayer ({getBogotaDate(-1)})
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <>

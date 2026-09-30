@@ -35,7 +35,8 @@ export const RCA_CATEGORIES_L1: DefectCategoryL1[] = [
         subtypes: [
             { code: 'aplastamiento_sobreestiba', label: 'Aplastamiento por sobrepeso/sobreestiba', typicalResponsible: 'transporte', description: 'Canastillas sobrecargadas o furgón mal estibado.' },
             { code: 'golpe_magulladura', label: 'Golpe / Magulladura por caída', typicalResponsible: 'transporte', description: 'Hematomas en pulpa por frenazos bruscos o manipulación en descarga.' },
-            { code: 'corte_raspadura', label: 'Corte / Raspadura en corteza', typicalResponsible: 'picking', description: 'Heridas abiertas provocadas por herramientas, uñas o canastillas rotas.' }
+            { code: 'corte_raspadura', label: 'Corte / Raspadura en corteza', typicalResponsible: 'picking', description: 'Heridas abiertas provocadas por herramientas, uñas o canastillas rotas.' },
+            { code: 'faltante_pesaje_báscula', label: 'Faltante de Kilos en Báscula / Picking', typicalResponsible: 'picking', description: 'Diferencia física entre lo pesado en célula y lo recibido por el cliente.' }
         ]
     },
     {
@@ -70,11 +71,12 @@ export const RCA_CATEGORIES_L1: DefectCategoryL1[] = [
     },
     {
         code: 'error_montaje_pedido',
-        label: '6. Error en Montaje de Pedido (Ventas)',
-        description: 'Inconsistencias al momento de capturar, digitar o programar la orden del cliente.',
+        label: '6. Error en Montaje & Alistamiento',
+        description: 'Inconsistencias al capturar la orden o rotular/armar los pedidos en célula.',
         subtypes: [
             { code: 'sku_equivocado_captura', label: 'SKU o variedad errada en captura', typicalResponsible: 'comercial', description: 'Asesor digitó una variedad diferente a la solicitada por el cliente.' },
             { code: 'unidad_cantidad_errada', label: 'Unidad o cantidad digitada errada', typicalResponsible: 'comercial', description: 'Confusión entre caja, kilo o atado, o exceso de ceros en cantidad.' },
+            { code: 'rotulado_célula_trocado', label: 'Rótulo o canastilla trocada en célula', typicalResponsible: 'picking', description: 'Canastilla rotulada o empacada cruzada para otro cliente.' },
             { code: 'sede_sucursal_trocada', label: 'Sede o sucursal de entrega trocada', typicalResponsible: 'comercial', description: 'Pedido asignado a la sede norte en lugar de la sede sur del cliente.' },
             { code: 'fecha_ventana_invalida', label: 'Fecha o franja de entrega incorrecta', typicalResponsible: 'comercial', description: 'Programado para un día de cierre o fuera de la ventana pactada.' },
             { code: 'precio_desacuerdo_comercial', label: 'Precio no acorde al acuerdo comercial', typicalResponsible: 'comercial', description: 'Facturación con precio estándar obviando el acuerdo pactado.' },
@@ -168,25 +170,79 @@ export const RESPONSIBLE_PARTIES: Record<string, ResponsibleParty> = {
     }
 };
 
-// Helpers to encode & decode RCA metadata from resolution notes/descriptions
-// Ensuring 100% backward compatibility even before DB migrations are run
-export function parseRcaFromRecord(record: any): {
+export interface ImputedEntity {
+    id: string;
+    name: string;
+    documentId?: string;
+    role?: string;
+    entityType: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
+    sharePercent: number; // 0 a 100
+    deductionAmount?: number; // Valor en COP
+    notes?: string;
+}
+
+export interface ParsedRcaResult {
     categoryL1: string;
     subtypeL2: string;
     responsible: 'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente' | 'no_definido';
     notes: string;
     isReplacementRejection: boolean;
     isExplicitRca: boolean;
-} {
+    imputedTargetType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client' | 'none';
+    imputedEntities: ImputedEntity[];
+    imputedEntityId?: string;
+    imputedEntityName?: string;
+    imputedEvidenceNotes?: string;
+}
+
+// Helpers to encode & decode RCA metadata from resolution notes/descriptions
+// Ensuring 100% backward compatibility even before DB migrations are run
+export function parseRcaFromRecord(record: any): ParsedRcaResult {
     // 1. Direct columns if present in DB
     if (record.defect_category_l1) {
+        let parsedEntities: ImputedEntity[] = [];
+        if (record.imputed_entity_name) {
+            parsedEntities = [{
+                id: record.imputed_entity_id || 'entity-1',
+                name: record.imputed_entity_name,
+                role: record.imputed_responsible,
+                entityType: record.imputed_responsible === 'proveedor' ? 'provider' : 
+                            record.imputed_responsible === 'transporte' ? 'driver' : 
+                            record.imputed_responsible === 'comercial' ? 'sales_rep' : 
+                            record.imputed_responsible === 'cliente' ? 'client' : 'employee',
+                sharePercent: 100
+            }];
+        }
+
+        // Try extracting richer metadata from tag if available
+        const textToSearch = `${record.resolution_notes || ''} \n ${record.description || ''}`;
+        const rcaMatch = textToSearch.match(/\[RCA_METADATA:\s*({.*?})\]/);
+        if (rcaMatch && rcaMatch[1]) {
+            try {
+                const parsed = JSON.parse(rcaMatch[1]);
+                if (Array.isArray(parsed.imputedEntities) && parsed.imputedEntities.length > 0) {
+                    parsedEntities = parsed.imputedEntities;
+                }
+            } catch {
+                // ignore
+            }
+        }
+
         return {
             categoryL1: record.defect_category_l1,
             subtypeL2: record.defect_subtype_l2 || '',
             responsible: (record.imputed_responsible as any) || 'no_definido',
             notes: record.imputation_evidence_notes || '',
             isReplacementRejection: Boolean(record.is_replacement_rejection),
-            isExplicitRca: true
+            isExplicitRca: true,
+            imputedTargetType: record.imputed_responsible === 'proveedor' ? 'provider' : 
+                               record.imputed_responsible === 'transporte' ? 'driver' : 
+                               record.imputed_responsible === 'comercial' ? 'sales_rep' : 
+                               record.imputed_responsible === 'cliente' ? 'client' : 'employee',
+            imputedEntities: parsedEntities,
+            imputedEntityId: record.imputed_entity_id,
+            imputedEntityName: record.imputed_entity_name,
+            imputedEvidenceNotes: record.imputation_evidence_notes
         };
     }
 
@@ -196,13 +252,28 @@ export function parseRcaFromRecord(record: any): {
     if (rcaMatch && rcaMatch[1]) {
         try {
             const parsed = JSON.parse(rcaMatch[1]);
+            const entities: ImputedEntity[] = Array.isArray(parsed.imputedEntities) ? parsed.imputedEntities : 
+                (parsed.imputedEntityName ? [{
+                    id: parsed.imputedEntityId || 'legacy-1',
+                    name: parsed.imputedEntityName,
+                    role: parsed.responsible,
+                    entityType: parsed.imputedTargetType || 'employee',
+                    sharePercent: 100,
+                    deductionAmount: parsed.deductionAmount
+                }] : []);
+
             return {
                 categoryL1: parsed.categoryL1 || 'otro',
                 subtypeL2: parsed.subtypeL2 || '',
                 responsible: parsed.responsible || 'no_definido',
                 notes: parsed.notes || '',
                 isReplacementRejection: Boolean(parsed.isReplacementRejection),
-                isExplicitRca: true
+                isExplicitRca: true,
+                imputedTargetType: parsed.imputedTargetType,
+                imputedEntities: entities,
+                imputedEntityId: parsed.imputedEntityId,
+                imputedEntityName: parsed.imputedEntityName,
+                imputedEvidenceNotes: parsed.imputedEvidenceNotes || parsed.notes
             };
         } catch {
             // Ignore parse error and continue
@@ -267,7 +338,8 @@ export function parseRcaFromRecord(record: any): {
         responsible: inferredResponsible,
         notes: '',
         isReplacementRejection: isReplacement,
-        isExplicitRca: false
+        isExplicitRca: false,
+        imputedEntities: []
     };
 }
 
@@ -277,13 +349,25 @@ export function buildRcaMetadataTag(data: {
     responsible: string;
     notes?: string;
     isReplacementRejection?: boolean;
+    imputedTargetType?: string;
+    imputedEntities?: ImputedEntity[];
+    imputedEntityId?: string;
+    imputedEntityName?: string;
+    imputedEvidenceNotes?: string;
+    deductionAmount?: number;
 }): string {
     const json = JSON.stringify({
         categoryL1: data.categoryL1,
         subtypeL2: data.subtypeL2,
         responsible: data.responsible,
         notes: data.notes || '',
-        isReplacementRejection: Boolean(data.isReplacementRejection)
+        isReplacementRejection: Boolean(data.isReplacementRejection),
+        imputedTargetType: data.imputedTargetType || 'none',
+        imputedEntities: data.imputedEntities || [],
+        imputedEntityId: data.imputedEntityId || '',
+        imputedEntityName: data.imputedEntityName || '',
+        imputedEvidenceNotes: data.imputedEvidenceNotes || '',
+        deductionAmount: data.deductionAmount || 0
     });
     return `[RCA_METADATA: ${json}]`;
 }

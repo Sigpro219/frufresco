@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.29 (Calibración Estricta de Remisiones Físicas en Carta Letter Portrait, Erradicación de Desbordes y Enlace Directo en Navbar)  
-> **Fecha:** 29 de Septiembre, 2026  
+> **Versión:** 1.9.38 (Plantillas Humanizadas de Comunicación WhatsApp SAC, Consola Maestra 1600px, Sticky Magnético 2-Line, Dashboard Histórico Lean con Pareto Dual 80/20, KPIs FTR/CoQ/MTTR/CRI/VQR/CDR/PAR & Tracker de Planes de Acción CAPA Poka-Yoke)
+> **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección de Operaciones, Mesa de Control Logística & Arquitectura Backend Supabase
+> **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
 
 ---
 
@@ -437,6 +437,12 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 - [x] **Tarea COM-23 (Reingeniería Matriz / Pareto de Frescura):** Implementar clasificación dinámica en 3 Terciles por frecuencia transaccional (T1: 4d, T2: 8d, T3: 15d).
 - [x] **Tarea COM-24 (Reingeniería Matriz / UI & Filtros de Tercil):** Incorporar badges de tercil, chips de filtrado rápido (`[T1: Críticos]`, `[T2: Moderados]`, `[T3: Quincenales]`, `[Alertas >20%]`) y panel Andon priorizado.
 - [x] **Tarea COM-25 (Acuerdos Comerciales / Nomenclatura & Visualización):** Implementar función `computeDefaultAgreementName` con formato `[Empresa] - [DD-MM-AA]`, persistencia en `quotes.model_snapshot_name` y visualización omnipresente en tabla principal, drawer lateral, documento de precios, PDF formal, ficha de cliente y portal B2B.
+- [x] **Tarea COM-26 (Facturación / Auditoría de Novedades de Calidad en Cortes):** Enlazar visualmente en la vista de Cortes de Facturación (`/admin/commercial/billing`) las resoluciones emitidas por Control de Calidad (`billing_returns` con `status = 'approved'`), discriminando entre sustracción de remisión neta y generación de Nota Crédito con vista de Auditoría Tripartita.
+- [x] **Tarea COM-27 (Facturación / Generador de Planos World Office Desktop):** Construir el módulo exportador de documentos masivos para World Office Desktop (`.xlsx` / `.csv`) con la estructura canónica requerida por su validador local (Documentos FV y NC, NIT sin DV, DV separado, Cuentas Contables y desglose de Base e IVA).
+- [x] **Tarea COM-28 (Calidad / Automatización de Sustracción Neta de Remisión):** Asegurar que al aprobar un ajuste de remisión en `FinancialAdjustmentModal.tsx`, las unidades e importes de `order_items` y `orders` se descuenten automáticamente antes del corte de facturación, garantizando que la factura emitida en World Office nazca con el valor neto exacto recibido.
+- [x] **Tarea COM-29 (Facturación / Gobernanza de Secuencias Duales y Orden de Entrega):** Implementar en `app_settings` y en la pestaña de Configuración de Facturación el control del prefijo y próximo consecutivo para Facturas de Venta (`SETT`) y Notas Crédito (`NC-SETT`), aplicando la asignación determinista 1 a 1 por Jerarquía de Ruta y Parada de Entrega.
+- [x] **Tarea COM-30 (Clientes / Bandera de Requerimiento de Documento por Sucursal):** Habilitar en la ficha de la sucursal (`profiles`) el selector de `document_requirement` (`remision_post_entrega` vs `factura_pre_despacho`) para enrutar automáticamente el pedido al flujo contable correspondiente.
+- [x] **Tarea COM-31 (Facturación / Calibración Gemba Plano Oficial 57 Columnas World Office Desktop):** Calibrar el motor de exportación `worldOfficeExport.ts` para que genere idénticamente la plantilla oficial de 57 columnas que World Office Desktop digiere en la operación viva de FruFresco (`formato_migracion (2).xlsx`): Hoja `'Detalle migración'`, Empresa fija `"INVESTMENTS CORTES SAS"`, Tercero Interno `456282`, Bodega `"Principal"`, Fechas en `DD/MM/YYYY`, IVA en formato decimal (`0` / `0.19`) y Tercero Externo como NIT limpio.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -465,6 +471,247 @@ Para sincronizar la facturación con los despachos físicos de bodega, las remis
    - **Validación de Mora:** Si existe al menos una factura impaga con `due_date < now()`.
 3. Si se viola cualquiera de las dos condiciones, el sistema **bloquea la orden** y solicita confirmación de excepción comercial al usuario. Si se autoriza, se escribe un registro inmutable en `audit_logs` con la acción `CREDIT_LIMIT_EXCEPTION_AUTHORIZED`, salvaguardando la gobernanza de caja.
 4. **Sincronización de Términos (GAP-17):** Al crear una cotización o formalizar un acuerdo comercial, el plazo `payment_terms_days` se sincroniza automáticamente al campo `payment_days` de la tabla `profiles`.
+
+#### D. El Circuito Transaccional Calidad-Facturación: Sustracción Neta vs Nota Crédito
+La facturación no opera sobre promesas comerciales teóricas sino sobre la **realidad física de la entrega liquidada por Calidad**:
+
+1. **Principio Rector: Remisión como Instrumento Operativo y Factura como Efecto Contable:**
+   - **Ruta Estándar (Por Remisión):** El vehículo despacha con Remisión de Despacho física en papel carta duplex. Si el cliente reporta mermas o rechazos en puerta, el chofer registra la novedad. Control de Calidad valida y dictamina en `/admin/customer-service`. Las cantidades rechazadas se sustraen directamente de la remisión (`order_items.quantity = picked_quantity - returned_quantity`). Al ejecutar el corte de facturación (AM/PM), la Factura de Venta se emite directamente por el **valor neto recibido a satisfacción**, erradicando notas crédito innecesarias ante la DIAN y World Office.
+   - **Ruta Excepción (Facturación Anticipada por Exigencia del Cliente):** Cuando un cliente institucional exige por contrato que la Factura Electrónica física viaje con el camión desde la madrugada:
+     - Si ocurre una devolución en destino, la factura ya existe en firme en World Office con el valor original.
+     - Calidad audita el rechazo y aprueba la resolución `credit_note` en `FinancialAdjustmentModal.tsx`.
+     - Esto inserta un registro en `billing_returns` con `status: 'approved'` y taxonomía RCA L1/L2.
+     - El facturador procesa estas novedades en el **Corte ADJ**, generando formalmente el documento de **Nota Crédito (NC)** referenciando el consecutivo fiscal de la factura madre original.
+
+2. **Las 4 Resoluciones Deterministas de Calidad y su Impacto:**
+   - **A. Rechazar PQRS (`reject_pqr`):** La novedad no procede (daño imputable al cliente, rotura de cadena de frío en nevera del cliente o fuera de norma de recibo). La remisión/factura se mantiene al 100% y se cobra íntegra.
+   - **B. Nota Crédito (`credit_note`):** Se aprueba el descuento financiero. En remisión estándar, descuenta la base facturable previa al corte; en pedidos prefacturados, autoriza formalmente la emisión de la Nota Crédito (NC) en el Corte ADJ con IVA prorrateado.
+   - **C. Ajustar Factura / Sustracción Neta (`invoice_adjustment`):** Modifica directamente las cantidades en `order_items.quantity`, recalcula `orders.total` y ajusta `billing_invoices` para que la factura nazca con el valor neto exacto recibido a satisfacción sin emitir nota crédito.
+   - **D. Reprogramar Pedido / Reposición Física D+1 (`reschedule_order`):** Se genera automáticamente un pedido hijo (`order_type = 'replacement'`, `origin_source = 'customer_service'`) en ruta para el día siguiente valorizado estrictamente en **$0 COP**. La factura y remisión original se mantienen intactas porque el cliente recibirá la reposición física sin cobro adicional. El enlace interactivo `/admin/orders/create?...` precarga al cliente, el producto a reponer y la tarifa en $0 COP con notas de auditoría vinculadas a la PQR.
+
+3. **Matriz de Imputabilidad Nominal y Grupal con Política de Descuento (Política de Responsabilidad Corporativa - SDD v1.9.34):**
+   Dentro del ecosistema FruFresco, existe una **política de responsabilidad corporativa y cobro de errores operativos/comerciales**, donde las averías, mermas injustificadas y faltantes se imputan nominalmente al colaborador, cuadrilla o proveedor causante para deducción en nómina, retención en fletes o emisión de nota débito:
+
+   - **A. Canal Proveedor (`proveedor` - Campo / Origen):**
+     * **Selector Dinámico:** Despliega un omnibox interactivo sobre la tabla `providers` para buscar por Nombre Comercial, Razón Social o NIT.
+     * **Pre-selección Inteligente:** Si el producto reclamado tiene un registro de compra en `purchases`, el sistema sugiere automáticamente al proveedor que despachó el lote.
+     * **Consecuencia Financiera:** Genera una **Nota Débito al Proveedor** en el módulo de compras y castiga su score de calidad de abastecimiento.
+   
+   - **B. Canal Bodega (`bodega` - Almacenamiento & Postcosecha):**
+     * **Selector Dinámico:** Consulta la tabla `profiles` filtrando colaboradores con especialidad o rol de Almacén (`AUX DE BODEGA`, `LIDER DE BODEGA`, `LIDER DE INVENTARIO`).
+     * **Consecuencia Financiera:** Se asienta como merma operativa de bodega y genera la novedad de descuento de nómina para el auxiliar o supervisor de turno.
+
+   - **C. Canal Picking (`picking` - Célula de Alistamiento & Mesa):**
+     * **Selector Dinámico & Cuadrillas:** Permite seleccionar uno o varios operarios de alistamiento (`profiles` con rol `LIDER DE LISTA`, `AUX DE BODEGA`, `PICKER`).
+     * **Prorrateo de Responsabilidad (% Split):** Permite distribuir el 100% de la deducción entre los miembros de la cuadrilla (ej: 50% Operario 1 y 50% Operario 2, o porcentajes ponderados).
+     * **Consecuencia Financiera:** Novedad directa de deducción salarial por falta de cuidado en selección o mal pesaje en báscula.
+
+   - **D. Canal Transporte (`transporte` - Logística & Flota):**
+     * **Selector Dinámico & Auto-Detección:** Si el pedido cuenta con ruta asignada en `routes` / `route_stops`, el sistema **auto-sugiere al Conductor titular asignado al furgón**, permitiendo además seleccionar auxiliares de ruta (`AUX DE RUTA`).
+     * **Consecuencia Financiera:** Aplica retención o descuento directo en la **Liquidación de Fletes** del transportista.
+
+   - **E. Canal Comercial (`comercial` - Ventas & KAMs):**
+     * **Selector Dinámico:** Lista los asesores comerciales y gestores de pedidos (`profiles` con rol `GESTION DE PEDIDOS`, `ADMINISTRACION`, `COMERCIAL`).
+     * **Consecuencia Financiera:** Registra incidencia en la tasa de errores de captura (retrabajo logístico) y deducción por error manifiesto en precio o cantidad no pactada.
+
+   - **F. Canal Cliente (`cliente` - Relación Comercial / Autogestión B2B):**
+     * **Selector & Vínculo:** Pre-carga la sede y razón social del cliente corporativo, registrando el nombre del ecónomo o contacto que incurrió en error en el portal B2B o solicitó cambio de minuta a destiempo.
+     * **Consecuencia Financiera:** **No castiga el OEE ni la calidad de FruFresco**; habilita la evaluación de cobro de flete correctivo al cliente.
+
+   - **G. Estructura de Persistencia del Dictamen (JSON RCA_METADATA & Columnas SQL):**
+     * El tag inmutable `[RCA_METADATA: ...]` persiste el desglose:
+       ```json
+       {
+         "categoryL1": "dano_mecanico",
+         "subtypeL2": "aplastamiento_sobreestiba",
+         "responsible": "transporte",
+         "imputedTargetType": "employee",
+         "imputedEntities": [
+           { "id": "uuid-1", "name": "Carlos Rodríguez", "documentId": "1020304050", "role": "Conductor", "sharePercent": 70, "deductionAmount": 42000 },
+           { "id": "uuid-2", "name": "Pedro Gómez", "documentId": "1030405060", "role": "Auxiliar Ruta", "sharePercent": 30, "deductionAmount": 18000 }
+         ],
+         "imputedEvidenceNotes": "Estiba volcada en curva por exceso de velocidad. Remisión firmada con novedad.",
+         "isReplacementRejection": false
+       }
+       ```
+     * Las tablas `customer_service_pqrs` y `billing_returns` actualizan las columnas canónicas: `defect_category_l1`, `defect_subtype_l2`, `imputed_responsible`, `imputation_evidence_notes`.
+
+   - **H. Emisión Oficial del Reporte de No Conformidad (RNC PDF Imprimible):**
+     * En `/admin/customer-service/rnc/[id]/print`, se genera el acta legal institucional de *INVESTMENTS CORTES SAS* que contiene:
+       1. Encabezado con logo y metadatos del pedido/PQR.
+       2. Diagnóstico técnico L1/L2 y justificación biológica/logística.
+       3. Cuadro de **Imputación Nominal de Responsabilidad & Notificación de Deducción**, desglosando Nombre, Cédula/NIT, Cargo, Porcentaje de Culpa y Monto en Pesos a descontar.
+       4. Casillas de firma formal para el Inspector de Calidad y el Funcionario/Proveedor Imputado.
+
+
+4. **UX/UI Canónica: Consola Maestra Full-Width (1600px) & Wizard Modal de Auditoría Poka-Yoke (SDD v1.9.36):**
+   Para erradicar la sobrecarga cognitiva de las vistas divididas verticales (Split-View 2 Columnas) y maximizar el escaneo visual rápido en pantallas de escritorio, el módulo de Atención al Cliente y Calidad adopta la arquitectura de **Galería Maestra con Modal de Pasos (Wizard Stepper)** probada en el Módulo Maestro SKU (/admin/commercial/inventory):
+   
+   - **A. Vista Principal: Galería Maestra Full-Width (1600px):**
+     * **Cockpit de KPIs Operativos Colapsable:** Métricas en tiempo real de FTR (% First Time Right sin novedades), Costo de Calidad acumulado ($ CoQ COP), Tiempo Promedio de Cierre (MTTR horas) y Macrocausa #1 de Pareto. Con persistencia local (localStorage) para expandir o contraer.
+     * **Protocolo Sticky Magnético Multi-Línea (`estandar-galerias-frufresco` - Perfil A):**
+       - **Línea 0 (Navbar Principal):** Base inferior anclada en `top: 85px` (`zIndex: 100`).
+       - **Línea 1 Sticky (Toolbar & Omnibox):** Anclada en `top: 85px` con `zIndex: 70`, fondo `#FFFFFF` 100% sólido anti-sangrado, radio de 16px, borde `1px solid #CBD5E1` y sombra sutil (`boxShadow: 0 4px 20px rgba(0,0,0,0.05)`). Equipada con telemetría reactiva (`ResizeObserver` sobre `toolbarRef`) para medir `toolbarHeight` en tiempo real ante cualquier resolución de pantalla o zoom.
+       - **Línea 2 Sticky (Thead & Celdas TH):** Anclada de forma reactiva en `top: ${85 + toolbarHeight}px` con `zIndex: 40`, fondo `#F8FAFC` 100% sólido y borde inferior `2px solid #E2E8F0`, garantizando continuidad matemática estricta ($Gap = 0\text{px}$) en ambas tablas (PQRS y Novedades de Línea).
+       - **Blindaje Anti-Secuestro de Scroll (Chromium GPU Rules):** Contenedores tipo Card con `overflow: 'visible'` y tablas con `borderCollapse: 'separate', borderSpacing: 0` para evitar desalineaciones en capas de composición gráfica de Blink.
+     * **Barra de Herramientas Sticky con Superbuscador Omnibox Universal:** Integración de GalleryOmnibox con atajo / para búsqueda multi-criterio simultánea (Folio, Cliente, NIT, Canal, Causa Raíz L1/L2, Imputado, # Pedido), selector de pestañas (Pendientes, En Auditoría, Resueltos, Rechazados, Novedades Faltantes/Averías) y recarga rápida.
+     * **Sábana Maestra de Alta Densidad:**
+       1. *Folio & Radicación:* Tipo de caso (Reclamo, Petición, Queja), ID abreviado con fecha amigable y hora.
+       2. *Cliente & Contacto:* Avatar de iniciales, Razón social, Sede, NIT, Canal HORECA/Institucional y botón de WhatsApp verificado (E.164 Colombia).
+       3. *Asunto & Pedido:* Resumen del hecho y badge clickeable del pedido vinculado (#PED-XXXX) o indicador de vinculación rápida.
+       4. *Evidencia Fotográfica:* Thumbnail con hover interactivo, badge con contador de evidencias fotográficas adjuntas y zoom instantáneo.
+       5. *Diagnóstico RCA:* Badge de Macrocausa L1 y Subtipo L2 con código visual de severidad.
+       6. *Imputabilidad & Recuperación:* Icono de área responsable (Bodega, Picking, Transporte, etc.), funcionario/proveedor asignado y monto $ COP liquidado para deducción.
+       7. *Estado & Resolución Comercial:* Píldora de estado del caso y etiqueta de resolución ejecutada (Repuesto D+1  COP, Nota Crédito, Ajuste Factura, Rechazado).
+       8. *Acciones Rápidas:* Botón primario Auditar Caso (despliega Wizard Modal), acceso directo al acta legal RNC PDF y contacto WhatsApp.
+
+   - **B. Modal de Auditoría en 3 Pasos (Wizard Stepper Poka-Yoke):**
+     * Al hacer clic en Auditar Caso, se despliega una consola modal centrada y focalizada con barra de progreso superior de 3 etapas:
+       - **Paso 1: Contexto, Hecho Técnico & Evidencias:**
+         * Descripción completa del reclamo, datos de contacto del cliente corporativo y editor rápido de celular para WhatsApp.
+         * **Consola de Comunicación WhatsApp SAC con Plantillas Humanizadas (SDD v1.9.38):** Erradica mensajes crípticos con hashes internos (#91e43fa9). Genera automáticamente mensajes personalizados y profesionales con saludo institucional, nombre del cliente y empresa, número de pedido inteligible (#PED-XXXX), resumen de la novedad y botones de acción rápida:
+            1. *Plantilla 1 (Caso Recibido & En Proceso):* Saludo ágil y confirmación directa de tranquilidad ("Ya tenemos tu caso sobre el Pedido #XXXX y estamos trabajando en solucionarlo lo más pronto posible").
+            2. *Plantilla 2 (Confirmar Reposición D+1):* Notificación de reposición de producto a  COP programada para el próximo ciclo de ruta.
+            3. *Plantilla 3 (Nota Crédito / Ajuste):* Confirmación de ajuste contable y saldo a favor en estado de cuenta.
+            4. *Plantilla 4 (Cierre Conforme):* Agradecimiento de retroalimentación y cierre satisfactorio del reporte.
+          * Selector interactivo de vinculación con pedidos recientes del cliente o desvinculación asistida.
+         * Visor de fotos con miniaturas, visor principal, carrusel y botón de carga de evidencias fotográficas adicionales.
+         * Panel de declaración de novedades de línea (Faltante / Avería) por SKU con cálculo de impacto económico.
+       - **Paso 2: Diagnóstico Causa Raíz (RCA) & Matriz de Imputabilidad Nominal:**
+         * Selector de Macrocausa L1 y Subtipo L2 con acceso al configurador de taxonomía.
+         * Matriz de 6 Tarjetas de Área Responsable (Proveedor, Bodega, Picking, Transporte, Comercial, Cliente).
+         * Asignación nominal de funcionarios de cuadrilla o proveedores con sliders de porcentaje de culpa (% Split) y cálculo reactivo en pesos colombianos ($ COP) para deducción en nómina/fletes/nota débito.
+         * Cuadro de justificación técnica y análisis de causa raíz.
+       - **Paso 3: Resolución Comercial & Plan de Acción (CAPA):**
+         * 4 Tarjetas de Resolución Comercial Poka-Yoke:
+           1. *Cerrar Conforme / Sin Costo:* Dictamen de no procedencia sin impacto contable.
+           2. *Reponer Físicamente D+1 ( COP):* Enrutamiento directo al montaje de pedido hijo con valor  COP.
+           3. *Emitir Nota Crédito Financiera:* Apertura de FinancialAdjustmentModal en modo NC.
+           4. *Ajustar Factura / Sustracción Neta:* Apertura de FinancialAdjustmentModal en modo Ajuste.
+         * Selector de plantilla de Disposición Sanitaria (Invima Res. 2674/2013).
+         * Notas de dictamen final y botones de guardado / cierre formal del caso.
+
+5. **Dashboard Histórico de Calidad, Pareto Dual (Frecuencia vs Severidad $ COP) & Tracker de Planes de Mejoramiento (CAPA / PDCA Lean - SDD v1.9.37):**
+   Para transformar la consola operativa de PQRS en un sistema de **Calidad en la Fuente (Jidoka)** y **Mejora Continua (Kaizen / DMAIC)**, el módulo de Atención al Cliente y Calidad integra una vista analítica ejecutiva:
+   
+   - **A. Switcher de Modo de Consola (/admin/customer-service):**
+     * **[📋 Consola Operativa de Casos]:** Galería maestra 1600px, tabla docked con acople sticky magnético 2-line, Omnibox multi-criterio y Wizard Stepper modal de 3 pasos.
+     * **[📊 Dashboard Histórico & Planes de Mejora (CAPA)]:** Consola de telemetría lean con selector de horizonte temporal (`Hoy`, `Últimos 7 días`, `Últimos 30 días`, `Últimos 90 días`, `Año en curso`, `Histórico Total`) y exportación ejecutiva.
+   
+   - **B. Matriz Canónica de Indicadores Lean de Alto Rendimiento:**
+     1. *First Time Right (FTR %):* $\text{FTR} = \frac{\text{Pedidos Conformes sin Novedad}}{\text{Total Pedidos Despachados}} \times 100$ (Meta $\ge 98.5\%$, Semáforo Verde $\ge 98\%$, Amarillo $95\%-97.9\%$, Rojo $< 95\%$).
+     2. *Costo de No Calidad (CoQ Total $ COP):* $\text{CoQ} = \sum \text{Mermas} + \sum \text{Notas Crédito} + \sum \text{Costo Flete Falso (Reposición D+1)}$.
+     3. *CoQ Ratio (% sobre Facturación):* $\text{CoQ Ratio} = \frac{\text{CoQ Total}}{\text{Facturación Bruta Total}} \times 100$ (Meta Lean $\le 0.8\%$).
+     4. *Índice de Recuperación Nominal (Cost Recovery Index - CRI %):* $\text{CRI} = \frac{\sum \text{Deducciones Imputadas a Proveedores / Fletes / Nómina}}{\text{CoQ Total}} \times 100$ (Meta $\ge 85\%$).
+     5. *Tiempo Medio de Cierre (MTTR Horas):* $\text{MTTR} = \frac{\sum (\text{Fecha Resolución} - \text{Fecha Radicación})}{\text{Total Casos Resueltos}}$ (Meta $\le 4\text{h}$ en perecederos).
+     6. *Vendor Quality Rating (VQR Proveedor):* $\text{VQR} = 100 - (\% \text{ Rechazos en Muelle/Cliente} \times 1.5)$ (Meta $\ge 96/100$).
+     7. *Carrier Damage Rate (CDR Transporte):* $\text{CDR} = \frac{\text{Kg Dañados por Aplastamiento/Golpes}}{\text{Kg Transportados en Ruta}} \times 100$ (Meta $\le 0.3\%$).
+     8. *Picking Accuracy Rate (PAR Célula):* $\text{PAR} = 100 - \left( \frac{\text{Casos Faltante Báscula + SKU Trocado}}{\text{Total Canastillas Alistadas}} \times 100 \right)$ (Meta $\ge 99.2\%$).
+   
+   - **C. Pareto Dual Dinámico (Ley 80/20):**
+     * **Pareto por Frecuencia (Volumen de Incidencias):** Mapeo de Macrocausas L1 y Subtipos L2 más repetitivos para atacar fallas sistemáticas de captura, rotulado y pesaje en célula.
+     * **Pareto por Severidad Financiera ($ COP Impacto Acumulado):** Mapeo del costo real de pérdidas para priorizar negociaciones con proveedores de campo, cadena de frío y daños mayores de transporte.
+     * **Curva de Lorenz (Línea Acumulada 80%):** Delimitación gráfica automática de los "Pocos Vitales" vs los "Muchos Triviales".
+   
+   - **D. Matriz de Imputabilidad & Salud de la Cadena de Suministro:**
+     * Desglose porcentual y financiero por área: `Campo/Proveedor`, `Bodega`, `Picking`, `Transporte`, `Comercial/Ventas`, `Cliente`.
+     * Radar de reincidencia por funcionario de cuadrilla, transportador y proveedor agrícola.
+   
+   - **E. Tracker de Planes de Mejoramiento (CAPA / PDCA Poka-Yoke):**
+     * **Disparador Automático (Trigger):** Cuando una causa raíz supere $\ge 3$ incidencias en 14 días o un impacto $\ge \$500.000\text{ COP}$, el sistema activa el botón de apertura de Plan CAPA.
+     * **Estructura Metodológica del Plan (Formato 5 Porqués / 8D):**
+       1. *Problema Identificado & Evidencia Estadística.* 
+       2. *Análisis 5 Porqués (Árbol de Causa Raíz).* 
+       3. *Acción Inmediata de Contención (Mitigación).* 
+       4. *Acción Correctiva de Fondo Poka-Yoke (Dispositivo o procedimiento a prueba de error humano).* 
+       5. *Responsable Asignado & Fecha Límite de Implementación.* 
+       6. *Estatus del Plan:* `En Diagnóstico` $\rightarrow$ `En Implementación` $\rightarrow$ `Verificación 15D` $\rightarrow$ `Cerrado Eficaz`.
+       7. *Run Chart de Verificación:* Gráfica de control que comprueba la reducción de la causa a cero en los siguientes 30 días.
+#### E. Integración Canónica con World Office Desktop (Matriz Oficial de 57 Columnas - Gemba Real)
+Para la integración con **World Office Desktop (instalación local sobre Microsoft SQL Server)**, contrastada y validada contra la operación viva en producción (`formato_migracion (2).xlsx`):
+
+1. **Veredicto Arquitectónico: Exportación Masiva en Lotes vs API Directa:**
+   - World Office Desktop opera en la red local de la empresa y no dispone de una API REST pública nativa en la nube. Forzar túneles locales (VPN / reverse proxies) hacia SQL Server genera graves vulnerabilidades de seguridad y puntos de falla a las 05:00 AM durante el despacho matutino.
+   - Por tanto, el canal maestro de integración es el **Generador de Planos Oficiales de World Office (Excel .xlsx)**, permitiendo al analista contable auditar visualmente el corte y cargarlo en World Office Desktop en 1 clic (*Menú Herramientas $\rightarrow$ Importar Documentos*).
+
+2. **Estructura Canónica del Plano de Importación World Office (57 Columnas):**
+   - **Nombre de la Hoja:** Obligatoriamente `'Detalle migración'`.
+   - **Mapeo de Campos Reales del Asistente:**
+     | # | Columna World Office | Valor / Mapeo FruFresco |
+     | :---: | :--- | :--- |
+     | 0 | `EMPRESA` | `"INVESTMENTS CORTES SAS"` |
+     | 1 | `Encab: Tipo Documento` | `"FV"` (Factura Venta) o `"NC"` (Nota Crédito) |
+     | 2 | `Encab: Prefijo` | `""` (Vacío según resolución configurada en WO) |
+     | 3 | `Encab: Documento Número` | Número consecutivo asignado al pedido/corte |
+     | 4 | `Encab: Fecha` | Fecha de corte en formato `DD/MM/YYYY` |
+     | 5 | `Encab: Tercero Interno` | `456282` (Código de asesor/usuario interno en WO) |
+     | 6 | `Encab: Tercero Externo` | NIT del cliente (numérico limpio sin DV ni guiones) |
+     | 7 | `Encab: Nota` | Nombre del cliente o referencia de OC (`OC00059992`) |
+     | 8 | `Encab: FormaPago` | `"Credito"` (o `"Contado"`) |
+     | 9 | `Encab: Fecha Entrega` | Fecha de entrega en formato `DD/MM/YYYY` |
+     | 10-28 | `Encab: Personalizado 1` a `15` | `""` |
+     | 29 | `Encab: Sucursal` | Razón social o sede de entrega del cliente |
+     | 30 | `Encab: Clasificación` | `""` |
+     | 31 | `Detalle: Producto` | ID numérico del producto en catálogo FruFresco |
+     | 32 | `Detalle: Bodega` | `"Principal"` |
+     | 33 | `Detalle: UnidadDeMedida` | `"kg"`, `"Und."` |
+     | 34 | `Detalle: Cantidad` | Cantidad entregada a satisfacción |
+     | 35 | `Detalle: IVA` | `0` (Excluido/Exento) o `0.19` (Gravado 19%) |
+     | 36 | `Detalle: Valor Unitario` | Tarifa pactada por ítem |
+     | 37 | `Detalle: Descuento` | `0` |
+     | 38 | `Detalle: Vencimiento` | Fecha calculada (`Fecha + payment_days`) en `DD/MM/YYYY` |
+     | 39 | `Detalle: Nota` | `""` |
+     | 40 | `Detalle: Centro costos` | `""` |
+     | 41-55 | `Detalle: Personalizado1` a `15` | `""` |
+     | 56 | `Detalle: Código Centro Costos` | `""` |
+
+#### F. Gobernanza de Secuencias Duales y Asignación 1-a-1 por Orden de Entrega (COM-29, COM-30)
+Para salvaguardar la estricta concordancia fiscal con la DIAN y World Office Desktop:
+
+1. **Secuencias Duales Independientes en Base de Datos:**
+   El sistema no utiliza secuencias arbitrarias con marcas de tiempo. Gestiona dos velocímetros fiscales independientes en la tabla `public.app_settings`:
+   - **Facturas de Venta (`FV`):**
+     * `billing_invoice_prefix`: Prefijo DIAN autorizado (ej. `'SETT'`).
+     * `billing_invoice_next_number`: Próximo consecutivo numérico disponible (ej. `10024`).
+   - **Notas Crédito (`NC`):**
+     * `billing_nc_prefix`: Prefijo DIAN para notas crédito (ej. `'NC-SETT'`).
+     * `billing_nc_next_number`: Próximo consecutivo de nota crédito disponible (ej. `501`).
+   - **Control Administrativo:** En la pestaña **Configuración** de Facturación, el usuario con rol de Administrador o Facturación puede auditar el contador, ajustar manualmente el próximo consecutivo ante saltos de talonario en World Office, y registrar la justificación en `audit_logs`.
+
+2. **Algoritmo de Asignación 1-a-1 por Jerarquía de Orden de Entrega:**
+   Al procesar y emitir las facturas de un corte (AM, PM o ADJ), los pedidos se ordenan determinísticamente antes de estampar la numeración:
+   $$\text{Criterio 1: Código de Ruta Ascendente } (\text{routes.code}) \longrightarrow \text{Criterio 2: Parada de Ruta } (\text{route\_stops.stop\_order})$$
+   - Los pedidos en mostrador o sin ruta asignada se ubican al final del lote, ordenados por `orders.sequence_id` ascendente.
+   - La asignación es atómica:
+     $$\text{Pedido}_1 \longrightarrow \text{Prefijo} + \text{NextNum}, \quad \text{Pedido}_2 \longrightarrow \text{Prefijo} + (\text{NextNum} + 1), \quad \dots$$
+   - Cada pedido actualiza su campo `orders.invoice_id` vinculado al ID de `billing_invoices`.
+   - El contador global `billing_invoice_next_number` avanza en una sola transacción atómica al siguiente número libre.
+
+3. **Previsualización de Auditoría Tripartita (Poka-Yoke en Pantalla de Corte):**
+   Antes de confirmar la emisión y numeración del corte, la tabla de pedidos presenta 4 columnas de control ineludibles:
+   - **Total Pedido Original:** Monto bruto pactado al momento de alistar.
+   - **Deducción Calidad (-):** Monto total de sustracciones por novedades aprobadas en `/admin/customer-service`, acompañado de un badge distintivo (ej. `[Ajuste Calidad -10 kg]`) con acceso directo al detalle de la PQR/RNC.
+   - **Total Factura Neta (=):** Valor final sobre el cual se liquidará la base y el IVA.
+   - **Factura Asignada Proyectada:** Número consecutivo exacto que le corresponderá al pedido (ej. `SETT-10024`), permitiendo al facturador auditar la correlatividad antes de sellar el corte.
+
+4. **Bandera de Requerimiento de Documento por Sucursal (`document_requirement`):**
+   - En la ficha y configuración de cada sucursal (`profiles.document_requirement`):
+     * `'remision_post_entrega'` (Por defecto, 90% de los clientes): Despacha con remisión duplicada. Calidad liquida las novedades al retorno. La factura nace en el corte con el valor neto recibido sin generar Notas Crédito.
+     * `'factura_pre_despacho'` (Excepción institucional): El cliente exige que la Factura Electrónica viaje en el furgón. Se emite la factura en el corte previo a la salida; si hay devolución en destino, Calidad aprueba el ajuste y el Corte ADJ emite la **Nota Crédito (NC)** cruzada contra la factura madre.
+
+5. **Estándar de Galería de Pedidos por Facturar (Alta Densidad 2-Filas & Auditoría Tripartita):**
+   - **ID Canónico de Pedido:** Formato canónico obligatorio `#DDMM_XXXX` (`getFriendlyOrderId(order)`) que combina día y mes de creación con los 4 dígitos de la secuencia (ej. `#2909_0975`), erradicando IDs truncados o números de secuencia aislados. En sub-fila se expone la hora de creación (`Clock`) y `Seq #`.
+   - **Organización en 2 Filas por Celda:**
+     * *Cliente / Razón Social & NIT:* Fila 1 = Nombre Comercial; Fila 2 = `NIT: ...` y Razón Social oficial si difiere.
+     * *Entrega & OC:* Fila 1 = Fecha de Entrega destacada; Fila 2 = Badge de Orden de Compra (`OC: ...`) o franja horaria.
+     * *Ítems / Volumen:* Fila 1 = Conteo consolidado de líneas (`X ítems`); Fila 2 = `Ver productos ↗`.
+     * *Novedades de Calidad (COM-26):* Fila 1 = Badge de estado de calidad (`✓ Conforme` vs `⚠ X novedad(es)`); Fila 2 = Estado de resolución (`Descontada` / `Pendiente`).
+     * *Tipo Emisión & Cartera:* Fila 1 = `📄 Factura Previa` vs `📦 Remisión Entrega`; Fila 2 = Plazo de crédito (`Crédito Xd` / `Contado`).
+     * *Total Pedido:* Fila 1 = Monto bruto/neto en negrita tabular-nums; Fila 2 = Condición IVA (`IVA incl.` / `Exento`).
+   - **Modal de Inspección Tripartita & Desglose de Pedido:** Al hacer clic en cualquier fila o en el botón `[Detalle 👁]`:
+     * Despliega la auditoría completa del pedido con ficha comercial, estado de cartera, y auditoría de novedades de calidad (COM-26).
+     * Tabla con el 100% de los ítems del pedido desglosando SKU, especificación culinaria (badges de calibre, maduración, gramaje de pieza), cantidad solicitada, unidad, precio unitario y total.
+     * Botón de acceso directo para previsualizar e imprimir la remisión/factura oficial (`/admin/orders/contingency-print?ids=...`).
 
 ### 7.8 Estándar de Oro en Impresión PDF & Storytelling B2B (GAP-10, 11, 14, 16, 18)
 1. **Paginación Continua:** Se erradica `position: fixed !important` en contenedores de impresión. Los documentos oficiales usan `position: absolute !important` con `@page { size: letter portrait; margin: 1.1cm 1.3cm 1.3cm 1.3cm; }`, repetición de cabeceras de tabla `thead { display: table-header-group; }` y `tfoot { display: table-footer-group; }`.
@@ -777,10 +1024,15 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
 2. **Registro de Novedad en Ruta:**
    - Si el cliente rechaza productos o cancela en puerta, el chofer tacha la remisión física, toma fotografía de la remisión firmada con tachaduras y evidencia del producto en `/ops/driver/delivery`.
    - Se crea el registro en `billing_returns` con estado `'pending_review'` y el ticket en `customer_service_pqrs` con taxonomía RCA.
-3. **Compuerta de Control de Calidad (Gatekeeper):**
-   - El área de Facturación NO aplica deducciones automáticas no verificadas.
-   - **Control de Calidad / Servicio al Cliente** revisa la remisión física devuelta y la fotografía en `/admin/customer-service`, dictaminando la resolución (aprobación de Nota Crédito, reposición o cobro).
-   - Solo los registros de `billing_returns` en estado `'approved'` son liquidados por Facturación en `/admin/commercial/billing`.
+3. **Compuerta de Control de Calidad & Matriz de Imputabilidad (Gatekeeper Táctico):**
+   - El área de Facturación NO aplica deducciones automáticas no verificadas ni a ciegas.
+   - **Control de Calidad / Servicio al Cliente** revisa la remisión física devuelta y la evidencia fotográfica en `/admin/customer-service`, dictaminando una de las **4 Resoluciones Canónicas**:
+     1. `reject_pqr`: Rechaza la queja por imputabilidad al cliente o mal almacenamiento. No hay descuento; el cobro se mantiene al 100%.
+     2. `credit_note`: Devolución parcial aceptada. Si el pedido viajó con remisión, se sustraen las unidades en `order_items` para facturación neta; si viajó prefacturado por exigencia del cliente, se emite Nota Crédito formal en Corte ADJ con IVA prorrateado.
+     3. `invoice_adjustment`: Ajuste directo de factura y cantidades recibidas en `order_items.quantity`, recalculando base e IVA sin generar Nota Crédito.
+     4. `reschedule_order`: Reposición física. Se genera un pedido hijo en ruta para el día siguiente valorizado en **$0 COP** (`order_type: 'replacement'`), manteniendo intacta la factura original.
+   - **Imputación Nominal de Responsabilidad & Deducción:** Todo dictamen clasifica la Macrocausa L1, Subtipo L2 y asigna la responsabilidad nominal o grupal (Proveedor con Nota Débito, Colaborador/Cuadrilla de Bodega o Picking con descuento salarial prorrateado, Conductor con retención en flete, Asesor Comercial o Cliente).
+   - Solo los registros de `billing_returns` dictaminados formalmente por Calidad son habilitados para el cierre del lote contable en `/admin/commercial/billing` y la emisión del Reporte de No Conformidad (`RNC.pdf`).
 4. **Cuarentena de Devoluciones en Patio:**
    - El producto devuelto ingresa a `inventory_movements` con `reference_type: 'route_return'` y estado `'returned'`.
    - Queda segregado en Columna O y NO se suma al disponible de venta comercial hasta que el supervisor en `/ops/inventory` inspeccione la mercancía y determine:
@@ -819,6 +1071,14 @@ La planta cuenta con 150 bahías de piso numeradas. La asignación es temporal y
   2. Se inserta exactamente una fila en `inventory_movements` con `reference_type: 'route_return'`, `status_to: 'returned'` y cantidad 10 kg (alimentando Columna O).
   3. Se genera un registro en `billing_returns` con `status: 'pending_review'`.
   4. Facturación NO aplica la Nota Crédito hasta que Control de Calidad audite la remisión tachada y apruebe el registro en `billing_returns`.
+
+#### Escenario 3: Facturación Neta por Remisión y Exportación Masiva a World Office Desktop
+- **Given** un pedido entregado con 40 kg de Tomate Chonto ($4,000 COP/kg) y 10 kg devueltos auditados por Calidad con resolución `credit_note`.
+- **When** el facturador abre el Corte AM en `/admin/commercial/billing` y genera las facturas en lote.
+- **Then**:
+  1. Si el pedido viajó con remisión: La factura se genera automáticamente por el valor neto entregado: $40 \text{ kg} \times \$4,000 = \$160,000 \text{ COP}$, recalculando base e IVA sin generar Nota Crédito.
+  2. Si el pedido viajó prefacturado por \$200,000 COP: El sistema preserva la factura original y encola una Nota Crédito por $10 \text{ kg} \times \$4,000 = \$40,000 \text{ COP}$ para el Corte ADJ.
+  3. Al presionar `[📥 Descargar Plano World Office]`, se genera un archivo estructurado con las columnas oficiales de World Office Desktop (`FV` y `NC`), listo para importar en el software contable en 1 clic.
 
 ### 9.7 Contrato Canónico de Trazabilidad Dual: Unidades Nominales y Peso Logístico (Dual-Unit Lifecycle)
 
@@ -2673,3 +2933,89 @@ sequenceDiagram
      - Márgenes de `@page` calibradas a `6mm 8mm` en Carta para maximizar el área imprimible (267.4 mm).
   3. **Acceso Rápido Directo desde Navbar (`Navbar.tsx`)**:
      - Incorporado el enlace directo **«Previsualización Impresión»** con icono `Printer` en el dropdown Operaciones y menú móvil.
+
+
+#### Escenario 57: Estándar Universal de Galerías Operativas: Ancho Maestro (1600px), Superbuscador Omnibox Multi-Criterio y Apilamiento Magnético Multi-Capa (Ejes X, Y, Z) (SDD v1.9.33)
+- **Given** la necesidad imperativa de uniformidad espacial, eficiencia ergonómica en pantallas de alta densidad y velocidad operativa sin desbordes ni pérdida de contexto al desplazarse por tablas extensas en todos los módulos de FruFresco:
+- **When** el operador logístico, comercial, de compras o administrativo interactúa con cualquier módulo de galería o consola de datos:
+  - Facturación & Cartera (`/admin/commercial/billing`)
+  - Clientes & Directorio Comercial (`/admin/commercial/clients` o `ClientsModule.tsx`)
+  - Matriz de Costos & Precios (`/admin/commercial/cost-matrix`)
+  - Mesa de Control & Despachos (`/admin/orders/loading`)
+  - Balance Diario Kardex de Inventarios (`InventoryDailyBalanceTab.tsx`)
+  - Catálogo Maestro de Productos (`ProductGridContainer.tsx`)
+- **Then**:
+  1. **Regla Inviolable del Eje X: Ancho Maestro (1600px)**:
+     - El contenedor maestro de la página debe encapsularse obligatoriamente con `maxWidth: '1600px'`, centrado simétrico `margin: '0 auto'` y respiración lateral `padding: '1.25rem 1.75rem 3.5rem 1.75rem'` (o Tailwind `max-w-[1600px] mx-auto px-6`).
+     - Se prohíbe el uso de anchos angostos arbitrarios (ej. `max-w-5xl` o `1240px`) que desperdicien más de un tercio del monitor en terminales de escritorio.
+  2. **Superbuscador Omnibox Universal Multi-Criterio (`GalleryOmnibox.tsx` & `matchesUniversalSearch`)**:
+     - Toda galería debe integrar en su barra de herramientas el componente oficial `GalleryOmnibox`.
+     - **Motor de Búsqueda Integrado:** Búsqueda en paralelo por múltiples campos simultáneos (Razón Social, Nombre de Fantasía, Contacto, SKU, Código interno, #ID, NIT, Célula, Categoría, Teléfono o Estado).
+     - **Prefijo `#ID`:** Si la búsqueda inicia con `#` (ej. `#15`, `#1002`), ejecuta coincidencia exacta sobre el identificador numérico o contable.
+     - **Multi-Término AND:** Si el usuario ingresa palabras separadas por espacio (ej. `fresa cali`), se valida que todos los términos estén presentes independientemente del orden.
+     - **Insensibilidad Diacrítica:** Normalización NFD para erradicar diferencias entre tildes y mayúsculas (`limon` encuentra `Limón`, `bogota` encuentra `Bogotá`).
+     - **Operador OR por Comas:** Permite consultar conjuntos disjuntos (ej. `fresas, moras, papas`).
+     - **Atajo Universal de Foco:** Presionar la tecla `/` en cualquier punto fuera de inputs traslada el foco inmediatamente al Superbuscador.
+     - **Telemetría Reactiva:** Muestra en tiempo real la píldora `X de Y` resultados o `Y total`, con botón de limpieza instantánea `(X)`.
+  3. **Reglas Inviolables Anti-Secuestro de Scroll (Scroll Hijacking Traps)**:
+     - **Prohibición de `overflow: hidden` / `overflow: clip`:** Todo contenedor tipo Card que aloje una tabla con cabecera sticky debe declarar `overflow: 'visible'`. Las esquinas redondeadas se asignan a las celdas o cabeceras internas (`borderTopLeftRadius: '14px'`, `borderTopRightRadius: '14px'`).
+     - **Prohibición de `overflowX: auto` en Wrappers de Tabla:** A 1600px de ancho maestro, el wrapper debe ser `overflow: 'visible'` para evitar secuestrar el contexto de scroll de la ventana (`window.scrollY`).
+  4. **Reglas de Renderizado de Tablas en Motores Chromium (Blink)**:
+     - **Separación de Bordes Obligatoria:** Toda tabla con cabeceras fijas DEBE llevar `borderCollapse: 'separate', borderSpacing: 0` (o `border-separate border-spacing-0`). Se prohíbe `borderCollapse: 'collapse'` por provocar desincronización de capas de GPU y desbordamiento de filas sobre el thead.
+     - **Sticky Directo en Cada Celda `<th>`:** El anclaje `position: 'sticky'`, la coordenada `top` exacta y el color de fondo sólido (`#F8FAFC`) deben aplicarse explícitamente a cada elemento `<th>`.
+  5. **Jerarquía Inviolable del Eje Z**:
+     - `Modales / Diálogos / Portales`: **`z-[120]`** o superior.
+     - `Navbar Principal`: **`z-50`** o **`z-100`** (`top: 0`).
+     - `Capa 1 Sticky (Subpestañas operativas)`: **`z-45`** o **`z-40`**.
+     - `Capa 2 Sticky (Toolbar / Superbuscador / Píldoras)`: **`z-40`** o **`z-30`**.
+     - `Capa 3 Sticky (Thead / Celdas TH de tabla)`: **`z-30`** o **`z-20`**.
+     - `Esquina Superior Izquierda 2D (Top-Left intersection)`: **`z-70`**.
+     - `Columna Izquierda 2D (SKU / Nombre fijo al scrollear en X)`: **`z-25`** o **`z-15`**.
+  6. **Fórmula de Apilamiento Magnético en Eje Y (Magnetic Stacking con Tolerancia Cero - 0px Gap)**:
+     - **Fórmula:** $\text{top}_{\text{Capa } N+1} = \text{top}_{\text{Capa } N} + \text{height}_{\text{Capa } N}$ (Cero brechas arbitrarias entre capas fijas).
+     - **Perfil 2 Líneas (Toolbar + Thead):** Navbar (`0-86px`), Toolbar en `top: 86px` (altura 48px), Thead/Th en `top: 134px` (`86 + 48 = 134px`).
+     - **Perfil 3 Líneas (Subpestañas + Toolbar + Thead):** Navbar (`0-86px`), Subtabs en `top: 85px` (altura 37px $\rightarrow$ base 122px), Toolbar en `top: 122px` (altura 47px $\rightarrow$ base 169px), Thead/Th en `top: 169px` (`122 + 47 = 169px`).
+  7. **Principio Anti-Transparencia y Solidez Visual (Anti-Bleed)**:
+     - Se prohíbe `rgba(255, 255, 255, 0.95)` o transparencias en barras/encabezados sticky. Se exige fondo 100% sólido (`#FFFFFF` / `#F8FAFC`), micro-sombra (`boxShadow: '0 2px 6px rgba(0,0,0,0.03)'`) y borde de contraste (`border-b border-slate-200`), impidiendo que el texto de las filas scrolleadas se filtre detrás.
+  8. **Gobernanza de Implementación y Skill Dedicado**:
+     - Todas las galerías quedan gobernadas por el skill `estandar-galerias-frufresco` (`~/.gemini/config/skills/estandar-galerias-frufresco/SKILL.md`), con validación de compilación TypeScript (`tsc --noEmit`) y certificación visual con Playwright.
+
+
+#### Escenario 58: Protocolo de Integración Bidireccional entre Gestión de Calidad (PQRS), Ventana de Gracia Post-Entrega y Facturación Masiva con Poka-Yoke Anti-Facturación Prematura (SDD v1.9.35)
+- **Given** la necesidad de erradicar la emisión prematura de facturas electrónicas sobre pedidos que tienen reclamaciones de calidad, mermas o rechazos en trámite por parte del cliente o la mesa de calidad:
+- **When** un pedido institucional (B2B) o de hogar (B2C) es despachado, entregado en sede del cliente o auditado por Calidad:
+- **Then**:
+  1. **Relación Canónica en Base de Datos (Supabase)**:
+     - El pedido oficial en `public.orders` es la entidad raíz vinculante (`orders.id`).
+     - **Gestión de Reclamos:** `public.customer_service_pqrs` vincula `order_id` $\rightarrow$ `orders.id`.
+     - **Mermas / Devoluciones Físicas:** `public.billing_returns` vincula `order_id` $\rightarrow$ `orders.id` y `product_id` $\rightarrow$ `products.id`.
+  2. **Regla de Poka-Yoke Fiscal en Facturación (`/admin/commercial/billing`)**:
+     - **Criterio de Bloqueo Inviolable (`isReadyForCut = false`):**
+       $$\text{Bloqueado} \iff \exists \text{ PQRS en estado } ('pending', 'in\_progress') \lor \exists \text{ Devolución en } 'pending\_review'$$
+     - Todo pedido con una incidencia abierta queda **estrictamente excluido** del corte automático de facturación masiva y de la generación de archivos para Word Office / DIAN.
+     - **Contador Maestro de Corte:** El contador superior `[ ✓ N pedidos listos para corte ]` descuenta en tiempo real los pedidos retenidos por Calidad.
+  3. **Protocolo del Countdown de Ventana de Gracia Post-Entrega**:
+     - **Disparador:** La cuenta regresiva se activa cuando `order.status = 'delivered'` tomando como timestamp base `order.manual_delivery_time` o `order.logistics_data.delivered_at` (o fallback a `created_at`).
+     - **Duración Parametrizable:** Gobernado por la clave `billing_delivery_grace_minutes` en `public.app_settings` (valor por defecto: **120 minutos / 2 horas**).
+     - **SLA Operativo para Calidad:** Dentro de los 120 minutos post-entrega, el equipo de Calidad o el cliente pueden radicar la PQRS.
+     - **Congelamiento Instantáneo:** En el milisegundo en que se crea la PQRS en `customer_service_pqrs`, el cronómetro de gracia en Facturación se congela inmediatamente y el pedido pasa de `⏳ En Gracia` a `⚠️ PQRS Abierta / Retenido por Calidad`.
+     - **Expiración Limpia:** Si transcurren los 120 minutos sin incidencias abiertas, el pedido pasa automáticamente a `✓ Listo (2h)` (`isReadyForCut = true`).
+  4. **Contrato de Interfaz para el Módulo de Gestión de Calidad**:
+     - **Alerta de Ventana de Gracia en Vivo:** En la bandeja de pedidos entregados de Calidad, se debe desplegar el cronómetro de cuenta regresiva: `⏳ Ventana de Facturación: XXm restantes para radicar mermas`.
+     - **Indicador de Poka-Yoke Activo:** Una vez radicada la PQRS, la interfaz de Calidad debe confirmar visualmente: `🛡️ Poka-Yoke Activo: Facturación Bloqueada hasta Resolución`.
+     - **Resolución Determinista con Ajuste Monetario:**
+       - Al aprobar la PQRS con Nota Crédito o Descuento, Calidad actualiza `customer_service_pqrs.status = 'resolved'` y `billing_returns.status = 'approved'`.
+       - Se recalculan atómicamente los campos `orders.total`, `subtotal` y `tax` (recalculando IVA 19% o 0% según `profiles.iva_responsible`).
+       - El pedido se desbloquea de inmediato y queda `✓ Listo para Facturación` con el valor neto depurado.
+  5. **Taxonomía RCA Lean Compartida**:
+     - Ambas tablas (`customer_service_pqrs` y `billing_returns`) persisten obligatoriamente:
+       - `defect_category_l1`: `fisiologia_maduracion`, `dano_mecanico`, `fitopatologia`, `cadena_frio`, `calibre_especificacion`, `error_montaje_pedido`, `comercial_cliente`.
+       - `defect_subtype_l2`: Subtipo específico (ej. `sobremaduro_blando`, `golpe_magulladura`, `pudricion_origen`, etc.).
+       - `imputed_responsible`: `proveedor`, `bodega`, `picking`, `transporte`, `comercial`, `cliente`.
+  6. **Estándar Visual en la Galería de Facturación**:
+     - **Columna 1 (`# Pedido / Fechas`):** Jerarquía compacta de 3 líneas sin micro-íconos decorativos:
+       - Línea 1: `#{friendlyId}` + tag `OC: 1234` si aplica.
+       - Línea 2: `Ped: {fecha_creacion}` (ej. `Ped: 29 sep · 10:34am`).
+       - Línea 3: `Ent: {fecha_entrega} · {ventana_horaria}` (ej. `Ent: 30 sep · 06:30 - 11:00`), con tooltip contextual `title` que despliega la restricción completa de recepción de la sucursal.
+     - **Columna 5 (`Novedades QA / PQRS`):** Badge dinámico `<AlertTriangle /> {N} PQRS Abierta / Novedad` en `#FEF2F2` / `#991B1B` con el asunto o motivo de la incidencia.
+     - **Columna 7 (`Estado & Gracia`):** Badge de estado, micro-telemetría vectorizada en Lucide (`Clock`, `CheckCircle2`, `AlertTriangle`) y barra de progreso con efecto glassmorphism / sombra fantasma para pedidos en espera de entrega.

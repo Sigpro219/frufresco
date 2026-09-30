@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { parseRcaFromRecord, RESPONSIBLE_PARTIES, RCA_CATEGORIES_L1, getStoredTaxonomy } from '@/lib/rcaTaxonomy';
-import { Printer, ArrowLeft, ShieldAlert, CheckCircle2, FileText, Building2, User, Phone, MapPin, Calendar, Camera, ShieldCheck } from 'lucide-react';
+import { Printer, ArrowLeft, ShieldAlert, CheckCircle2, FileText, Building2, User, Phone, MapPin, Calendar, Camera, ShieldCheck, Users } from 'lucide-react';
 
 export default function RncPrintPage() {
     const params = useParams();
@@ -110,7 +110,7 @@ export default function RncPrintPage() {
     const companyPhone = appSettings.provider_phone || '315 406 3876';
     const companyLogo = appSettings.provider_logo_url || '/logo-investments.png';
 
-    // Parse RCA information
+    // Parse RCA information and nominal imputation
     const rca = parseRcaFromRecord(pqr);
     const storedTaxonomy = getStoredTaxonomy();
     const catL1 = storedTaxonomy.find(c => c.code === rca.categoryL1) || RCA_CATEGORIES_L1.find(c => c.code === rca.categoryL1);
@@ -268,7 +268,7 @@ export default function RncPrintPage() {
                 </div>
             </div>
 
-            {/* Fixed Watermark (Subtle Corporate Watermark) */}
+            {/* Fixed Watermark */}
             <div style={{
                 position: 'fixed',
                 top: '45%',
@@ -354,7 +354,7 @@ export default function RncPrintPage() {
                     </tr>
                     <tr>
                         <td style={{ fontSize: '7.2pt', fontWeight: '800', color: '#334155', padding: '3.5px 8px', border: '1px solid #334155', backgroundColor: '#FFFFFF' }}>
-                            <span style={{ color: '#64748B', fontWeight: '600' }}>VERSIÓN:</span> 002
+                            <span style={{ color: '#64748B', fontWeight: '600' }}>VERSIÓN:</span> 003
                         </td>
                     </tr>
                     <tr>
@@ -463,7 +463,7 @@ export default function RncPrintPage() {
                 </table>
             </section>
 
-            {/* SECTION 2: TECHNICAL ROOT CAUSE ANALYSIS (RCA LEAN) */}
+            {/* SECTION 2: TECHNICAL ROOT CAUSE ANALYSIS & NOMINAL IMPUTATION */}
             <section className="page-break-avoid" style={{ marginBottom: '12px' }}>
                 <div style={{
                     backgroundColor: '#EAEFEA',
@@ -482,7 +482,7 @@ export default function RncPrintPage() {
                     letterSpacing: '0.04em'
                 }}>
                     <ShieldAlert size={13} />
-                    <span>2. Dictamen Técnico y Causa Raíz (Metodología RCA Lean Six Sigma)</span>
+                    <span>2. Dictamen Técnico, Causa Raíz (RCA) e Imputabilidad Nominal</span>
                 </div>
 
                 <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
@@ -500,7 +500,7 @@ export default function RncPrintPage() {
                     }}>
                         <div>Familia Causa Raíz (Nivel 1)</div>
                         <div>Subtipo de Falla (Nivel 2)</div>
-                        <div>Imputabilidad Económica</div>
+                        <div>Área Responsable</div>
                     </div>
 
                     <div style={{
@@ -535,6 +535,40 @@ export default function RncPrintPage() {
                             </span>
                         </div>
                     </div>
+
+                    {/* Breakdown of Imputed Entities (Collaborators / Squad / Provider with Deductions) */}
+                    {rca.imputedEntities && rca.imputedEntities.length > 0 && (
+                        <div style={{ padding: '8px 10px', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+                            <div style={{ fontSize: '6.8pt', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Users size={11} />
+                                <span>Responsables Asignados (Política de Descuento de Nómina / Proveedor):</span>
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7.2pt', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '1px solid #CBD5E1', textAlign: 'left' }}>
+                                        <th style={{ padding: '4px 6px', fontWeight: '800', color: '#475569' }}>Funcionario / Proveedor</th>
+                                        <th style={{ padding: '4px 6px', fontWeight: '800', color: '#475569' }}>Rol / Área</th>
+                                        <th style={{ padding: '4px 6px', fontWeight: '800', color: '#475569', textAlign: 'center' }}>% Imputado</th>
+                                        <th style={{ padding: '4px 6px', fontWeight: '800', color: '#DC2626', textAlign: 'right' }}>Monto Descuento COP</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rca.imputedEntities.map((ent, eIdx) => (
+                                        <tr key={ent.id || eIdx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '4px 6px', fontWeight: '800', color: '#0F172A' }}>
+                                                {ent.name} {ent.documentId ? `(Doc: ${ent.documentId})` : ''}
+                                            </td>
+                                            <td style={{ padding: '4px 6px', color: '#475569' }}>{ent.role || rca.responsible}</td>
+                                            <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: '800', color: '#0D7A57' }}>{ent.sharePercent}%</td>
+                                            <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '900', color: '#DC2626' }}>
+                                                {ent.deductionAmount ? `$${ent.deductionAmount.toLocaleString('es-CO')} COP` : 'N/A'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
                     {/* Problem Statement & Client Observation */}
                     <div style={{ padding: '8px 10px', backgroundColor: '#FAFAFA', fontSize: '7.5pt', borderTop: '1px solid #E2E8F0' }}>
@@ -624,7 +658,7 @@ export default function RncPrintPage() {
                 </section>
             )}
 
-            {/* SECTION 4: PHOTOGRAPHIC EVIDENCE IN ACCORDANCE WITH AUDITOR DE CALIDAD */}
+            {/* SECTION 4: PHOTOGRAPHIC EVIDENCE */}
             {photos.length > 0 && (
                 <section className="page-break-avoid" style={{ marginBottom: '12px' }}>
                     <div style={{
@@ -730,7 +764,7 @@ export default function RncPrintPage() {
                 </div>
             </section>
 
-            {/* SECTION 6: THREE-PARTY FORMAL LEGAL SIGNATURES */}
+            {/* SECTION 6: FORMAL LEGAL SIGNATURES (INCLUDING IMPUTED RESPONSIBLE ACCEPTANCE) */}
             <section className="page-break-avoid" style={{ marginTop: '16px' }}>
                 <div style={{
                     backgroundColor: '#EAEFEA',
@@ -755,12 +789,12 @@ export default function RncPrintPage() {
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '16px',
+                    gap: '12px',
                     textAlign: 'center'
                 }}>
                     {/* Quality Inspector Investments Cortés */}
                     <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px', backgroundColor: '#FAFAFA' }}>
-                        <div style={{ height: '42px', borderBottom: '1px solid #475569', marginBottom: '6px' }}></div>
+                        <div style={{ height: '38px', borderBottom: '1px solid #475569', marginBottom: '6px' }}></div>
                         <div style={{ fontWeight: '900', fontSize: '7.4pt', color: '#0F172A' }}>
                             Aseguramiento de Calidad
                         </div>
@@ -772,23 +806,25 @@ export default function RncPrintPage() {
                         </div>
                     </div>
 
-                    {/* Logistics / Driver */}
+                    {/* Imputed Responsible Acceptance (Collaborator / Provider / Driver) */}
                     <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px', backgroundColor: '#FAFAFA' }}>
-                        <div style={{ height: '42px', borderBottom: '1px solid #475569', marginBottom: '6px' }}></div>
+                        <div style={{ height: '38px', borderBottom: '1px solid #475569', marginBottom: '6px' }}></div>
                         <div style={{ fontWeight: '900', fontSize: '7.4pt', color: '#0F172A' }}>
-                            Transportador / Distribución
+                            Responsable Imputado / Aceptación
                         </div>
-                        <div style={{ fontSize: '6.6pt', color: '#475569', fontWeight: '700' }}>
-                            Operador Logístico de Flota
+                        <div style={{ fontSize: '6.6pt', color: '#B45309', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {rca.imputedEntities && rca.imputedEntities.length > 0 
+                                ? rca.imputedEntities.map(e => e.name).join(', ')
+                                : party.label}
                         </div>
                         <div style={{ fontSize: '6.2pt', color: '#64748B' }}>
-                            C.C. y Placa de Vehículo
+                            C.C. / NIT • Aceptación Política de Nómina
                         </div>
                     </div>
 
                     {/* Client Representative */}
                     <div style={{ border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px', backgroundColor: '#FAFAFA' }}>
-                        <div style={{ height: '42px', borderBottom: '1px solid #475569', marginBottom: '6px' }}></div>
+                        <div style={{ height: '38px', borderBottom: '1px solid #475569', marginBottom: '6px' }}></div>
                         <div style={{ fontWeight: '900', fontSize: '7.4pt', color: '#0F172A' }}>
                             Recibido Conforme Cliente
                         </div>
@@ -806,7 +842,7 @@ export default function RncPrintPage() {
                     textAlign: 'center',
                     fontSize: '6.4pt',
                     color: '#64748B',
-                    marginTop: '16px',
+                    marginTop: '14px',
                     paddingTop: '8px',
                     borderTop: '1px solid #E2E8F0',
                     lineHeight: '1.4'
@@ -815,7 +851,7 @@ export default function RncPrintPage() {
                         <strong>{companyLegalName}</strong> • NIT {companyNit} • {companyAddress} • {companyPhone} • {companyEmail}
                     </div>
                     <div style={{ color: '#94A3B8' }}>
-                        Documento interno oficial del Sistema de Gestión de Calidad (SGC). Válido como sustento técnico para emisión de Notas Crédito, reposición logística de inventario y auditorías de certificación ISO 9001 / BPM.
+                        Documento oficial del Sistema de Gestión de Calidad (SGC). Sustento técnico para emisión de Notas Crédito, cobro de errores operativos y auditorías ISO 9001 / BPM Res. 2674/2013 Invima.
                     </div>
                 </div>
             </section>

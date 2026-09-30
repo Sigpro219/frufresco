@@ -1,449 +1,100 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { 
-    MessageSquare, AlertTriangle, CheckCircle2, Clock, Search, 
-    Building2, User, Calendar, Plus, Trash2, Loader2, ArrowRight,
-    Play, Eye, CornerDownRight, FileText, Camera, Truck, BarChart2,
-    ShieldAlert, AlertCircle, Sparkles, HelpCircle, Check, ShieldCheck,
-    HeartHandshake, TrendingUp, Layers, Store, Warehouse, PackageCheck,
-    Zap, ChevronRight, ChevronDown, ChevronUp, RotateCcw, ExternalLink, CameraOff, Upload,
-    Maximize2, Phone, Mail, MessageCircle, UserCheck, X, Scale, Receipt,
-    PackageMinus, Inbox, Edit2, Sliders, Settings, Link2, Unlink, ShoppingBag
+import {
+    ShieldAlert, ShieldCheck, AlertCircle, AlertTriangle, CheckCircle2,
+    Clock, Search, Plus, Trash2, Loader2, ArrowRight, Eye, FileText,
+    Camera, Truck, BarChart2, Sparkles, HelpCircle, Store, Warehouse,
+    Layers, User, Building2, ChevronDown, ChevronUp, RefreshCw,
+    Maximize2, MessageCircle, ExternalLink, X, DollarSign, Percent,
+    PackageMinus, Sliders, Settings, Check
 } from 'lucide-react';
 import Link from 'next/link';
-import RoleProcessGuide from '@/components/common/RoleProcessGuide';
-import ProcessTooltip from '@/components/common/ProcessTooltip';
+import { GalleryOmnibox } from '@/components/common/GalleryOmnibox';
 import FinancialAdjustmentModal from '@/components/FinancialAdjustmentModal';
-import { 
-    RCA_CATEGORIES_L1, 
-    RESPONSIBLE_PARTIES, 
-    parseRcaFromRecord, 
-    buildRcaMetadataTag,
+import {
+    RCA_CATEGORIES_L1,
+    RESPONSIBLE_PARTIES,
+    parseRcaFromRecord,
     getStoredTaxonomy,
-    saveStoredTaxonomy,
-    resetStoredTaxonomy,
-    DISPOSICION_SANITARIA_TEMPLATES,
     DefectCategoryL1,
-    DefectSubtype
+    ImputedEntity
 } from '@/lib/rcaTaxonomy';
+import {
+    PQR,
+    getClientInitials,
+    getTypeBadgeStyle,
+    formatDateFriendly,
+    cleanColombianPhone,
+    getPqrPhotos,
+    getPqrAuthorInfo,
+    getReplacementOrderUrl,
+    buildPqrWhatsAppMessage
+} from './utils';
 
-// Helpers for visual storytelling and scanning
-const getClientInitials = (name?: string): string => {
-    if (!name) return 'CL';
-    const clean = name.trim();
-    const parts = clean.split(' ').filter(Boolean);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-};
-
-const getTypeBadgeStyle = (type: string) => {
-    switch (type) {
-        case 'reclamo':
-            return { bg: '#FFE4E6', text: '#BE123C', border: '#FECDD3', label: 'Reclamo' };
-        case 'peticion':
-            return { bg: '#E0F2FE', text: '#0369A1', border: '#BAE6FD', label: 'Petición' };
-        case 'queja':
-            return { bg: '#FEF3C7', text: '#B45309', border: '#FDE68A', label: 'Queja' };
-        case 'felicitacion':
-            return { bg: '#DCFCE7', text: '#15803D', border: '#BBF7D0', label: 'Felicitación' };
-        case 'sugerencia':
-            return { bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF', label: 'Sugerencia' };
-        default:
-            return { bg: '#F1F5F9', text: '#475569', border: '#E2E8F0', label: type };
-    }
-};
-
-const getResponsibleIcon = (code: string) => {
-    switch (code) {
-        case 'proveedor':
-            return <Store size={12} />;
-        case 'bodega':
-            return <Warehouse size={12} />;
-        case 'picking':
-            return <Layers size={12} />;
-        case 'transporte':
-            return <Truck size={12} />;
-        case 'comercial':
-            return <User size={12} />;
-        case 'cliente':
-            return <Building2 size={12} />;
-        default:
-            return <HelpCircle size={12} />;
-    }
-};
-
-const formatDateFriendly = (dateStr: string): string => {
-    try {
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-    } catch {
-        return dateStr;
-    }
-};
-
-// Helper to sanitize and validate Colombian mobile numbers for WhatsApp
-export const cleanColombianPhone = (phoneRaw?: string | null): { display: string; waNumber: string; isValid: boolean } => {
-    if (!phoneRaw) return { display: '', waNumber: '', isValid: false };
-    const digits = phoneRaw.replace(/\D/g, '');
-    
-    // If starts with 57 and has 12 digits (573001234567)
-    if (digits.startsWith('57') && digits.length === 12 && digits[2] === '3') {
-        const local = digits.substring(2);
-        return { display: local, waNumber: digits, isValid: true };
-    }
-    
-    // Standard 10-digit mobile starting with 3 (e.g. 3154456827)
-    if (digits.length === 10 && digits.startsWith('3')) {
-        return { display: digits, waNumber: `57${digits}`, isValid: true };
-    }
-
-    // Landline or generic number with 7+ digits
-    if (digits.length >= 7) {
-        return { display: digits, waNumber: `57${digits}`, isValid: digits.length === 10 && digits.startsWith('3') };
-    }
-    
-    return { display: '', waNumber: '', isValid: false };
-};
-
-// Safe helper to extract and clean photo URLs from PQR record
-export const getPqrPhotos = (p: PQR | null | undefined): string[] => {
-    if (!p) return [];
-    const photos: string[] = [];
-    if (p.primary_photo_url && typeof p.primary_photo_url === 'string' && p.primary_photo_url.trim().length > 0) {
-        photos.push(p.primary_photo_url.trim());
-    }
-    if (Array.isArray(p.additional_photos)) {
-        p.additional_photos.forEach(url => {
-            if (url && typeof url === 'string' && url.trim().length > 0 && !photos.includes(url.trim())) {
-                photos.push(url.trim());
-            }
-        });
-    }
-    return photos;
-};
-
-export interface PqrAuthorInfo {
-    channel: 'portal_b2b' | 'portal_b2c' | 'conductor' | 'mesa_ayuda';
-    channelLabel: string;
-    channelBadgeColor: string;
-    channelBadgeBg: string;
-    channelBadgeBorder: string;
-    authorTitle: string;
-    authorName: string;
-    authorRole: string;
-    authorInitials: string;
-    receptionChannel: string;
-    companyName: string;
-    clientContact: string;
-    nit: string;
-    email: string;
-    phone: string;
-    cleanPhone: string;
-    isPhoneValid: boolean;
-    isDriver: boolean;
-    isClient: boolean;
-}
-
-export const getPqrAuthorInfo = (p: PQR): PqrAuthorInfo => {
-    const subject = p.subject || '';
-    const desc = p.description || '';
-    const company = p.profiles?.company_name || 'Empresa No Especificada';
-    const contact = p.profiles?.contact_name || 'Ecónomo / Contacto en Sitio';
-    const nit = p.profiles?.nit || '';
-    const email = p.profiles?.email || '';
-    const rawPhone = p.profiles?.contact_phone || p.profiles?.phone || '';
-    const phoneParsed = cleanColombianPhone(rawPhone);
-
-    // 0. Explicit Collaborator Attribution (Internal Staff via Floating Widget / Ops)
-    const collabMatch = desc.match(/\[Radicado por Colaborador FruFresco:\s*([^\]]+)\]/i) || desc.match(/\[Radicado por:\s*([^\]]+)\]/i);
-    if (collabMatch) {
-        const collabRaw = collabMatch[1].trim();
-        return {
-            channel: 'mesa_ayuda',
-            channelLabel: 'Módulo Operaciones / SAC',
-            channelBadgeColor: '#7C3AED',
-            channelBadgeBg: '#F3E8FF',
-            channelBadgeBorder: '#DDD6FE',
-            authorTitle: 'Radicado Internamente por FruFresco',
-            authorName: collabRaw,
-            authorRole: 'Equipo de Operaciones & Mesa de Experiencia FruFresco',
-            authorInitials: getClientInitials(collabRaw.split('(')[0]),
-            receptionChannel: 'Mesa de Ayuda / Chat Interno FruFresco',
-            companyName: company,
-            clientContact: contact,
-            nit,
-            email,
-            phone: phoneParsed.display || rawPhone,
-            cleanPhone: phoneParsed.waNumber,
-            isPhoneValid: phoneParsed.isValid,
-            isDriver: false,
-            isClient: false
-        };
-    }
-
-    // 1. If submitted via Driver App in delivery route
-    if (subject.startsWith('[Conductor]') || desc.includes('El conductor reportó') || desc.includes('Cancelación total reportada por conductor')) {
-        return {
-            channel: 'conductor',
-            channelLabel: 'App Móvil Conductor',
-            channelBadgeColor: '#1D4ED8',
-            channelBadgeBg: '#EFF6FF',
-            channelBadgeBorder: '#BFDBFE',
-            authorTitle: 'Novedad Reportada en Entrega Física',
-            authorName: 'Conductor Asignado en Ruta',
-            authorRole: 'Transportista de Última Milla — Logística FruFresco',
-            authorInitials: 'TR',
-            receptionChannel: 'App Móvil Conductor (Novedad en Sitio de Entrega)',
-            companyName: company,
-            clientContact: contact,
-            nit,
-            email,
-            phone: phoneParsed.display || rawPhone,
-            cleanPhone: phoneParsed.waNumber,
-            isPhoneValid: phoneParsed.isValid,
-            isDriver: true,
-            isClient: false
-        };
-    }
-
-    // 2. If submitted by B2B Institutional Client (Self-Service or Order Novelty)
-    if (subject.startsWith('[Portal B2B]') || desc.includes('Reporte de autoservicio B2B')) {
-        const clientDisplayName = contact && contact !== 'Ecónomo / Contacto en Sitio' && contact !== company ? contact : company;
-        return {
-            channel: 'portal_b2b',
-            channelLabel: 'Portal Autogestión B2B',
-            channelBadgeColor: '#047857',
-            channelBadgeBg: '#ECFDF5',
-            channelBadgeBorder: '#A7F3D0',
-            authorTitle: 'Radicado Directamente por Cliente B2B',
-            authorName: clientDisplayName,
-            authorRole: `Ecónomo / Encargado de Compras (${company})`,
-            authorInitials: getClientInitials(company),
-            receptionChannel: 'Portal Institucional B2B (Radicación Digital Autogestión)',
-            companyName: company,
-            clientContact: contact,
-            nit,
-            email,
-            phone: phoneParsed.display || rawPhone,
-            cleanPhone: phoneParsed.waNumber,
-            isPhoneValid: phoneParsed.isValid,
-            isDriver: false,
-            isClient: true
-        };
-    }
-
-    // 3. If submitted by B2C Final Consumer Client
-    if (subject.startsWith('[Portal B2C]') || subject.startsWith('[Tienda B2C]') || desc.includes('Reporte de autoservicio B2C') || desc.includes('Reporte Tienda Online B2C')) {
-        const b2cName = contact || company || 'Cliente Consumidor Final';
-        return {
-            channel: 'portal_b2c',
-            channelLabel: 'Tienda Online B2C',
-            channelBadgeColor: '#2563EB',
-            channelBadgeBg: '#EFF6FF',
-            channelBadgeBorder: '#BFDBFE',
-            authorTitle: 'Radicado por Cliente B2C (Tienda Online)',
-            authorName: b2cName,
-            authorRole: 'Cliente Consumidor Final (E-Commerce FruFresco)',
-            authorInitials: getClientInitials(b2cName),
-            receptionChannel: 'Tienda Web E-Commerce B2C (Autogestión)',
-            companyName: company,
-            clientContact: contact,
-            nit,
-            email,
-            phone: phoneParsed.display || rawPhone,
-            cleanPhone: phoneParsed.waNumber,
-            isPhoneValid: phoneParsed.isValid,
-            isDriver: false,
-            isClient: true
-        };
-    }
-
-    // 4. Internal FruFresco Staff / Customer Service Desk (Default for internal tickets)
-    return {
-        channel: 'mesa_ayuda',
-        channelLabel: 'Mesa de Ayuda SAC',
-        channelBadgeColor: '#7C3AED',
-        channelBadgeBg: '#F3E8FF',
-        channelBadgeBorder: '#DDD6FE',
-        authorTitle: 'Radicado Internamente en Mesa SAC',
-        authorName: 'Mesa de Experiencia FruFresco',
-        authorRole: 'Gestión de Calidad & No Conformidades FruFresco',
-        authorInitials: 'SAC',
-        receptionChannel: 'Llamada Telefónica / WhatsApp Directo SAC',
-        companyName: company,
-        clientContact: contact,
-        nit,
-        email,
-        phone: phoneParsed.display || rawPhone,
-        cleanPhone: phoneParsed.waNumber,
-        isPhoneValid: phoneParsed.isValid,
-        isDriver: false,
-        isClient: false
-    };
-};
-
-interface PQR {
-    id: string;
-    client_id: string;
-    order_id: string | null;
-    type: 'queja' | 'reclamo' | 'peticion' | 'sugerencia' | 'felicitacion';
-    category: 'producto' | 'entrega' | 'facturacion' | 'otro';
-    subject: string;
-    description: string;
-    primary_photo_url: string | null;
-    additional_photos: string[] | null;
-    status: 'pending' | 'in_progress' | 'resolved' | 'rejected';
-    priority: 'low' | 'normal' | 'high' | 'urgent';
-    created_at: string;
-    resolved_at: string | null;
-    resolution_notes: string | null;
-    defect_category_l1?: string | null;
-    defect_subtype_l2?: string | null;
-    imputed_responsible?: string | null;
-    imputation_evidence_notes?: string | null;
-    is_replacement_rejection?: boolean | null;
-    profiles?: {
-        id?: string;
-        company_name: string;
-        contact_name: string;
-        role: string;
-        nit: string;
-        email?: string;
-        phone?: string;
-        contact_phone?: string;
-        corporate_role?: string;
-    } | null;
-    orders?: {
-        sequence_id: number;
-        total: number;
-        created_at: string;
-        origin_source?: string;
-        admin_notes?: string;
-        shipping_address?: string;
-    } | null;
-}
-
-export const getReplacementOrderUrl = (
-    pqr: PQR | null | undefined, 
-    selItemId?: string | null, 
-    items: any[] = [], 
-    novQty: number = 0
-): string => {
-    if (!pqr) return '/admin/orders/create';
-    const params = new URLSearchParams();
-    if (pqr.client_id) params.set('clientId', pqr.client_id);
-    params.set('type', pqr.profiles?.role === 'b2c_client' ? 'B2C' : 'B2B');
-    params.set('pqrId', pqr.id);
-    params.set('replacement', 'true');
-
-    const selItem = items.find(i => i.id === selItemId);
-    if (selItem && selItem.products) {
-        params.set('productId', selItem.product_id);
-        params.set('productQuery', selItem.products.name || '');
-        params.set('quantity', String(novQty > 0 ? novQty : selItem.quantity || 1));
-    } else {
-        const combined = `${pqr.subject || ''} ${pqr.description || ''}`;
-        const qtyMatch = combined.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilos?|kls?|und|unidades?|libras?|paquetes?|bolsas?)/i);
-        if (qtyMatch) {
-            params.set('quantity', qtyMatch[1].replace(',', '.'));
-        }
-        const cleanKeyword = (pqr.subject || '')
-            .replace(/\[[^\]]+\]/g, '')
-            .replace(/(de mala calidad|mala calidad|calidad|averiado|averia|danado|dano|dañado|daño|faltante|reclamo|queja|novedad|en mal estado|mal estado|podrido|inconforme|no llego|no llego el|no llegaron)/gi, '')
-            .trim();
-        if (cleanKeyword) {
-            params.set('productQuery', cleanKeyword);
-        }
-    }
-    const shortId = pqr.id ? pqr.id.substring(0, 8) : '';
-    params.set('notes', `Reposición prioritaria D+1 autorizada por PQR #${shortId} (${pqr.subject || ''})`);
-    return `/admin/orders/create?${params.toString()}`;
-};
+import PqrAuditModal from './components/PqrAuditModal';
+import PqrTaxonomyModal from './components/PqrTaxonomyModal';
+import PqrNoveltyReviewModal from './components/PqrNoveltyReviewModal';
+import PqrLeanDashboard from './components/PqrLeanDashboard';
 
 export default function CustomerServicePage() {
+    // Data State
     const [pqrs, setPqrs] = useState<PQR[]>([]);
     const [novelties, setNovelties] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'pending' | 'resolved' | 'novelties'>('pending');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected'>('all');
-    const [noveltyStatusFilter, setNoveltyStatusFilter] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('all');
-    const rightPanelRef = useRef<HTMLDivElement>(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedPqr, setSelectedPqr] = useState<PQR | null>(null);
-    const [selectedNovelty, setSelectedNovelty] = useState<any | null>(null);
-    const [resolutionNotes, setResolutionNotes] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
-    const [resolutionOption, setResolutionOption] = useState<'opt1' | 'opt2' | 'opt3' | 'opt4'>('opt1');
-
-    // RCA Form State
-    const [rcaCategoryL1, setRcaCategoryL1] = useState('dano_mecanico');
-    const [rcaSubtypeL2, setRcaSubtypeL2] = useState('aplastamiento_sobreestiba');
-    const [rcaResponsible, setRcaResponsible] = useState<'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente'>('transporte');
-    const [rcaEvidenceNotes, setRcaEvidenceNotes] = useState('');
-
-    // Toast feedback state
-    const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
-
-    // Carousel & Photo Modal state
-    const [activePhotoIdx, setActivePhotoIdx] = useState(0);
-    const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
-    const [uploadingPhoto, setUploadingPhoto] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // Novelty creation state (for product-related PQRs with orders)
-    const [orderItems, setOrderItems] = useState<any[]>([]);
-    const [loadingItems, setLoadingItems] = useState(false);
-    const [selectedItemId, setSelectedItemId] = useState('');
-    const [noveltyQty, setNoveltyQty] = useState(0);
-    const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia'>('faltante');
-    const [noveltyReason, setNoveltyReason] = useState('');
-
-    // Phone management state for quick WhatsApp reachability
-    const [editingPhoneProfileId, setEditingPhoneProfileId] = useState<string | null>(null);
-    const [newPhoneInput, setNewPhoneInput] = useState('');
-    const [savingPhone, setSavingPhone] = useState(false);
-
-    // Order linking state for cases without an associated order
-    const [clientRecentOrders, setClientRecentOrders] = useState<any[]>([]);
-    const [linkingOrderId, setLinkingOrderId] = useState<string>('');
-    const [isLinkingOrder, setIsLinkingOrder] = useState<boolean>(false);
-    const [loadingRecentOrders, setLoadingRecentOrders] = useState<boolean>(false);
-
-    // Sticky header & KPI collapse state
-    const [showKpis, setShowKpis] = useState(true);
-    const kpiHeaderRef = useRef<HTMLDivElement>(null);
-
-    // Custom Taxonomy & Parameters State
-    const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
-    const [showTaxonomyModal, setShowTaxonomyModal] = useState(false);
-    const [showFinancialModal, setShowFinancialModal] = useState(false);
-    const [financialModalMode, setFinancialModalMode] = useState<'credit_note' | 'invoice_adjustment'>('credit_note');
-
-    const openFinancialModal = (mode: 'credit_note' | 'invoice_adjustment') => {
-        setFinancialModalMode(mode);
-        setResolutionOption(mode === 'credit_note' ? 'opt3' : 'opt4');
-        setShowFinancialModal(true);
-    };
-    const [editingTaxonomy, setEditingTaxonomy] = useState<DefectCategoryL1[]>([]);
-    const [selectedTaxonomyCatIdx, setSelectedTaxonomyCatIdx] = useState(0);
     const [totalOrdersCount, setTotalOrdersCount] = useState<number | null>(null);
     const [deliveredOrdersCount, setDeliveredOrdersCount] = useState<number | null>(null);
 
-    // New Category L1 Form
-    const [isAddingCategory, setIsAddingCategory] = useState(false);
-    const [newCatCode, setNewCatCode] = useState('');
-    const [newCatLabel, setNewCatLabel] = useState('');
-    const [newCatDesc, setNewCatDesc] = useState('');
+    // Lists for Imputation & Taxonomy
+    const [providersList, setProvidersList] = useState<{ id: string; name: string; nit?: string; phone?: string }[]>([]);
+    const [collaboratorsList, setCollaboratorsList] = useState<{ id: string; contact_name: string; role: string; phone?: string; is_active?: boolean }[]>([]);
+    const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
 
-    // New Subtype L2 Form
-    const [newSubCode, setNewSubCode] = useState('');
-    const [newSubLabel, setNewSubLabel] = useState('');
-    const [newSubDesc, setNewSubDesc] = useState('');
-    const [newSubResponsible, setNewSubResponsible] = useState<'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente'>('transporte');
+    // Navigation & Filtering
+    const [mainView, setMainView] = useState<'cases' | 'lean_dashboard'>('cases');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties'>('pending');
+    const [showKpis, setShowKpis] = useState(true);
 
+    // Sticky Magnetic Stacking Measurement (Zero Gap Protocol)
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const [toolbarHeight, setToolbarHeight] = useState(54);
+
+    useEffect(() => {
+        if (!toolbarRef.current) return;
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const height = entry.borderBoxSize?.[0]?.blockSize || entry.contentRect?.height;
+                if (height) setToolbarHeight(Math.ceil(height));
+            }
+        });
+        observer.observe(toolbarRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // Active Modals State
+    const [selectedAuditPqr, setSelectedAuditPqr] = useState<PQR | null>(null);
+    const [auditModalOpen, setAuditModalOpen] = useState(false);
+    const [showTaxonomyModal, setShowTaxonomyModal] = useState(false);
+    const [selectedNovelty, setSelectedNovelty] = useState<any | null>(null);
+    const [showFinancialModal, setShowFinancialModal] = useState(false);
+    const [financialModalMode, setFinancialModalMode] = useState<'credit_note' | 'invoice_adjustment'>('credit_note');
+    const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
+
+    // Toast feedback
+    const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
+
+    const showToast = (text: string, type: 'success' | 'error' | 'warning' = 'success') => {
+        setToastMessage({ text, type });
+        setTimeout(() => {
+            setToastMessage(null);
+        }, 4000);
+    };
+
+    // Load Taxonomy & KPIs preferences
     useEffect(() => {
         const saved = localStorage.getItem('cs_show_kpis');
         if (saved !== null) {
@@ -460,151 +111,22 @@ export default function CustomerServicePage() {
         });
     };
 
-    const showToast = (text: string, type: 'success' | 'error' | 'warning' = 'success') => {
-        setToastMessage({ text, type });
-        setTimeout(() => {
-            setToastMessage(null);
-        }, 4000);
-    };
-
-    const handleSavePhone = async (profileId: string) => {
-        const clean = newPhoneInput.replace(/\D/g, '');
-        if (clean.length < 10) {
-            showToast('Ingresa un número celular válido de 10 dígitos (ej: 3154456827)', 'warning');
-            return;
-        }
-        setSavingPhone(true);
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ contact_phone: clean, phone: clean })
-                .eq('id', profileId);
-            if (error) throw error;
-
-            // Update local state in pqrs
-            setPqrs(prev => prev.map(p => {
-                if (p.client_id === profileId && p.profiles) {
-                    return {
-                        ...p,
-                        profiles: {
-                            ...p.profiles,
-                            phone: clean,
-                            contact_phone: clean
-                        }
-                    };
-                }
-                return p;
-            }));
-
-            // Update selectedPqr if currently open
-            if (selectedPqr && selectedPqr.client_id === profileId && selectedPqr.profiles) {
-                setSelectedPqr({
-                    ...selectedPqr,
-                    profiles: {
-                        ...selectedPqr.profiles,
-                        phone: clean,
-                        contact_phone: clean
-                    }
-                });
-            }
-
-            // Update novelties if matches
-            setNovelties(prev => prev.map(n => {
-                if (n.orders?.profiles && (n.orders.profiles as any).id === profileId) {
-                    return {
-                        ...n,
-                        orders: {
-                            ...n.orders,
-                            profiles: {
-                                ...n.orders.profiles,
-                                phone: clean,
-                                contact_phone: clean
-                            }
-                        }
-                    };
-                }
-                return n;
-            }));
-
-            setEditingPhoneProfileId(null);
-            setNewPhoneInput('');
-            showToast('Número de WhatsApp registrado con éxito en la cuenta del cliente.', 'success');
-        } catch (err: any) {
-            console.error('Error saving phone:', err);
-            showToast('Error al guardar el teléfono: ' + (err.message || 'Error desconocido'), 'error');
-        } finally {
-            setSavingPhone(false);
-        }
-    };
-
-    const handleUploadEvidence = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !selectedPqr) return;
-
-        setUploadingPhoto(true);
-        try {
-            const fileExt = file.name.split('.').pop() || 'jpg';
-            const fileName = `pqr-${selectedPqr.id}-${Date.now()}.${fileExt}`;
-
-            const { error: uploadErr } = await supabase.storage
-                .from('product-images')
-                .upload(fileName, file, { contentType: file.type, upsert: true });
-
-            if (uploadErr) throw uploadErr;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('product-images')
-                .getPublicUrl(fileName);
-
-            const newPrimary = selectedPqr.primary_photo_url ? selectedPqr.primary_photo_url : publicUrl;
-            const newAdditional = selectedPqr.primary_photo_url 
-                ? [...(selectedPqr.additional_photos || []), publicUrl]
-                : (selectedPqr.additional_photos || []);
-
-            const { error: updateErr } = await supabase
-                .from('customer_service_pqrs')
-                .update({
-                    primary_photo_url: newPrimary,
-                    additional_photos: newAdditional
-                })
-                .eq('id', selectedPqr.id);
-
-            if (updateErr) throw updateErr;
-
-            const updatedPqr: PQR = {
-                ...selectedPqr,
-                primary_photo_url: newPrimary,
-                additional_photos: newAdditional
-            };
-            setSelectedPqr(updatedPqr);
-            setPqrs(prev => prev.map(p => p.id === selectedPqr.id ? updatedPqr : p));
-            showToast('Foto de evidencia adjuntada con éxito al caso.', 'success');
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        } catch (err: any) {
-            console.error('Error subiendo foto:', err);
-            showToast('Error al subir foto de evidencia: ' + (err.message || 'Error desconocido'), 'error');
-        } finally {
-            setUploadingPhoto(false);
-        }
-    };
-
+    // Data Fetching
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch PQRs with complete profile contact data
             const { data: pqrsData, error: pqrsError } = await supabase
                 .from('customer_service_pqrs')
                 .select(`
                     *,
                     profiles:client_id(id, company_name, contact_name, role, nit, email, phone, contact_phone, corporate_role),
-                    orders:order_id(sequence_id, total, created_at, origin_source, admin_notes, shipping_address)
+                    orders:order_id(id, sequence_id, total, created_at, origin_source, admin_notes, shipping_address)
                 `)
                 .order('created_at', { ascending: false });
 
             if (pqrsError) throw pqrsError;
             setPqrs(pqrsData || []);
 
-            // 2. Fetch Billing Returns (Novelties)
             const { data: returnsData, error: returnsError } = await supabase
                 .from('billing_returns')
                 .select(`
@@ -624,20 +146,31 @@ export default function CustomerServicePage() {
             if (returnsError) throw returnsError;
             setNovelties(returnsData || []);
 
-            // 3. Fetch Delivered Orders Count for FTR Calculation (real delivered orders)
-            const { count: delCount, error: delErr } = await supabase
+            const { count: delCount } = await supabase
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .in('status', ['completed', 'delivered', 'recibido']);
-            if (delCount !== null && !delErr) setDeliveredOrdersCount(delCount);
+            if (delCount !== null) setDeliveredOrdersCount(delCount);
 
-            // 4. Also fetch total orders count for audit visibility
-            const { count: ordCount, error: ordErr } = await supabase
+            const { count: ordCount } = await supabase
                 .from('orders')
                 .select('*', { count: 'exact', head: true });
-            if (ordCount !== null && !ordErr) setTotalOrdersCount(ordCount);
+            if (ordCount !== null) setTotalOrdersCount(ordCount);
+
+            const { data: provsData } = await supabase
+                .from('providers')
+                .select('id, name, nit, phone')
+                .order('name');
+            setProvidersList(provsData || []);
+
+            const { data: colabsData } = await supabase
+                .from('collaborators')
+                .select('id, contact_name, role, phone, is_active')
+                .order('contact_name');
+            setCollaboratorsList(colabsData || []);
+
         } catch (e: any) {
-            console.error('Error fetching PQRs/novelties:', e);
+            console.error('Error fetching customer service data:', e);
             showToast('Error cargando datos: ' + e.message, 'error');
         } finally {
             setLoading(false);
@@ -648,4118 +181,1314 @@ export default function CustomerServicePage() {
         fetchData();
     }, [fetchData]);
 
-    const handlePqrSelect = async (pqr: PQR) => {
-        setSelectedPqr(pqr);
-        setResolutionNotes(pqr.resolution_notes || '');
-        setActivePhotoIdx(0);
-        setSelectedItemId('');
-        setNoveltyQty(0);
-        setNoveltyReason('');
-        if (rightPanelRef.current) {
-            rightPanelRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-        if (typeof window !== 'undefined' && window.scrollY < 120 && showKpis) {
-            window.scrollTo({ top: 160, behavior: 'smooth' });
-        }
-
-        // Parse RCA metadata from record
-        const rca = parseRcaFromRecord(pqr);
-        setRcaCategoryL1(rca.categoryL1 || 'dano_mecanico');
-        setRcaSubtypeL2(rca.subtypeL2 || '');
-        setRcaResponsible((rca.responsible !== 'no_definido' ? rca.responsible : 'transporte') as any);
-        setRcaEvidenceNotes(rca.notes || '');
-
-        // If it's a replacement rejection, default to opt3 (Credit Note) to avoid ping-pong
-        const isReplacement = rca.isReplacementRejection || 
-            (pqr.subject || '').includes('[ALERTA PING-PONG]') || 
-            (pqr.description || '').includes('ALERTA CORTE DE BUCLE');
-
-        setResolutionOption(isReplacement ? 'opt3' : 'opt1');
-
-        // If PQR has an associated order, load its items to allow registering novelties
-        if (pqr.order_id) {
-            setLoadingItems(true);
-            try {
-                const { data, error } = await supabase
-                    .from('order_items')
-                    .select(`
-                        *,
-                        products(name, sku, unit_of_measure)
-                    `)
-                    .eq('order_id', pqr.order_id);
-                if (error) throw error;
-                setOrderItems(data || []);
-            } catch (e) {
-                console.error('Error fetching order items:', e);
-            } finally {
-                setLoadingItems(false);
-            }
-        } else {
-            setOrderItems([]);
-        }
-
-        // Fetch recent orders for this client to enable 1-click linking
-        setLinkingOrderId('');
-        if (pqr.client_id) {
-            setLoadingRecentOrders(true);
-            try {
-                const { data: recentOrders } = await supabase
-                    .from('orders')
-                    .select('id, sequence_id, total, status, created_at, shipping_address, origin_source, admin_notes')
-                    .eq('profile_id', pqr.client_id)
-                    .order('created_at', { ascending: false })
-                    .limit(10);
-                setClientRecentOrders(recentOrders || []);
-            } catch (err) {
-                console.error('Error fetching client recent orders:', err);
-                setClientRecentOrders([]);
-            } finally {
-                setLoadingRecentOrders(false);
-            }
-        } else {
-            setClientRecentOrders([]);
-        }
+    // Open Audit Wizard Modal
+    const handleOpenAuditModal = (pqr: PQR) => {
+        setSelectedAuditPqr(pqr);
+        setAuditModalOpen(true);
     };
 
-    // Link an order to a PQR case that was created without order association
-    const handleLinkOrder = async (orderIdToLink: string) => {
-        if (!selectedPqr || !orderIdToLink) return;
-        setIsLinkingOrder(true);
-        try {
-            const { data: orderData, error: ordErr } = await supabase
-                .from('orders')
-                .select('id, sequence_id, total, created_at, origin_source, admin_notes, shipping_address')
-                .eq('id', orderIdToLink)
-                .single();
-            if (ordErr) throw ordErr;
-
-            const { error: updateErr } = await supabase
-                .from('customer_service_pqrs')
-                .update({ order_id: orderIdToLink })
-                .eq('id', selectedPqr.id);
-            if (updateErr) throw updateErr;
-
-            const updatedPqr: PQR = {
-                ...selectedPqr,
-                order_id: orderIdToLink,
-                orders: orderData
-            };
-            setSelectedPqr(updatedPqr);
-            setPqrs(prev => prev.map(p => p.id === selectedPqr.id ? updatedPqr : p));
-
-            setLoadingItems(true);
-            const { data: items, error: itemsErr } = await supabase
-                .from('order_items')
-                .select(`
-                    *,
-                    products(name, sku, unit_of_measure)
-                `)
-                .eq('order_id', orderIdToLink);
-            if (itemsErr) throw itemsErr;
-            setOrderItems(items || []);
-
-            showToast(`Pedido #${orderData.sequence_id} vinculado exitosamente al caso.`, 'success');
-        } catch (e: any) {
-            console.error('Error linking order:', e);
-            showToast('Error al vincular pedido: ' + (e.message || 'Error desconocido'), 'error');
-        } finally {
-            setIsLinkingOrder(false);
-            setLoadingItems(false);
-        }
+    // Open Financial Adjustment Modal from Audit
+    const handleOpenFinancialModal = (mode: 'credit_note' | 'invoice_adjustment') => {
+        setFinancialModalMode(mode);
+        setShowFinancialModal(true);
     };
 
-    // Unlink order from PQR case
-    const handleUnlinkOrder = async () => {
-        if (!selectedPqr) return;
-        setIsLinkingOrder(true);
-        try {
-            const { error: updateErr } = await supabase
-                .from('customer_service_pqrs')
-                .update({ order_id: null })
-                .eq('id', selectedPqr.id);
-            if (updateErr) throw updateErr;
-
-            const updatedPqr: PQR = {
-                ...selectedPqr,
-                order_id: null,
-                orders: null
-            };
-            setSelectedPqr(updatedPqr);
-            setPqrs(prev => prev.map(p => p.id === selectedPqr.id ? updatedPqr : p));
-            setOrderItems([]);
-            setSelectedItemId('');
-            showToast('Pedido desvinculado del caso.', 'success');
-        } catch (e: any) {
-            console.error('Error unlinking order:', e);
-            showToast('Error al desvincular pedido: ' + (e.message || 'Error desconocido'), 'error');
-        } finally {
-            setIsLinkingOrder(false);
-        }
-    };
-
-    // Update PQR Status / Resolution with Option Concept & RCA Tracking
-    const handleResolvePqr = async (status: 'resolved' | 'rejected') => {
-        if (!selectedPqr || !resolutionNotes.trim()) {
-            showToast('Por favor, ingresa una nota de resolución antes de guardar.', 'warning');
-            return;
-        }
-
-        const rcaParsed = parseRcaFromRecord(selectedPqr);
-        const isReplacementRejection = rcaParsed.isReplacementRejection || 
-            (selectedPqr.subject || '').includes('[ALERTA PING-PONG]') || 
-            (selectedPqr.description || '').includes('ALERTA CORTE DE BUCLE');
-
-        // Poka-Yoke Corte de Bucle (Re-rechazo en Reposición)
-        if (status === 'resolved' && resolutionOption === 'opt2' && isReplacementRejection) {
-            showToast('⚠️ BLOQUEADO POR REGLA DE CORTE DE BUCLE: No es posible reprogramar un tercer flete de un producto ya devuelto dos veces. Debe liquidarse como Nota Crédito (Opción 3) o Ajustar Factura (Opción 4).', 'error');
-            return;
-        }
-
-        setActionLoading(true);
-        try {
-            let finalNotes = resolutionNotes;
-            let redirectUrl = null;
-
-            if (status === 'resolved') {
-                if (resolutionOption === 'opt1') {
-                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Cerrado sin cambios en factura (Entregado Conforme)]`;
-                } else if (resolutionOption === 'opt2') {
-                    if (!selectedPqr.order_id) {
-                        showToast('Esta PQR no tiene un pedido asociado para reprogramar reposición.', 'warning');
-                        setActionLoading(false);
-                        return;
-                    }
-
-                    // Fetch original order details
-                    const { data: originalOrder, error: orderErr } = await supabase
-                        .from('orders')
-                        .select('*')
-                        .eq('id', selectedPqr.order_id)
-                        .single();
-
-                    if (orderErr || !originalOrder) {
-                        throw new Error('No se pudo cargar el pedido original.');
-                    }
-
-                    // Fetch pending returns for this order to see if it is partial or total
-                    const { data: pendingReturns, error: returnsError } = await supabase
-                        .from('billing_returns')
-                        .select('*')
-                        .eq('order_id', selectedPqr.order_id)
-                        .eq('status', 'pending_review');
-
-                    if (returnsError) {
-                        throw new Error(`Error consultando devoluciones pendientes: ${returnsError.message}`);
-                    }
-
-                    // Copy items
-                    const { data: originalItems, error: itemsErr } = await supabase
-                        .from('order_items')
-                        .select('*')
-                        .eq('order_id', selectedPqr.order_id);
-
-                    if (itemsErr) {
-                        throw new Error('No se pudieron cargar los productos del pedido original.');
-                    }
-
-                    let itemsToReprogram: any[] = [];
-                    let isPartial = false;
-
-                    if (pendingReturns && pendingReturns.length > 0) {
-                        isPartial = true;
-                        pendingReturns.forEach(ret => {
-                            const matchedItem = originalItems?.find(item => item.product_id === ret.product_id);
-                            if (matchedItem) {
-                                itemsToReprogram.push({
-                                    product_id: ret.product_id,
-                                    quantity: ret.quantity_returned,
-                                    unit_price: matchedItem.unit_price,
-                                    nickname: matchedItem.nickname,
-                                    selected_options: matchedItem.selected_options,
-                                    variant_label: matchedItem.variant_label
-                                });
-                            }
-                        });
-                    }
-
-                    // POKA-YOKE: If no returns registered, do NOT accidentally clone 100% of order unless confirmed
-                    if (itemsToReprogram.length === 0) {
-                        const confirmTotal = window.confirm(
-                            '⚠️ ATENCIÓN: No hay productos específicos devueltos registrados en el panel derecho.\n\n¿Estás seguro de que deseas reprogramar el 100% de TODOS los productos del pedido original?'
-                        );
-                        if (!confirmTotal) {
-                            setActionLoading(false);
-                            return;
-                        }
-
-                        isPartial = false;
-                        itemsToReprogram = (originalItems || []).map(item => ({
-                            product_id: item.product_id,
-                            quantity: item.quantity,
-                            unit_price: item.unit_price,
-                            nickname: item.nickname,
-                            selected_options: item.selected_options,
-                            variant_label: item.variant_label
-                        }));
-                    }
-
-                    // Calculate total and subtotal for the new order based on the reprogrammed items
-                    const newTotal = itemsToReprogram.reduce((acc, item) => acc + (item.quantity * item.unit_price), 0);
-
-                    // Create new order record (D+1)
-                    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-                    const { data: newOrder, error: newOrderErr } = await supabase
-                        .from('orders')
-                        .insert([{
-                            profile_id: originalOrder.profile_id,
-                            type: originalOrder.type,
-                            status: 'draft',
-                            origin_source: 'customer_service',
-                            delivery_date: tomorrow,
-                            delivery_slot: originalOrder.delivery_slot || 'AM',
-                            shipping_address: originalOrder.shipping_address,
-                            latitude: originalOrder.latitude,
-                            longitude: originalOrder.longitude,
-                            total: newTotal,
-                            subtotal: newTotal,
-                            total_weight_kg: 0,
-                            admin_notes: `[REPOSICIÓN DE PEDIDO - RECHAZO ${isPartial ? 'PARCIAL' : 'TOTAL'}] Generado automáticamente por PQR del Pedido original #${originalOrder.sequence_id}.\n\nNotas PQR: ${resolutionNotes}`
-                        }])
-                        .select()
-                        .single();
-
-                    if (newOrderErr || !newOrder) {
-                        throw new Error(`Error creando pedido de reposición: ${newOrderErr?.message}`);
-                    }
-
-                    const itemsWithOrderId = itemsToReprogram.map(item => ({
-                        ...item,
-                        order_id: newOrder.id
-                    }));
-
-                    const { error: insertItemsErr } = await supabase
-                        .from('order_items')
-                        .insert(itemsWithOrderId);
-
-                    if (insertItemsErr) {
-                        throw new Error(`Error copiando artículos del pedido: ${insertItemsErr.message}`);
-                    }
-
-                    if (isPartial) {
-                        for (const novelty of pendingReturns) {
-                            await supabase
-                                .from('billing_returns')
-                                .update({ status: 'approved', reason: `${novelty.reason} - Reprogramado en Pedido #${newOrder.sequence_id}` })
-                                .eq('id', novelty.id);
-                        }
-                    }
-
-                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 2 - Reprogramar reposición (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Nuevo pedido de reposición generado con folio #${newOrder.sequence_id}`;
-                    redirectUrl = `/admin/orders/${newOrder.id}`;
-
-                } else if (resolutionOption === 'opt3') {
-                    setActionLoading(false);
-                    openFinancialModal('credit_note');
-                    return;
-
-                } else if (resolutionOption === 'opt4') {
-                    setActionLoading(false);
-                    openFinancialModal('invoice_adjustment');
-                    return;
-                }
-            } else {
-                finalNotes = `${resolutionNotes}\n\n[CASO RECHAZADO / ARCHIVADO]`;
-            }
-
-            // Append structured RCA metadata tag
-            const rcaTag = buildRcaMetadataTag({
-                categoryL1: rcaCategoryL1,
-                subtypeL2: rcaSubtypeL2,
-                responsible: rcaResponsible,
-                notes: rcaEvidenceNotes,
-                isReplacementRejection: isReplacementRejection
-            });
-            const responsibleLabel = RESPONSIBLE_PARTIES[rcaResponsible]?.label || rcaResponsible;
-            finalNotes = `${finalNotes}\n\n${rcaTag}\n[RESPONSABLE IMPUTADO (RCA): ${responsibleLabel}]`;
-
-            const { error } = await supabase
-                .from('customer_service_pqrs')
-                .update({
-                    status: status,
-                    resolution_notes: finalNotes,
-                    resolved_at: new Date().toISOString()
-                })
-                .eq('id', selectedPqr.id);
-
-            if (error) throw error;
-
-            showToast(`✅ PQR cerrada con éxito (${status === 'resolved' ? 'Resuelta' : 'Rechazada'}).`, 'success');
-            fetchData();
-
-            if (redirectUrl) {
-                setTimeout(() => {
-                    window.location.href = redirectUrl;
-                }, 1200);
-            }
-        } catch (e: any) {
-            console.error('Error resolving PQR:', e);
-            showToast('Error al procesar la resolución de PQR: ' + e.message, 'error');
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    // Keyboard-First shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            const target = e.target as HTMLElement;
-            const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT';
-
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault();
-                if (selectedPqr && selectedPqr.status === 'pending' && !actionLoading) {
-                    handleResolvePqr('resolved');
-                }
-                return;
-            }
-
-            if (!isTyping && selectedPqr && selectedPqr.status === 'pending') {
-                if (e.key === '1') setResolutionOption('opt1');
-                else if (e.key === '2') setResolutionOption('opt2');
-                else if (e.key === '3') setResolutionOption('opt3');
-                else if (e.key === '4') setResolutionOption('opt4');
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedPqr, resolutionNotes, resolutionOption, actionLoading, rcaCategoryL1, rcaSubtypeL2, rcaResponsible]);
-
-    const handleCreateNovelty = async () => {
-        if (!selectedPqr?.order_id || !selectedItemId || noveltyQty <= 0) {
-            showToast('Por favor, completa todos los campos de la novedad.', 'warning');
-            return;
-        }
-
-        setActionLoading(true);
-        try {
-            const selectedItem = orderItems.find(i => i.id === selectedItemId);
-            if (!selectedItem) throw new Error('Artículo no encontrado en el pedido.');
-
-            if (noveltyQty > selectedItem.quantity) {
-                showToast(`La cantidad no puede superar la cantidad despachada original (${selectedItem.quantity}).`, 'warning');
-                setActionLoading(false);
-                return;
-            }
-
-            const { error: returnErr } = await supabase
-                .from('billing_returns')
-                .insert([{
-                    order_id: selectedPqr.order_id,
-                    product_id: selectedItem.product_id,
-                    quantity_returned: noveltyQty,
-                    reason: noveltyReason || `Novedad de PQR: ${selectedPqr.subject}`,
-                    status: 'pending_review'
-                }]);
-
-            if (returnErr) throw returnErr;
-
-            showToast('✅ Novedad registrada para cobro y cartera.', 'success');
-            setSelectedItemId('');
-            setNoveltyQty(0);
-            setNoveltyReason('');
-            fetchData();
-        } catch (e: any) {
-            showToast('Error al registrar novedad: ' + e.message, 'error');
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const getPqrPhotos = (pqr: PQR) => {
-        const list: string[] = [];
-        if (pqr.primary_photo_url) list.push(pqr.primary_photo_url);
-        if (pqr.additional_photos && Array.isArray(pqr.additional_photos)) {
-            list.push(...pqr.additional_photos);
-        }
-        return list;
-    };
-
-    const pqrCounts = {
-        all: pqrs.length,
-        pending: pqrs.filter(p => p.status === 'pending').length,
-        in_progress: pqrs.filter(p => p.status === 'in_progress').length,
-        resolved: pqrs.filter(p => p.status === 'resolved').length,
-        rejected: pqrs.filter(p => p.status === 'rejected').length,
-    };
-
-    const noveltyCounts = {
-        all: novelties.length,
-        pending_review: novelties.filter(n => n.status === 'pending_review').length,
-        approved: novelties.filter(n => n.status === 'approved').length,
-        rejected: novelties.filter(n => n.status === 'rejected').length,
-    };
-
-    const filteredPqrs = pqrs.filter(p => {
-        // Status filter matching
-        if (statusFilter === 'pending' && p.status !== 'pending') return false;
-        if (statusFilter === 'in_progress' && p.status !== 'in_progress') return false;
-        if (statusFilter === 'resolved' && p.status !== 'resolved') return false;
-        if (statusFilter === 'rejected' && p.status !== 'rejected') return false;
-
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (
-            p.subject.toLowerCase().includes(term) ||
-            p.description.toLowerCase().includes(term) ||
-            (p.profiles?.company_name || '').toLowerCase().includes(term) ||
-            (p.profiles?.contact_name || '').toLowerCase().includes(term) ||
-            (p.orders?.sequence_id ? `#${p.orders.sequence_id}`.includes(term) : false)
-        );
-    });
-
-    const filteredNovelties = novelties.filter(n => {
-        if (noveltyStatusFilter !== 'all' && n.status !== noveltyStatusFilter) {
-            return false;
-        }
-
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (
-            (n.products?.name || '').toLowerCase().includes(term) ||
-            (n.reason || '').toLowerCase().includes(term) ||
-            (n.orders?.profiles?.company_name || '').toLowerCase().includes(term) ||
-            (n.orders?.profiles?.contact_name || '').toLowerCase().includes(term) ||
-            (n.orders?.sequence_id ? `#${n.orders.sequence_id}`.includes(term) : false)
-        );
-    });
-
+    // Process Single Novelty
     const handleProcessNovelty = async (novelty: any, decision: 'approved' | 'rejected') => {
         setActionLoading(true);
         try {
-            if (decision === 'rejected') {
-                const { error } = await supabase
-                    .from('billing_returns')
-                    .update({ status: 'rejected' })
-                    .eq('id', novelty.id);
-                if (error) throw error;
-            } else {
-                const { data: itemData, error: itemError } = await supabase
-                    .from('order_items')
-                    .select('unit_price, quantity')
-                    .eq('order_id', novelty.order_id)
-                    .eq('product_id', novelty.product_id)
-                    .single();
-                if (itemError) throw itemError;
+            const { error } = await supabase
+                .from('billing_returns')
+                .update({
+                    status: decision,
+                    resolved_at: new Date().toISOString()
+                })
+                .eq('id', novelty.id);
 
-                const newQty = Math.max(0, Number(itemData.quantity) - Number(novelty.quantity_returned));
-                const priceCredit = Number(novelty.quantity_returned) * Number(itemData.unit_price);
+            if (error) throw error;
 
-                const { error: updateItemError } = await supabase
-                    .from('order_items')
-                    .update({ quantity: newQty })
-                    .eq('order_id', novelty.order_id)
-                    .eq('product_id', novelty.product_id);
-                if (updateItemError) throw updateItemError;
-
-                const { data: orderData } = await supabase.from('orders').select('total').eq('id', novelty.order_id).single();
-                const newTotal = Math.max(0, (Number(orderData?.total) || 0) - priceCredit);
-                const { error: updateOrderError } = await supabase
-                    .from('orders')
-                    .update({ total: newTotal })
-                    .eq('id', novelty.order_id);
-                if (updateOrderError) throw updateOrderError;
-
-                const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', novelty.order_id).single();
-                if (invoiceData) {
-                    const { data: orderProf } = await supabase
-                        .from('orders')
-                        .select('profiles(iva_responsible)')
-                        .eq('id', novelty.order_id)
-                        .single();
-                    const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
-                    const totalBase = isIva ? newTotal / 1.19 : newTotal;
-                    const totalTax = isIva ? newTotal - totalBase : 0;
-
-                    await supabase
-                        .from('billing_invoices')
-                        .update({
-                            total_base: totalBase,
-                            total_tax: totalTax,
-                            total_final: newTotal
-                        })
-                        .eq('id', invoiceData.id);
-                }
-
-                await supabase.from('billing_returns').update({ status: 'approved' }).eq('id', novelty.id);
-            }
-            showToast(`✅ Novedad ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'} correctamente.`, 'success');
-            fetchData();
+            showToast(`Novedad ${decision === 'approved' ? 'aprobada' : 'rechazada'} exitosamente.`, 'success');
             setSelectedNovelty(null);
-        } catch (err: any) {
-            console.error('Error processing novelty:', err);
-            showToast('Error al procesar la novedad: ' + err.message, 'error');
+            fetchData();
+        } catch (e: any) {
+            showToast('Error al procesar novedad: ' + e.message, 'error');
         } finally {
             setActionLoading(false);
         }
     };
 
-    const activeTaxonomy = customTaxonomy.length > 0 ? customTaxonomy : RCA_CATEGORIES_L1;
-    const selectedCategoryL1Obj = activeTaxonomy.find(c => c.code === rcaCategoryL1);
-    const selectedResponsibleObj = RESPONSIBLE_PARTIES[rcaResponsible];
+    // KPI Metrics Calculation
+    const kpiMetrics = useMemo(() => {
+        const totalPqrs = pqrs.length;
+        const pendingCount = pqrs.filter(p => p.status === 'pending').length;
+        const inProgressCount = pqrs.filter(p => p.status === 'in_progress').length;
+        const resolvedCount = pqrs.filter(p => p.status === 'resolved').length;
+        const rejectedCount = pqrs.filter(p => p.status === 'rejected').length;
+        const noveltiesCount = novelties.filter(n => n.status === 'pending_review').length;
 
-    const isCurrentSelectedPqrReplacement = selectedPqr ? (
-        parseRcaFromRecord(selectedPqr).isReplacementRejection ||
-        (selectedPqr.subject || '').includes('[ALERTA PING-PONG]') ||
-        (selectedPqr.description || '').includes('ALERTA CORTE DE BUCLE') ||
-        selectedPqr.orders?.origin_source === 'customer_service' ||
-        (selectedPqr.orders?.admin_notes || '').includes('REPOSICIÓN')
-    ) : false;
+        const claimOrderIds = new Set(pqrs.filter(p => p.order_id).map(p => p.order_id));
+        const effectiveDelivered = deliveredOrdersCount || Math.max(totalPqrs, 100);
+        const ftrPercentage = Math.max(0, Math.min(100, ((effectiveDelivered - claimOrderIds.size) / effectiveDelivered) * 100));
 
-    // Operational pulse counters and quick actions
-    const pendingPqrsCount = pqrs.filter(p => p.status === 'pending' || p.status === 'in_progress').length;
-    const resolvedPqrsCount = pqrs.filter(p => p.status === 'resolved' || p.status === 'rejected').length;
-    const pendingNoveltiesCount = novelties.filter(n => n.status === 'pending_review').length;
-    const firstPendingPqr = pqrs.find(p => p.status === 'pending' || p.status === 'in_progress');
-
-    // =========================================================================
-    // LEAN & QUALITY METRICS CALCULATIONS (FTR, CoQ, MTTR, PARETO TOP 1)
-    // 100% CONECTADO A BASE DE DATOS REAL — CERO CONSTANTES NI MULTIPLICADORES MOCK
-    // =========================================================================
-    const totalDelivered = deliveredOrdersCount !== null ? deliveredOrdersCount : (totalOrdersCount !== null ? totalOrdersCount : null);
-    
-    // Conteo de órdenes únicas entregadas que tuvieron reclamos o devoluciones de calidad
-    const affectedOrdersCount = useMemo(() => {
-        const set = new Set<string>();
-        pqrs.forEach(p => { if (p.order_id) set.add(p.order_id); });
-        novelties.forEach(n => { if (n.order_id) set.add(n.order_id); });
-        return set.size;
-    }, [pqrs, novelties]);
-
-    const conformingDeliveries = totalDelivered !== null ? Math.max(0, totalDelivered - affectedOrdersCount) : 0;
-    const ftrRate = (totalDelivered !== null && totalDelivered > 0)
-        ? Number(((conformingDeliveries / totalDelivered) * 100).toFixed(1))
-        : null;
-    const ftrColor = ftrRate !== null ? (ftrRate >= 98 ? '#15803D' : ftrRate >= 95 ? '#B45309' : '#DC2626') : '#64748B';
-    const ftrBg = ftrRate !== null ? (ftrRate >= 98 ? '#DCFCE7' : ftrRate >= 95 ? '#FEF3C7' : '#FEE2E2') : '#F1F5F9';
-
-    // Costo Real de No Calidad (CoQ): Valorización exacta de mermas + reposiciones generadas
-    const costOfQuality = useMemo(() => {
-        let totalReturnsValuated = 0;
-        novelties.forEach(n => {
-            const qty = Number(n.quantity_returned || 0);
-            const unitPrice = Number(n.products?.base_price || 0);
-            totalReturnsValuated += (qty * unitPrice);
-        });
-
-        // Sumar órdenes de reposición originadas en atención a no conformidades
-        let correctiveReplacementsCost = 0;
-        pqrs.forEach(p => {
-            if (p.orders?.origin_source === 'customer_service' || (p.orders?.admin_notes || '').includes('REPOSICIÓN')) {
-                correctiveReplacementsCost += Number(p.orders?.total || 0);
+        const totalCoQ = novelties.reduce((sum, n) => {
+            if (n.status === 'approved' || n.status === 'pending_review') {
+                const price = n.products?.base_price || 0;
+                return sum + (price * (Number(n.quantity_returned) || 0));
             }
-        });
+            return sum;
+        }, 0);
 
-        return totalReturnsValuated + correctiveReplacementsCost;
-    }, [novelties, pqrs]);
+        const resolvedWithDates = pqrs.filter(p => p.resolved_at && p.created_at);
+        let avgMttrHours = 0;
+        if (resolvedWithDates.length > 0) {
+            const totalHours = resolvedWithDates.reduce((acc, p) => {
+                const diffMs = new Date(p.resolved_at!).getTime() - new Date(p.created_at).getTime();
+                return acc + (diffMs / (1000 * 60 * 60));
+            }, 0);
+            avgMttrHours = Math.round(totalHours / resolvedWithDates.length);
+        }
 
-    // MTTR Real: Tiempo Medio de Resolución en Horas (solo sobre casos cerrados con resolved_at)
-    const avgMttrHours = useMemo(() => {
-        const resolved = pqrs.filter(p => p.resolved_at && p.created_at);
-        if (resolved.length === 0) return null; // Transparencia: sin casos cerrados no se inventa valor
-        const sumMs = resolved.reduce((acc, p) => acc + (new Date(p.resolved_at!).getTime() - new Date(p.created_at).getTime()), 0);
-        return Math.max(0.1, Number((sumMs / (resolved.length * 3600000)).toFixed(1)));
-    }, [pqrs]);
-
-    // Pareto #1 Real de Causa Raíz
-    const paretoTop1 = useMemo(() => {
-        const counts: Record<string, { count: number; isExplicit: boolean }> = {};
+        const rcaCounts: Record<string, number> = {};
         pqrs.forEach(p => {
             const rca = parseRcaFromRecord(p);
-            const code = rca.categoryL1;
-            if (!counts[code]) counts[code] = { count: 0, isExplicit: rca.isExplicitRca };
-            counts[code].count += 1;
-            if (rca.isExplicitRca) counts[code].isExplicit = true;
+            const cat = rca.categoryL1 || 'dano_mecanico';
+            rcaCounts[cat] = (rcaCounts[cat] || 0) + 1;
         });
-        const sorted = Object.entries(counts).sort((a, b) => b[1].count - a[1].count);
-        if (sorted.length === 0) return { label: 'Sin defectos', pct: 100, count: 0, isExplicit: true };
-        
-        const topCode = sorted[0][0];
-        const topData = sorted[0][1];
-        const activeCats = customTaxonomy.length > 0 ? customTaxonomy : RCA_CATEGORIES_L1;
-        const catObj = activeCats.find(c => c.code === topCode);
-        
-        let label = catObj ? catObj.label.replace(/^\d+\.\s*/, '') : topCode;
-        if (topCode === 'sin_clasificar') label = 'Pendiente Dictamen RCA';
-        
-        const pct = Math.round((topData.count / Math.max(1, pqrs.length)) * 100);
-        return { label, pct, count: topData.count, isExplicit: topData.isExplicit };
-    }, [pqrs, customTaxonomy]);
+        const topRcaEntry = Object.entries(rcaCounts).sort((a, b) => b[1] - a[1])[0];
+        const topRcaLabel = customTaxonomy.find(c => c.code === topRcaEntry?.[0])?.label || 'Daño Mecánico';
+        const topRcaPct = totalPqrs > 0 && topRcaEntry ? Math.round((topRcaEntry[1] / totalPqrs) * 100) : 0;
 
-    const handleSelectFirstPending = () => {
-        if (firstPendingPqr) {
-            setActiveTab('pending');
-            handlePqrSelect(firstPendingPqr);
+        return {
+            totalPqrs,
+            pendingCount,
+            inProgressCount,
+            resolvedCount,
+            rejectedCount,
+            noveltiesCount,
+            ftrPercentage,
+            totalCoQ,
+            avgMttrHours,
+            topRcaLabel,
+            topRcaPct
+        };
+    }, [pqrs, novelties, deliveredOrdersCount, customTaxonomy]);
+
+    // Multi-Criteria Omnibox Search & Tab Filtering
+    const filteredPqrs = useMemo(() => {
+        let result = pqrs;
+
+        if (activeTab === 'pending') {
+            result = result.filter(p => p.status === 'pending');
+        } else if (activeTab === 'in_progress') {
+            result = result.filter(p => p.status === 'in_progress');
+        } else if (activeTab === 'resolved') {
+            result = result.filter(p => p.status === 'resolved');
+        } else if (activeTab === 'rejected') {
+            result = result.filter(p => p.status === 'rejected');
         }
-    };
+
+        if (searchTerm.trim()) {
+            const term = searchTerm.toLowerCase().trim();
+            result = result.filter(p => {
+                const author = getPqrAuthorInfo(p);
+                const rca = parseRcaFromRecord(p);
+                const orderSeq = p.orders?.sequence_id ? `#${p.orders.sequence_id}` : '';
+                const pqrShortId = `#${p.id.substring(0, 8)}`;
+
+                return (
+                    p.subject?.toLowerCase().includes(term) ||
+                    p.description?.toLowerCase().includes(term) ||
+                    author.clientDisplayName.toLowerCase().includes(term) ||
+                    author.nit?.toLowerCase().includes(term) ||
+                    orderSeq.toLowerCase().includes(term) ||
+                    pqrShortId.toLowerCase().includes(term) ||
+                    rca.categoryL1?.toLowerCase().includes(term) ||
+                    rca.subtypeL2?.toLowerCase().includes(term) ||
+                    rca.responsible?.toLowerCase().includes(term) ||
+                    rca.imputedEntities?.some(e => e.name.toLowerCase().includes(term))
+                );
+            });
+        }
+
+        return result;
+    }, [pqrs, activeTab, searchTerm]);
+
+    const filteredNovelties = useMemo(() => {
+        if (!searchTerm.trim()) return novelties;
+        const term = searchTerm.toLowerCase().trim();
+        return novelties.filter(n => {
+            const clientName = n.orders?.profiles?.company_name || n.orders?.profiles?.contact_name || '';
+            const prodName = n.products?.name || '';
+            const orderSeq = n.orders?.sequence_id ? `#${n.orders.sequence_id}` : '';
+            return (
+                clientName.toLowerCase().includes(term) ||
+                prodName.toLowerCase().includes(term) ||
+                orderSeq.toLowerCase().includes(term) ||
+                n.reason?.toLowerCase().includes(term)
+            );
+        });
+    }, [novelties, searchTerm]);
 
     return (
-        <main style={{ 
-            minHeight: '100vh', 
-            backgroundColor: '#F8FAFC', 
-            color: THEME.colors.textMain, 
-            boxSizing: 'border-box',
-            position: 'relative'
-        }}>
-            {/* Custom Sleek Scrollbar Styles */}
-            <style>{`
-                .cs-custom-scroll::-webkit-scrollbar {
-                    width: 6px;
-                    height: 6px;
-                }
-                .cs-custom-scroll::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .cs-custom-scroll::-webkit-scrollbar-thumb {
-                    background: #CBD5E1;
-                    border-radius: 9999px;
-                }
-                .cs-custom-scroll::-webkit-scrollbar-thumb:hover {
-                    background: #94A3B8;
-                }
-            `}</style>
-            
-            {/* Toast Banner */}
-            {toastMessage && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: '24px',
-                    right: '24px',
-                    zIndex: 99999,
-                    padding: '12px 18px',
-                    borderRadius: '12px',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+        <main style={{ minHeight: '100vh', backgroundColor: '#F4F7F6', width: '100%', fontFamily: 'var(--font-inter), sans-serif' }}>
+            {/* Master 1600px Container */}
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.25rem 1.75rem 3.5rem 1.75rem' }}>
+                
+                {/* 1. Header Bar */}
+                <header style={{
                     display: 'flex',
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    gap: '10px',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    backgroundColor: toastMessage.type === 'success' ? '#064E3B' : toastMessage.type === 'error' ? '#881337' : '#78350F',
-                    color: 'white',
-                    border: `1px solid ${toastMessage.type === 'success' ? '#059669' : toastMessage.type === 'error' ? '#E11D48' : '#D97706'}`
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '16px',
+                    paddingBottom: '1rem',
+                    borderBottom: '1px solid #E2E8F0'
                 }}>
-                    {toastMessage.type === 'success' && <CheckCircle2 size={18} color="#34D399" />}
-                    {toastMessage.type === 'error' && <AlertTriangle size={18} color="#FDA4AF" />}
-                    {toastMessage.type === 'warning' && <AlertCircle size={18} color="#FDE68A" />}
-                    <span>{toastMessage.text}</span>
-                </div>
-            )}
-
-            {/* 1. SECCIÓN SUPERIOR: ENCABEZADO Y PULSO OPERATIVO (SE OCULTA AL HACER SCROLL O AL COLAPSAR) */}
-            <div 
-                ref={kpiHeaderRef}
-                style={{
-                    backgroundColor: '#F8FAFC',
-                    padding: '0.85rem 2rem 0.5rem 2rem',
-                    display: showKpis ? 'flex' : 'none',
-                    flexDirection: 'column',
-                    gap: '0.65rem',
-                    transition: 'all 0.25s ease-in-out'
-                }}
-            >
-                {/* Row 1: Title, Subtitle & Action Buttons */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '10px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, boxShadow: '0 2px 6px rgba(13,122,87,0.12)' }}>
-                            <ShieldCheck size={22} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#0D7A57',
+                            color: 'white',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                        }}>
+                            <ShieldAlert size={22} />
                         </div>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <h1 style={{ fontSize: '1.35rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', lineHeight: '1.2' }}>
-                                    Gestión de Calidad & No Conformidades
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                <h1 style={{
+                                    fontSize: '1.25rem',
+                                    fontWeight: '900',
+                                    color: '#1A231E',
+                                    margin: 0,
+                                    letterSpacing: '-0.02em',
+                                    fontFamily: 'var(--font-outfit), sans-serif'
+                                }}>
+                                    Gestión de Calidad, PQRS & Devoluciones
                                 </h1>
-                                <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '1px 7px', borderRadius: '9999px', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}>
-                                    SGC & Lean Agroindustrial
+                                <span style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: '700',
+                                    padding: '3px 10px',
+                                    borderRadius: '20px',
+                                    backgroundColor: '#EAEFEA',
+                                    color: '#0D7A57',
+                                    border: '1px solid #C4D7C4'
+                                }}>
+                                    SDD v1.9.37
                                 </span>
                             </div>
-                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.78rem', margin: '2px 0 0 0', fontWeight: '500' }}>
-                                Aseguramiento de calidad agroindustrial, dictamen técnico de mermas y resolución de novedades de entrega.
+                            <p style={{ fontSize: '0.75rem', color: '#64748B', margin: '2px 0 0 0', fontWeight: '500' }}>
+                                Consola de Auditoría Técnica, Análisis Causa Raíz (RCA Lean), Pareto Dual 80/20 y Planes de Acción CAPA
                             </p>
                         </div>
                     </div>
 
-                    {/* Quick Access to RCA Dashboard, Taxonomy Parameters & SOP Guide */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEditingTaxonomy(JSON.parse(JSON.stringify(customTaxonomy.length > 0 ? customTaxonomy : RCA_CATEGORIES_L1)));
-                                setSelectedTaxonomyCatIdx(0);
-                                setIsAddingCategory(false);
-                                setShowTaxonomyModal(true);
-                            }}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '6px 13px',
-                                borderRadius: '10px',
-                                backgroundColor: '#FFFFFF',
-                                border: '1px solid #CBD5E1',
-                                color: '#334155',
-                                fontWeight: '800',
-                                fontSize: '0.75rem',
-                                cursor: 'pointer',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                transition: 'all 0.15s ease'
-                            }}
-                            title="Personalizar familias de defectos L1 y subtipos L2"
-                        >
-                            <Sliders size={14} color="#0D7A57" />
-                            <span>Taxonomía RCA (Parámetros)</span>
-                        </button>
-
-                        <Link 
-                            href="/admin/customer-service/rca"
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '6px 14px',
-                                borderRadius: '10px',
-                                backgroundColor: '#1E293B',
-                                color: 'white',
-                                fontWeight: '800',
-                                fontSize: '0.75rem',
-                                textDecoration: 'none',
-                                boxShadow: '0 2px 8px rgba(30, 41, 59, 0.15)'
-                            }}
-                        >
-                            <BarChart2 size={14} color="#34D399" />
-                            <span>Dashboard Causa Raíz (RCA)</span>
-                        </Link>
-                        <RoleProcessGuide role="customer_service_agent" compact sectionTitle="Protocolo Operativo" />
-                    </div>
-                </div>
-
-                {/* Row 2: Operational Pulse 4 Micro-Cards (Lean Six Sigma & Quality Auditing) */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem' }}>
-                    {/* Card 1: Tasa de Calidad FTR (First Time Right) */}
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '10px',
-                        padding: '8px 12px',
-                        border: '1px solid #E2E8F0',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                    }}>
+                    {/* Header Action Buttons & View Switcher */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        {/* View Switcher Pill */}
                         <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            backgroundColor: ftrBg,
-                            color: ftrColor,
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                        }}>
-                            <ShieldCheck size={16} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                Eficacia FTR (Calidad)
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
-                                <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0F172A' }}>
-                                    {ftrRate !== null ? `${ftrRate}%` : '--'}
-                                </span>
-                                <span style={{
-                                    fontSize: '0.62rem',
-                                    fontWeight: '800',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    backgroundColor: ftrBg,
-                                    color: ftrColor
-                                }}>
-                                    {ftrRate !== null ? (ftrRate >= 98 ? 'Clase Mundial' : ftrRate >= 95 ? 'Vigilancia' : 'Crítico') : 'Auditando'}
-                                </span>
-                            </div>
-                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
-                                {totalDelivered !== null ? `${conformingDeliveries} de ${totalDelivered} despachos conformes` : 'Auditando histórico...'}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Card 2: Costo Estimado de No Calidad (CoQ) */}
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '10px',
-                        padding: '8px 12px',
-                        border: '1px solid #E2E8F0',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                    }}>
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            backgroundColor: costOfQuality > 0 ? '#FEF2F2' : '#F0FDF4',
-                            color: costOfQuality > 0 ? '#DC2626' : '#16A34A',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                        }}>
-                            <AlertTriangle size={16} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                Costo No Calidad (CoQ)
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
-                                <span style={{ fontSize: '1.05rem', fontWeight: '900', color: costOfQuality > 0 ? '#991B1B' : '#15803D' }}>
-                                    {formatMoney(costOfQuality)}
-                                </span>
-                                <span style={{
-                                    fontSize: '0.62rem',
-                                    fontWeight: '800',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    backgroundColor: costOfQuality > 0 ? '#FEE2E2' : '#DCFCE7',
-                                    color: costOfQuality > 0 ? '#DC2626' : '#15803D'
-                                }}>
-                                    {costOfQuality > 0 ? 'Pérdida Neta' : 'Cero Mermas'}
-                                </span>
-                            </div>
-                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
-                                {costOfQuality > 0 ? 'Mermas y fletes correctivos' : 'Sin mermas valorizadas en BD'}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Card 3: Casos Activos & MTTR */}
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '10px',
-                        padding: '8px 12px',
-                        border: '1px solid #E2E8F0',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                    }}>
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            backgroundColor: pendingPqrsCount > 0 ? '#FEF3C7' : '#DCFCE7',
-                            color: pendingPqrsCount > 0 ? '#B45309' : '#15803D',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                        }}>
-                            <Clock size={16} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                Casos Abiertos & MTTR
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
-                                <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0F172A' }}>
-                                    {pendingPqrsCount} casos
-                                </span>
-                                <span style={{
-                                    fontSize: '0.62rem',
-                                    fontWeight: '800',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    backgroundColor: avgMttrHours !== null ? '#E0F2FE' : '#F1F5F9',
-                                    color: avgMttrHours !== null ? '#0369A1' : '#64748B'
-                                }}>
-                                    {avgMttrHours !== null ? `MTTR: ${avgMttrHours}h` : 'Sin cierres'}
-                                </span>
-                            </div>
-                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
-                                {resolvedPqrsCount > 0 ? `${resolvedPqrsCount} caso(s) cerrado(s)` : `${pendingPqrsCount} en gestión activa`}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Card 4: Fuga Principal Pareto Top 1 */}
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '10px',
-                        padding: '8px 12px',
-                        border: '1px solid #E2E8F0',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                    }}>
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            backgroundColor: '#EEF2FF',
-                            color: '#4F46E5',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                        }}>
-                            <TrendingUp size={16} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '0.66rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                Fuga Principal (Pareto #1)
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '1px' }}>
-                                <span style={{ fontSize: '0.92rem', fontWeight: '900', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '135px' }} title={paretoTop1.label}>
-                                    {paretoTop1.label}
-                                </span>
-                                <span style={{
-                                    fontSize: '0.62rem',
-                                    fontWeight: '800',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    backgroundColor: '#EEF2FF',
-                                    color: '#4F46E5'
-                                }}>
-                                    {paretoTop1.pct}%
-                                </span>
-                            </div>
-                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '1px', fontWeight: '500' }}>
-                                {paretoTop1.count} caso(s) ({paretoTop1.isExplicit ? 'RCA formal' : 'Heurística'})
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 2. BARRA DE CONTROL STICKY (A PARTIR DE LA LÍNEA HACIA ABAJO: BUSCADOR PRIMERO Y PESTAÑAS) */}
-            <div style={{
-                position: 'sticky',
-                top: '85px',
-                zIndex: 45,
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
-                padding: '0.55rem 2rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '12px',
-                transition: 'all 0.2s ease'
-            }}>
-                {/* Search Input - First thing visible, wide & prominent */}
-                <div style={{ position: 'relative', flex: 1, maxWidth: '520px', minWidth: '260px' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex' }}>
-                        <Search size={15} />
-                    </span>
-                    <input 
-                        type="text"
-                        placeholder="Buscar por cliente, motivo, causal técnica RCA o pedido..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        onFocus={() => {
-                            if (typeof window !== 'undefined' && window.scrollY < 120 && showKpis) {
-                                window.scrollTo({ top: 160, behavior: 'smooth' });
-                            }
-                        }}
-                        style={{
-                            width: '100%',
-                            padding: '8px 32px 8px 34px',
-                            borderRadius: '10px',
-                            border: '1.5px solid #CBD5E1',
-                            fontSize: '0.82rem',
-                            outline: 'none',
-                            backgroundColor: 'white',
-                            boxSizing: 'border-box',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                            transition: 'all 0.15s ease'
-                        }}
-                    />
-                    {searchTerm && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchTerm('')}
-                            style={{
-                                position: 'absolute',
-                                right: '10px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                border: 'none',
-                                background: '#F1F5F9',
-                                color: '#64748B',
-                                borderRadius: '50%',
-                                width: '18px',
-                                height: '18px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifySelf: 'center',
-                                justifyContent: 'center'
-                            }}
-                        >
-                            <X size={11} strokeWidth={2.5} />
-                        </button>
-                    )}
-                </div>
-
-                {/* Right: Global View Tabs + KPI Toggle Button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {/* Global View Tabs */}
-                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '10px' }}>
-                        <button 
-                            onClick={() => { setActiveTab('pending'); setStatusFilter('all'); setSelectedPqr(null); setSelectedNovelty(null); }}
-                            style={{
-                                padding: '6px 14px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontSize: '0.78rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                backgroundColor: activeTab !== 'novelties' ? 'white' : 'transparent',
-                                color: activeTab !== 'novelties' ? '#0D7A57' : '#64748B',
-                                boxShadow: activeTab !== 'novelties' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <ShieldCheck size={14} />
-                            <span>No Conformidades & Reclamos</span>
-                            <span style={{
-                                fontSize: '0.65rem',
-                                padding: '1px 6px',
-                                borderRadius: '9999px',
-                                backgroundColor: activeTab !== 'novelties' ? '#EAEFEA' : '#CBD5E1',
-                                color: activeTab !== 'novelties' ? '#0D7A57' : '#334155',
-                                fontWeight: '900'
-                            }}>
-                                {pqrs.length}
-                            </span>
-                        </button>
-                        <button 
-                            onClick={() => { setActiveTab('novelties'); setSelectedPqr(null); setSelectedNovelty(null); }}
-                            style={{
-                                padding: '6px 14px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontSize: '0.78rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                backgroundColor: activeTab === 'novelties' ? 'white' : 'transparent',
-                                color: activeTab === 'novelties' ? '#0D7A57' : '#64748B',
-                                boxShadow: activeTab === 'novelties' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.15s'
-                            }}
-                        >
-                            <Truck size={14} />
-                            <span>Novedades Transportador</span>
-                            <span style={{
-                                fontSize: '0.65rem',
-                                padding: '1px 6px',
-                                borderRadius: '9999px',
-                                backgroundColor: activeTab === 'novelties' ? '#EAEFEA' : '#CBD5E1',
-                                color: activeTab === 'novelties' ? '#0D7A57' : '#334155',
-                                fontWeight: '900'
-                            }}>
-                                {novelties.length}
-                            </span>
-                        </button>
-                    </div>
-
-                    {/* Toggle button to show/hide top KPI cockpit */}
-                    <button
-                        type="button"
-                        onClick={toggleShowKpis}
-                        title={showKpis ? "Ocultar panel superior de indicadores" : "Mostrar panel superior de indicadores"}
-                        style={{
-                            padding: '6px 12px',
-                            borderRadius: '9px',
+                            backgroundColor: '#F1F5F9',
                             border: '1px solid #CBD5E1',
-                            backgroundColor: 'white',
-                            color: '#475569',
-                            fontSize: '0.75rem',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            transition: 'all 0.15s'
-                        }}
-                    >
-                        {showKpis ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        <span>{showKpis ? 'Ocultar KPIs' : 'Ver KPIs'}</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* 3. DUAL INDEPENDENT SCROLLING GALLERIES (CON MÁXIMO PROTAGONISMO) */}
-            <div style={{
-                height: 'calc(100vh - 85px - 62px)',
-                minHeight: '640px',
-                display: 'grid',
-                gridTemplateColumns: 'minmax(460px, 500px) 1fr',
-                gap: '1.25rem',
-                padding: '0.75rem 2rem 1rem 2rem',
-                boxSizing: 'border-box'
-            }}>
-                {/* Left Column: Tickets List (Card Container) */}
-                <div style={{
-                    height: '100%',
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    backgroundColor: 'white',
-                    borderRadius: '16px',
-                    border: '1px solid #E2E8F0',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
-                    overflow: 'hidden'
-                }}>
-                    {/* Encabezado y Filtro por Estado (Sticky header inside left column) */}
-                    <div style={{
-                        padding: '10px 10px',
-                        borderBottom: '1px solid #F1F5F9',
-                        backgroundColor: '#FFFFFF',
-                        flexShrink: 0
-                    }}>
-                        {/* Header: Title & Total Badge & Refresh */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', padding: '0 2px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                    width: '28px',
-                                    height: '28px',
-                                    borderRadius: '8px',
-                                    backgroundColor: '#EAEFEA',
-                                    color: '#0D7A57',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}>
-                                    <Inbox size={15} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '0.86rem', fontWeight: '900', color: '#1E293B', lineHeight: '1.2' }}>
-                                        {activeTab === 'novelties' ? 'Novedades de Conductor' : 'Bandeja de Tickets'}
-                                    </h3>
-                                    <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>
-                                        {activeTab === 'novelties' 
-                                            ? `${filteredNovelties.length} de ${novelties.length} novedades` 
-                                            : `${filteredPqrs.length} de ${pqrs.length} casos`}
-                                    </span>
-                                </div>
-                            </div>
-
+                            borderRadius: '12px',
+                            padding: '3px',
+                            gap: '3px'
+                        }}>
                             <button
                                 type="button"
-                                onClick={fetchData}
-                                title="Refrescar listado"
+                                onClick={() => setMainView('cases')}
                                 style={{
-                                    background: '#F8FAFC',
-                                    border: '1px solid #E2E8F0',
-                                    borderRadius: '6px',
-                                    padding: '4px 8px',
-                                    color: '#475569',
+                                    padding: '7px 14px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: mainView === 'cases' ? '800' : '600',
+                                    color: mainView === 'cases' ? '#FFFFFF' : '#475569',
+                                    backgroundColor: mainView === 'cases' ? '#0D7A57' : 'transparent',
+                                    borderRadius: '9px',
+                                    border: 'none',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '4px',
-                                    fontSize: '0.68rem',
-                                    fontWeight: '700'
+                                    gap: '6px',
+                                    boxShadow: mainView === 'cases' ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none',
+                                    transition: 'all 0.15s ease'
                                 }}
                             >
-                                <RotateCcw size={11} className={loading ? 'animate-spin' : ''} />
-                                <span>Refrescar</span>
+                                <FileText size={14} />
+                                <span>Consola de Casos</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setMainView('lean_dashboard')}
+                                style={{
+                                    padding: '7px 14px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: mainView === 'lean_dashboard' ? '800' : '600',
+                                    color: mainView === 'lean_dashboard' ? '#FFFFFF' : '#475569',
+                                    backgroundColor: mainView === 'lean_dashboard' ? '#0D7A57' : 'transparent',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: mainView === 'lean_dashboard' ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <BarChart2 size={14} />
+                                <span>Dashboard Lean & Pareto</span>
                             </button>
                         </div>
 
-                        {/* Filtro por Estado (Pills con Conteo en Grid de 5 columnas exactas) */}
-                        {activeTab !== 'novelties' ? (
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-                                gap: '4px',
-                                width: '100%',
-                                boxSizing: 'border-box'
-                            }}>
-                                {[
-                                    { id: 'all', label: 'Todos', count: pqrCounts.all, color: '#475569', bg: '#F1F5F9' },
-                                    { id: 'pending', label: 'Pendientes', count: pqrCounts.pending, color: '#B45309', bg: '#FEF3C7' },
-                                    { id: 'in_progress', label: 'En Curso', count: pqrCounts.in_progress, color: '#0369A1', bg: '#E0F2FE' },
-                                    { id: 'resolved', label: 'Resueltos', count: pqrCounts.resolved, color: '#15803D', bg: '#DCFCE7' },
-                                    { id: 'rejected', label: 'Rechazados', count: pqrCounts.rejected, color: '#DC2626', bg: '#FEE2E2' }
-                                ].map(st => {
-                                    const isSel = statusFilter === st.id;
-                                    return (
-                                        <button
-                                            key={st.id}
-                                            type="button"
-                                            onClick={() => setStatusFilter(st.id as any)}
-                                            title={`${st.label} (${st.count})`}
-                                            style={{
-                                                padding: '4px 2px',
-                                                borderRadius: '6px',
-                                                border: `1.5px solid ${isSel ? '#0D7A57' : 'transparent'}`,
-                                                backgroundColor: isSel ? '#EAEFEA' : '#F8FAFC',
-                                                color: isSel ? '#0D7A57' : '#64748B',
-                                                fontSize: '0.64rem',
-                                                fontWeight: isSel ? '900' : '700',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '3px',
-                                                minWidth: 0,
-                                                width: '100%',
-                                                boxSizing: 'border-box',
-                                                transition: 'all 0.12s ease'
-                                            }}
-                                        >
-                                            <span style={{
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                letterSpacing: '-0.01em'
-                                            }}>
-                                                {st.label}
-                                            </span>
-                                            <span style={{
-                                                fontSize: '0.58rem',
-                                                padding: '1px 3px',
-                                                borderRadius: '9999px',
-                                                backgroundColor: isSel ? '#0D7A57' : st.bg,
-                                                color: isSel ? 'white' : st.color,
-                                                fontWeight: '900',
-                                                flexShrink: 0
-                                            }}>
-                                                {st.count}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                                gap: '4px',
-                                width: '100%',
-                                boxSizing: 'border-box'
-                            }}>
-                                {[
-                                    { id: 'all', label: 'Todas', count: noveltyCounts.all, color: '#475569', bg: '#F1F5F9' },
-                                    { id: 'pending_review', label: 'Pendientes', count: noveltyCounts.pending_review, color: '#B45309', bg: '#FEF3C7' },
-                                    { id: 'approved', label: 'Aprobadas', count: noveltyCounts.approved, color: '#15803D', bg: '#DCFCE7' },
-                                    { id: 'rejected', label: 'Rechazadas', count: noveltyCounts.rejected, color: '#DC2626', bg: '#FEE2E2' }
-                                ].map(st => {
-                                    const isSel = noveltyStatusFilter === st.id;
-                                    return (
-                                        <button
-                                            key={st.id}
-                                            type="button"
-                                            onClick={() => setNoveltyStatusFilter(st.id as any)}
-                                            title={`${st.label} (${st.count})`}
-                                            style={{
-                                                padding: '4px 2px',
-                                                borderRadius: '6px',
-                                                border: `1.5px solid ${isSel ? '#0D7A57' : 'transparent'}`,
-                                                backgroundColor: isSel ? '#EAEFEA' : '#F8FAFC',
-                                                color: isSel ? '#0D7A57' : '#64748B',
-                                                fontSize: '0.64rem',
-                                                fontWeight: isSel ? '900' : '700',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '3px',
-                                                minWidth: 0,
-                                                width: '100%',
-                                                boxSizing: 'border-box',
-                                                transition: 'all 0.12s ease'
-                                            }}
-                                        >
-                                            <span style={{
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                letterSpacing: '-0.01em'
-                                            }}>
-                                                {st.label}
-                                            </span>
-                                            <span style={{
-                                                fontSize: '0.58rem',
-                                                padding: '1px 3px',
-                                                borderRadius: '9999px',
-                                                backgroundColor: isSel ? '#0D7A57' : st.bg,
-                                                color: isSel ? 'white' : st.color,
-                                                fontWeight: '900',
-                                                flexShrink: 0
-                                            }}>
-                                                {st.count}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowTaxonomyModal(true)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 14px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                color: '#334155',
+                                backgroundColor: 'white',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                            }}
+                        >
+                            <Settings size={14} style={{ color: '#64748B' }} />
+                            <span>Taxonomía RCA</span>
+                        </button>
 
-                    {/* Scrollable Tickets List (Independent Scroll) */}
-                    <div 
-                        className="cs-custom-scroll"
-                        style={{
-                            flex: 1,
-                            minHeight: 0,
-                            overflowY: 'auto',
-                            overscrollBehavior: 'contain',
-                            padding: '10px 12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                            scrollbarWidth: 'thin',
-                            scrollbarColor: '#CBD5E1 transparent'
-                        }}
-                    >
-                        {loading ? (
-                            <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
-                                <Loader2 className="animate-spin" size={30} style={{ color: '#0D7A57', margin: '0 auto' }} />
-                                <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '12px', fontWeight: '700' }}>Cargando casos y novedades...</p>
-                            </div>
-                        ) : activeTab === 'novelties' ? (
-                            filteredNovelties.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: '3rem 1.5rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', color: '#64748B' }}>
-                                    <CheckCircle2 size={32} color="#10B981" style={{ margin: '0 auto 8px auto' }} />
-                                    <h4 style={{ margin: 0, fontWeight: '800', color: '#1E293B', fontSize: '0.92rem' }}>Sin novedades pendientes</h4>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem' }}>No hay novedades de ruta pendientes de revisión contable.</p>
-                                </div>
-                            ) : (
-                                filteredNovelties.map(n => {
-                                    const isSelected = selectedNovelty?.id === n.id;
-                                    const clientName = n.orders?.profiles?.company_name || n.orders?.profiles?.contact_name || 'Cliente Desconocido';
-                                    const initials = getClientInitials(clientName);
-                                    return (
-                                        <div 
-                                            key={n.id}
-                                            onClick={() => { setSelectedPqr(null); setSelectedNovelty(n); }}
-                                            style={{
-                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
-                                                padding: '1.15rem',
-                                                borderRadius: '16px',
-                                                border: `1px solid ${isSelected ? '#0D7A57' : '#E2E8F0'}`,
-                                                borderLeft: isSelected ? '4px solid #0D7A57' : '4px solid transparent',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.18s ease',
-                                                boxShadow: isSelected ? '0 6px 16px rgba(13, 122, 87, 0.12)' : '0 1px 3px rgba(0,0,0,0.02)'
-                                            }}
-                                        >
-                                            {/* Status & Date */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                <span style={{ 
-                                                    fontSize: '0.65rem', 
-                                                    fontWeight: '800', 
-                                                    padding: '2px 8px', 
-                                                    borderRadius: '6px', 
-                                                    textTransform: 'uppercase',
-                                                    backgroundColor: n.status === 'approved' ? '#DCFCE7' : n.status === 'rejected' ? '#FEE2E2' : '#FEF3C7',
-                                                    color: n.status === 'approved' ? '#15803D' : n.status === 'rejected' ? '#EF4444' : '#B45309',
-                                                    border: `1px solid ${n.status === 'approved' ? '#BBF7D0' : n.status === 'rejected' ? '#FECACA' : '#FDE68A'}`
-                                                }}>
-                                                    {n.status === 'pending_review' ? 'Pendiente' : n.status === 'approved' ? 'Aprobada' : 'Rechazada'}
-                                                </span>
-                                                <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>
-                                                    {formatDateFriendly(n.created_at)}
-                                                </span>
-                                            </div>
-
-                                            {/* Product Title */}
-                                            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', lineHeight: '1.3' }}>
-                                                {n.products?.name}
-                                            </h4>
-
-                                            {/* Quantity & Order badge */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#475569' }}>
-                                                    Cantidad: {n.quantity_returned} {n.products?.unit_of_measure}
-                                                </span>
-                                                {n.orders?.sequence_id && (
-                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#E0F2FE', color: '#0369A1' }}>
-                                                        Pedido #{n.orders.sequence_id}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Client Info & WhatsApp Quick Action */}
-                                            {(() => {
-                                                const rawNovPhone = n.orders?.profiles?.contact_phone || n.orders?.profiles?.phone;
-                                                const novPhone = cleanColombianPhone(rawNovPhone);
-                                                return (
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #F1F5F9' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                                                            <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: '#EAEFEA', color: '#0D7A57', fontSize: '0.65rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                                {initials}
-                                                            </div>
-                                                            <span style={{ fontSize: '0.76rem', color: '#334155', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {clientName}
-                                                            </span>
-                                                        </div>
-                                                        {novPhone.isValid && (
-                                                            <a
-                                                                href={`https://wa.me/${novPhone.waNumber}?text=${encodeURIComponent(`Hola ${clientName}, te contactamos de FruFresco SAC respecto a la devolución en entrega de: ${n.products?.name}.`)}`}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                style={{
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '3px',
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: '5px',
-                                                                    backgroundColor: '#DCFCE7',
-                                                                    color: '#15803D',
-                                                                    border: '1px solid #BBF7D0',
-                                                                    fontSize: '0.64rem',
-                                                                    fontWeight: '800',
-                                                                    textDecoration: 'none',
-                                                                    flexShrink: 0
-                                                                }}
-                                                                title={`Escribir por WhatsApp a ${novPhone.display}`}
-                                                            >
-                                                                <MessageCircle size={10} /> WhatsApp
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                    );
-                                })
-                            )
-                        ) : (
-                            filteredPqrs.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: '3rem 1.5rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', color: '#64748B' }}>
-                                    <CheckCircle2 size={32} color="#10B981" style={{ margin: '0 auto 8px auto' }} />
-                                    <h4 style={{ margin: 0, fontWeight: '800', color: '#1E293B', fontSize: '0.92rem' }}>
-                                        {activeTab === 'pending' ? '¡Bandeja al día!' : 'Sin historial en esta vista'}
-                                    </h4>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem' }}>
-                                        {activeTab === 'pending' ? 'No hay casos pendientes por responder en este momento.' : 'No se encontraron PQRs archivadas con el filtro actual.'}
-                                    </p>
-                                </div>
-                            ) : (
-                                filteredPqrs.map(p => {
-                                    const isSelected = selectedPqr?.id === p.id;
-                                    const rcaParsed = parseRcaFromRecord(p);
-                                    const isPingPong = rcaParsed.isReplacementRejection || (p.subject || '').includes('[ALERTA PING-PONG]');
-                                    const badgeStyle = getTypeBadgeStyle(p.type);
-                                    const clientName = p.profiles?.company_name || p.profiles?.contact_name || 'Cliente Institucional';
-                                    const initials = getClientInitials(clientName);
-                                    const isB2B = p.profiles?.role === 'b2b_client';
-                                    const responsibleParty = rcaParsed.responsible !== 'no_definido' ? RESPONSIBLE_PARTIES[rcaParsed.responsible] : null;
-                                    const authorInfo = getPqrAuthorInfo(p);
-                                    const pqrPhotos = getPqrPhotos(p);
-
-                                    return (
-                                        <div 
-                                            key={p.id}
-                                            onClick={() => handlePqrSelect(p)}
-                                            style={{
-                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
-                                                padding: '1.15rem',
-                                                borderRadius: '16px',
-                                                border: `1px solid ${isSelected ? '#0D7A57' : '#E2E8F0'}`,
-                                                borderLeft: isSelected ? '4px solid #0D7A57' : '4px solid transparent',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.18s ease',
-                                                boxShadow: isSelected ? '0 6px 16px rgba(13, 122, 87, 0.12)' : '0 1px 3px rgba(0,0,0,0.02)'
-                                            }}
-                                        >
-                                            {/* Header: Type, PingPong & Photos + Date */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-                                                    <span style={{ 
-                                                        fontSize: '0.64rem', 
-                                                        fontWeight: '800', 
-                                                        padding: '2px 7px', 
-                                                        borderRadius: '5px', 
-                                                        textTransform: 'uppercase',
-                                                        backgroundColor: badgeStyle.bg,
-                                                        color: badgeStyle.text,
-                                                        border: `1px solid ${badgeStyle.border}`
-                                                    }}>
-                                                        {badgeStyle.label}
-                                                    </span>
-
-                                                    {isPingPong && (
-                                                        <span style={{ fontSize: '0.62rem', fontWeight: '900', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            <ShieldAlert size={10} /> Ping-Pong
-                                                        </span>
-                                                    )}
-
-                                                    {/* Canal Badge */}
-                                                    <span style={{ 
-                                                        fontSize: '0.62rem', 
-                                                        fontWeight: '800', 
-                                                        padding: '2px 6px', 
-                                                        borderRadius: '4px', 
-                                                        backgroundColor: authorInfo.channelBadgeBg, 
-                                                        color: authorInfo.channelBadgeColor, 
-                                                        border: `1px solid ${authorInfo.channelBadgeBorder}`,
-                                                        display: 'inline-flex', 
-                                                        alignItems: 'center', 
-                                                        gap: '3px' 
-                                                    }}>
-                                                        {authorInfo.channel === 'conductor' ? <Truck size={10} /> : authorInfo.channel === 'portal_b2b' ? <Building2 size={10} /> : authorInfo.channel === 'portal_b2c' ? <User size={10} /> : <UserCheck size={10} />}
-                                                        {authorInfo.channelLabel}
-                                                    </span>
-                                                </div>
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                    {/* Photo Indicator Badge */}
-                                                    {pqrPhotos.length > 0 ? (
-                                                        <span style={{ 
-                                                            fontSize: '0.62rem', 
-                                                            fontWeight: '800', 
-                                                            padding: '2px 6px', 
-                                                            borderRadius: '4px', 
-                                                            backgroundColor: '#DCFCE7', 
-                                                            color: '#15803D', 
-                                                            border: '1px solid #BBF7D0', 
-                                                            display: 'inline-flex', 
-                                                            alignItems: 'center', 
-                                                            gap: '3px' 
-                                                        }} title={`${pqrPhotos.length} fotos adjuntas`}>
-                                                            <Camera size={10} /> {pqrPhotos.length}
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ 
-                                                            fontSize: '0.6rem', 
-                                                            fontWeight: '600', 
-                                                            padding: '2px 5px', 
-                                                            borderRadius: '4px', 
-                                                            backgroundColor: '#F8FAFC', 
-                                                            color: '#94A3B8', 
-                                                            border: '1px solid #E2E8F0', 
-                                                            display: 'inline-flex', 
-                                                            alignItems: 'center', 
-                                                            gap: '3px' 
-                                                        }} title="Sin fotos adjuntas">
-                                                            <CameraOff size={9} /> 0
-                                                        </span>
-                                                    )}
-
-                                                    <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>
-                                                        {formatDateFriendly(p.created_at)}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Subject */}
-                                            <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '800', color: '#1E293B', lineHeight: '1.3' }}>
-                                                {p.subject}
-                                            </h4>
-
-                                            {/* Client Info Row */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
-                                                    <div style={{
-                                                        width: '26px',
-                                                        height: '26px',
-                                                        borderRadius: '8px',
-                                                        backgroundColor: isB2B ? '#EAEFEA' : '#F1F5F9',
-                                                        color: isB2B ? '#0D7A57' : '#475569',
-                                                        fontSize: '0.65rem',
-                                                        fontWeight: '800',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0
-                                                    }}>
-                                                        {initials}
-                                                    </div>
-                                                    <span style={{ fontSize: '0.78rem', color: '#334155', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {clientName}
-                                                    </span>
-                                                </div>
-
-                                                {p.orders?.sequence_id && (
-                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 7px', borderRadius: '5px', backgroundColor: '#E0F2FE', color: '#0369A1', flexShrink: 0 }}>
-                                                        #{p.orders.sequence_id}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Who created / mounted it & WhatsApp Quick Action */}
-                                            <div style={{
-                                                marginTop: '6px',
-                                                padding: '4px 8px',
-                                                backgroundColor: '#F8FAFC',
-                                                borderRadius: '6px',
-                                                border: '1px solid #F1F5F9',
-                                                fontSize: '0.68rem',
-                                                color: '#64748B',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                gap: '6px'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
-                                                    <UserCheck size={12} color="#0D7A57" style={{ flexShrink: 0 }} />
-                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        Radicó: <strong style={{ color: '#1E293B' }}>{authorInfo.authorName}</strong>
-                                                    </span>
-                                                </div>
-
-                                                {authorInfo.isPhoneValid && (
-                                                    <a
-                                                        href={`https://wa.me/${authorInfo.cleanPhone}?text=${encodeURIComponent(`Hola ${authorInfo.clientContact || authorInfo.companyName}, te saludamos de FruFresco respecto a tu solicitud: "${p.subject}".`)}`}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '3px',
-                                                            padding: '2px 7px',
-                                                            borderRadius: '5px',
-                                                            backgroundColor: '#DCFCE7',
-                                                            color: '#15803D',
-                                                            border: '1px solid #BBF7D0',
-                                                            fontSize: '0.64rem',
-                                                            fontWeight: '800',
-                                                            textDecoration: 'none',
-                                                            flexShrink: 0,
-                                                            transition: 'all 0.12s ease'
-                                                        }}
-                                                        title={`Escribir por WhatsApp a ${authorInfo.phone}`}
-                                                    >
-                                                        <MessageCircle size={10} /> WhatsApp
-                                                    </a>
-                                                )}
-                                            </div>
-
-                                            {/* Responsible attribution chip if assigned */}
-                                            {responsibleParty && (
-                                                <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <div style={{
-                                                        fontSize: '0.65rem',
-                                                        fontWeight: '700',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '5px',
-                                                        padding: '2px 8px',
-                                                        borderRadius: '6px',
-                                                        backgroundColor: responsibleParty.bgLight,
-                                                        color: responsibleParty.color,
-                                                        border: `1px solid ${responsibleParty.border}`
-                                                    }}>
-                                                        {getResponsibleIcon(rcaParsed.responsible)}
-                                                        <span>{responsibleParty.label}</span>
-                                                    </div>
-                                                    <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '600' }}>
-                                                        RCA Asignada
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })
-                            )
-                        )}
-                        </div>
-                    </div>
-
-                    {/* Right Column: Case Detail & Resolution Cockpit (Independent Scroll) */}
-                    <div 
-                        ref={rightPanelRef}
-                        className="cs-custom-scroll"
-                        style={{ 
-                            height: '100%', 
-                            minHeight: 0, 
-                            overflowY: 'auto', 
-                            overscrollBehavior: 'contain',
-                            backgroundColor: 'white', 
-                            borderRadius: '16px', 
-                            border: '1px solid #E2E8F0', 
-                            padding: '1.5rem 1.75rem', 
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.02)', 
-                            scrollbarWidth: 'thin', 
-                            scrollbarColor: '#CBD5E1 transparent' 
-                        }}
-                    >
-                        {activeTab === 'novelties' ? (
-                            selectedNovelty ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    {/* Novelty Header */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', gap: '1rem' }}>
-                                        <div>
-                                            <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: '900', color: '#1E293B' }}>
-                                                Novedad: {selectedNovelty.products?.name}
-                                            </h2>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#EAEFEA', color: '#0D7A57', textTransform: 'uppercase' }}>
-                                                    Cantidad: {selectedNovelty.quantity_returned} {selectedNovelty.products?.unit_of_measure}
-                                                </span>
-                                                {selectedNovelty.orders && (
-                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#E0F2FE', color: '#0369A1' }}>
-                                                        PEDIDO #{selectedNovelty.orders.sequence_id}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span style={{
-                                                fontSize: '0.72rem',
-                                                fontWeight: '800',
-                                                padding: '4px 12px',
-                                                borderRadius: '9999px',
-                                                backgroundColor: selectedNovelty.status === 'approved' ? '#DCFCE7' : selectedNovelty.status === 'rejected' ? '#FEE2E2' : '#FEF3C7',
-                                                color: selectedNovelty.status === 'approved' ? '#15803D' : selectedNovelty.status === 'rejected' ? '#EF4444' : '#B45309',
-                                                textTransform: 'uppercase',
-                                                border: '1px solid currentColor'
-                                            }}>
-                                                {selectedNovelty.status === 'pending_review' ? 'Pendiente' : selectedNovelty.status === 'approved' ? 'Aprobada' : 'Rechazada'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Motivo y Cliente */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.5rem' }}>
-                                        <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1rem' }}>
-                                            <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase' }}>
-                                                Motivo del Conductor / Despacho
-                                            </h4>
-                                            <p style={{ margin: 0, fontSize: '0.82rem', color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-wrap', fontWeight: '500' }}>
-                                                {selectedNovelty.reason || 'Sin motivo detallado'}
-                                            </p>
-                                        </div>
-                                        <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1rem' }}>
-                                            <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase' }}>
-                                                Datos del Cliente
-                                            </h4>
-                                            <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Building2 size={14} color="#64748B" />
-                                                {selectedNovelty.orders?.profiles?.company_name || selectedNovelty.orders?.profiles?.contact_name || 'Desconocido'}
-                                            </div>
-                                            {selectedNovelty.orders?.profiles?.nit && (
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
-                                                    NIT: {selectedNovelty.orders.profiles.nit}
-                                                </div>
-                                            )}
-                                            {selectedNovelty.orders && (
-                                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0', fontSize: '0.75rem', color: '#64748B' }}>
-                                                    <strong>Venta original:</strong> {formatMoney(selectedNovelty.orders.total)}
-                                                </div>
-                                            )}
-
-                                            {/* WhatsApp Quick Action in Novelty */}
-                                            {(() => {
-                                                const rawNovPhone = selectedNovelty.orders?.profiles?.contact_phone || selectedNovelty.orders?.profiles?.phone;
-                                                const novPhone = cleanColombianPhone(rawNovPhone);
-                                                const clientName = selectedNovelty.orders?.profiles?.company_name || selectedNovelty.orders?.profiles?.contact_name || 'Cliente';
-                                                const profileId = (selectedNovelty.orders?.profiles as any)?.id;
-
-                                                return (
-                                                    <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-                                                        {novPhone.isValid ? (
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                                                <a
-                                                                    href={`https://wa.me/${novPhone.waNumber}?text=${encodeURIComponent(`Hola ${clientName}, te contactamos de FruFresco SAC respecto a la novedad de entrega en el pedido #${selectedNovelty.orders?.sequence_id}: "${selectedNovelty.products?.name}".`)}`}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    style={{
-                                                                        padding: '4px 10px',
-                                                                        borderRadius: '6px',
-                                                                        backgroundColor: '#DCFCE7',
-                                                                        color: '#15803D',
-                                                                        border: '1px solid #BBF7D0',
-                                                                        fontSize: '0.72rem',
-                                                                        fontWeight: '800',
-                                                                        textDecoration: 'none',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '5px'
-                                                                    }}
-                                                                >
-                                                                    <MessageCircle size={13} /> WhatsApp: {novPhone.display} <ExternalLink size={10} />
-                                                                </a>
-                                                            </div>
-                                                        ) : (
-                                                            <div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                                    <span style={{ fontSize: '0.68rem', color: '#DC2626', fontWeight: '700' }}>Sin celular WhatsApp</span>
-                                                                    {profileId && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setEditingPhoneProfileId(profileId);
-                                                                                setNewPhoneInput('');
-                                                                            }}
-                                                                            style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '3px 8px', borderRadius: '5px', fontSize: '0.68rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                                        >
-                                                                            <Plus size={10} /> Registrar
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                {editingPhoneProfileId === profileId && (
-                                                                    <div style={{ marginTop: '6px', display: 'flex', gap: '4px' }}>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={newPhoneInput}
-                                                                            onChange={e => setNewPhoneInput(e.target.value)}
-                                                                            placeholder="Ej: 3154456827"
-                                                                            maxLength={12}
-                                                                            style={{ flex: 1, padding: '3px 6px', fontSize: '0.72rem', borderRadius: '4px', border: '1px solid #CBD5E1' }}
-                                                                        />
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={savingPhone}
-                                                                            onClick={() => handleSavePhone(profileId)}
-                                                                            style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer' }}
-                                                                        >
-                                                                            {savingPhone ? '...' : 'OK'}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setEditingPhoneProfileId(null)}
-                                                                            style={{ backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '3px 6px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}
-                                                                        >
-                                                                            X
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                    </div>
-
-                                    {/* Evidencia Fotográfica */}
-                                    {selectedNovelty.photo_url && (
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '1.15rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                                <h4 style={{ margin: 0, fontSize: '0.76rem', fontWeight: '900', color: '#1E293B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <Camera size={15} color="#0D7A57" /> Evidencia Fotográfica en Sitio (Conductor)
-                                                </h4>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setZoomPhotoUrl(selectedNovelty.photo_url)}
-                                                    style={{
-                                                        backgroundColor: '#0D7A57',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        padding: '4px 10px',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: '800',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '5px'
-                                                    }}
-                                                >
-                                                    <Maximize2 size={12} /> Ampliar / Zoom
-                                                </button>
-                                            </div>
-                                            <div 
-                                                onClick={() => setZoomPhotoUrl(selectedNovelty.photo_url)}
-                                                style={{ 
-                                                    width: '100%', 
-                                                    maxWidth: '560px', 
-                                                    height: '320px', 
-                                                    borderRadius: '12px', 
-                                                    overflow: 'hidden', 
-                                                    border: '1px solid #CBD5E1', 
-                                                    backgroundColor: '#0F172A',
-                                                    cursor: 'zoom-in',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                <img 
-                                                    src={selectedNovelty.photo_url} 
-                                                    alt="Evidencia novedad" 
-                                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Action buttons if Pending */}
-                                    {selectedNovelty.status === 'pending_review' && (
-                                        <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '1.25rem', display: 'flex', gap: '1rem', maxWidth: '420px' }}>
-                                            <button 
-                                                disabled={actionLoading}
-                                                onClick={() => handleProcessNovelty(selectedNovelty, 'approved')}
-                                                style={{ flex: 1, backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '10px', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                            >
-                                                <CheckCircle2 size={16} /> Aprobar y Descontar
-                                            </button>
-                                            <button 
-                                                disabled={actionLoading}
-                                                onClick={() => handleProcessNovelty(selectedNovelty, 'rejected')}
-                                                style={{ flex: 1, backgroundColor: '#FEE2E2', color: '#EF4444', border: '1px solid #FECACA', padding: '10px 16px', borderRadius: '10px', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                            >
-                                                <AlertTriangle size={16} /> Rechazar Novedad
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div style={{ textAlign: 'center', padding: '4rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ width: '64px', height: '64px', borderRadius: '18px', backgroundColor: '#EFF6FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem' }}>
-                                        <Truck size={30} />
-                                    </div>
-                                    <h3 style={{ margin: 0, fontWeight: '900', fontSize: '1.2rem', color: '#1E293B' }}>
-                                        Novedades de Ruta Registradas por Conductor
-                                    </h3>
-                                    <p style={{ margin: '8px 0 1.5rem 0', fontSize: '0.84rem', color: '#64748B', maxWidth: '480px', lineHeight: '1.5' }}>
-                                        Selecciona una devolución física de la lista izquierda para validar los motivos de rechazo, inspeccionar la evidencia y aprobar el descuento en facturación.
-                                    </p>
-                                    {novelties.find(n => n.status === 'pending_review') && (
-                                        <button
-                                            onClick={() => setSelectedNovelty(novelties.find(n => n.status === 'pending_review'))}
-                                            style={{
-                                                backgroundColor: '#0D7A57',
-                                                color: 'white',
-                                                border: 'none',
-                                                padding: '10px 20px',
-                                                borderRadius: '12px',
-                                                fontWeight: '800',
-                                                fontSize: '0.82rem',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '8px',
-                                                boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)'
-                                            }}
-                                        >
-                                            <Play size={15} /> Atender Primera Novedad Pendiente
-                                        </button>
-                                    )}
-                                </div>
-                            )
-                        ) : selectedPqr ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                
-                                {/* Detail Header with Avatar and Badges */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #F1F5F9', paddingBottom: '1.15rem', gap: '1rem', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1, minWidth: '280px' }}>
-                                        <div style={{
-                                            width: '42px',
-                                            height: '42px',
-                                            borderRadius: '12px',
-                                            backgroundColor: selectedPqr.profiles?.role === 'b2b_client' ? '#EAEFEA' : '#EFF6FF',
-                                            color: selectedPqr.profiles?.role === 'b2b_client' ? '#0D7A57' : '#1D4ED8',
-                                            fontSize: '0.82rem',
-                                            fontWeight: '900',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
-                                        }}>
-                                            {getClientInitials(selectedPqr.profiles?.company_name || selectedPqr.profiles?.contact_name)}
-                                        </div>
-                                        <div>
-                                            <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: '900', color: '#1E293B', lineHeight: '1.25' }}>
-                                                {selectedPqr.subject}
-                                            </h2>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#EAEFEA', color: '#0D7A57', textTransform: 'uppercase' }}>
-                                                    {selectedPqr.category}
-                                                </span>
-                                                <span style={{
-                                                    fontSize: '0.68rem',
-                                                    fontWeight: '800',
-                                                    padding: '3px 8px',
-                                                    borderRadius: '6px',
-                                                    backgroundColor: selectedPqr.priority === 'urgent' || selectedPqr.priority === 'high' ? '#FEE2E2' : '#F1F5F9',
-                                                    color: selectedPqr.priority === 'urgent' || selectedPqr.priority === 'high' ? '#EF4444' : '#64748B',
-                                                    textTransform: 'uppercase'
-                                                }}>
-                                                    Prioridad: {selectedPqr.priority}
-                                                </span>
-                                                {selectedPqr.orders ? (
-                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <Link 
-                                                            href={`/admin/orders/${selectedPqr.order_id}`}
-                                                            style={{
-                                                                fontSize: '0.68rem',
-                                                                fontWeight: '800',
-                                                                padding: '3px 8px',
-                                                                borderRadius: '6px',
-                                                                backgroundColor: '#E0F2FE',
-                                                                color: '#0369A1',
-                                                                textDecoration: 'none',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px'
-                                                            }}
-                                                        >
-                                                            PEDIDO #{selectedPqr.orders.sequence_id} <ExternalLink size={10} />
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleUnlinkOrder}
-                                                            disabled={isLinkingOrder}
-                                                            title="Desvincular pedido de este caso"
-                                                            style={{
-                                                                background: '#F1F5F9',
-                                                                border: '1px solid #E2E8F0',
-                                                                color: '#64748B',
-                                                                borderRadius: '4px',
-                                                                cursor: 'pointer',
-                                                                padding: '2px 4px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                fontSize: '0.62rem',
-                                                                fontWeight: '700'
-                                                            }}
-                                                        >
-                                                            <Unlink size={10} style={{ marginRight: '2px' }} /> Cambiar
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <span style={{
-                                                        fontSize: '0.68rem',
-                                                        fontWeight: '800',
-                                                        padding: '3px 8px',
-                                                        borderRadius: '6px',
-                                                        backgroundColor: '#FEF3C7',
-                                                        color: '#92400E',
-                                                        border: '1px solid #FDE68A',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}>
-                                                        <ShoppingBag size={11} /> Sin Pedido Asociado
-                                                    </span>
-                                                )}
-                                                <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>
-                                                    Radicado el {new Date(selectedPqr.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <Link
-                                            href={`/admin/customer-service/rnc/${selectedPqr.id}/print`}
-                                            target="_blank"
-                                            style={{
-                                                padding: '5px 12px',
-                                                borderRadius: '8px',
-                                                backgroundColor: '#0D7A57',
-                                                color: 'white',
-                                                fontSize: '0.74rem',
-                                                fontWeight: '800',
-                                                textDecoration: 'none',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            title="Emitir Reporte Oficial de No Conformidad en PDF"
-                                        >
-                                            <FileText size={13} />
-                                            <span>Acta RNC (PDF)</span>
-                                        </Link>
-
-                                        <span style={{
-                                            fontSize: '0.74rem',
-                                            fontWeight: '800',
-                                            padding: '5px 14px',
-                                            borderRadius: '9999px',
-                                            backgroundColor: selectedPqr.status === 'resolved' ? '#DCFCE7' : selectedPqr.status === 'rejected' ? '#FEE2E2' : '#FEF3C7',
-                                            color: selectedPqr.status === 'resolved' ? '#15803D' : selectedPqr.status === 'rejected' ? '#EF4444' : '#B45309',
-                                            textTransform: 'uppercase',
-                                            border: `1px solid ${selectedPqr.status === 'resolved' ? '#BBF7D0' : selectedPqr.status === 'rejected' ? '#FECACA' : '#FDE68A'}`,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '5px'
-                                        }}>
-                                            {selectedPqr.status === 'resolved' && <CheckCircle2 size={13} />}
-                                            {selectedPqr.status === 'pending' ? 'Pendiente' : selectedPqr.status === 'in_progress' ? 'En Curso' : selectedPqr.status === 'resolved' ? 'Resuelto' : 'Rechazado'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Anti-Ping-Pong Alert Banner */}
-                                {isCurrentSelectedPqrReplacement && (
-                                    <div style={{
-                                        backgroundColor: '#FEF2F2',
-                                        border: '1px solid #FECACA',
-                                        borderRadius: '14px',
-                                        padding: '1.1rem',
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: '12px'
-                                    }}>
-                                        <ShieldAlert size={24} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                        <div>
-                                            <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#991B1B' }}>
-                                                ALERTA POKA-YOKE: RE-RECHAZO EN REPOSICIÓN (CORTE DE BUCLE LOGÍSTICO)
-                                            </div>
-                                            <p style={{ fontSize: '0.78rem', color: '#7F1D1D', margin: '4px 0 0 0', lineHeight: '1.45' }}>
-                                                Este caso proviene de una reposición que fue rechazada por segunda vez en destino. 
-                                                <strong> Para cortar el ciclo de fletes inútiles, la Opción 2 (Reprogramar) está bloqueada.</strong> Aplica Nota Crédito (Opción 3) o ajusta la factura a la cantidad real recibida (Opción 4).
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Main Description & Author/Client Info */}
-                                {(() => {
-                                    const selectedAuthorInfo = getPqrAuthorInfo(selectedPqr);
-                                    const selectedPhotos = getPqrPhotos(selectedPqr);
-
-                                    return (
-                                        <>
-                                            {/* Dossier del Caso: Contexto Técnico y Trazabilidad Dual */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.25rem' }}>
-                                                {/* Left Column: Description & Delivery Details */}
-                                                <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '1.15rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                    <div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                                            <h4 style={{ margin: 0, fontSize: '0.74rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                                Descripción del Hecho Técnico
-                                                            </h4>
-                                                            <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#EAEFEA', padding: '2px 7px', borderRadius: '4px' }}>
-                                                                PQR #{selectedPqr.id.substring(0, 8)}
-                                                            </span>
-                                                        </div>
-                                                        <p style={{ margin: 0, fontSize: '0.86rem', color: '#1E293B', lineHeight: '1.55', whiteSpace: 'pre-wrap', fontWeight: '500' }}>
-                                                            {selectedPqr.description
-                                                                .replace(/^\[Radicado por Colaborador FruFresco:\s*[^\]]+\]\s*/i, '')
-                                                                .replace(/^\[Radicado por:\s*[^\]]+\]\s*/i, '')
-                                                                .replace(/^\[RCA_METADATA:[^\]]+\]\s*/i, '')
-                                                                .trim()}
-                                                        </p>
-                                                    </div>
-                                                    
-                                                    {selectedPqr.orders && (
-                                                        <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '0.74rem', color: '#64748B' }}>
-                                                            <span><strong>Pedido:</strong> #{selectedPqr.orders.sequence_id} ({formatMoney(selectedPqr.orders.total)})</span>
-                                                            {selectedPqr.orders.shipping_address && (
-                                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>
-                                                                    <strong>Dirección:</strong> {selectedPqr.orders.shipping_address}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Right Column: Trazabilidad Dual (FruFresco + Cliente) */}
-                                                <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '1.15rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                    
-                                                    {/* Bloque 1: Origen de Radicación (Canal y Autor Real) */}
-                                                    <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '10px 12px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: selectedAuthorInfo.channelBadgeColor, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                                {selectedAuthorInfo.channel === 'conductor' ? <Truck size={13} /> : selectedAuthorInfo.channel === 'portal_b2b' ? <Building2 size={13} /> : selectedAuthorInfo.channel === 'portal_b2c' ? <User size={13} /> : <UserCheck size={13} />}
-                                                                <span>{selectedAuthorInfo.authorTitle}</span>
-                                                            </div>
-                                                            <span style={{ 
-                                                                fontSize: '0.62rem', 
-                                                                fontWeight: '800', 
-                                                                padding: '1px 6px', 
-                                                                borderRadius: '4px', 
-                                                                backgroundColor: selectedAuthorInfo.channelBadgeBg, 
-                                                                color: selectedAuthorInfo.channelBadgeColor, 
-                                                                border: `1px solid ${selectedAuthorInfo.channelBadgeBorder}` 
-                                                            }}>
-                                                                {selectedAuthorInfo.channelLabel}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#0F172A' }}>
-                                                            {selectedAuthorInfo.authorName}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.72rem', color: selectedAuthorInfo.channelBadgeColor, fontWeight: '700', marginTop: '1px' }}>
-                                                            {selectedAuthorInfo.authorRole}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            <Clock size={11} />
-                                                            <span>{selectedAuthorInfo.receptionChannel} • {new Date(selectedPqr.created_at).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Bloque 2: Cuenta Cliente Institucional & Contacto Directo */}
-                                                    <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '10px 12px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                            <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#0284C7', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                                <Building2 size={13} color="#0284C7" />
-                                                                <span>Cuenta Cliente {selectedPqr.profiles?.role === 'b2c_client' ? 'B2C' : 'B2B'}</span>
-                                                            </div>
-                                                            {selectedAuthorInfo.nit && (
-                                                                <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '600' }}>
-                                                                    NIT: {selectedAuthorInfo.nit}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                            {selectedAuthorInfo.companyName}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '1px' }}>
-                                                            Contacto en sitio: <strong>{selectedAuthorInfo.clientContact}</strong>
-                                                        </div>
-
-                                                        {/* Canales de Contacto: WhatsApp Prominente y Correo */}
-                                                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #F1F5F9' }}>
-                                                            {selectedAuthorInfo.isPhoneValid ? (
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
-                                                                    <a 
-                                                                        href={`https://wa.me/${selectedAuthorInfo.cleanPhone}?text=${encodeURIComponent(`Hola ${selectedAuthorInfo.clientContact || selectedAuthorInfo.companyName}, te contactamos de FruFresco SAC respecto a tu reporte PQR #${selectedPqr.id.substring(0, 8)} ("${selectedPqr.subject}"). Estamos gestionando tu solución.`)}`}
-                                                                        target="_blank"
-                                                                        rel="noreferrer"
-                                                                        style={{
-                                                                            padding: '4px 10px',
-                                                                            borderRadius: '6px',
-                                                                            backgroundColor: '#DCFCE7',
-                                                                            color: '#15803D',
-                                                                            border: '1.5px solid #86EFAC',
-                                                                            fontSize: '0.72rem',
-                                                                            fontWeight: '800',
-                                                                            textDecoration: 'none',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '5px',
-                                                                            boxShadow: '0 1px 2px rgba(16, 185, 129, 0.12)'
-                                                                        }}
-                                                                    >
-                                                                        <MessageCircle size={13} /> Escribir por WhatsApp ({selectedAuthorInfo.phone}) <ExternalLink size={10} />
-                                                                    </a>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setEditingPhoneProfileId(selectedPqr.client_id);
-                                                                                setNewPhoneInput(selectedAuthorInfo.phone);
-                                                                            }}
-                                                                            style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '3px 6px', borderRadius: '5px', fontSize: '0.66rem', color: '#64748B', cursor: 'pointer', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '2px' }}
-                                                                            title="Editar número celular"
-                                                                        >
-                                                                            <Edit2 size={9} /> Editar
-                                                                        </button>
-                                                                        {selectedAuthorInfo.email && (
-                                                                            <a href={`mailto:${selectedAuthorInfo.email}?subject=${encodeURIComponent(`Seguimiento PQR FruFresco: ${selectedPqr.subject}`)}`} style={{ color: '#0369A1', textDecoration: 'none', fontSize: '0.68rem', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '4px' }}>
-                                                                                <Mail size={11} /> Correo
-                                                                            </a>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#DC2626', fontWeight: '700' }}>
-                                                                            <AlertTriangle size={12} color="#DC2626" />
-                                                                            <span>{selectedAuthorInfo.phone && selectedAuthorInfo.phone !== '.' ? `Teléfono no celular (${selectedAuthorInfo.phone})` : 'Sin celular para WhatsApp'}</span>
-                                                                        </div>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setEditingPhoneProfileId(selectedPqr.client_id);
-                                                                                setNewPhoneInput('');
-                                                                            }}
-                                                                            style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '3px 8px', borderRadius: '5px', fontSize: '0.68rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                                        >
-                                                                            <Plus size={10} /> Registrar WhatsApp
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Formulario Inline para Registrar/Editar Celular */}
-                                                            {editingPhoneProfileId === selectedPqr.client_id && (
-                                                                <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                                    <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
-                                                                        Número de Celular para WhatsApp (10 dígitos):
-                                                                    </label>
-                                                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                                                        <input 
-                                                                            type="text"
-                                                                            value={newPhoneInput}
-                                                                            onChange={e => setNewPhoneInput(e.target.value)}
-                                                                            placeholder="Ej: 3154456827"
-                                                                            maxLength={12}
-                                                                            style={{ flex: 1, padding: '4px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.75rem', fontWeight: '700' }}
-                                                                        />
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={savingPhone}
-                                                                            onClick={() => handleSavePhone(selectedPqr.client_id)}
-                                                                            style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer' }}
-                                                                        >
-                                                                            {savingPhone ? <Loader2 size={12} className="animate-spin" /> : 'Guardar'}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setEditingPhoneProfileId(null)}
-                                                                            style={{ backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', padding: '4px 8px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer' }}
-                                                                        >
-                                                                            Cancelar
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Order Linking Selector Banner for Unlinked Cases */}
-                                            {!selectedPqr.order_id && (
-                                                <div style={{
-                                                    backgroundColor: '#F0FDF4',
-                                                    border: '1.5px dashed #16A34A',
-                                                    borderRadius: '14px',
-                                                    padding: '1rem 1.25rem',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: '10px'
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#DCFCE7', color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                <ShoppingBag size={16} />
-                                                            </div>
-                                                            <div>
-                                                                <h4 style={{ margin: 0, fontSize: '0.84rem', fontWeight: '900', color: '#14532D' }}>
-                                                                    Vincular Pedido del Cliente
-                                                                </h4>
-                                                                <p style={{ margin: '2px 0 0 0', fontSize: '0.72rem', color: '#166534' }}>
-                                                                    Este caso fue reportado sin asociar un pedido específico. Asocia un pedido reciente para habilitar el reporte de ítems averiados/faltantes y notas crédito.
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {loadingRecentOrders ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', color: '#166534' }}>
-                                                            <Loader2 size={14} className="animate-spin" /> Buscando pedidos recientes del cliente...
-                                                        </div>
-                                                    ) : clientRecentOrders.length > 0 ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                            <select
-                                                                value={linkingOrderId}
-                                                                onChange={e => setLinkingOrderId(e.target.value)}
-                                                                style={{
-                                                                    flex: 1,
-                                                                    minWidth: '240px',
-                                                                    padding: '8px 12px',
-                                                                    borderRadius: '8px',
-                                                                    border: '1px solid #86EFAC',
-                                                                    backgroundColor: 'white',
-                                                                    fontSize: '0.78rem',
-                                                                    fontWeight: '700',
-                                                                    color: '#1E293B',
-                                                                    outline: 'none'
-                                                                }}
-                                                            >
-                                                                <option value="">Selecciona un pedido reciente ({clientRecentOrders.length} encontrados)...</option>
-                                                                {clientRecentOrders.map(ord => (
-                                                                    <option key={ord.id} value={ord.id}>
-                                                                        Pedido #{ord.sequence_id} — {formatMoney(ord.total || 0)} [{ord.status}] — {new Date(ord.created_at).toLocaleDateString('es-CO')} {ord.shipping_address ? `(${ord.shipping_address})` : ''}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                            <button
-                                                                type="button"
-                                                                disabled={!linkingOrderId || isLinkingOrder}
-                                                                onClick={() => handleLinkOrder(linkingOrderId)}
-                                                                style={{
-                                                                    padding: '8px 16px',
-                                                                    borderRadius: '8px',
-                                                                    backgroundColor: linkingOrderId ? '#0D7A57' : '#94A3B8',
-                                                                    color: 'white',
-                                                                    border: 'none',
-                                                                    fontWeight: '800',
-                                                                    fontSize: '0.78rem',
-                                                                    cursor: linkingOrderId ? 'pointer' : 'not-allowed',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '6px',
-                                                                    transition: 'all 0.15s ease',
-                                                                    boxShadow: linkingOrderId ? '0 2px 6px rgba(13, 122, 87, 0.2)' : 'none'
-                                                                }}
-                                                            >
-                                                                {isLinkingOrder ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
-                                                                <span>Vincular Pedido al Caso</span>
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ fontSize: '0.72rem', color: '#64748B', fontStyle: 'italic' }}>
-                                                            No se encontraron pedidos registrados para el cliente seleccionado.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* Photo Evidence Section (Compact & Zero Wasted Space) */}
-                                            <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '1rem' }}>
-                                                {selectedPhotos.length > 0 ? (
-                                                    <div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <Camera size={16} color="#0D7A57" />
-                                                                <h4 style={{ margin: 0, fontSize: '0.78rem', fontWeight: '900', color: '#1E293B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                                    Evidencia Fotográfica de Calidad ({selectedPhotos.length} {selectedPhotos.length === 1 ? 'Foto' : 'Fotos'})
-                                                                </h4>
-                                                            </div>
-                                                            <div>
-                                                                <input type="file" ref={fileInputRef} onChange={handleUploadEvidence} accept="image/*" style={{ display: 'none' }} />
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={uploadingPhoto}
-                                                                    onClick={() => fileInputRef.current?.click()}
-                                                                    style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', padding: '5px 12px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', color: '#0D7A57', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                                                >
-                                                                    {uploadingPhoto ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                                                                    <span>Adjuntar Otra Foto</span>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Tight Photo Stage with Thumbnails */}
-                                                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                            {/* Active Photo Container */}
-                                                            <div 
-                                                                onClick={() => setZoomPhotoUrl(selectedPhotos[activePhotoIdx])}
-                                                                style={{
-                                                                    position: 'relative',
-                                                                    width: '320px',
-                                                                    height: '220px',
-                                                                    borderRadius: '12px',
-                                                                    overflow: 'hidden',
-                                                                    border: '1px solid #CBD5E1',
-                                                                    backgroundColor: '#0F172A',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    cursor: 'zoom-in',
-                                                                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-                                                                }}
-                                                            >
-                                                                <img 
-                                                                    src={selectedPhotos[activePhotoIdx]} 
-                                                                    alt={`Evidencia ${activePhotoIdx + 1}`} 
-                                                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                                />
-                                                                <div style={{ position: 'absolute', bottom: '8px', right: '8px', display: 'flex', gap: '6px' }}>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => { e.stopPropagation(); setZoomPhotoUrl(selectedPhotos[activePhotoIdx]); }}
-                                                                        style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                                                    >
-                                                                        <Maximize2 size={11} /> Ampliar
-                                                                    </button>
-                                                                    <a
-                                                                        href={selectedPhotos[activePhotoIdx]}
-                                                                        target="_blank"
-                                                                        rel="noreferrer"
-                                                                        onClick={e => e.stopPropagation()}
-                                                                        style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '0.66rem', fontWeight: '700', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                                                    >
-                                                                        <ExternalLink size={11} /> Original
-                                                                    </a>
-                                                                </div>
-                                                                <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(15, 23, 42, 0.8)', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: '800' }}>
-                                                                    Foto {activePhotoIdx + 1} de {selectedPhotos.length}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Thumbnails list */}
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
-                                                                    Miniaturas de Cotejo:
-                                                                </span>
-                                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                                    {selectedPhotos.map((url, idx) => {
-                                                                        const isActive = idx === activePhotoIdx;
-                                                                        return (
-                                                                            <div 
-                                                                                key={idx}
-                                                                                onClick={() => setActivePhotoIdx(idx)}
-                                                                                style={{
-                                                                                    width: '64px',
-                                                                                    height: '64px',
-                                                                                    borderRadius: '8px',
-                                                                                    overflow: 'hidden',
-                                                                                    border: `2px solid ${isActive ? '#0D7A57' : '#CBD5E1'}`,
-                                                                                    cursor: 'pointer',
-                                                                                    backgroundColor: '#0F172A',
-                                                                                    transition: 'all 0.15s ease',
-                                                                                    transform: isActive ? 'scale(1.05)' : 'scale(1)'
-                                                                                }}
-                                                                            >
-                                                                                <img src={url} alt={`Miniatura ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                                <span style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '4px' }}>
-                                                                    Haz clic en cualquier miniatura para inspeccionarla o en &quot;Ampliar&quot; para pantalla completa.
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    /* Compact Single-Row Notice for cases with no photos */
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748B', fontSize: '0.78rem' }}>
-                                                            <CameraOff size={16} color="#94A3B8" />
-                                                            <span>Este caso fue radicado por descripción telefónica / texto sin fotos adjuntas de origen.</span>
-                                                        </div>
-                                                        <div>
-                                                            <input type="file" ref={fileInputRef} onChange={handleUploadEvidence} accept="image/*" style={{ display: 'none' }} />
-                                                            <button
-                                                                type="button"
-                                                                disabled={uploadingPhoto}
-                                                                onClick={() => fileInputRef.current?.click()}
-                                                                style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', padding: '5px 12px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', color: '#0D7A57', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                                            >
-                                                                {uploadingPhoto ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                                                                <span>Adjuntar Foto de Evidencia</span>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-
-                                {/* Resolution Form & RCA Attribution (100% CARDS - ZERO CLUNKY DROPDOWNS) */}
-                                {selectedPqr.status === 'pending' && (
-                                    <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        
-                                        {/* 1. Concepto Comercial: 4 Interactive Visual Action Cards */}
-                                        <div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                <label style={{ fontSize: '0.76rem', fontWeight: '900', textTransform: 'uppercase', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '0.04em' }}>
-                                                    <span>1. Concepto de Resolución Comercial</span>
-                                                    <ProcessTooltip 
-                                                        title="Conceptos de Compensación"
-                                                        description="Define el impacto financiero y logístico: Opción 1 descarta el reclamo, Opción 2 alista un nuevo pedido, Opción 3 emite Nota Crédito, Opción 4 recalcula la factura con la cantidad real recibida."
-                                                        worldClassTarget="Resolución en <60 min"
-                                                    />
-                                                </label>
-                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '600' }}>
-                                                    Selecciona con 1 clic o atajos <kbd style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '1px 4px' }}>1-4</kbd>
-                                                </span>
-                                            </div>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-                                                {/* Card 1: Entregado Conforme */}
-                                                <div 
-                                                    onClick={() => setResolutionOption('opt1')}
-                                                    style={{
-                                                        backgroundColor: resolutionOption === 'opt1' ? '#ECFDF5' : '#FFFFFF',
-                                                        border: `2px solid ${resolutionOption === 'opt1' ? '#0D7A57' : '#E2E8F0'}`,
-                                                        borderRadius: '12px',
-                                                        padding: '12px',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s ease',
-                                                        boxShadow: resolutionOption === 'opt1' ? '0 4px 12px rgba(13, 122, 87, 0.12)' : 'none'
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: resolutionOption === 'opt1' ? '#DCFCE7' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <CheckCircle2 size={16} color={resolutionOption === 'opt1' ? '#0D7A57' : '#64748B'} />
-                                                        </div>
-                                                        <span style={{ fontWeight: '900', fontSize: '0.82rem', color: resolutionOption === 'opt1' ? '#065F46' : '#1E293B' }}>
-                                                            1. Cerrar Conforme
-                                                        </span>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
-                                                        Calidad aceptada en estándar. Reclamo desestimado sin cambios en factura.
-                                                    </p>
-                                                </div>
-
-                                                {/* Card 2: Reponer D+1 */}
-                                                <div 
-                                                    onClick={() => !isCurrentSelectedPqrReplacement && setResolutionOption('opt2')}
-                                                    style={{
-                                                        backgroundColor: isCurrentSelectedPqrReplacement ? '#FFFBEB' : resolutionOption === 'opt2' ? '#EFF6FF' : '#FFFFFF',
-                                                        border: `2px solid ${isCurrentSelectedPqrReplacement ? '#FDE68A' : resolutionOption === 'opt2' ? '#2563EB' : '#E2E8F0'}`,
-                                                        borderRadius: '12px',
-                                                        padding: '12px',
-                                                        cursor: isCurrentSelectedPqrReplacement ? 'not-allowed' : 'pointer',
-                                                        opacity: isCurrentSelectedPqrReplacement ? 0.7 : 1,
-                                                        transition: 'all 0.15s ease',
-                                                        boxShadow: resolutionOption === 'opt2' ? '0 4px 12px rgba(37, 99, 235, 0.12)' : 'none'
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: isCurrentSelectedPqrReplacement ? '#FEF3C7' : resolutionOption === 'opt2' ? '#DBEAFE' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <RotateCcw size={16} color={isCurrentSelectedPqrReplacement ? '#D97706' : resolutionOption === 'opt2' ? '#2563EB' : '#64748B'} />
-                                                        </div>
-                                                        <span style={{ fontWeight: '900', fontSize: '0.82rem', color: isCurrentSelectedPqrReplacement ? '#92400E' : resolutionOption === 'opt2' ? '#1E40AF' : '#1E293B' }}>
-                                                            2. Reponer D+1
-                                                        </span>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '0.72rem', color: isCurrentSelectedPqrReplacement ? '#B45309' : '#64748B', lineHeight: '1.35' }}>
-                                                        {isCurrentSelectedPqrReplacement ? 'Bloqueado: Corte de bucle anti-ping-pong activo.' : 'Alistar nuevo despacho prioritario con siguiente entrega.'}
-                                                    </p>
-                                                    {!isCurrentSelectedPqrReplacement && (
-                                                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #BFDBFE' }}>
-                                                            <Link
-                                                                href={getReplacementOrderUrl(selectedPqr, selectedItemId, orderItems, noveltyQty)}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                style={{
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '5px',
-                                                                    fontSize: '0.72rem',
-                                                                    fontWeight: '800',
-                                                                    color: '#1D4ED8',
-                                                                    backgroundColor: '#DBEAFE',
-                                                                    padding: '4px 8px',
-                                                                    borderRadius: '6px',
-                                                                    textDecoration: 'none'
-                                                                }}
-                                                            >
-                                                                <ShoppingBag size={12} /> Montar Pedido D+1 ↗
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Card 3: Nota Crédito */}
-                                                <div 
-                                                    onClick={() => {
-                                                        setResolutionOption('opt3');
-                                                        openFinancialModal('credit_note');
-                                                    }}
-                                                    style={{
-                                                        backgroundColor: resolutionOption === 'opt3' ? '#F5F3FF' : '#FFFFFF',
-                                                        border: `2px solid ${resolutionOption === 'opt3' ? '#7C3AED' : '#E2E8F0'}`,
-                                                        borderRadius: '12px',
-                                                        padding: '12px',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s ease',
-                                                        boxShadow: resolutionOption === 'opt3' ? '0 4px 12px rgba(124, 58, 237, 0.12)' : 'none'
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: resolutionOption === 'opt3' ? '#EDE9FE' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <Receipt size={16} color={resolutionOption === 'opt3' ? '#7C3AED' : '#64748B'} />
-                                                        </div>
-                                                        <span style={{ fontWeight: '900', fontSize: '0.82rem', color: resolutionOption === 'opt3' ? '#5B21B6' : '#1E293B' }}>
-                                                            3. Nota Crédito
-                                                        </span>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
-                                                        Emitir descuento contable a favor del cliente en facturación.
-                                                    </p>
-                                                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #DDD6FE' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openFinancialModal('credit_note');
-                                                            }}
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '5px',
-                                                                fontSize: '0.72rem',
-                                                                fontWeight: '800',
-                                                                color: '#6D28D9',
-                                                                backgroundColor: '#EDE9FE',
-                                                                border: 'none',
-                                                                padding: '4px 8px',
-                                                                borderRadius: '6px',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <Receipt size={12} /> Liquidar Nota Crédito ↗
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Card 4: Ajustar Factura */}
-                                                <div 
-                                                    onClick={() => {
-                                                        setResolutionOption('opt4');
-                                                        openFinancialModal('invoice_adjustment');
-                                                    }}
-                                                    style={{
-                                                        backgroundColor: resolutionOption === 'opt4' ? '#FFFBEB' : '#FFFFFF',
-                                                        border: `2px solid ${resolutionOption === 'opt4' ? '#D97706' : '#E2E8F0'}`,
-                                                        borderRadius: '12px',
-                                                        padding: '12px',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s ease',
-                                                        boxShadow: resolutionOption === 'opt4' ? '0 4px 12px rgba(217, 119, 6, 0.12)' : 'none'
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: resolutionOption === 'opt4' ? '#FEF3C7' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <Scale size={16} color={resolutionOption === 'opt4' ? '#D97706' : '#64748B'} />
-                                                        </div>
-                                                        <span style={{ fontWeight: '900', fontSize: '0.82rem', color: resolutionOption === 'opt4' ? '#92400E' : '#1E293B' }}>
-                                                            4. Ajustar Factura
-                                                        </span>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B', lineHeight: '1.35' }}>
-                                                        Recalcular valor a pagar liquidando solo la cantidad conforme recibida.
-                                                    </p>
-                                                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #FDE68A' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openFinancialModal('invoice_adjustment');
-                                                            }}
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '5px',
-                                                                fontSize: '0.72rem',
-                                                                fontWeight: '800',
-                                                                color: '#B45309',
-                                                                backgroundColor: '#FEF3C7',
-                                                                border: 'none',
-                                                                padding: '4px 8px',
-                                                                borderRadius: '6px',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <Scale size={12} /> Configurar Ajuste Factura ↗
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* 2. Causa Raíz (RCA) & Matriz de Imputabilidad (ZERO DROPDOWNS - 100% CARDS & PILLS) */}
-                                        <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>
-                                                <span style={{ fontSize: '0.78rem', fontWeight: '900', textTransform: 'uppercase', color: '#0D7A57', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '0.04em' }}>
-                                                    <Sparkles size={15} color="#0D7A57" />
-                                                    2. Análisis Causa Raíz & Matriz de Imputabilidad
-                                                </span>
-                                                <RoleProcessGuide role="quality_auditor" compact sectionTitle="Norma RCA" />
-                                            </div>
-
-                                            {/* Macro-Causa L1 (Clickable Category Pills) */}
-                                            <div>
-                                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>
-                                                    Macro-Causa del Defecto (L1):
-                                                </label>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                    {activeTaxonomy.map(cat => {
-                                                        const isSelected = rcaCategoryL1 === cat.code;
-                                                        return (
-                                                            <button
-                                                                key={cat.code}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setRcaCategoryL1(cat.code);
-                                                                    if (cat.subtypes.length > 0) {
-                                                                        setRcaSubtypeL2(cat.subtypes[0].code);
-                                                                        setRcaResponsible(cat.subtypes[0].typicalResponsible);
-                                                                    }
-                                                                }}
-                                                                style={{
-                                                                    padding: '6px 12px',
-                                                                    borderRadius: '8px',
-                                                                    fontSize: '0.74rem',
-                                                                    fontWeight: isSelected ? '900' : '600',
-                                                                    border: `1.5px solid ${isSelected ? '#0D7A57' : '#CBD5E1'}`,
-                                                                    backgroundColor: isSelected ? '#EAEFEA' : '#FFFFFF',
-                                                                    color: isSelected ? '#0D7A57' : '#334155',
-                                                                    cursor: 'pointer',
-                                                                    boxShadow: isSelected ? '0 2px 6px rgba(13, 122, 87, 0.15)' : 'none',
-                                                                    transition: 'all 0.12s ease'
-                                                                }}
-                                                            >
-                                                                {cat.label}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            {/* Subtipo L2 (Interactive Subtype Chips) */}
-                                            <div>
-                                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>
-                                                    Subtipo Específico (L2):
-                                                </label>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                    {selectedCategoryL1Obj?.subtypes.map(sub => {
-                                                        const isSubSelected = rcaSubtypeL2 === sub.code;
-                                                        return (
-                                                            <button
-                                                                key={sub.code}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setRcaSubtypeL2(sub.code);
-                                                                    setRcaResponsible(sub.typicalResponsible);
-                                                                }}
-                                                                style={{
-                                                                    padding: '5px 10px',
-                                                                    borderRadius: '6px',
-                                                                    fontSize: '0.72rem',
-                                                                    fontWeight: isSubSelected ? '800' : '600',
-                                                                    border: `1.5px solid ${isSubSelected ? '#0D7A57' : '#E2E8F0'}`,
-                                                                    backgroundColor: isSubSelected ? '#0D7A57' : '#FFFFFF',
-                                                                    color: isSubSelected ? '#FFFFFF' : '#475569',
-                                                                    cursor: 'pointer',
-                                                                    transition: 'all 0.12s ease'
-                                                                }}
-                                                            >
-                                                                {sub.label}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            {/* Matriz de Imputabilidad: 6 Department Cards */}
-                                            <div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                                    <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' }}>
-                                                        <span>Área Responsable Imputable (¿Quién asume la pérdida?)</span>
-                                                        <ProcessTooltip 
-                                                            title="Matriz de Imputabilidad"
-                                                            description="Asigna objetivamente la falla: Proveedor (Campo), Bodega (FIFO/Frío), Picking (Alistamiento), Transporte (Chofer), Comercial (Error de Montaje) o Cliente."
-                                                            consequence="Define si se cobra al proveedor, se marca como merma de bodega o se evalúa error en ventas."
-                                                        />
-                                                    </label>
-                                                </div>
-
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
-                                                    {Object.values(RESPONSIBLE_PARTIES).map(resp => {
-                                                        const isSelected = rcaResponsible === resp.code;
-                                                        return (
-                                                            <div 
-                                                                key={resp.code}
-                                                                onClick={() => setRcaResponsible(resp.code as any)}
-                                                                style={{
-                                                                    backgroundColor: isSelected ? resp.bgLight : '#FFFFFF',
-                                                                    border: `2px solid ${isSelected ? resp.border : '#E2E8F0'}`,
-                                                                    borderRadius: '10px',
-                                                                    padding: '10px 8px',
-                                                                    cursor: 'pointer',
-                                                                    textAlign: 'center',
-                                                                    transition: 'all 0.15s ease',
-                                                                    boxShadow: isSelected ? '0 2px 8px rgba(0,0,0,0.06)' : 'none'
-                                                                }}
-                                                            >
-                                                                <div style={{ color: isSelected ? resp.color : '#64748B', display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>
-                                                                    {getResponsibleIcon(resp.code)}
-                                                                </div>
-                                                                <div style={{ fontWeight: '900', fontSize: '0.76rem', color: isSelected ? resp.color : '#1E293B' }}>
-                                                                    {resp.label}
-                                                                </div>
-                                                                <div style={{ fontSize: '0.64rem', color: '#94A3B8', marginTop: '2px' }}>
-                                                                    {resp.department}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-
-                                                {/* Consecuencia Operativa Preview */}
-                                                {selectedResponsibleObj && (
-                                                    <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${selectedResponsibleObj.border}`, backgroundColor: selectedResponsibleObj.bgLight, color: selectedResponsibleObj.color, fontSize: '0.72rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <Sparkles size={13} color={selectedResponsibleObj.color} />
-                                                        <span><strong>Efecto Operativo:</strong> {selectedResponsibleObj.operationalConsequence}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* 3. Notas de Resolución & Acciones Correctivas */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: selectedPqr.order_id ? '1.4fr 1fr' : '1fr', gap: '1.25rem', alignItems: 'start' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
-                                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', margin: 0 }}>
-                                                            3. Notas de Resolución & Acciones Correctivas
-                                                        </label>
-                                                        {/* Suggested Sanitary Disposal Template */}
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <span style={{ fontSize: '0.66rem', color: '#0D7A57', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                Protocolo Merma:
-                                                            </span>
-                                                            <select
-                                                                onChange={(e) => {
-                                                                    const tmpl = DISPOSICION_SANITARIA_TEMPLATES.find(t => t.id === e.target.value);
-                                                                    if (tmpl) {
-                                                                        setResolutionNotes(prev => prev ? `${prev}\n\n${tmpl.textTemplate}` : tmpl.textTemplate);
-                                                                        showToast(`Protocolo "${tmpl.title}" insertado.`, 'success');
-                                                                    }
-                                                                    e.target.value = '';
-                                                                }}
-                                                                style={{
-                                                                    padding: '3px 8px',
-                                                                    borderRadius: '6px',
-                                                                    border: '1px solid #CBD5E1',
-                                                                    fontSize: '0.68rem',
-                                                                    fontWeight: '600',
-                                                                    color: '#334155',
-                                                                    backgroundColor: '#FFFFFF',
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                                defaultValue=""
-                                                            >
-                                                                <option value="" disabled>Seleccionar protocolo BPM/Invima...</option>
-                                                                {DISPOSICION_SANITARIA_TEMPLATES.map(t => (
-                                                                    <option key={t.id} value={t.id}>{t.title}</option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                    <textarea
-                                                        value={resolutionNotes}
-                                                        onChange={e => setResolutionNotes(e.target.value)}
-                                                        placeholder="Describe las acciones acordadas con el cliente, el dictamen de calidad y el protocolo de merma..."
-                                                        rows={4}
-                                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.82rem', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' }}
-                                                    />
-                                                </div>
-
-                                                {/* Reponer D+1 Direct Action Card */}
-                                                {resolutionOption === 'opt2' && !isCurrentSelectedPqrReplacement && (
-                                                    <div style={{ backgroundColor: '#EFF6FF', border: '1.5px solid #93C5FD', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <RotateCcw size={18} color="#2563EB" />
-                                                            <div>
-                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1E40AF' }}>
-                                                                    Montar Reposición Prioritaria D+1
-                                                                </div>
-                                                                <div style={{ fontSize: '0.7rem', color: '#3B82F6' }}>
-                                                                    Abre el módulo de creación de pedidos pre-cargando el cliente, producto a reponer y notas del PQR.
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <Link
-                                                            href={getReplacementOrderUrl(selectedPqr, selectedItemId, orderItems, noveltyQty)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '6px',
-                                                                backgroundColor: '#2563EB',
-                                                                color: '#FFFFFF',
-                                                                padding: '8px 14px',
-                                                                borderRadius: '8px',
-                                                                fontSize: '0.76rem',
-                                                                fontWeight: '800',
-                                                                textDecoration: 'none',
-                                                                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
-                                                                whiteSpace: 'nowrap'
-                                                            }}
-                                                        >
-                                                            <ExternalLink size={13} /> Montar Nuevo Pedido D+1 ↗
-                                                        </Link>
-                                                    </div>
-                                                )}
-
-                                                {/* Nota Crédito Direct Action Card */}
-                                                {resolutionOption === 'opt3' && (
-                                                    <div style={{ backgroundColor: '#FAF5FF', border: '1.5px solid #DDD6FE', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <Receipt size={18} color="#7C3AED" />
-                                                            <div>
-                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#6D28D9' }}>
-                                                                    Emisión de Nota Crédito Comercial
-                                                                </div>
-                                                                <div style={{ fontSize: '0.7rem', color: '#7C3AED' }}>
-                                                                    Abre el asistente interactivo para liquidar productos, calcular saldos a favor y emitir la nota crédito.
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openFinancialModal('credit_note')}
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '6px',
-                                                                backgroundColor: '#7C3AED',
-                                                                color: '#FFFFFF',
-                                                                padding: '8px 14px',
-                                                                borderRadius: '8px',
-                                                                fontSize: '0.76rem',
-                                                                fontWeight: '800',
-                                                                border: 'none',
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)',
-                                                                whiteSpace: 'nowrap'
-                                                            }}
-                                                        >
-                                                            <Receipt size={13} /> Abrir Liquidador de Nota Crédito ↗
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* Ajustar Factura Direct Action Card */}
-                                                {resolutionOption === 'opt4' && (
-                                                    <div style={{ backgroundColor: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <Scale size={18} color="#D97706" />
-                                                            <div>
-                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#92400E' }}>
-                                                                    Ajuste Directo de Factura & Pedido
-                                                                </div>
-                                                                <div style={{ fontSize: '0.7rem', color: '#B45309' }}>
-                                                                    Modifica cantidades recibidas para refacturar y cobrar únicamente lo recibido conforme.
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openFinancialModal('invoice_adjustment')}
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '6px',
-                                                                backgroundColor: '#D97706',
-                                                                color: '#FFFFFF',
-                                                                padding: '8px 14px',
-                                                                borderRadius: '8px',
-                                                                fontSize: '0.76rem',
-                                                                fontWeight: '800',
-                                                                border: 'none',
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)',
-                                                                whiteSpace: 'nowrap'
-                                                            }}
-                                                        >
-                                                            <Scale size={13} /> Configurar Ajuste de Factura ↗
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* Action Buttons */}
-                                                <div style={{ display: 'flex', gap: '10px' }}>
-                                                    <button 
-                                                        disabled={actionLoading}
-                                                        onClick={() => handleResolvePqr('resolved')}
-                                                        style={{ flex: 1, backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '11px 18px', borderRadius: '10px', fontWeight: '900', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 2px 8px rgba(13, 122, 87, 0.25)' }}
-                                                    >
-                                                        <CheckCircle2 size={16} /> Resolver y Cerrar Caso
-                                                    </button>
-                                                    <button 
-                                                        disabled={actionLoading}
-                                                        onClick={() => handleResolvePqr('rejected')}
-                                                        style={{ flex: 1, backgroundColor: '#FEE2E2', color: '#EF4444', border: '1px solid #FECACA', padding: '11px 18px', borderRadius: '10px', fontWeight: '900', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                                    >
-                                                        <AlertTriangle size={16} /> Rechazar / Archivar
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Order novelties interface (ONLY rendered when order_id exists!) */}
-                                            {selectedPqr.order_id && (
-                                                <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                    <h4 style={{ margin: 0, fontSize: '0.78rem', fontWeight: '900', color: '#0D7A57', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <CornerDownRight size={14} /> Registrar Novedad de Pedido
-                                                    </h4>
-                                                    
-                                                    {loadingItems ? (
-                                                        <div style={{ padding: '2rem 0', textAlign: 'center' }}><Loader2 className="animate-spin" size={20} style={{ color: '#0D7A57', margin: '0 auto' }} /></div>
-                                                    ) : (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                            <div>
-                                                                <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                                                    Producto Afectado del Pedido:
-                                                                </label>
-                                                                {orderItems.length === 0 ? (
-                                                                    <div style={{ fontSize: '0.72rem', color: '#94A3B8', padding: '8px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                                        Sin productos asociados a este pedido.
-                                                                    </div>
-                                                                ) : (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '140px', overflowY: 'auto' }}>
-                                                                        {orderItems.map(item => {
-                                                                            const isItemSel = selectedItemId === item.id;
-                                                                            return (
-                                                                                <div 
-                                                                                    key={item.id}
-                                                                                    onClick={() => setSelectedItemId(item.id)}
-                                                                                    style={{
-                                                                                        padding: '6px 10px',
-                                                                                        borderRadius: '8px',
-                                                                                        border: `1.5px solid ${isItemSel ? '#0D7A57' : '#E2E8F0'}`,
-                                                                                        backgroundColor: isItemSel ? '#EAEFEA' : '#FFFFFF',
-                                                                                        cursor: 'pointer',
-                                                                                        display: 'flex',
-                                                                                        alignItems: 'center',
-                                                                                        justifyContent: 'space-between',
-                                                                                        fontSize: '0.74rem',
-                                                                                        transition: 'all 0.12s ease'
-                                                                                    }}
-                                                                                >
-                                                                                    <span style={{ fontWeight: isItemSel ? '900' : '600', color: isItemSel ? '#0D7A57' : '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                                        {item.products?.name}
-                                                                                    </span>
-                                                                                    <span style={{ fontSize: '0.66rem', fontWeight: '800', color: isItemSel ? '#0D7A57' : '#64748B', backgroundColor: isItemSel ? '#DCFCE7' : '#F1F5F9', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>
-                                                                                        {item.quantity} {item.products?.unit_of_measure}
-                                                                                    </span>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            {selectedItemId && (
-                                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px' }}>
-                                                                    <div>
-                                                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Tipo de Novedad</label>
-                                                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setNoveltyType('faltante')}
-                                                                                style={{
-                                                                                    flex: 1,
-                                                                                    padding: '5px 8px',
-                                                                                    borderRadius: '6px',
-                                                                                    border: `1.5px solid ${noveltyType === 'faltante' ? '#D97706' : '#E2E8F0'}`,
-                                                                                    backgroundColor: noveltyType === 'faltante' ? '#FEF3C7' : '#FFFFFF',
-                                                                                    color: noveltyType === 'faltante' ? '#92400E' : '#64748B',
-                                                                                    fontWeight: noveltyType === 'faltante' ? '800' : '600',
-                                                                                    fontSize: '0.7rem',
-                                                                                    cursor: 'pointer',
-                                                                                    display: 'inline-flex',
-                                                                                    alignItems: 'center',
-                                                                                    justifyContent: 'center',
-                                                                                    gap: '4px'
-                                                                                }}
-                                                                            >
-                                                                                <PackageMinus size={12} /> Faltante
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setNoveltyType('averia')}
-                                                                                style={{
-                                                                                    flex: 1,
-                                                                                    padding: '5px 8px',
-                                                                                    borderRadius: '6px',
-                                                                                    border: `1.5px solid ${noveltyType === 'averia' ? '#EF4444' : '#E2E8F0'}`,
-                                                                                    backgroundColor: noveltyType === 'averia' ? '#FEE2E2' : '#FFFFFF',
-                                                                                    color: noveltyType === 'averia' ? '#DC2626' : '#64748B',
-                                                                                    fontWeight: noveltyType === 'averia' ? '800' : '600',
-                                                                                    fontSize: '0.7rem',
-                                                                                    cursor: 'pointer',
-                                                                                    display: 'inline-flex',
-                                                                                    alignItems: 'center',
-                                                                                    justifyContent: 'center',
-                                                                                    gap: '4px'
-                                                                                }}
-                                                                            >
-                                                                                <AlertTriangle size={12} /> Avería
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Cantidad Afectada</label>
-                                                                        <input 
-                                                                            type="number"
-                                                                            value={noveltyQty}
-                                                                            onChange={e => setNoveltyQty(Number(e.target.value))}
-                                                                            min={1}
-                                                                            style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.75rem', boxSizing: 'border-box', fontWeight: '700' }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {selectedItemId && (
-                                                                <div>
-                                                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '3px', textTransform: 'uppercase' }}>Observación Contable</label>
-                                                                    <input 
-                                                                        type="text"
-                                                                        value={noveltyReason}
-                                                                        onChange={e => setNoveltyReason(e.target.value)}
-                                                                        placeholder="Ej: Devolución parcial en descarga..."
-                                                                        style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.75rem', boxSizing: 'border-box' }}
-                                                                    />
-                                                                </div>
-                                                            )}
-
-                                                            <button 
-                                                                disabled={actionLoading || !selectedItemId || noveltyQty <= 0}
-                                                                onClick={handleCreateNovelty}
-                                                                style={{
-                                                                    width: '100%',
-                                                                    padding: '8px',
-                                                                    borderRadius: '8px',
-                                                                    fontWeight: '800',
-                                                                    fontSize: '0.75rem',
-                                                                    color: 'white',
-                                                                    border: 'none',
-                                                                    cursor: selectedItemId && noveltyQty > 0 ? 'pointer' : 'not-allowed',
-                                                                    backgroundColor: selectedItemId && noveltyQty > 0 ? '#1E293B' : '#CBD5E1',
-                                                                    transition: 'all 0.15s'
-                                                                }}
-                                                            >
-                                                                Registrar Novedad y Descuento
-                                                            </button>
-
-                                                            <Link 
-                                                                href={`/admin/orders/loading?orderId=${selectedPqr.order_id}`}
-                                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: '700', color: '#0D7A57', textDecoration: 'none', marginTop: '4px' }}
-                                                            >
-                                                                <FileText size={12} /> Modificar pedido en Cargue de Pedidos <ArrowRight size={10} />
-                                                            </Link>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Solved state display */}
-                                {selectedPqr.status === 'resolved' && (
-                                    <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #DCFCE7', borderRadius: '14px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <div style={{ fontWeight: '800', color: '#166534', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <CheckCircle2 size={18} color="#16A34A" /> Caso Resuelto y Archivado
-                                        </div>
-                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803D', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
-                                            {selectedPqr.resolution_notes}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                
-                                {/* Welcome Hero Banner with Quick Start */}
-                                <div style={{
-                                    background: 'linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 50%, #F8FAFC 100%)',
-                                    borderRadius: '18px',
-                                    border: '1px solid #A7F3D0',
-                                    padding: '1.75rem',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
+                        {mainView === 'cases' && (
+                            <button
+                                type="button"
+                                onClick={toggleShowKpis}
+                                style={{
+                                    display: 'inline-flex',
                                     alignItems: 'center',
-                                    flexWrap: 'wrap',
-                                    gap: '1.25rem',
-                                    boxShadow: '0 4px 16px rgba(13, 122, 87, 0.04)'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', maxWidth: '640px' }}>
-                                        <div style={{
-                                            width: '48px',
-                                            height: '48px',
-                                            borderRadius: '14px',
-                                            backgroundColor: '#DCFCE7',
-                                            color: '#0D7A57',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.15)'
-                                        }}>
-                                            <HeartHandshake size={26} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                Centro de Experiencia FruFresco
-                                            </div>
-                                            <h2 style={{ margin: '4px 0 6px 0', fontSize: '1.35rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
-                                                Resolución Ágil, Empatía y Calidad en Cada Entrega
-                                            </h2>
-                                            <p style={{ margin: 0, fontSize: '0.84rem', color: '#475569', lineHeight: '1.5' }}>
-                                                Nuestra promesa con restaurantes y clientes institucionales no termina en el despacho. Cada novedad es atendida con equidad, protegiendo tanto la relación comercial como el margen logístico mediante análisis de causa raíz.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Quick Start Action Button */}
-                                    <div>
-                                        {firstPendingPqr ? (
-                                            <button
-                                                onClick={handleSelectFirstPending}
-                                                style={{
-                                                    backgroundColor: '#0D7A57',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    padding: '12px 22px',
-                                                    borderRadius: '12px',
-                                                    fontWeight: '800',
-                                                    fontSize: '0.84rem',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    boxShadow: '0 4px 14px rgba(13, 122, 87, 0.25)',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <Play size={16} />
-                                                <span>Atender Primer Caso ({pendingPqrsCount} pendientes)</span>
-                                            </button>
-                                        ) : (
-                                            <div style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '8px',
-                                                padding: '10px 18px',
-                                                borderRadius: '12px',
-                                                backgroundColor: '#DCFCE7',
-                                                color: '#15803D',
-                                                fontWeight: '800',
-                                                fontSize: '0.82rem',
-                                                border: '1px solid #BBF7D0'
-                                            }}>
-                                                <CheckCircle2 size={18} />
-                                                <span>Todas las PQRs al día</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Protocolo de Excelencia Operativa en 3 Pasos */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-                                        <div>
-                                            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <ShieldCheck size={20} color="#0D7A57" />
-                                                Protocolo Operativo de Atención en 3 Pasos
-                                            </h3>
-                                            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#64748B' }}>
-                                                Estándar industrial FruFresco para una atención empática, rápida y sin reincidencia de mermas.
-                                            </p>
-                                        </div>
-                                        <RoleProcessGuide role="customer_service_agent" compact sectionTitle="Manual CS" />
-                                    </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                                        {/* Step 1 */}
-                                        <div style={{
-                                            backgroundColor: '#F8FAFC',
-                                            borderRadius: '14px',
-                                            border: '1px solid #E2E8F0',
-                                            padding: '1.25rem',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '10px'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#E0F2FE', color: '#0369A1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Eye size={18} />
-                                                </div>
-                                                <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#94A3B8', letterSpacing: '0.05em' }}>
-                                                    PASO 01
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
-                                                    Escucha Activa & Evidencia
-                                                </h4>
-                                                <p style={{ margin: '6px 0 0 0', fontSize: '0.76rem', color: '#475569', lineHeight: '1.45' }}>
-                                                    Inspecciona fotos cargadas en sitio, remisiones de pesaje y la versión del chef o conductor para entender el hecho técnico con empatía y objetividad.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Step 2 */}
-                                        <div style={{
-                                            backgroundColor: '#F8FAFC',
-                                            borderRadius: '14px',
-                                            border: '1px solid #E2E8F0',
-                                            padding: '1.25rem',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '10px'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#FEF3C7', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Zap size={18} />
-                                                </div>
-                                                <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#94A3B8', letterSpacing: '0.05em' }}>
-                                                    PASO 02
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
-                                                    Solución Justa & Inmediata
-                                                </h4>
-                                                <p style={{ margin: '6px 0 0 0', fontSize: '0.76rem', color: '#475569', lineHeight: '1.45' }}>
-                                                    Elige la vía idónea en &lt;45 min: reprogramar reposición prioritaria D+1 (Opción 2), emitir Nota Crédito (Opción 3) o ajustar la factura en caliente (Opción 4).
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Step 3 */}
-                                        <div style={{
-                                            backgroundColor: '#F8FAFC',
-                                            borderRadius: '14px',
-                                            border: '1px solid #E2E8F0',
-                                            padding: '1.25rem',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '10px'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#DCFCE7', color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <TrendingUp size={18} />
-                                                </div>
-                                                <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#94A3B8', letterSpacing: '0.05em' }}>
-                                                    PASO 03
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
-                                                    Causa Raíz Lean (RCA)
-                                                </h4>
-                                                <p style={{ margin: '6px 0 0 0', fontSize: '0.76rem', color: '#475569', lineHeight: '1.45' }}>
-                                                    Clasifica la falla (fisiología, golpe, frío) e imputa al área responsable (Campo, Bodega, Picking, Transporte) para erradicar la recurrencia de raíz.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Connection to RCA Dashboard */}
-                                <div style={{
-                                    backgroundColor: '#0F172A',
-                                    borderRadius: '16px',
-                                    padding: '1.5rem',
-                                    color: 'white',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    flexWrap: 'wrap',
-                                    gap: '1.25rem',
-                                    boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15)'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', maxWidth: '600px' }}>
-                                        <div style={{
-                                            width: '46px',
-                                            height: '46px',
-                                            borderRadius: '12px',
-                                            backgroundColor: 'rgba(52, 211, 153, 0.15)',
-                                            color: '#34D399',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0
-                                        }}>
-                                            <BarChart2 size={24} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#34D399', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                Inteligencia de Calidad & Mejora Continua
-                                            </div>
-                                            <h4 style={{ margin: '2px 0 4px 0', fontSize: '1.05rem', fontWeight: '900', color: 'white' }}>
-                                                Dashboard de Análisis Causa Raíz (RCA)
-                                            </h4>
-                                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#94A3B8', lineHeight: '1.45' }}>
-                                                Consulta los diagramas de Pareto de merma por proveedor, índices de daño en transporte y la matriz de imputabilidad de los últimos 90 días.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <Link
-                                        href="/admin/customer-service/rca"
-                                        style={{
-                                            backgroundColor: '#0D7A57',
-                                            color: 'white',
-                                            padding: '10px 18px',
-                                            borderRadius: '10px',
-                                            fontWeight: '800',
-                                            fontSize: '0.8rem',
-                                            textDecoration: 'none',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.3)',
-                                            transition: 'background-color 0.15s'
-                                        }}
-                                    >
-                                        <span>Ver Métricas RCA</span>
-                                        <ChevronRight size={16} />
-                                    </Link>
-                                </div>
-
-                                {/* Regla Anti-Ping-Pong de Protección de Fletes */}
-                                <div style={{
-                                    backgroundColor: '#FFFBEB',
-                                    border: '1px solid #FDE68A',
-                                    borderRadius: '14px',
-                                    padding: '1.15rem 1.25rem',
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '12px'
-                                }}>
-                                    <ShieldAlert size={22} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                    <div>
-                                        <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#92400E' }}>
-                                            Regla de Corte de Bucle Logístico (Protección de Fletes)
-                                        </h4>
-                                        <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem', color: '#B45309', lineHeight: '1.45' }}>
-                                            Para evitar el &apos;Ping-Pong&apos; de reposiciones reiteradas que erosionan el margen del pedido, si un producto ya fue rechazado en reposición, el sistema bloquea automáticamente un tercer envío. La orden se liquida mediante <strong>Nota Crédito</strong> o <strong>Ajuste de Factura</strong>.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Barra Informativa de Atajos Rápidos de Teclado */}
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    padding: '0.75rem 1rem',
-                                    backgroundColor: '#F8FAFC',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '600',
+                                    color: '#475569',
+                                    backgroundColor: 'white',
+                                    border: '1px solid #CBD5E1',
                                     borderRadius: '10px',
-                                    border: '1px solid #E2E8F0',
-                                    fontSize: '0.72rem',
-                                    color: '#64748B',
-                                    flexWrap: 'wrap',
-                                    gap: '8px'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
-                                        <Sparkles size={14} color="#0D7A57" />
-                                        <span>Flujo Ágil con Teclado:</span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                                        <span><kbd style={{ background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '1px 5px', fontWeight: '800' }}>1</kbd> Entregado Conforme</span>
-                                        <span><kbd style={{ background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '1px 5px', fontWeight: '800' }}>2</kbd> Reponer D+1</span>
-                                        <span><kbd style={{ background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '1px 5px', fontWeight: '800' }}>3</kbd> Nota Crédito</span>
-                                        <span><kbd style={{ background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '1px 5px', fontWeight: '800' }}>4</kbd> Ajustar Factura</span>
-                                        <span><kbd style={{ background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '1px 5px', fontWeight: '800' }}>Ctrl + Enter</kbd> Resolver</span>
-                                    </div>
-                                </div>
-                            </div>
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                }}
+                            >
+                                <BarChart2 size={14} />
+                                <span>{showKpis ? 'Ocultar KPIs' : 'Ver KPIs'}</span>
+                                {showKpis ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
                         )}
+
+                        <button
+                            type="button"
+                            onClick={fetchData}
+                            disabled={loading}
+                            title="Recargar datos"
+                            style={{
+                                padding: '8px',
+                                backgroundColor: 'white',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '10px',
+                                color: '#475569',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            <RefreshCw size={15} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+                        </button>
+                    </div>
+                </header>
+
+                {mainView === 'lean_dashboard' ? (
+                    <PqrLeanDashboard
+                        pqrs={pqrs}
+                        novelties={novelties}
+                        totalOrdersCount={totalOrdersCount}
+                        deliveredOrdersCount={deliveredOrdersCount}
+                        customTaxonomy={customTaxonomy}
+                        onRefresh={fetchData}
+                        showToast={showToast}
+                    />
+                ) : (
+                    <>
+                        {/* 2. Collapsible KPI Cockpit */}
+                        {showKpis && (
+                    <section style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                        gap: '14px',
+                        margin: '1rem 0'
+                    }}>
+                        {/* KPI 1: FTR */}
+                        <div style={{
+                            backgroundColor: 'white',
+                            padding: '1.1rem 1.25rem',
+                            borderRadius: '14px',
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.04em', display: 'block' }}>
+                                    First Time Right (FTR)
+                                </span>
+                                <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#0D7A57', marginTop: '2px', letterSpacing: '-0.02em' }}>
+                                    {kpiMetrics.ftrPercentage.toFixed(1)}%
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                    Entregas conformes sin novedades
+                                </span>
+                            </div>
+                            <div style={{ padding: '10px', backgroundColor: '#EAEFEA', color: '#0D7A57', borderRadius: '12px', border: '1px solid #C4D7C4' }}>
+                                <CheckCircle2 size={22} />
+                            </div>
+                        </div>
+
+                        {/* KPI 2: CoQ */}
+                        <div style={{
+                            backgroundColor: 'white',
+                            padding: '1.1rem 1.25rem',
+                            borderRadius: '14px',
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.04em', display: 'block' }}>
+                                    Costo de Calidad (CoQ)
+                                </span>
+                                <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#1A231E', marginTop: '2px', letterSpacing: '-0.02em' }}>
+                                    {formatMoney(kpiMetrics.totalCoQ)}
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                    Impacto monetario por mermas/NCs
+                                </span>
+                            </div>
+                            <div style={{ padding: '10px', backgroundColor: '#F8FAFC', color: '#475569', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <DollarSign size={22} />
+                            </div>
+                        </div>
+
+                        {/* KPI 3: MTTR */}
+                        <div style={{
+                            backgroundColor: 'white',
+                            padding: '1.1rem 1.25rem',
+                            borderRadius: '14px',
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.04em', display: 'block' }}>
+                                    Tiempo Medio Cierre (MTTR)
+                                </span>
+                                <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#1A231E', marginTop: '2px', letterSpacing: '-0.02em' }}>
+                                    {kpiMetrics.avgMttrHours}h
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                    Promedio de resolución de casos
+                                </span>
+                            </div>
+                            <div style={{ padding: '10px', backgroundColor: '#F8FAFC', color: '#475569', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <Clock size={22} />
+                            </div>
+                        </div>
+
+                        {/* KPI 4: Pareto Top RCA */}
+                        <div style={{
+                            backgroundColor: 'white',
+                            padding: '1.1rem 1.25rem',
+                            borderRadius: '14px',
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.04em', display: 'block' }}>
+                                    Pareto #1 Macrocausa
+                                </span>
+                                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#1A231E', marginTop: '2px', letterSpacing: '-0.01em', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {kpiMetrics.topRcaLabel}
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                    Concentra el <strong>{kpiMetrics.topRcaPct}%</strong> de incidencias
+                                </span>
+                            </div>
+                            <div style={{ padding: '10px', backgroundColor: '#F8FAFC', color: '#475569', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <ShieldAlert size={22} />
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {/* 3. Sticky Solid Toolbar (Línea 1 Sticky: top 85px, zIndex 70) */}
+                <div
+                    ref={toolbarRef}
+                    style={{
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 70,
+                        margin: '1rem 0',
+                        padding: '10px 14px',
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        border: '1px solid #CBD5E1',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                        overflow: 'visible'
+                    }}
+                >
+                    {/* Filter Segmented Control Pills */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '10px',
+                        padding: '3px',
+                        overflowX: 'auto'
+                    }}>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('pending')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '7px',
+                                fontSize: '0.75rem',
+                                fontWeight: activeTab === 'pending' ? '800' : '600',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: activeTab === 'pending' ? '#0D7A57' : 'transparent',
+                                color: activeTab === 'pending' ? '#FFFFFF' : '#475569',
+                                boxShadow: activeTab === 'pending' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
+                                transition: 'all 0.15s ease-in-out'
+                            }}
+                        >
+                            <span>Pendientes</span>
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '900',
+                                padding: '1px 6px',
+                                borderRadius: '10px',
+                                backgroundColor: activeTab === 'pending' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                                color: activeTab === 'pending' ? '#FFFFFF' : '#475569'
+                            }}>
+                                {kpiMetrics.pendingCount}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('in_progress')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '7px',
+                                fontSize: '0.75rem',
+                                fontWeight: activeTab === 'in_progress' ? '800' : '600',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: activeTab === 'in_progress' ? '#0D7A57' : 'transparent',
+                                color: activeTab === 'in_progress' ? '#FFFFFF' : '#475569',
+                                boxShadow: activeTab === 'in_progress' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
+                                transition: 'all 0.15s ease-in-out'
+                            }}
+                        >
+                            <span>En Auditoría</span>
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '900',
+                                padding: '1px 6px',
+                                borderRadius: '10px',
+                                backgroundColor: activeTab === 'in_progress' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                                color: activeTab === 'in_progress' ? '#FFFFFF' : '#475569'
+                            }}>
+                                {kpiMetrics.inProgressCount}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('resolved')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '7px',
+                                fontSize: '0.75rem',
+                                fontWeight: activeTab === 'resolved' ? '800' : '600',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: activeTab === 'resolved' ? '#0D7A57' : 'transparent',
+                                color: activeTab === 'resolved' ? '#FFFFFF' : '#475569',
+                                boxShadow: activeTab === 'resolved' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
+                                transition: 'all 0.15s ease-in-out'
+                            }}
+                        >
+                            <span>Resueltos</span>
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '900',
+                                padding: '1px 6px',
+                                borderRadius: '10px',
+                                backgroundColor: activeTab === 'resolved' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                                color: activeTab === 'resolved' ? '#FFFFFF' : '#475569'
+                            }}>
+                                {kpiMetrics.resolvedCount}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('rejected')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '7px',
+                                fontSize: '0.75rem',
+                                fontWeight: activeTab === 'rejected' ? '800' : '600',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: activeTab === 'rejected' ? '#0D7A57' : 'transparent',
+                                color: activeTab === 'rejected' ? '#FFFFFF' : '#475569',
+                                boxShadow: activeTab === 'rejected' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
+                                transition: 'all 0.15s ease-in-out'
+                            }}
+                        >
+                            <span>Rechazados</span>
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '900',
+                                padding: '1px 6px',
+                                borderRadius: '10px',
+                                backgroundColor: activeTab === 'rejected' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                                color: activeTab === 'rejected' ? '#FFFFFF' : '#475569'
+                            }}>
+                                {kpiMetrics.rejectedCount}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('novelties')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '7px',
+                                fontSize: '0.75rem',
+                                fontWeight: activeTab === 'novelties' ? '800' : '600',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                backgroundColor: activeTab === 'novelties' ? '#0D7A57' : 'transparent',
+                                color: activeTab === 'novelties' ? '#FFFFFF' : '#475569',
+                                boxShadow: activeTab === 'novelties' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none',
+                                transition: 'all 0.15s ease-in-out'
+                            }}
+                        >
+                            <span>Novedades Línea</span>
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: '900',
+                                padding: '1px 6px',
+                                borderRadius: '10px',
+                                backgroundColor: activeTab === 'novelties' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                                color: activeTab === 'novelties' ? '#FFFFFF' : '#475569'
+                            }}>
+                                {kpiMetrics.noveltiesCount}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('all')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '7px',
+                                fontSize: '0.75rem',
+                                fontWeight: activeTab === 'all' ? '800' : '600',
+                                border: 'none',
+                                cursor: 'pointer',
+                                backgroundColor: activeTab === 'all' ? '#0D7A57' : 'transparent',
+                                color: activeTab === 'all' ? '#FFFFFF' : '#475569',
+                                boxShadow: activeTab === 'all' ? '0 2px 6px rgba(13, 122, 87, 0.35)' : 'none'
+                            }}
+                        >
+                            Todos ({kpiMetrics.totalPqrs})
+                        </button>
+                    </div>
+
+                    {/* Omnibox Search Bar */}
+                    <div style={{ flex: '1', maxWidth: '420px', minWidth: '260px' }}>
+                        <GalleryOmnibox
+                            value={searchTerm}
+                            onChange={setSearchTerm}
+                            placeholder="Buscar caso, cliente, NIT, RCA o #PED..."
+                            filteredCount={activeTab === 'novelties' ? filteredNovelties.length : filteredPqrs.length}
+                            totalCount={activeTab === 'novelties' ? novelties.length : pqrs.length}
+                        />
                     </div>
                 </div>
 
-            {/* Fullscreen Photo Zoom Modal */}
+                {/* 4. Master Data Table */}
+                {activeTab !== 'novelties' ? (
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '14px',
+                        border: '1px solid #E2E8F0',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        overflow: 'visible'
+                    }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                            <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
+                                <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
+                                        Folio & Fecha
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Cliente & Canal
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Asunto & Pedido
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'center' }}>
+                                        Evidencia
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Diagnóstico RCA
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Imputabilidad & Cobro
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Estado
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                        Acciones
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredPqrs.length > 0 ? (
+                                    filteredPqrs.map((pqr, idx) => {
+                                        const author = getPqrAuthorInfo(pqr);
+                                        const photos = getPqrPhotos(pqr);
+                                        const rca = parseRcaFromRecord(pqr);
+                                        const typeStyle = getTypeBadgeStyle(pqr.type);
+                                        const catObj = customTaxonomy.find(c => c.code === rca.categoryL1);
+
+                                        return (
+                                            <tr
+                                                key={pqr.id}
+                                                onClick={() => handleOpenAuditModal(pqr)}
+                                                style={{
+                                                    backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA',
+                                                    cursor: 'pointer',
+                                                    transition: 'background-color 0.15s ease'
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#FAFAFA')}
+                                            >
+                                                {/* 1. Folio & Fecha */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: '800',
+                                                                textTransform: 'uppercase',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                backgroundColor: typeStyle.bg,
+                                                                color: typeStyle.text,
+                                                                border: `1px solid ${typeStyle.border}`
+                                                            }}>
+                                                                {typeStyle.label}
+                                                            </span>
+                                                            <span style={{ fontFamily: 'monospace', fontWeight: '800', color: '#1A231E', fontSize: '0.78rem' }}>
+                                                                #{pqr.id.substring(0, 8)}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                                            {formatDateFriendly(pqr.created_at)} • {new Date(pqr.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* 2. Cliente & Canal */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <div style={{
+                                                            width: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#EAEFEA',
+                                                            color: '#0D7A57',
+                                                            fontWeight: '900',
+                                                            fontSize: '0.75rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0
+                                                        }}>
+                                                            {author.authorInitials}
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '210px' }}>
+                                                            <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {author.clientDisplayName}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                {author.nit && <span>NIT: {author.nit}</span>}
+                                                                {author.phoneParsed.isValid && (
+                                                                    <a
+                                                                        href={`https://wa.me/${author.phoneParsed.waNumber}?text=${encodeURIComponent(buildPqrWhatsAppMessage(pqr, 'initial'))}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        onClick={e => e.stopPropagation()}
+                                                                        style={{ color: '#0D7A57', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+                                                                        title="Chat WhatsApp con Cliente"
+                                                                    >
+                                                                        <MessageCircle size={12} />
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* 3. Asunto & Pedido */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', maxWidth: '280px' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                        <div style={{ fontWeight: '600', color: '#1A231E', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pqr.subject}>
+                                                            {pqr.subject || 'Sin asunto'}
+                                                        </div>
+                                                        {pqr.order_id ? (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #E2E8F0' }}>
+                                                                    Pedido #{pqr.orders?.sequence_id || 'N/A'}
+                                                                </span>
+                                                                {pqr.orders?.total && (
+                                                                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                                                        {formatMoney(pqr.orders.total)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.68rem', color: '#64748B', backgroundColor: '#F8FAFC', padding: '1px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', display: 'inline-block', width: 'fit-content' }}>
+                                                                Sin Pedido Enlazado
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+
+                                                {/* 4. Evidencia */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'center' }}>
+                                                    {photos.length > 0 ? (
+                                                        <div
+                                                            style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setZoomPhotoUrl(photos[0]);
+                                                            }}
+                                                        >
+                                                            <img
+                                                                src={photos[0]}
+                                                                alt="Evidencia"
+                                                                style={{
+                                                                    width: '42px',
+                                                                    height: '42px',
+                                                                    borderRadius: '8px',
+                                                                    objectFit: 'cover',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                    display: 'block'
+                                                                }}
+                                                            />
+                                                            {photos.length > 1 && (
+                                                                <span style={{
+                                                                    position: 'absolute',
+                                                                    top: '-4px',
+                                                                    right: '-4px',
+                                                                    backgroundColor: '#0F172A',
+                                                                    color: 'white',
+                                                                    fontSize: '0.6rem',
+                                                                    fontWeight: '800',
+                                                                    borderRadius: '50%',
+                                                                    width: '16px',
+                                                                    height: '16px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                                                }}>
+                                                                    +{photos.length - 1}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontStyle: 'italic' }}>
+                                                            Sin fotos
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* 5. Diagnóstico RCA */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                        <span style={{
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '700',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: '#F8FAFC',
+                                                            color: '#1A231E',
+                                                            border: '1px solid #E2E8F0',
+                                                            display: 'inline-block',
+                                                            width: 'fit-content'
+                                                        }}>
+                                                            {catObj?.label.split('.')[1]?.trim() || catObj?.label || 'Daño Mecánico'}
+                                                        </span>
+                                                        {rca.subtypeL2 && (
+                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {rca.subtypeL2.replace(/_/g, ' ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+
+                                                {/* 6. Imputabilidad & Cobro */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                        {rca.responsible && rca.responsible !== 'no_definido' ? (
+                                                            <span style={{
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '800',
+                                                                textTransform: 'uppercase',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                backgroundColor: '#EAEFEA',
+                                                                color: '#0D7A57',
+                                                                border: '1px solid #C4D7C4',
+                                                                display: 'inline-block',
+                                                                width: 'fit-content'
+                                                            }}>
+                                                                {RESPONSIBLE_PARTIES[rca.responsible as any]?.label || rca.responsible}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '700',
+                                                                textTransform: 'uppercase',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                backgroundColor: '#F8FAFC',
+                                                                color: '#64748B',
+                                                                border: '1px solid #E2E8F0',
+                                                                display: 'inline-block',
+                                                                width: 'fit-content'
+                                                            }}>
+                                                                Sin Asignar
+                                                            </span>
+                                                        )}
+                                                        {rca.imputedEntities && rca.imputedEntities.length > 0 ? (
+                                                            <div style={{ fontSize: '0.68rem', color: '#475569', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca.imputedEntities.map(e => `${e.name} (${e.sharePercent}%)`).join(', ')}>
+                                                                {rca.imputedEntities.map(e => e.name).join(', ')}
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Sin responsable</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+
+                                                {/* 7. Estado & Resolución */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                                    {pqr.status === 'resolved' ? (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#EAEFEA', color: '#0D7A57', border: '1px solid #C4D7C4' }}>
+                                                            <CheckCircle2 size={12} />
+                                                            <span>Resuelto</span>
+                                                        </span>
+                                                    ) : pqr.status === 'rejected' ? (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECDD3' }}>
+                                                            <AlertCircle size={12} />
+                                                            <span>Rechazado</span>
+                                                        </span>
+                                                    ) : pqr.status === 'in_progress' ? (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1' }}>
+                                                            <Clock size={12} />
+                                                            <span>En Auditoría</span>
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                                            <AlertTriangle size={12} />
+                                                            <span>Pendiente</span>
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* 8. Acciones */}
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenAuditModal(pqr)}
+                                                            style={{
+                                                                padding: '6px 12px',
+                                                                backgroundColor: '#0D7A57',
+                                                                color: 'white',
+                                                                fontWeight: '700',
+                                                                fontSize: '0.75rem',
+                                                                borderRadius: '8px',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                                            }}
+                                                        >
+                                                            <ShieldCheck size={13} />
+                                                            <span>Auditar</span>
+                                                        </button>
+
+                                                        <Link
+                                                            href={`/admin/customer-service/rnc/${pqr.id}/print`}
+                                                            target="_blank"
+                                                            style={{
+                                                                padding: '6px 8px',
+                                                                color: '#475569',
+                                                                backgroundColor: 'white',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '8px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                textDecoration: 'none'
+                                                            }}
+                                                            title="Imprimir Acta RNC (PDF)"
+                                                        >
+                                                            <FileText size={14} />
+                                                        </Link>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={8} style={{ padding: '3rem 1rem', textAlign: 'center', color: '#64748B' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                <ShieldCheck size={36} style={{ color: '#94A3B8' }} />
+                                                <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#334155' }}>
+                                                    No se encontraron casos de PQRS con los filtros actuales.
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+                                                    Prueba ajustando el término de búsqueda en el Omnibox o cambiando de pestaña.
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    /* Novelties Table View */
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '14px',
+                        border: '1px solid #E2E8F0',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        overflow: 'visible'
+                    }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                            <thead style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
+                                <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', borderTopLeftRadius: '14px' }}>
+                                        Pedido & Fecha
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Cliente
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Producto Afectado
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Cantidad Devuelta
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Impacto Financiero
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Motivo Declarado
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
+                                        Estado
+                                    </th>
+                                    <th style={{ position: 'sticky', top: `${85 + toolbarHeight}px`, zIndex: 40, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', padding: '12px 16px', fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', textAlign: 'right', borderTopRightRadius: '14px' }}>
+                                        Acción
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredNovelties.length > 0 ? (
+                                    filteredNovelties.map((nov, idx) => {
+                                        const price = nov.products?.base_price || 0;
+                                        const qty = Number(nov.quantity_returned) || 0;
+                                        const totalImpact = price * qty;
+
+                                        return (
+                                            <tr key={nov.id} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', whiteSpace: 'nowrap', fontWeight: '800', color: '#1A231E', fontSize: '0.78rem' }}>
+                                                    #{nov.orders?.sequence_id || 'N/A'}
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'normal' }}>
+                                                        {formatDateFriendly(nov.created_at)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontWeight: '700', color: '#1A231E', fontSize: '0.78rem' }}>
+                                                    {nov.orders?.profiles?.company_name || nov.orders?.profiles?.contact_name || 'Cliente'}
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                    <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem' }}>{nov.products?.name || 'Producto'}</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', fontFamily: 'monospace' }}>SKU: {nov.products?.sku || 'N/A'}</div>
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontWeight: '800', color: '#991B1B', fontSize: '0.78rem' }}>
+                                                    -{qty} {nov.products?.unit_of_measure || 'Und'}
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontWeight: '800', color: '#1A231E', fontSize: '0.78rem' }}>
+                                                    {formatMoney(totalImpact)}
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', maxWidth: '250px', color: '#475569', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={nov.reason}>
+                                                    {nov.reason || 'Sin motivo'}
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
+                                                    {nov.status === 'approved' ? (
+                                                        <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#EAEFEA', color: '#0D7A57', border: '1px solid #C4D7C4' }}>
+                                                            Aprobada
+                                                        </span>
+                                                    ) : nov.status === 'rejected' ? (
+                                                        <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECDD3' }}>
+                                                            Rechazada
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                                            Pendiente Revisión
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', textAlign: 'right' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedNovelty(nov)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            backgroundColor: '#0D7A57',
+                                                            color: 'white',
+                                                            fontWeight: '700',
+                                                            fontSize: '0.75rem',
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                                        }}
+                                                    >
+                                                        Auditar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={8} style={{ padding: '3rem 1rem', textAlign: 'center', color: '#64748B', fontSize: '0.78rem' }}>
+                                            No hay novedades de línea registradas con los filtros seleccionados.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+                </>
+                )}
+            </div>
+
+            {/* ================= MODALS ================= */}
+
+            {/* 1. Stepper Wizard Audit Modal */}
+            <PqrAuditModal
+                pqr={selectedAuditPqr}
+                isOpen={auditModalOpen}
+                onClose={() => {
+                    setAuditModalOpen(false);
+                    setSelectedAuditPqr(null);
+                }}
+                onResolved={() => {
+                    fetchData();
+                }}
+                providersList={providersList}
+                collaboratorsList={collaboratorsList}
+                customTaxonomy={customTaxonomy}
+                onOpenTaxonomyModal={() => setShowTaxonomyModal(true)}
+                onOpenFinancialModal={handleOpenFinancialModal}
+                novelties={novelties}
+                showToast={showToast}
+                onZoomPhoto={(url) => setZoomPhotoUrl(url)}
+            />
+
+            {/* 2. Taxonomy Configuration Modal */}
+            <PqrTaxonomyModal
+                isOpen={showTaxonomyModal}
+                onClose={() => setShowTaxonomyModal(false)}
+                customTaxonomy={customTaxonomy}
+                onSaved={(updated) => setCustomTaxonomy(updated)}
+                showToast={showToast}
+            />
+
+            {/* 3. Novelty Review Modal */}
+            <PqrNoveltyReviewModal
+                novelty={selectedNovelty}
+                isOpen={!!selectedNovelty}
+                onClose={() => setSelectedNovelty(null)}
+                onProcessed={handleProcessNovelty}
+                actionLoading={actionLoading}
+            />
+
+            {/* 4. Financial Adjustment Modal */}
+            {showFinancialModal && (
+                <FinancialAdjustmentModal
+                    isOpen={showFinancialModal}
+                    onClose={() => setShowFinancialModal(false)}
+                    onSuccess={() => {
+                        setShowFinancialModal(false);
+                        fetchData();
+                    }}
+                    mode={financialModalMode}
+                    pqr={selectedAuditPqr}
+                    orderItems={[]}
+                    defaultImputedTargetType={selectedAuditPqr ? (parseRcaFromRecord(selectedAuditPqr).imputedTargetType as any) : undefined}
+                    defaultImputedEntities={selectedAuditPqr ? (parseRcaFromRecord(selectedAuditPqr).imputedEntities as any) : undefined}
+                    providersList={providersList}
+                    collaboratorsList={collaboratorsList}
+                />
+            )}
+
+            {/* 5. Fullscreen Photo Zoom Modal */}
             {zoomPhotoUrl && (
                 <div 
-                    onClick={() => setZoomPhotoUrl(null)} 
-                    style={{ 
-                        position: 'fixed', 
-                        inset: 0, 
-                        zIndex: 999999, 
-                        backgroundColor: 'rgba(0,0,0,0.92)', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        padding: '2rem', 
-                        backdropFilter: 'blur(8px)' 
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 99999,
+                        backgroundColor: 'rgba(0, 0, 0, 0.92)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1.5rem'
                     }}
+                    onClick={() => setZoomPhotoUrl(null)}
                 >
-                    <button 
-                        type="button"
-                        onClick={() => setZoomPhotoUrl(null)} 
-                        style={{ 
-                            position: 'absolute', 
-                            top: '24px', 
-                            right: '24px', 
-                            backgroundColor: 'rgba(255,255,255,0.2)', 
-                            border: 'none', 
-                            color: 'white', 
-                            width: '44px', 
-                            height: '44px', 
-                            borderRadius: '50%', 
-                            cursor: 'pointer', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            transition: 'background-color 0.15s'
+                    <button
+                        onClick={() => setZoomPhotoUrl(null)}
+                        style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            padding: '10px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            cursor: 'pointer'
                         }}
-                        title="Cerrar vista previa"
                     >
                         <X size={24} />
                     </button>
-                    <img 
-                        src={zoomPhotoUrl} 
-                        alt="Evidencia fotográfica ampliada" 
-                        style={{ 
-                            maxWidth: '92vw', 
-                            maxHeight: '92vh', 
-                            objectFit: 'contain', 
+                    <img
+                        src={zoomPhotoUrl}
+                        alt="Evidencia Fullscreen"
+                        style={{
+                            maxWidth: '90vw',
+                            maxHeight: '88vh',
+                            objectFit: 'contain',
                             borderRadius: '12px',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
-                        }} 
-                        onClick={e => e.stopPropagation()} 
+                        }}
+                        onClick={e => e.stopPropagation()}
                     />
                 </div>
             )}
 
-            {/* Modal de Configuración de Taxonomía Técnica RCA */}
-            {showTaxonomyModal && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 99999,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '1.5rem'
-                }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '18px',
-                        width: '100%',
-                        maxWidth: '960px',
-                        maxHeight: '88vh',
+            {/* Toast Notification */}
+            {toastMessage && (
+                <div 
+                    style={{
+                        position: 'fixed',
+                        bottom: '20px',
+                        right: '20px',
+                        zIndex: 999999,
                         display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Modal Header */}
-                        <div style={{
-                            padding: '1.25rem 1.75rem',
-                            borderBottom: '1px solid #E2E8F0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            backgroundColor: '#F8FAFC'
-                        }}>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Sliders size={18} color="#0D7A57" />
-                                    <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>
-                                        Parámetros de Taxonomía RCA (Causas de Calidad)
-                                    </h2>
-                                </div>
-                                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#64748B' }}>
-                                    Personaliza las familias de defectos (L1) y los subtipos específicos (L2) con su área imputable típica.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowTaxonomyModal(false)}
-                                style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    color: '#64748B',
-                                    padding: '6px',
-                                    borderRadius: '8px'
-                                }}
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body: Two Columns (L1 Categories & L2 Subtypes) */}
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '300px 1fr',
-                            flex: 1,
-                            minHeight: 0,
-                            overflow: 'hidden'
-                        }}>
-                            {/* Left Column: L1 Category Tree */}
-                            <div style={{
-                                borderRight: '1px solid #E2E8F0',
-                                backgroundColor: '#F8FAFC',
-                                padding: '1rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '8px',
-                                overflowY: 'auto'
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B' }}>
-                                        Macro-Familias L1 ({editingTaxonomy.length})
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsAddingCategory(!isAddingCategory)}
-                                        style={{
-                                            border: 'none',
-                                            background: '#EAEFEA',
-                                            color: '#0D7A57',
-                                            fontSize: '0.7rem',
-                                            fontWeight: '800',
-                                            padding: '3px 8px',
-                                            borderRadius: '6px',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        {isAddingCategory ? 'Cancelar' : '+ Nueva L1'}
-                                    </button>
-                                </div>
-
-                                {/* Form to Add New Category L1 */}
-                                {isAddingCategory && (
-                                    <div style={{ backgroundColor: 'white', padding: '10px', borderRadius: '10px', border: '1px solid #CBD5E1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <input
-                                            type="text"
-                                            placeholder="Nombre ej: 8. Empaque & Embalaje"
-                                            value={newCatLabel}
-                                            onChange={e => setNewCatLabel(e.target.value)}
-                                            style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.75rem' }}
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="Descripción corta..."
-                                            value={newCatDesc}
-                                            onChange={e => setNewCatDesc(e.target.value)}
-                                            style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.72rem' }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (!newCatLabel.trim()) return;
-                                                const code = newCatLabel.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                                                const newCat: DefectCategoryL1 = {
-                                                    code,
-                                                    label: newCatLabel.trim(),
-                                                    description: newCatDesc.trim() || 'Defecto parametrizado',
-                                                    subtypes: []
-                                                };
-                                                const updated = [...editingTaxonomy, newCat];
-                                                setEditingTaxonomy(updated);
-                                                setSelectedTaxonomyCatIdx(updated.length - 1);
-                                                setNewCatLabel('');
-                                                setNewCatDesc('');
-                                                setIsAddingCategory(false);
-                                            }}
-                                            style={{ padding: '5px', backgroundColor: '#0D7A57', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer' }}
-                                        >
-                                            Guardar Familia L1
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Categories List */}
-                                {editingTaxonomy.map((cat, idx) => {
-                                    const isSelected = selectedTaxonomyCatIdx === idx;
-                                    return (
-                                        <div
-                                            key={cat.code || idx}
-                                            onClick={() => setSelectedTaxonomyCatIdx(idx)}
-                                            style={{
-                                                padding: '10px 12px',
-                                                borderRadius: '10px',
-                                                backgroundColor: isSelected ? 'white' : 'transparent',
-                                                border: `1.5px solid ${isSelected ? '#0D7A57' : 'transparent'}`,
-                                                boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.12s ease'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontWeight: isSelected ? '900' : '700', fontSize: '0.78rem', color: isSelected ? '#0D7A57' : '#1E293B' }}>
-                                                    {cat.label}
-                                                </span>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '1px 6px', borderRadius: '9999px', backgroundColor: isSelected ? '#EAEFEA' : '#E2E8F0', color: isSelected ? '#0D7A57' : '#64748B' }}>
-                                                    {cat.subtypes.length}
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {cat.description}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Right Column: L2 Subtypes of Selected Category */}
-                            <div style={{
-                                padding: '1.25rem 1.5rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '1rem',
-                                overflowY: 'auto'
-                            }}>
-                                {editingTaxonomy[selectedTaxonomyCatIdx] ? (
-                                    <>
-                                        {/* Category Detail Header */}
-                                        <div style={{ paddingBottom: '10px', borderBottom: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase' }}>
-                                                Familia Seleccionada:
-                                            </div>
-                                            <h3 style={{ margin: '2px 0 4px 0', fontSize: '1.1rem', fontWeight: '900', color: '#0F172A' }}>
-                                                {editingTaxonomy[selectedTaxonomyCatIdx].label}
-                                            </h3>
-                                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748B' }}>
-                                                {editingTaxonomy[selectedTaxonomyCatIdx].description}
-                                            </p>
-                                        </div>
-
-                                        {/* Subtypes List */}
-                                        <div>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', marginBottom: '8px' }}>
-                                                Subtipos Específicos L2 ({editingTaxonomy[selectedTaxonomyCatIdx].subtypes.length})
-                                            </div>
-
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                {editingTaxonomy[selectedTaxonomyCatIdx].subtypes.map((sub, sIdx) => {
-                                                    const party = RESPONSIBLE_PARTIES[sub.typicalResponsible] || RESPONSIBLE_PARTIES.transporte;
-                                                    return (
-                                                        <div
-                                                            key={sub.code || sIdx}
-                                                            style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'space-between',
-                                                                padding: '8px 12px',
-                                                                borderRadius: '8px',
-                                                                backgroundColor: '#F8FAFC',
-                                                                border: '1px solid #E2E8F0',
-                                                                gap: '10px'
-                                                            }}
-                                                        >
-                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    <span style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E293B' }}>
-                                                                        {sub.label}
-                                                                    </span>
-                                                                    <span style={{
-                                                                        fontSize: '0.65rem',
-                                                                        fontWeight: '800',
-                                                                        padding: '2px 7px',
-                                                                        borderRadius: '4px',
-                                                                        backgroundColor: party.bgLight,
-                                                                        color: party.color,
-                                                                        border: `1px solid ${party.border}`
-                                                                    }}>
-                                                                        {party.label}
-                                                                    </span>
-                                                                </div>
-                                                                <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
-                                                                    {sub.description}
-                                                                </div>
-                                                            </div>
-
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const updated = [...editingTaxonomy];
-                                                                    const curCat = updated[selectedTaxonomyCatIdx];
-                                                                    updated[selectedTaxonomyCatIdx] = {
-                                                                        ...curCat,
-                                                                        subtypes: curCat.subtypes.filter((_, i) => i !== sIdx)
-                                                                    };
-                                                                    setEditingTaxonomy(updated);
-                                                                }}
-                                                                style={{
-                                                                    border: 'none',
-                                                                    background: '#FEE2E2',
-                                                                    color: '#DC2626',
-                                                                    padding: '5px',
-                                                                    borderRadius: '6px',
-                                                                    cursor: 'pointer',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center'
-                                                                }}
-                                                                title="Eliminar subtipo"
-                                                            >
-                                                                <Trash2 size={13} />
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Add New Subtype Form */}
-                                        <div style={{
-                                            backgroundColor: '#F8FAFC',
-                                            border: '1.5px dashed #CBD5E1',
-                                            borderRadius: '10px',
-                                            padding: '12px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '8px'
-                                        }}>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#0D7A57' }}>
-                                                + Agregar Subtipo a esta Familia
-                                            </div>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '8px' }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre del subtipo (ej: Pérdida de frío en furgón)"
-                                                    value={newSubLabel}
-                                                    onChange={e => setNewSubLabel(e.target.value)}
-                                                    style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.76rem' }}
-                                                />
-                                                <select
-                                                    value={newSubResponsible}
-                                                    onChange={e => setNewSubResponsible(e.target.value as any)}
-                                                    style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.74rem', fontWeight: '600', color: '#334155' }}
-                                                >
-                                                    {Object.values(RESPONSIBLE_PARTIES).map(p => (
-                                                        <option key={p.code} value={p.code}>{p.label}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <input
-                                                type="text"
-                                                placeholder="Descripción técnica del defecto..."
-                                                value={newSubDesc}
-                                                onChange={e => setNewSubDesc(e.target.value)}
-                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.74rem' }}
-                                            />
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (!newSubLabel.trim() || !editingTaxonomy[selectedTaxonomyCatIdx]) return;
-                                                    const code = newSubLabel.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                                                    const newSub: DefectSubtype = {
-                                                        code,
-                                                        label: newSubLabel.trim(),
-                                                        typicalResponsible: newSubResponsible,
-                                                        description: newSubDesc.trim() || 'Defecto específico'
-                                                    };
-                                                    const updated = [...editingTaxonomy];
-                                                    const cur = updated[selectedTaxonomyCatIdx];
-                                                    updated[selectedTaxonomyCatIdx] = {
-                                                        ...cur,
-                                                        subtypes: [...cur.subtypes, newSub]
-                                                    };
-                                                    setEditingTaxonomy(updated);
-                                                    setNewSubLabel('');
-                                                    setNewSubDesc('');
-                                                }}
-                                                style={{
-                                                    alignSelf: 'flex-start',
-                                                    padding: '6px 14px',
-                                                    backgroundColor: '#0D7A57',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '6px',
-                                                    fontSize: '0.74rem',
-                                                    fontWeight: '800',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                + Guardar Subtipo
-                                            </button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div style={{ color: '#94A3B8', textAlign: 'center', padding: '3rem' }}>
-                                        Selecciona una macro-familia de la izquierda para editar sus subtipos.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div style={{
-                            padding: '1rem 1.75rem',
-                            borderTop: '1px solid #E2E8F0',
-                            backgroundColor: '#F8FAFC',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (window.confirm('¿Deseas restablecer toda la taxonomía a los valores predeterminados de fábrica de FruFresco?')) {
-                                        const defaults = resetStoredTaxonomy();
-                                        setCustomTaxonomy(defaults);
-                                        setShowTaxonomyModal(false);
-                                        showToast('Taxonomía restablecida a los valores de fábrica.', 'success');
-                                    }
-                                }}
-                                style={{
-                                    border: '1px solid #E2E8F0',
-                                    backgroundColor: 'white',
-                                    color: '#64748B',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '700',
-                                    padding: '7px 14px',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Restablecer Valores de Fábrica
-                            </button>
-
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowTaxonomyModal(false)}
-                                    style={{
-                                        border: '1px solid #CBD5E1',
-                                        backgroundColor: 'white',
-                                        color: '#334155',
-                                        fontSize: '0.78rem',
-                                        fontWeight: '700',
-                                        padding: '7px 16px',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        saveStoredTaxonomy(editingTaxonomy);
-                                        setCustomTaxonomy(editingTaxonomy);
-                                        setShowTaxonomyModal(false);
-                                        showToast('Parámetros de taxonomía guardados exitosamente.', 'success');
-                                    }}
-                                    style={{
-                                        border: 'none',
-                                        backgroundColor: '#0D7A57',
-                                        color: 'white',
-                                        fontSize: '0.78rem',
-                                        fontWeight: '800',
-                                        padding: '7px 20px',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
-                                    }}
-                                >
-                                    Guardar Parámetros
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Financial Adjustment & Credit Note Modal (Options 3 & 4) */}
-            {selectedPqr && (
-                <FinancialAdjustmentModal
-                    isOpen={showFinancialModal}
-                    onClose={() => setShowFinancialModal(false)}
-                    mode={financialModalMode}
-                    pqr={selectedPqr}
-                    orderItems={orderItems}
-                    defaultRcaCategory={rcaCategoryL1}
-                    defaultRcaSubtype={rcaSubtypeL2}
-                    defaultRcaResponsible={rcaResponsible}
-                    activeTaxonomy={activeTaxonomy}
-                    onSuccess={(msg) => {
-                        showToast(msg, 'success');
-                        fetchData();
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '12px 18px',
+                        borderRadius: '14px',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        backgroundColor: toastMessage.type === 'error' ? '#FEF2F2' : toastMessage.type === 'warning' ? '#FFFBEB' : '#EAEFEA',
+                        color: toastMessage.type === 'error' ? '#991B1B' : toastMessage.type === 'warning' ? '#92400E' : '#0D7A57',
+                        border: `1px solid ${toastMessage.type === 'error' ? '#FECDD3' : toastMessage.type === 'warning' ? '#FDE68A' : '#C4D7C4'}`
                     }}
-                />
+                >
+                    {toastMessage.type === 'error' ? (
+                        <AlertCircle size={18} style={{ color: '#E11D48' }} />
+                    ) : toastMessage.type === 'warning' ? (
+                        <AlertTriangle size={18} style={{ color: '#D97706' }} />
+                    ) : (
+                        <CheckCircle2 size={18} style={{ color: '#0D7A57' }} />
+                    )}
+                    <span>{toastMessage.text}</span>
+                </div>
             )}
         </main>
     );

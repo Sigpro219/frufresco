@@ -67,6 +67,7 @@ interface Profile {
     is_corporate_parent?: boolean;
     billing_nit?: string;
     billing_razon_social?: string;
+    document_requirement?: 'remision_post_entrega' | 'factura_pre_despacho' | string;
     is_verified_dev?: boolean;
     tags?: string[];
     created_at: string;
@@ -1853,6 +1854,10 @@ function ClientDetailsModal({ client, onClose, pricingModels, onUpdateDevVerifie
                                 label="Margen Base" 
                                 value={client.role === 'b2c_client' ? 'Diferencial x Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : 'N/A')} 
                             />
+                            <ModalRow 
+                                label="Documento Despacho" 
+                                value={client.document_requirement === 'factura_pre_despacho' ? 'Factura Electrónica Anticipada' : 'Remisión Estándar (Facturación Neta)'} 
+                            />
                             {(client.role !== 'b2c_client' && selectedModel?.description) && (
                                 <p style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, marginTop: '0.5rem', fontStyle: 'italic' }}>&quot;{selectedModel.description}&quot;</p>
                             )}
@@ -1919,7 +1924,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, availabl
         is_corporate_parent: editData?.is_corporate_parent || false,
         parent_id: editData?.parent_id || '',
         billing_nit: editData?.billing_nit || '',
-        billing_razon_social: editData?.billing_razon_social || ''
+        billing_razon_social: editData?.billing_razon_social || '',
+        document_requirement: editData?.document_requirement || 'remision_post_entrega'
     });
     const [saving, setSaving] = useState(false);
 
@@ -2098,6 +2104,17 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, availabl
                                     <option value="Crédito 8 días">Crédito 8 días</option>
                                     <option value="Crédito 15 días">Crédito 15 días</option>
                                     <option value="Crédito 30 días">Crédito 30 días</option>
+                                </select>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Tipo de Documento en Despacho</label>
+                                <select 
+                                    value={formData.document_requirement} 
+                                    onChange={(e) => setFormData({...formData, document_requirement: e.target.value})}
+                                    style={{ padding: '0.6rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, fontWeight: '600', fontSize: '0.85rem' }}
+                                >
+                                    <option value="remision_post_entrega">Remisión Estándar (Facturación Neta Post-Entrega)</option>
+                                    <option value="factura_pre_despacho">Factura Electrónica Anticipada (Viaja en Camión)</option>
                                 </select>
                             </div>
                         </div>

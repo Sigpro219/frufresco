@@ -45,6 +45,7 @@ import {
     Maximize2,
     Minimize2,
     Pencil,
+    Package,
     PackageX,
     ShieldCheck,
     Tag,
@@ -7282,10 +7283,10 @@ function CreateOrderContent() {
                                                                                                             fontWeight: '800', 
                                                                                                             display: 'inline-flex', 
                                                                                                             alignItems: 'center', 
-                                                                                                            gap: '3px',
+                                                                                                            gap: '4px',
                                                                                                             border: isFocused ? '1px solid #6366F1' : '1px solid #C7D2FE'
                                                                                                         }}>
-                                                                                                            📄 Convenio
+                                                                                                            <FileText size={10} style={{ flexShrink: 0 }} /> Convenio
                                                                                                         </span>
                                                                                                     ) : (
                                                                                                         <span style={{ 
@@ -7297,10 +7298,10 @@ function CreateOrderContent() {
                                                                                                             fontWeight: '700', 
                                                                                                             display: 'inline-flex', 
                                                                                                             alignItems: 'center', 
-                                                                                                            gap: '3px',
+                                                                                                            gap: '4px',
                                                                                                             border: '1px solid #E5E7EB'
                                                                                                         }}>
-                                                                                                            📦 Catálogo Libre
+                                                                                                            <Package size={10} style={{ flexShrink: 0 }} /> Catálogo Libre
                                                                                                         </span>
                                                                                                     )
                                                                                                 )}

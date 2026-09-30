@@ -295,7 +295,42 @@ function OrderLoadingContent() {
         if (dateQueryParam && dateQueryParam !== selectedDate) {
             setSelectedDate(dateQueryParam);
         }
-    }, [dateQueryParam]); 
+    }, [dateQueryParam]);
+
+    const [dateCounts, setDateCounts] = useState<{ yesterday: number; today: number; tomorrow: number }>({ yesterday: 0, today: 0, tomorrow: 0 });
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchDateCounts = async () => {
+            try {
+                const yesterdayStr = getYesterdayDateStr();
+                const todayStr = getTodayDateStr();
+                const tomorrowStr = getTomorrowDateStr();
+                const { data } = await supabase
+                    .from('orders')
+                    .select('delivery_date')
+                    .in('delivery_date', [yesterdayStr, todayStr, tomorrowStr])
+                    .neq('status', 'cancelled');
+                if (data && isMounted) {
+                    let y = 0, t = 0, tm = 0;
+                    data.forEach((o: any) => {
+                        if (o.delivery_date === yesterdayStr) y++;
+                        else if (o.delivery_date === todayStr) t++;
+                        else if (o.delivery_date === tomorrowStr) tm++;
+                    });
+                    setDateCounts({ yesterday: y, today: t, tomorrow: tm });
+                    // Si no vino parámetro explícito en URL y mañana no tiene pedidos pero hoy sí tiene pedidos activos, auto-seleccionar hoy
+                    if (!dateQueryParam && tm === 0 && t > 0) {
+                        setSelectedDate(todayStr);
+                    }
+                }
+            } catch (e) {
+                // Ignore silently
+            }
+        };
+        fetchDateCounts();
+        return () => { isMounted = false; };
+    }, [dateQueryParam, refreshTrigger]); 
 
     const [searchTerm, setSearchTerm] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
@@ -2933,6 +2968,18 @@ function OrderLoadingContent() {
                             >
                                 <Star size={13} fill="currentColor" />
                                 <span>Mañana</span>
+                                {dateCounts.tomorrow > 0 && (
+                                    <span style={{
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '800',
+                                        backgroundColor: selectedDate === getTomorrowDateStr() ? 'rgba(6, 95, 70, 0.2)' : '#E2E8F0',
+                                        color: selectedDate === getTomorrowDateStr() ? '#065F46' : '#475569'
+                                    }}>
+                                        {dateCounts.tomorrow}
+                                    </span>
+                                )}
                             </button>
 
                             {/* Button: Hoy (En Ruta) */}
@@ -2949,11 +2996,27 @@ function OrderLoadingContent() {
                                     color: selectedDate === getTodayDateStr() ? '#0369A1' : '#64748B',
                                     cursor: 'pointer',
                                     whiteSpace: 'nowrap',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    boxShadow: selectedDate === getTodayDateStr() ? '0 2px 4px rgba(2, 132, 199, 0.15)' : 'none',
                                     transition: 'all 0.15s'
                                 }}
                                 title="Ver pedidos programados para entregar HOY (Monitoreo en tiempo real)"
                             >
-                                Hoy
+                                <span>Hoy</span>
+                                {dateCounts.today > 0 && (
+                                    <span style={{
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '800',
+                                        backgroundColor: selectedDate === getTodayDateStr() ? '#0284C7' : '#DCFCE7',
+                                        color: selectedDate === getTodayDateStr() ? '#FFFFFF' : '#166534'
+                                    }}>
+                                        {dateCounts.today}
+                                    </span>
+                                )}
                             </button>
 
                             {/* Button: Ayer */}
@@ -2970,11 +3033,26 @@ function OrderLoadingContent() {
                                     color: selectedDate === getYesterdayDateStr() ? '#92400E' : '#64748B',
                                     cursor: 'pointer',
                                     whiteSpace: 'nowrap',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
                                     transition: 'all 0.15s'
                                 }}
                                 title="Ver pedidos entregados AYER"
                             >
-                                Ayer
+                                <span>Ayer</span>
+                                {dateCounts.yesterday > 0 && (
+                                    <span style={{
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '800',
+                                        backgroundColor: selectedDate === getYesterdayDateStr() ? '#D97706' : '#E2E8F0',
+                                        color: selectedDate === getYesterdayDateStr() ? '#FFFFFF' : '#475569'
+                                    }}>
+                                        {dateCounts.yesterday}
+                                    </span>
+                                )}
                             </button>
 
                             {/* Button: Historial (15 Días) */}
@@ -6896,8 +6974,8 @@ function OrderLoadingContent() {
                                                     <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
                                                             <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Origen (Actual)</div>
-                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isOrigB2B ? '#EEF2FF' : '#FCE7F3', color: isOrigB2B ? '#4F46E5' : '#BE185D', border: `1px solid ${isOrigB2B ? '#E0E7FF' : '#FBCFE8'}` }}>
-                                                                {isOrigB2B ? '🏢 Institucional' : '🏠 Hogar'}
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isOrigB2B ? '#EEF2FF' : '#FCE7F3', color: isOrigB2B ? '#4F46E5' : '#BE185D', border: `1px solid ${isOrigB2B ? '#E0E7FF' : '#FBCFE8'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                {isOrigB2B ? <><Building2 size={10} style={{ flexShrink: 0 }} /> Institucional</> : <><Home size={10} style={{ flexShrink: 0 }} /> Hogar</>}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.88rem', marginTop: '4px' }}>
@@ -6927,8 +7005,8 @@ function OrderLoadingContent() {
                                                     <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #86EFAC' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
                                                             <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Destino (Nuevo)</div>
-                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isNewB2C ? '#FCE7F3' : '#EEF2FF', color: isNewB2C ? '#BE185D' : '#4F46E5', border: `1px solid ${isNewB2C ? '#FBCFE8' : '#E0E7FF'}` }}>
-                                                                {isNewB2C ? '🏠 Hogar' : '🏢 Institucional'}
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', backgroundColor: isNewB2C ? '#FCE7F3' : '#EEF2FF', color: isNewB2C ? '#BE185D' : '#4F46E5', border: `1px solid ${isNewB2C ? '#FBCFE8' : '#E0E7FF'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                {isNewB2C ? <><Home size={10} style={{ flexShrink: 0 }} /> Hogar</> : <><Building2 size={10} style={{ flexShrink: 0 }} /> Institucional</>}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.88rem', marginTop: '4px' }}>

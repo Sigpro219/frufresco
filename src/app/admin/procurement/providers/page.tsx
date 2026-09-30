@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
     Users, 
+    Briefcase,
     Plus, 
     Search, 
     ChevronRight, 
@@ -1908,8 +1909,8 @@ export default function ProvidersPage() {
                                                 {selectedProvider.contact_name || '—'}
                                             </div>
                                             {selectedProvider.contact_position && (
-                                                <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.15rem' }}>
-                                                    💼 {selectedProvider.contact_position}
+                                                <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Briefcase size={10} style={{ flexShrink: 0 }} /> {selectedProvider.contact_position}
                                                 </div>
                                             )}
                                         </div>
@@ -1942,7 +1943,7 @@ export default function ProvidersPage() {
                                         {/* Website */}
                                         <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '0.65rem 0.85rem', border: '1px solid #E2E8F0' }}>
                                             <div style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                🌐 Página Web
+                                                <Globe size={10} /> Página Web
                                             </div>
                                             {selectedProvider.website ? (
                                                 <a href={selectedProvider.website.startsWith('http') ? selectedProvider.website : `https://${selectedProvider.website}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.primary, textDecoration: 'underline', wordBreak: 'break-all' }}>
@@ -1972,8 +1973,8 @@ export default function ProvidersPage() {
                                                 {selectedProvider.address || 'No registrada'}
                                             </div>
                                             {selectedProvider.city && (
-                                                <div style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: '600', marginTop: '0.15rem' }}>
-                                                    📍 {selectedProvider.city}
+                                                <div style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: '600', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                    <MapPin size={10} style={{ flexShrink: 0 }} /> {selectedProvider.city}
                                                 </div>
                                             )}
                                         </div>

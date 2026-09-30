@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, ChevronDown } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export type PrintDocumentKey = 
     | 'alistamiento' 
@@ -124,6 +125,35 @@ export default function PrintDocumentSwitcher({
     const isYesterday = selectedDate === yesterdayStr;
     const isToday = selectedDate === todayStr;
     const isTomorrow = selectedDate === tomorrowStr;
+
+    const [counts, setCounts] = useState<{ yesterday: number; today: number; tomorrow: number }>({ yesterday: 0, today: 0, tomorrow: 0 });
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchCounts = async () => {
+            try {
+                const OPERATIONAL_STATUSES = ['pending_approval', 'pending', 'recibido', 'para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed'];
+                const { data } = await supabase
+                    .from('orders')
+                    .select('delivery_date')
+                    .in('delivery_date', [yesterdayStr, todayStr, tomorrowStr])
+                    .in('status', OPERATIONAL_STATUSES);
+                if (data && isMounted) {
+                    let y = 0, t = 0, tm = 0;
+                    data.forEach((o: any) => {
+                        if (o.delivery_date === yesterdayStr) y++;
+                        else if (o.delivery_date === todayStr) t++;
+                        else if (o.delivery_date === tomorrowStr) tm++;
+                    });
+                    setCounts({ yesterday: y, today: t, tomorrow: tm });
+                }
+            } catch (e) {
+                // Silently ignore count errors
+            }
+        };
+        fetchCounts();
+        return () => { isMounted = false; };
+    }, [yesterdayStr, todayStr, tomorrowStr]);
 
     // Cambiar de documento manteniendo la fecha y los orderIds
     const handleSelectDocument = (newDocKey: string) => {
@@ -266,7 +296,7 @@ export default function PrintDocumentSwitcher({
                         type="button"
                         onClick={() => handleApplyDate(yesterdayStr)}
                         style={{
-                            padding: '2px 6px',
+                            padding: '2px 7px',
                             fontSize: '0.7rem',
                             fontWeight: isYesterday ? '800' : '600',
                             borderRadius: '4px',
@@ -274,17 +304,32 @@ export default function PrintDocumentSwitcher({
                             backgroundColor: isYesterday ? activeShortcutBg : inactiveShortcutBg,
                             color: isYesterday ? '#FFFFFF' : labelColor,
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease'
+                            transition: 'all 0.15s ease',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
                         }}
                         title={`Auditar tanda de ayer (${yesterdayStr})`}
                     >
-                        Ayer
+                        <span>Ayer</span>
+                        {counts.yesterday > 0 && (
+                            <span style={{
+                                padding: '1px 4px',
+                                borderRadius: '3px',
+                                fontSize: '0.62rem',
+                                fontWeight: '800',
+                                backgroundColor: isYesterday ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
+                                color: isYesterday ? '#FFFFFF' : '#475569'
+                            }}>
+                                {counts.yesterday}
+                            </span>
+                        )}
                     </button>
                     <button
                         type="button"
                         onClick={() => handleApplyDate(todayStr)}
                         style={{
-                            padding: '2px 6px',
+                            padding: '2px 7px',
                             fontSize: '0.7rem',
                             fontWeight: isToday ? '800' : '600',
                             borderRadius: '4px',
@@ -292,17 +337,32 @@ export default function PrintDocumentSwitcher({
                             backgroundColor: isToday ? activeShortcutBg : inactiveShortcutBg,
                             color: isToday ? '#FFFFFF' : labelColor,
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease'
+                            transition: 'all 0.15s ease',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
                         }}
                         title={`Tanda de hoy (${todayStr})`}
                     >
-                        Hoy
+                        <span>Hoy</span>
+                        {counts.today > 0 && (
+                            <span style={{
+                                padding: '1px 4px',
+                                borderRadius: '3px',
+                                fontSize: '0.62rem',
+                                fontWeight: '800',
+                                backgroundColor: isToday ? 'rgba(255,255,255,0.25)' : '#DCFCE7',
+                                color: isToday ? '#FFFFFF' : '#166534'
+                            }}>
+                                {counts.today}
+                            </span>
+                        )}
                     </button>
                     <button
                         type="button"
                         onClick={() => handleApplyDate(tomorrowStr)}
                         style={{
-                            padding: '2px 6px',
+                            padding: '2px 7px',
                             fontSize: '0.7rem',
                             fontWeight: isTomorrow ? '800' : '600',
                             borderRadius: '4px',
@@ -310,11 +370,26 @@ export default function PrintDocumentSwitcher({
                             backgroundColor: isTomorrow ? activeShortcutBg : inactiveShortcutBg,
                             color: isTomorrow ? '#FFFFFF' : labelColor,
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease'
+                            transition: 'all 0.15s ease',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
                         }}
                         title={`Tanda de mañana (${tomorrowStr})`}
                     >
-                        Mañana
+                        <span>Mañana</span>
+                        {counts.tomorrow > 0 && (
+                            <span style={{
+                                padding: '1px 4px',
+                                borderRadius: '3px',
+                                fontSize: '0.62rem',
+                                fontWeight: '800',
+                                backgroundColor: isTomorrow ? 'rgba(255,255,255,0.25)' : '#E0F2FE',
+                                color: isTomorrow ? '#FFFFFF' : '#0369A1'
+                            }}>
+                                {counts.tomorrow}
+                            </span>
+                        )}
                     </button>
                 </div>
             )}
