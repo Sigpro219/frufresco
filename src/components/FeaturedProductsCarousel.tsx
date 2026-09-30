@@ -10,20 +10,38 @@ interface Props {
 }
 
 export default function FeaturedProductsCarousel({ products }: Props) {
+    const containerRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isHovered, setIsHovered] = useState(false);
+    const [isVisible, setIsVisible] = useState(true);
 
     if (!products || products.length === 0) return null;
 
-    // Duplicar para ilusión de infinito (suficiente para que el scroll manual no se quede sin items)
-    const displayProducts = [...products, ...products, ...products, ...products];
+    // Duplicar 2x (suficiente para bucle continuo sin sobrecargar el árbol DOM de React)
+    const displayProducts = [...products, ...products];
 
     const exactScrollRef = useRef<number>(0);
+
+    // Pausar animación cuando el carrusel esté fuera de la pantalla (0% CPU/GPU)
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setIsVisible(entry.isIntersecting);
+            },
+            { threshold: 0.05 }
+        );
+
+        if (containerRef.current) {
+            observer.observe(containerRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         let animationFrameId: number;
         let lastTime = performance.now();
-        const speed = 0.048; // Pixeles por milisegundo (ajustado -20%)
+        const speed = 0.048; // Pixeles por milisegundo
 
         // Sincronizar en caso de scroll manual previo
         if (scrollRef.current && exactScrollRef.current === 0) {
@@ -34,7 +52,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
             const delta = time - lastTime;
             lastTime = time;
 
-            if (scrollRef.current && !isHovered) {
+            if (scrollRef.current && !isHovered && isVisible) {
                 // Si alguien hizo scroll manual (touch/trackpad), actualizamos la referencia exacta
                 if (Math.abs(scrollRef.current.scrollLeft - Math.round(exactScrollRef.current)) > 2) {
                     exactScrollRef.current = scrollRef.current.scrollLeft;
@@ -43,19 +61,23 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                 exactScrollRef.current += speed * delta;
                 scrollRef.current.scrollLeft = exactScrollRef.current;
                 
-                // Lógica de loop infinito
+                // Lógica de loop infinito con 2x duplicación
                 const singleSetWidth = products.length * 304; 
-                if (scrollRef.current.scrollLeft >= singleSetWidth * 2) {
+                if (scrollRef.current.scrollLeft >= singleSetWidth) {
                     exactScrollRef.current -= singleSetWidth;
                     scrollRef.current.scrollLeft = exactScrollRef.current;
                 }
             }
-            animationFrameId = requestAnimationFrame(scroll);
+            if (isVisible) {
+                animationFrameId = requestAnimationFrame(scroll);
+            }
         };
 
-        animationFrameId = requestAnimationFrame(scroll);
+        if (isVisible) {
+            animationFrameId = requestAnimationFrame(scroll);
+        }
         return () => cancelAnimationFrame(animationFrameId);
-    }, [isHovered, products.length]);
+    }, [isHovered, isVisible, products.length]);
 
     const scrollByAmount = (amount: number) => {
         if (scrollRef.current) {
@@ -71,6 +93,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
 
     return (
         <div 
+            ref={containerRef}
             style={{ position: 'relative', padding: '1rem 0' }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}

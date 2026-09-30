@@ -218,87 +218,103 @@ export default function WeeklyMarketBulletinModal({
         // 1. Fetch active client profiles
         const { data: profiles, error: pErr } = await supabase
           .from('profiles')
-          .select('id, full_name, email, additional_billing_emails, is_corporate_parent, parent_id, client_type')
-          .order('full_name');
+          .select('id, company_name, contact_name, email, additional_billing_emails, is_corporate_parent, parent_id, role')
+          .order('company_name');
 
-        if (pErr) throw pErr;
+        if (pErr) {
+          console.warn('[WeeklyMarketBulletin] Error fetching profiles:', pErr);
+        }
 
-        // 2. Fetch recent orders & order items for the last 60 days
+        // 2. Fetch products dictionary for name matching
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('id, name, sku');
+
+        const productMap = new Map<string, string>();
+        (productsData || []).forEach(p => productMap.set(p.id, p.name));
+
+        // 3. Fetch recent orders for the last 60 days
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-        const { data: recentOrders, error: oErr } = await supabase
+        const { data: recentOrders } = await supabase
           .from('orders')
-          .select(`
-            id,
-            customer_id,
-            created_at,
-            order_items (
-              product_id,
-              product_name
-            )
-          `)
+          .select('id, customer_id, created_at')
           .gte('created_at', sixtyDaysAgo.toISOString())
           .neq('status', 'cancelled');
 
-        if (oErr) console.warn('[WeeklyMarketBulletin] Could not query recent order_items:', oErr);
+        const orderIds = (recentOrders || []).map(o => o.id);
+        const orderToCustomerMap = new Map<string, string>();
+        (recentOrders || []).forEach(o => {
+          if (o.customer_id) orderToCustomerMap.set(o.id, o.customer_id);
+        });
 
-        // 3. Fetch active agreements & quote items
-        const { data: activeAgreements, error: aErr } = await supabase
+        // 4. Fetch order items for recent orders
+        const consumptionMap = new Map<string, Set<string>>();
+        if (orderIds.length > 0) {
+          const { data: orderItems } = await supabase
+            .from('order_items')
+            .select('order_id, product_id, nickname')
+            .in('order_id', orderIds.slice(0, 200));
+
+          (orderItems || []).forEach(item => {
+            const customerId = orderToCustomerMap.get(item.order_id);
+            if (!customerId) return;
+            if (!consumptionMap.has(customerId)) consumptionMap.set(customerId, new Set());
+
+            const productName = (item.product_id && productMap.get(item.product_id)) || item.nickname || '';
+            if (productName) {
+              consumptionMap.get(customerId)?.add(productName);
+            }
+          });
+        }
+
+        // 5. Fetch active agreements
+        const { data: activeAgreements } = await supabase
           .from('quotes')
-          .select(`
-            id,
-            client_id,
-            status,
-            quote_items (
-              product_name
-            )
-          `)
+          .select('id, client_id, status')
           .eq('status', 'agreement');
 
-        if (aErr) console.warn('[WeeklyMarketBulletin] Could not query quote_items:', aErr);
+        const agreementClientIds = new Set<string>();
+        const agreementIds = (activeAgreements || []).map(a => {
+          if (a.client_id) agreementClientIds.add(a.client_id);
+          return a.id;
+        });
 
-        // Selected product keywords from Step 1
+        if (agreementIds.length > 0) {
+          const { data: quoteItems } = await supabase
+            .from('quote_items')
+            .select('quote_id, product_id, product_name')
+            .in('quote_id', agreementIds.slice(0, 100));
+
+          const quoteToClientMap = new Map<string, string>();
+          (activeAgreements || []).forEach(a => {
+            if (a.client_id) quoteToClientMap.set(a.id, a.client_id);
+          });
+
+          (quoteItems || []).forEach((qi: any) => {
+            const clientId = quoteToClientMap.get(qi.quote_id);
+            if (!clientId) return;
+            if (!consumptionMap.has(clientId)) consumptionMap.set(clientId, new Set());
+            const pName = qi.product_name || (qi.product_id && productMap.get(qi.product_id)) || '';
+            if (pName) {
+              consumptionMap.get(clientId)?.add(pName);
+            }
+          });
+        }
+
+        // 6. Selected product keywords from Step 1
         const activeKeywords = [
           ...harvestItems.filter(h => h.checked).map(h => h.name.toLowerCase().split(' ')[0]),
           ...scarcityItems.filter(s => s.checked).map(s => s.name.toLowerCase().split(' ')[0])
         ].filter(Boolean);
 
-        // Build consumption map per client
-        const consumptionMap = new Map<string, Set<string>>();
-        const agreementClientIds = new Set<string>();
-
-        (recentOrders || []).forEach((ord: any) => {
-          const cId = ord.customer_id;
-          if (!cId) return;
-          if (!consumptionMap.has(cId)) consumptionMap.set(cId, new Set());
-          
-          (ord.order_items || []).forEach((item: any) => {
-            if (item.product_name) {
-              consumptionMap.get(cId)?.add(item.product_name);
-            }
-          });
-        });
-
-        (activeAgreements || []).forEach((agr: any) => {
-          const cId = agr.client_id;
-          if (cId) {
-            agreementClientIds.add(cId);
-            if (!consumptionMap.has(cId)) consumptionMap.set(cId, new Set());
-            (agr.quote_items || []).forEach((item: any) => {
-              if (item.product_name) {
-                consumptionMap.get(cId)?.add(item.product_name);
-              }
-            });
-          }
-        });
-
-        // Match profiles
+        // 7. Match profiles
         const eligible: ClientSegmentationItem[] = [];
         let excluded = 0;
 
         (profiles || []).forEach((prof: any) => {
-          const clientName = prof.full_name || 'Cliente';
+          const clientName = prof.company_name || prof.contact_name || prof.email || 'Cliente Institucional';
           const consumedSet = consumptionMap.get(prof.id) || new Set();
           const consumedArray = Array.from(consumedSet);
 
@@ -313,9 +329,10 @@ export default function WeeklyMarketBulletinModal({
 
           // Also check agreement status
           const hasAgr = agreementClientIds.has(prof.id);
+          const isB2B = prof.role === 'b2b_client' || prof.is_corporate_parent || hasAgr;
 
-          // If client has matching consumption OR active agreement, mark eligible
-          if (matchedProducts.length > 0 || hasAgr || prof.is_corporate_parent) {
+          // If client has matching consumption OR active agreement OR is corporate parent, mark eligible
+          if ((matchedProducts.length > 0 || hasAgr || prof.is_corporate_parent) && isB2B) {
             eligible.push({
               id: prof.id,
               name: clientName,
@@ -327,7 +344,7 @@ export default function WeeklyMarketBulletinModal({
               has_active_agreement: hasAgr,
               checked: true // Defaults to checked for easy Human-in-the-Loop review
             });
-          } else {
+          } else if (isB2B) {
             excluded++;
           }
         });

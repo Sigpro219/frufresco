@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     // 1. Fetch Client Profiles
     const { data: clients, error: clientsErr } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, email, additional_billing_emails, is_corporate_parent, parent_id')
+      .select('id, company_name, contact_name, email, additional_billing_emails, is_corporate_parent, parent_id')
       .in('id', selectedClientIds);
 
     if (clientsErr) {
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     const nowIso = new Date().toISOString();
 
     for (const client of clients) {
-      const clientName = client.full_name || 'Cliente Institucional';
+      const clientName = client.company_name || client.contact_name || 'Cliente Institucional';
       const targetEmails = new Set<string>();
 
       if (client.email && client.email.includes('@')) {

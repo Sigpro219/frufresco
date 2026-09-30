@@ -217,10 +217,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       <section className="hero-split">
         {/* CSS Styles injection */}
         <style dangerouslySetInnerHTML={{__html: `
-          @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
-
           .editorial-serif {
-            font-family: 'Instrument Serif', Georgia, 'Playfair Display', serif;
+            font-family: var(--font-instrument-serif), Georgia, 'Playfair Display', serif;
             font-style: italic;
             font-weight: 400;
             text-transform: none;

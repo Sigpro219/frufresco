@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.50 (Boletín Semanal Agro-Comercial de Cosechas & Escasez con Sustitutos Culinarios B2B, Filtrado por Consumo Real Histórico ≤60d / Acuerdos Activos, Módulo de Tareas Tácticas Semanales HITL en Dashboard Comercial BI, Protocolo Multi-Fase de Despacho Asistido, EVT-10, Escenario BDD 87)
+> **Versión:** 1.9.51 (Protocolo de Inmunidad Anti-SafeLinks en Recuperación Supabase Auth, Plantilla Dual OTP 6-Dígitos + TokenHash, Arquitectura de Rendimiento Web Ultra-Rápido con Zero-Blocking Fonts, DOM Virtualization en Carruseles, Blindaje de Latencia SSR Stale-While-Revalidate, Escenarios BDD 88 y 89)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -1435,15 +1435,20 @@ Para subsanar registros históricos de abarrotes configurados erróneamente en `
    - Bajo ninguna circunstancia el sistema debe conmutar a inglés por variables de entorno, configuración regional del navegador o fallbacks vacíos.
    - El idioma Inglés (`en`) se activa **única y exclusivamente** si el usuario presiona de manera explícita el botón `[EN]` en el conmutador de la barra de navegación.
 
-2. **Protocolo Canónico de Recuperación de Contraseñas (Motor OTP de 6 Dígitos & Enlace Seguro Dual):**
+2. **Protocolo Canónico de Recuperación de Contraseñas (Motor OTP de 6 Dígitos & Blindaje Anti-SafeLinks):**
    - Todo usuario (colaborador interno o cliente institucional B2B/B2C) tiene derecho a restablecer su credencial de acceso de forma 100% autónoma y en autoservicio.
-   - **Flujo Principal (Código OTP Numérico de 6 Dígitos):**
+   - **Vulnerabilidad Prevenida (Microsoft SafeLinks & Crawlers de Antivirus):**
+     - Los servicios de correo corporativo (Outlook 365, Hotmail, Defender, Proofpoint) ejecutan escaneos automáticos HTTP `GET` en segundo plano sobre los enlaces que llegan a la bandeja.
+     - La plantilla por defecto de Supabase (`auth/v1/verify?token=...`) consume y quema los tokens de un solo uso en dicho escaneo previo, dejando al usuario humano con el error *«Token expirado o inválido»*.
+   - **Flujo Principal Blindado (Código OTP Numérico de 6 Dígitos - Inmune a Bots):**
      - La interfaz de `/login` solicita el correo y despacha un código OTP efímero de 6 dígitos mediante `supabase.auth.resetPasswordForEmail()`.
-     - El usuario digita el código en una caja de entrada monoespaciada optimizada para móviles (`inputMode="numeric"`, `maxLength={6}`).
+     - El usuario recibe el código en el correo (`{{ .Token }}`) y lo digita en una caja de entrada monoespaciada optimizada para móviles (`inputMode="numeric"`, `maxLength={6}`).
      - La validación y cambio de clave se ejecutan atómicamente mediante `supabase.auth.verifyOtp({ email, token, type: 'recovery' })` (con fallback transparente a `type: 'email'`) seguido de `supabase.auth.updateUser({ password })`.
      - Al completarse con éxito, el sistema limpia la bandera `needs_password_change = false` en `profiles` y confirma con feedback visual inmediato.
-   - **Flujo Secundario (Enlace Mágico PKCE / Token Hash):**
-     - Si el usuario hace clic directo en el enlace del correo, `/auth/callback` procesa el código PKCE o hash token en el servidor (`@supabase/ssr`), establece la sesión segura y lo deposita en `/login?mode=recovery` listo para digitar su nueva clave.
+   - **Flujo Secundario Blindado (Enlace Directo sin Intermediación `auth/v1/verify`):**
+     - La plantilla de correo en Supabase Dashboard (`Authentication -> Emails -> Reset password`) se configura con el enlace directo al frontend:
+       `<a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery">Restablecer Contraseña</a>`
+     - Al hacer clic, `/auth/callback` procesa el `token_hash` en el servidor (`@supabase/ssr`), establece la sesión segura en cookies y redirige a `/login?mode=recovery` listo para ingresar la nueva clave, sin riesgo de consumo prematuro por crawlers.
 
 3. **Aprovisionamiento Just-In-Time Garantizado (Zero-Orphan Auth Protocol):**
    - **Problema Estructural Prevenido:** Ningún colaborador o cliente institucional registrado en la base de datos de negocio (`profiles` / `clients`) puede quedar huérfano ni recibir errores de *«Usuario no encontrado»* al intentar recuperar su contraseña.
@@ -3932,6 +3937,19 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
   5. En el **Paso 3 (Previsualización & Despacho)**, el operador revisa el correo HTML responsivo con membrete legal de Investments Cortés S.A.S., tarjetas visuales de cosecha/escasez, cero códigos SKU y sin dirección física de oficina.
   6. Al marcar `[x] He validado el boletín agronómico y autorizo el despacho a las N cuentas seleccionadas` y presionar `[Aprobar y Despachar Boletín]`, se encolan los correos en la tabla `mail` con `status = 'pending'`, registrando la autoría del Jefe Comercial y marcando la tarea semanal como completada con éxito.
 
+#### Escenario 88: Restablecimiento de Contraseña Inmune a SafeLinks y Crawlers de Antivirus
+- **Given** un colaborador o cliente institucional con correo en Microsoft Outlook / Office 365 (`@hotmail.com`, `@outlook.com` o dominio corporativo con Defender SafeLinks).
+- **When** el usuario solicita el restablecimiento de clave desde `/login` y Microsoft Defender SafeLinks realiza una inspección previa HTTP `GET` en segundo plano.
+- **Then**:
+  1. La plantilla de correo despacha tanto el código OTP numérico de 6 dígitos (`{{ .Token }}`) como el enlace directo `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery`.
+  2. El robot de Microsoft SafeLinks no puede quemar el código numérico OTP porque no es un hipervínculo que se ejecute con GET.
+  3. El enlace directo enruta a `/auth/callback` en el servidor de FruFresco sin pasar por `auth/v1/verify`, evitando el consumo anticipado del token de un solo uso.
+  4. El usuario introduce el código de 6 dígitos y su nueva contraseña en la pantalla de login, logrando el cambio de contraseña exitoso en menos de 5 segundos.
 
-
-
+#### Escenario 89: Carga de Catálogo y Landing Page con Rendimiento Ultra-Rápido y Zero-Blocking Fonts
+- **Given** un usuario que ingresa por primera vez a la landing page institucional (`https://frufresco-liard.vercel.app/`).
+- **When** el navegador procesa el HTML inicial y los recursos multimedia.
+- **Then**:
+  1. Todas las tipografías corporativas (`Inter`, `Outfit`, `Instrument_Serif`) se sirven directamente desde el bundle optimizado de Next.js (`next/font/google`) con `display: 'swap'`, eliminando bloqueos de red por `@import` externos.
+  2. El carrusel de productos destacados limita la duplicación de nodos DOM a 2x y suspende su ciclo de animación `requestAnimationFrame` mediante `IntersectionObserver` cuando el contenedor está fuera del viewport, reduciendo el consumo de GPU/CPU al 0%.
+  3. La consulta de productos visibles y configuraciones opera con `unstable_cache` y revalidación de fondo (Stale-While-Revalidate), garantizando un tiempo de respuesta de primer byte (TTFB) inferior a 150 ms incluso ante degradación de latencia en la base de datos PostgreSQL.

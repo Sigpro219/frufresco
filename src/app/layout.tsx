@@ -1,15 +1,25 @@
-import { Inter, Outfit } from 'next/font/google';
+import { Inter, Outfit, Instrument_Serif } from 'next/font/google';
 import "./globals.css";
 import ClientLayout from '@/components/ClientLayout';
 
 const inter = Inter({ 
   subsets: ['latin'],
   variable: '--font-inter',
+  display: 'swap',
 });
 
-const outfit = Outfit({
+const outfit = Outfit({ 
   subsets: ['latin'],
   variable: '--font-outfit',
+  display: 'swap',
+});
+
+const instrumentSerif = Instrument_Serif({
+  weight: '400',
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  variable: '--font-instrument-serif',
+  display: 'swap',
 });
 
 import { getSeoSettings } from '@/lib/data';
@@ -90,7 +100,7 @@ export default function RootLayout({
         `}} />
 
       </head>
-      <body className={`${inter.variable} ${outfit.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }} suppressHydrationWarning>
+      <body className={`${inter.variable} ${outfit.variable} ${instrumentSerif.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }} suppressHydrationWarning>
         <ClientLayout>
           {children}
         </ClientLayout>
