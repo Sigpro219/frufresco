@@ -168,20 +168,22 @@ export default function PqrTaxonomyModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '1rem'
+            padding: '1.25rem',
+            boxSizing: 'border-box'
         }}>
             <div style={{
                 position: 'relative',
                 width: '100%',
-                maxWidth: '880px',
+                maxWidth: '960px',
                 maxHeight: '90vh',
                 display: 'flex',
                 flexDirection: 'column',
                 backgroundColor: 'white',
                 borderRadius: '16px',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
                 border: '1px solid #E2E8F0',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                boxSizing: 'border-box'
             }}>
                 {/* Header */}
                 <div style={{
@@ -191,7 +193,8 @@ export default function PqrTaxonomyModal({
                     padding: '1rem 1.5rem',
                     backgroundColor: '#0F172A',
                     color: 'white',
-                    borderBottom: '1px solid #1E293B'
+                    borderBottom: '1px solid #1E293B',
+                    flexShrink: 0
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div style={{
@@ -229,13 +232,15 @@ export default function PqrTaxonomyModal({
                     overflowY: 'auto',
                     padding: '1.25rem 1.5rem',
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                    gap: '20px'
+                    gridTemplateColumns: 'minmax(260px, 1fr) minmax(360px, 1.4fr)',
+                    gap: '24px',
+                    boxSizing: 'border-box',
+                    minHeight: 0
                 }}>
                     {/* Left Column: Categories L1 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.04em' }}>
                                 Macrocausas L1 ({editingTaxonomy.length})
                             </span>
                             <button
@@ -249,34 +254,34 @@ export default function PqrTaxonomyModal({
                         </div>
 
                         {isAddingCategory && (
-                            <div style={{ padding: '10px 12px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ padding: '12px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box', width: '100%' }}>
                                 <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#065F46' }}>Nueva Macrocausa</span>
                                 <input
                                     type="text"
                                     placeholder="Nombre visible (ej: 8. Empaque)"
                                     value={newCatLabel}
                                     onChange={e => setNewCatLabel(e.target.value)}
-                                    style={{ padding: '6px 8px', fontSize: '0.75rem', border: '1px solid #A7F3D0', borderRadius: '6px', backgroundColor: 'white' }}
+                                    style={{ width: '100%', boxSizing: 'border-box', minWidth: 0, padding: '7px 10px', fontSize: '0.75rem', border: '1px solid #A7F3D0', borderRadius: '6px', backgroundColor: 'white', outline: 'none' }}
                                 />
                                 <input
                                     type="text"
                                     placeholder="Código clave (opcional)"
                                     value={newCatCode}
                                     onChange={e => setNewCatCode(e.target.value)}
-                                    style={{ padding: '6px 8px', fontSize: '0.75rem', border: '1px solid #A7F3D0', borderRadius: '6px', backgroundColor: 'white' }}
+                                    style={{ width: '100%', boxSizing: 'border-box', minWidth: 0, padding: '7px 10px', fontSize: '0.75rem', border: '1px solid #A7F3D0', borderRadius: '6px', backgroundColor: 'white', outline: 'none' }}
                                 />
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', paddingTop: '4px' }}>
                                     <button
                                         type="button"
                                         onClick={() => setIsAddingCategory(false)}
-                                        style={{ padding: '4px 8px', fontSize: '0.7rem', color: '#475569', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                                        style={{ padding: '5px 10px', fontSize: '0.7rem', color: '#475569', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: '600' }}
                                     >
                                         Cancelar
                                     </button>
                                     <button
                                         type="button"
                                         onClick={handleAddCategory}
-                                        style={{ padding: '4px 10px', backgroundColor: '#0D7A57', color: 'white', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
+                                        style={{ padding: '5px 12px', backgroundColor: '#0D7A57', color: 'white', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
                                     >
                                         Crear
                                     </button>
@@ -284,7 +289,7 @@ export default function PqrTaxonomyModal({
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '350px', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '380px', overflowY: 'auto', boxSizing: 'border-box' }}>
                             {editingTaxonomy.map((cat, idx) => (
                                 <div
                                     key={cat.code}
@@ -298,11 +303,14 @@ export default function PqrTaxonomyModal({
                                         justifyContent: 'space-between',
                                         backgroundColor: selectedCatIdx === idx ? '#ECFDF5' : '#F8FAFC',
                                         border: selectedCatIdx === idx ? '1px solid #0D7A57' : '1px solid #E2E8F0',
-                                        boxShadow: selectedCatIdx === idx ? '0 1px 3px rgba(0,0,0,0.04)' : 'none'
+                                        boxShadow: selectedCatIdx === idx ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
+                                        boxSizing: 'border-box',
+                                        width: '100%',
+                                        gap: '8px'
                                     }}
                                 >
-                                    <div>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: selectedCatIdx === idx ? '800' : '600', color: selectedCatIdx === idx ? '#065F46' : '#1E293B' }}>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: selectedCatIdx === idx ? '800' : '600', color: selectedCatIdx === idx ? '#065F46' : '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {cat.label}
                                         </div>
                                         <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>{cat.subtypes?.length || 0} subtipos</div>
@@ -313,7 +321,7 @@ export default function PqrTaxonomyModal({
                                             e.stopPropagation();
                                             handleDeleteCategory(idx);
                                         }}
-                                        style={{ padding: '4px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                                        style={{ padding: '4px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
                                     >
                                         <Trash2 size={13} />
                                     </button>
@@ -323,33 +331,73 @@ export default function PqrTaxonomyModal({
                     </div>
 
                     {/* Right Column: Subtypes L2 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
                         {currentCat && (
                             <>
                                 <div>
-                                    <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0F172A', display: 'block' }}>
+                                    <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'block' }}>
                                         {currentCat.label}
                                     </span>
                                     <p style={{ fontSize: '0.72rem', color: '#64748B', margin: '2px 0 0 0' }}>{currentCat.description}</p>
                                 </div>
 
                                 {/* Add Subtype Form */}
-                                <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                <div style={{
+                                    padding: '12px 14px',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '8px',
+                                    boxSizing: 'border-box',
+                                    width: '100%'
+                                }}>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.04em' }}>
                                         + Agregar Subtipo L2
                                     </span>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 0.85fr)',
+                                        gap: '8px',
+                                        width: '100%',
+                                        boxSizing: 'border-box'
+                                    }}>
                                         <input
                                             type="text"
                                             placeholder="Nombre del subtipo (ej: Golpes en descarga)"
                                             value={newSubLabel}
                                             onChange={e => setNewSubLabel(e.target.value)}
-                                            style={{ padding: '6px 8px', fontSize: '0.72rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '6px' }}
+                                            style={{
+                                                width: '100%',
+                                                boxSizing: 'border-box',
+                                                minWidth: 0,
+                                                padding: '7px 10px',
+                                                fontSize: '0.72rem',
+                                                backgroundColor: 'white',
+                                                border: '1px solid #CBD5E1',
+                                                borderRadius: '8px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <select
                                             value={newSubResponsible}
                                             onChange={e => setNewSubResponsible(e.target.value as any)}
-                                            style={{ padding: '6px 8px', fontSize: '0.72rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '6px' }}
+                                            style={{
+                                                width: '100%',
+                                                boxSizing: 'border-box',
+                                                minWidth: 0,
+                                                padding: '7px 8px',
+                                                fontSize: '0.72rem',
+                                                backgroundColor: 'white',
+                                                border: '1px solid #CBD5E1',
+                                                borderRadius: '8px',
+                                                outline: 'none',
+                                                cursor: 'pointer',
+                                                textOverflow: 'ellipsis',
+                                                overflow: 'hidden',
+                                                whiteSpace: 'nowrap'
+                                            }}
                                         >
                                             {Object.entries(RESPONSIBLE_PARTIES).map(([k, v]) => (
                                                 <option key={k} value={k}>
@@ -358,26 +406,51 @@ export default function PqrTaxonomyModal({
                                             ))}
                                         </select>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                                         <input
                                             type="text"
                                             placeholder="Descripción técnica o contexto de falla"
                                             value={newSubDesc}
                                             onChange={e => setNewSubDesc(e.target.value)}
-                                            style={{ flex: '1', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '6px' }}
+                                            style={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                width: '100%',
+                                                boxSizing: 'border-box',
+                                                padding: '7px 10px',
+                                                fontSize: '0.72rem',
+                                                backgroundColor: 'white',
+                                                border: '1px solid #CBD5E1',
+                                                borderRadius: '8px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <button
                                             type="button"
                                             onClick={handleAddSubtype}
-                                            style={{ padding: '6px 12px', backgroundColor: '#0F172A', color: 'white', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '700', border: 'none', cursor: 'pointer' }}
+                                            style={{
+                                                padding: '7px 14px',
+                                                backgroundColor: '#0F172A',
+                                                color: 'white',
+                                                borderRadius: '8px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '700',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                flexShrink: 0,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
                                         >
-                                            Agregar
+                                            <Plus size={13} />
+                                            <span>Agregar</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 {/* Subtypes List */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '300px', overflowY: 'auto' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '320px', overflowY: 'auto', boxSizing: 'border-box', width: '100%' }}>
                                     {currentCat.subtypes?.map(sub => (
                                         <div
                                             key={sub.code}
@@ -389,22 +462,24 @@ export default function PqrTaxonomyModal({
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
-                                                gap: '10px'
+                                                gap: '10px',
+                                                boxSizing: 'border-box',
+                                                width: '100%'
                                             }}
                                         >
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0F172A' }}>{sub.label}</span>
                                                     <span style={{ fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
                                                         {RESPONSIBLE_PARTIES[sub.typicalResponsible]?.label || sub.typicalResponsible}
                                                     </span>
                                                 </div>
-                                                <p style={{ fontSize: '0.7rem', color: '#64748B', margin: '2px 0 0 0' }}>{sub.description}</p>
+                                                <p style={{ fontSize: '0.7rem', color: '#64748B', margin: '2px 0 0 0', wordBreak: 'break-word' }}>{sub.description}</p>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => handleDeleteSubtype(sub.code)}
-                                                style={{ padding: '4px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                                                style={{ padding: '4px', color: '#94A3B8', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
                                             >
                                                 <Trash2 size={13} />
                                             </button>
@@ -428,7 +503,8 @@ export default function PqrTaxonomyModal({
                     justifyContent: 'space-between',
                     padding: '1rem 1.5rem',
                     backgroundColor: '#F8FAFC',
-                    borderTop: '1px solid #E2E8F0'
+                    borderTop: '1px solid #E2E8F0',
+                    flexShrink: 0
                 }}>
                     <button
                         type="button"

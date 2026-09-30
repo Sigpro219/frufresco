@@ -8,7 +8,8 @@ import {
     Truck, Store, Warehouse, Layers, User, Building2, HelpCircle,
     ChevronRight, ChevronLeft, Sparkles, Phone, MessageCircle, Link2,
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
-    PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy
+    PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
+    Clock, ArrowRight, PackageX, ShoppingBag
 } from 'lucide-react';
 import {
     RCA_CATEGORIES_L1,
@@ -24,6 +25,9 @@ import {
     PqrAuthorInfo, 
     getPqrAuthorInfo,
     buildPqrWhatsAppMessage,
+    buildShortageWhatsAppMessage,
+    getShortageTimeoutInfo,
+    ShortageTimeoutInfo,
     WHATSAPP_PQR_TEMPLATES,
     WhatsAppPqrTemplateType
 } from '../utils';
@@ -61,6 +65,19 @@ export default function PqrAuditModal({
     const [actionLoading, setActionLoading] = useState(false);
     const [resolutionNotes, setResolutionNotes] = useState('');
     const [resolutionOption, setResolutionOption] = useState<'opt1' | 'opt2' | 'opt3' | 'opt4'>('opt1');
+
+    // Shortage Proactive Timer & State
+    const [shortageCountdown, setShortageCountdown] = useState<ShortageTimeoutInfo>({
+        isShortage: false,
+        minutesRemaining: 0,
+        isExpired: false,
+        formattedCountdown: '--:--',
+        deadlineText: ''
+    });
+    const [availableCatalogProducts, setAvailableCatalogProducts] = useState<{ id: string; name: string; sku?: string; base_price?: number; unit_of_measure?: string }[]>([]);
+    const [substituteModalOpen, setSubstituteModalOpen] = useState(false);
+    const [selectedSubstituteProductId, setSelectedSubstituteProductId] = useState('');
+    const [substituteTargetItemId, setSubstituteTargetItemId] = useState('');
 
     // RCA Form State
     const [rcaCategoryL1, setRcaCategoryL1] = useState('dano_mecanico');
@@ -221,6 +238,284 @@ export default function PqrAuditModal({
             setClientRecentOrders([]);
         }
     }, [pqr, caseCoQ]);
+
+    // Shortage live countdown timer and template auto-selection
+    useEffect(() => {
+        if (!pqr) return;
+        const updateTimer = () => {
+            const info = getShortageTimeoutInfo(pqr);
+            setShortageCountdown(info);
+            if (info.isShortage && selectedWaTemplate === 'initial') {
+                setSelectedWaTemplate('shortage_substitution');
+            }
+        };
+        updateTimer();
+        const timer = setInterval(updateTimer, 1000);
+        return () => clearInterval(timer);
+    }, [pqr, selectedWaTemplate]);
+
+    // Load available catalog products for quick substitution
+    useEffect(() => {
+        if (!isOpen) return;
+        (async () => {
+            try {
+                const { data } = await supabase
+                    .from('products')
+                    .select('id, name, sku, base_price, unit_of_measure')
+                    .eq('is_active', true)
+                    .order('name');
+                setAvailableCatalogProducts(data || []);
+            } catch (e) {
+                console.error('Error loading products for substitution:', e);
+            }
+        })();
+    }, [isOpen]);
+
+    // Shortage Handlers
+    const handleExecuteShortageSubstitute = async () => {
+        if (!pqr?.order_id) {
+            showToast('Esta PQR no tiene un pedido asociado para sustituir.', 'warning');
+            return;
+        }
+        if (!selectedSubstituteProductId) {
+            showToast('Selecciona el producto sustituto del catálogo.', 'warning');
+            return;
+        }
+
+        const substituteProduct = availableCatalogProducts.find(p => p.id === selectedSubstituteProductId);
+        if (!substituteProduct) {
+            showToast('Producto sustituto no encontrado.', 'error');
+            return;
+        }
+
+        setActionLoading(true);
+        try {
+            const targetItem = substituteTargetItemId 
+                ? orderItems.find(i => i.id === substituteTargetItemId)
+                : (orderItems[0] || null);
+
+            if (targetItem) {
+                await supabase
+                    .from('order_items')
+                    .update({
+                        product_id: substituteProduct.id,
+                        nickname: `${substituteProduct.name} [Sustitución HORECA de ${targetItem.products?.name || 'original'}]`,
+                        variant_label: `Sustituido en Muelle / Bodega`
+                    })
+                    .eq('id', targetItem.id);
+            }
+
+            const rcaTag = buildRcaMetadataTag({
+                categoryL1: 'comercial_cliente',
+                subtypeL2: 'producto_agotado_plaza',
+                responsible: 'proveedor',
+                notes: `Sustitución autorizada: ${substituteProduct.name}`,
+                imputedTargetType: 'provider'
+            });
+
+            const finalNotes = `[🚨 SUSTITUCIÓN HORECA EN BODEGA ACEPTADA POR CLIENTE]\n- Producto Original: ${targetItem?.products?.name || pqr.subject || 'N/A'}\n- Producto Sustituto: ${substituteProduct.name}\n- Alistamiento: Autorizado y empacado de inmediato en muelle para salida en ruta.\n\n${rcaTag}`;
+
+            await supabase
+                .from('customer_service_pqrs')
+                .update({
+                    status: 'resolved',
+                    resolution_notes: finalNotes,
+                    defect_category_l1: 'comercial_cliente',
+                    defect_subtype_l2: 'producto_agotado_plaza',
+                    imputed_responsible: 'proveedor',
+                    resolved_at: new Date().toISOString()
+                })
+                .eq('id', pqr.id);
+
+            showToast(`✅ Sustitución por "${substituteProduct.name}" aplicada con éxito.`, 'success');
+            setSubstituteModalOpen(false);
+            onResolved();
+            onClose();
+        } catch (e: any) {
+            showToast('Error al aplicar sustitución: ' + e.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleExecuteShortageCleanWithdrawal = async (isAutoRelease = false) => {
+        setActionLoading(true);
+        try {
+            const targetItem = substituteTargetItemId 
+                ? orderItems.find(i => i.id === substituteTargetItemId)
+                : (orderItems[0] || null);
+
+            const qty = targetItem ? Number(targetItem.quantity) || 1 : 1;
+            const prodId = targetItem?.product_id;
+
+            if (prodId) {
+                await supabase.from('inventory_movements').insert([{
+                    product_id: prodId,
+                    quantity: qty,
+                    type: 'exit',
+                    reference_type: 'order_shortage',
+                    notes: `[COLUMNA K - ESCASEZ EN PLAZA]: ${isAutoRelease ? 'Auto-liberación por timeout' : 'Retiro limpio acordado con cliente'} | PQR #${pqr.id.substring(0, 8)} | Pedido #${pqr.orders?.sequence_id || 'N/A'}`
+                }]);
+            }
+
+            if (targetItem) {
+                await supabase.from('order_items').delete().eq('id', targetItem.id);
+            }
+
+            if (pqr.order_id) {
+                const { data: remItems } = await supabase.from('order_items').select('quantity, unit_price').eq('order_id', pqr.order_id);
+                const newSubtotal = (remItems || []).reduce((acc: number, it: any) => acc + ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)), 0);
+                await supabase.from('orders').update({
+                    subtotal: newSubtotal,
+                    total: newSubtotal
+                }).eq('id', pqr.order_id);
+            }
+
+            const rcaTag = buildRcaMetadataTag({
+                categoryL1: 'comercial_cliente',
+                subtypeL2: 'producto_agotado_plaza',
+                responsible: 'proveedor',
+                notes: isAutoRelease ? 'Auto-liberación Poka-Yoke por Timeout' : 'Retiro limpio sin costo',
+                imputedTargetType: 'provider'
+            });
+
+            const finalNotes = isAutoRelease 
+                ? `[⏱️ AUTO-LIBERACIÓN POKA-YOKE POR TIMEOUT DE SALIDA DE RUTA]\n- Acción: Producto escaso retirado sin cobro de la remisión.\n- Inventario: Asentado en Columna K (Escasez).\n- Logística: Pedido liberado en muelle para proteger franja de entrega.\n\n${rcaTag}`
+                : `[📦 RETIRO LIMPIO POR DESABASTECIMIENTO EN PLAZA]\n- Acción: Excluido de la remisión sin cobro.\n- Inventario: Asentado en Columna K.\n\n${rcaTag}`;
+
+            await supabase
+                .from('customer_service_pqrs')
+                .update({
+                    status: 'resolved',
+                    resolution_notes: finalNotes,
+                    defect_category_l1: 'comercial_cliente',
+                    defect_subtype_l2: 'producto_agotado_plaza',
+                    imputed_responsible: 'proveedor',
+                    resolved_at: new Date().toISOString()
+                })
+                .eq('id', pqr.id);
+
+            showToast(isAutoRelease ? '⚡ Auto-liberación Poka-Yoke ejecutada. Pedido liberado para ruta.' : '✅ Retiro limpio aplicado (Columna K). Factura depurada.', 'success');
+            onResolved();
+            onClose();
+        } catch (e: any) {
+            showToast('Error al procesar retiro limpio: ' + e.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleExecuteShortageAppendNextOrder = async () => {
+        if (!pqr.client_id) {
+            showToast('PQR sin cliente identificado.', 'warning');
+            return;
+        }
+
+        setActionLoading(true);
+        try {
+            const targetItem = substituteTargetItemId 
+                ? orderItems.find(i => i.id === substituteTargetItemId)
+                : (orderItems[0] || null);
+
+            const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+            const { data: futureOrders } = await supabase
+                .from('orders')
+                .select('*')
+                .eq('profile_id', pqr.client_id)
+                .gte('delivery_date', tomorrow)
+                .in('status', ['draft', 'pending', 'approved'])
+                .order('delivery_date', { ascending: true })
+                .limit(1);
+
+            let destOrderId = '';
+            let destOrderSeq = '';
+
+            if (futureOrders && futureOrders.length > 0) {
+                destOrderId = futureOrders[0].id;
+                destOrderSeq = `#${futureOrders[0].sequence_id} (${futureOrders[0].delivery_date})`;
+            } else {
+                const { data: newOrder, error: createErr } = await supabase
+                    .from('orders')
+                    .insert([{
+                        profile_id: pqr.client_id,
+                        type: pqr.profiles?.role === 'b2c_client' ? 'B2C' : 'B2B',
+                        status: 'draft',
+                        delivery_date: tomorrow,
+                        delivery_slot: 'AM',
+                        origin_source: 'customer_service_shortage_d1',
+                        admin_notes: `[ANEXIÓN D+1 POR QUIEBRE EN PLAZA] Generado por PQR #${pqr.id.substring(0, 8)}. Consolida producto escaso sin desvío de ruta.`
+                    }])
+                    .select()
+                    .single();
+
+                if (createErr || !newOrder) throw new Error('Error al crear orden para D+1: ' + createErr?.message);
+                destOrderId = newOrder.id;
+                destOrderSeq = `#${newOrder.sequence_id} (D+1 ${tomorrow})`;
+            }
+
+            if (targetItem) {
+                await supabase.from('order_items').insert([{
+                    order_id: destOrderId,
+                    product_id: targetItem.product_id,
+                    quantity: targetItem.quantity,
+                    unit_price: targetItem.unit_price || 0,
+                    nickname: targetItem.nickname || targetItem.products?.name,
+                    variant_label: `Anexado desde PQR #${pqr.id.substring(0, 8)} (D+1)`
+                }]);
+
+                await supabase.from('order_items').delete().eq('id', targetItem.id);
+            }
+
+            if (targetItem?.product_id) {
+                await supabase.from('inventory_movements').insert([{
+                    product_id: targetItem.product_id,
+                    quantity: Number(targetItem.quantity) || 1,
+                    type: 'exit',
+                    reference_type: 'order_shortage',
+                    notes: `[COLUMNA K - REPROGRAMADO D+1]: Anexado al siguiente pedido programado ${destOrderSeq} | PQR #${pqr.id.substring(0, 8)}`
+                }]);
+            }
+
+            if (pqr.order_id) {
+                const { data: remItems } = await supabase.from('order_items').select('quantity, unit_price').eq('order_id', pqr.order_id);
+                const newSubtotal = (remItems || []).reduce((acc: number, it: any) => acc + ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)), 0);
+                await supabase.from('orders').update({
+                    subtotal: newSubtotal,
+                    total: newSubtotal
+                }).eq('id', pqr.order_id);
+            }
+
+            const rcaTag = buildRcaMetadataTag({
+                categoryL1: 'comercial_cliente',
+                subtypeL2: 'producto_agotado_plaza',
+                responsible: 'proveedor',
+                notes: `Anexado a próximo pedido ${destOrderSeq} (Cero desvío de ruta)`,
+                imputedTargetType: 'provider'
+            });
+
+            const finalNotes = `[📅 ANEXADO AL SIGUIENTE PEDIDO HABITUAL D+1]\n- Destino: Pedido ${destOrderSeq}\n- Regla: CERO desvíos vehiculares ni fletes aislados de micro-cantidades.\n- Remisión de Hoy: Depurada sin cobro.\n\n${rcaTag}`;
+
+            await supabase
+                .from('customer_service_pqrs')
+                .update({
+                    status: 'resolved',
+                    resolution_notes: finalNotes,
+                    defect_category_l1: 'comercial_cliente',
+                    defect_subtype_l2: 'producto_agotado_plaza',
+                    imputed_responsible: 'proveedor',
+                    resolved_at: new Date().toISOString()
+                })
+                .eq('id', pqr.id);
+
+            showToast(`✅ Producto anexado exitosamente al pedido ${destOrderSeq}. Sin desvíos de ruta.`, 'success');
+            onResolved();
+            onClose();
+        } catch (e: any) {
+            showToast('Error al anexar a próximo pedido: ' + e.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
 
     if (!isOpen || !pqr) return null;
 
@@ -921,6 +1216,173 @@ export default function PqrAuditModal({
                     {/* ================= STEP 1: CONTEXT & EVIDENCE ================= */}
                     {currentStep === 1 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Shortage in Plaza Special Protocol Banner & Triad Actions */}
+                            {(shortageCountdown.isShortage || rcaSubtypeL2 === 'producto_agotado_plaza') && (
+                                <div style={{
+                                    backgroundColor: '#FFFBEB',
+                                    border: '2px solid #F59E0B',
+                                    borderRadius: '12px',
+                                    padding: '14px 16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '10px',
+                                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.12)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                padding: '6px',
+                                                backgroundColor: '#FEF3C7',
+                                                color: '#B45309',
+                                                borderRadius: '8px',
+                                                border: '1px solid #FDE68A',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}>
+                                                <ShieldAlert size={18} />
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: '0.78rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                    🚨 PROTOCOLO DE QUIEBRE DE ABASTECIMIENTO EN CORABASTOS (PQRS PROACTIVA)
+                                                </span>
+                                                <p style={{ fontSize: '0.68rem', color: '#B45309', margin: '2px 0 0 0' }}>
+                                                    Producto no disponible en la central mayorista. Consulta activa con el cliente antes de la salida del furgón.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Live Countdown Badge */}
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '6px 12px',
+                                            borderRadius: '8px',
+                                            backgroundColor: shortageCountdown.isExpired ? '#FEE2E2' : '#FEF3C7',
+                                            border: shortageCountdown.isExpired ? '1px solid #FCA5A5' : '1px solid #FCD34D',
+                                            color: shortageCountdown.isExpired ? '#991B1B' : '#92400E'
+                                        }}>
+                                            <Clock size={14} className={shortageCountdown.isExpired ? '' : 'animate-pulse'} />
+                                            <span style={{ fontSize: '0.74rem', fontWeight: '800', fontFamily: 'monospace' }}>
+                                                {shortageCountdown.isExpired ? 'TIMEOUT EXPIRADO (Auto-Liberación)' : `Auto-Liberación: ${shortageCountdown.formattedCountdown}`}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Decision Triad Buttons */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                        gap: '8px',
+                                        paddingTop: '6px'
+                                    }}>
+                                        {/* Opción A: Sustituir SKU */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setSubstituteModalOpen(true)}
+                                            disabled={actionLoading}
+                                            style={{
+                                                padding: '10px 12px',
+                                                backgroundColor: '#0D7A57',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '0.73rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)'
+                                            }}
+                                        >
+                                            <ShoppingBag size={14} />
+                                            <span>Opción A: Sustituir SKU en Bodega</span>
+                                        </button>
+
+                                        {/* Opción B: Retiro Limpio / Col K */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExecuteShortageCleanWithdrawal(false)}
+                                            disabled={actionLoading}
+                                            style={{
+                                                padding: '10px 12px',
+                                                backgroundColor: '#334155',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '0.73rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            <PackageMinus size={14} />
+                                            <span>Opción B: Retiro Limpio / Col K</span>
+                                        </button>
+
+                                        {/* Opción C: Anexar a Próximo Pedido D+1 */}
+                                        <button
+                                            type="button"
+                                            onClick={handleExecuteShortageAppendNextOrder}
+                                            disabled={actionLoading}
+                                            style={{
+                                                padding: '10px 12px',
+                                                backgroundColor: '#2563EB',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '0.73rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            <Truck size={14} />
+                                            <span>Opción C: Anexar a Próximo Pedido (D+1)</span>
+                                        </button>
+
+                                        {/* Auto-Liberación Express */}
+                                        {shortageCountdown.isExpired && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleExecuteShortageCleanWithdrawal(true)}
+                                                disabled={actionLoading}
+                                                style={{
+                                                    padding: '10px 12px',
+                                                    backgroundColor: '#DC2626',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.73rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '6px'
+                                                }}
+                                            >
+                                                <RotateCcw size={14} />
+                                                <span>⚡ Auto-Liberar Despacho Ahora</span>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div style={{ fontSize: '0.68rem', color: '#92400E', fontStyle: 'italic', borderTop: '1px solid #FDE68A', paddingTop: '6px' }}>
+                                        * Regla Poka-Yoke: Respuestas tardías se consolidan automáticamente en el siguiente pedido habitual del cliente ($D+1$). Prohibido desviar camiones en ruta para micro-cantidades.
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Radication & Contact Banner */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
                                 <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1857,6 +2319,129 @@ export default function PqrAuditModal({
                     </div>
                 </div>
             </div>
+
+            {/* Modal Dialog de Selección de Sustituto */}
+            {substituteModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 10000,
+                    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        width: '100%',
+                        maxWidth: '520px',
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}>
+                        <div style={{
+                            padding: '1rem 1.25rem',
+                            backgroundColor: '#0F172A',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <ShoppingBag size={18} style={{ color: '#34D399' }} />
+                                <h3 style={{ fontSize: '0.9rem', fontWeight: '800', margin: 0 }}>
+                                    Seleccionar SKU Sustituto en Bodega
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSubstituteModalOpen(false)}
+                                style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                    Producto a Reemplazar en Pedido #{pqr.orders?.sequence_id || ''}
+                                </label>
+                                <select
+                                    value={substituteTargetItemId}
+                                    onChange={e => setSubstituteTargetItemId(e.target.value)}
+                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600' }}
+                                >
+                                    <option value="">-- Todos los productos / Primer ítem del pedido --</option>
+                                    {orderItems.map(item => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.products?.name || item.nickname} ({item.quantity} {item.products?.unit_of_measure || 'kg'})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                    SKU Sustituto Disponible en Catálogo
+                                </label>
+                                <select
+                                    value={selectedSubstituteProductId}
+                                    onChange={e => setSelectedSubstituteProductId(e.target.value)}
+                                    style={{ width: '100%', padding: '8px 10px', fontSize: '0.75rem', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', fontWeight: '600' }}
+                                >
+                                    <option value="">-- Selecciona el producto equivalente disponible --</option>
+                                    {availableCatalogProducts.map(prod => (
+                                        <option key={prod.id} value={prod.id}>
+                                            {prod.name} ({prod.unit_of_measure || 'kg'}) {prod.sku ? `[${prod.sku}]` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <p style={{ fontSize: '0.7rem', color: '#64748B', margin: 0, backgroundColor: '#F0FDF4', padding: '8px 10px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                                💡 Al confirmar, el sistema actualiza la línea del pedido en caliente, notifica a la cuadrilla de alistamiento y emite la remisión con el producto sustituto conforme.
+                            </p>
+                        </div>
+
+                        <div style={{ padding: '0.75rem 1.25rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setSubstituteModalOpen(false)}
+                                style={{ padding: '8px 14px', backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleExecuteShortageSubstitute}
+                                disabled={actionLoading || !selectedSubstituteProductId}
+                                style={{
+                                    padding: '8px 18px',
+                                    backgroundColor: '#0D7A57',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                {actionLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
+                                <span>Confirmar Sustitución</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

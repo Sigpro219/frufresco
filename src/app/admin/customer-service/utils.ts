@@ -331,7 +331,13 @@ export const getReplacementOrderUrl = (
     return `/admin/orders/create?${params.toString()}`;
 };
 
-export type WhatsAppPqrTemplateType = 'initial' | 'replacement' | 'credit_note' | 'closing';
+export type WhatsAppPqrTemplateType = 
+    | 'initial' 
+    | 'replacement' 
+    | 'credit_note' 
+    | 'closing'
+    | 'shortage_substitution'
+    | 'shortage_autorelease';
 
 export interface WhatsAppTemplateOption {
     id: WhatsAppPqrTemplateType;
@@ -345,6 +351,16 @@ export const WHATSAPP_PQR_TEMPLATES: WhatsAppTemplateOption[] = [
         id: 'initial',
         label: 'Caso Recibido & En Proceso',
         description: 'Mensaje ágil de tranquilidad confirmando que el caso ya se está gestionando.'
+    },
+    {
+        id: 'shortage_substitution',
+        label: '🚨 Propuesta Sustitución HORECA (Quiebre Plaza)',
+        description: 'Notificación ágil al chef proponiendo un SKU sustituto o retiro antes del despacho.'
+    },
+    {
+        id: 'shortage_autorelease',
+        label: '⏱️ Aviso Despacho Puntual (Auto-Retiro)',
+        description: 'Aviso de salida en ruta protegiendo la puntualidad con remisión depurada.'
     },
     {
         id: 'replacement',
@@ -363,6 +379,77 @@ export const WHATSAPP_PQR_TEMPLATES: WhatsAppTemplateOption[] = [
     }
 ];
 
+export interface ShortageTimeoutInfo {
+    isShortage: boolean;
+    minutesRemaining: number;
+    isExpired: boolean;
+    formattedCountdown: string;
+    deadlineText: string;
+}
+
+export const getShortageTimeoutInfo = (pqr: PQR | null | undefined): ShortageTimeoutInfo => {
+    if (!pqr) {
+        return { isShortage: false, minutesRemaining: 0, isExpired: false, formattedCountdown: '--:--', deadlineText: '' };
+    }
+
+    const isShortage = pqr.defect_subtype_l2 === 'producto_agotado_plaza' ||
+        (pqr.subject || '').includes('Quiebre en Plaza') ||
+        (pqr.description || '').includes('ESCASEZ EN PLAZA') ||
+        (pqr.description || '').includes('Agotado en plaza');
+
+    if (!isShortage) {
+        return { isShortage: false, minutesRemaining: 0, isExpired: false, formattedCountdown: '--:--', deadlineText: '' };
+    }
+
+    const createdAt = new Date(pqr.created_at).getTime();
+    const timeoutDurationMs = 30 * 60 * 1000; // 30 minutos de SLA para consulta
+    const deadlineMs = createdAt + timeoutDurationMs;
+    const now = Date.now();
+    const diffMs = deadlineMs - now;
+
+    if (diffMs <= 0 || pqr.status === 'resolved' || pqr.status === 'rejected') {
+        return {
+            isShortage: true,
+            minutesRemaining: 0,
+            isExpired: true,
+            formattedCountdown: '00:00',
+            deadlineText: 'Ventana de consulta expirada (Auto-Liberación Poka-Yoke)'
+        };
+    }
+
+    const minutes = Math.floor(diffMs / 60000);
+    const seconds = Math.floor((diffMs % 60000) / 1000);
+    const formattedCountdown = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    return {
+        isShortage: true,
+        minutesRemaining: minutes,
+        isExpired: false,
+        formattedCountdown,
+        deadlineText: `${minutes}m restantes para autorizar sustitución antes de salida de ruta`
+    };
+};
+
+export const buildShortageWhatsAppMessage = (
+    pqr: PQR,
+    originalProduct: string = 'el producto solicitado',
+    suggestedSubstitute: string = 'una variedad equivalente de primera calidad',
+    timeoutMinutes: number = 30
+): string => {
+    const author = getPqrAuthorInfo(pqr);
+    const clientName = author.clientContact && author.clientContact !== 'Ecónomo / Contacto en Sitio' 
+        ? author.clientContact 
+        : author.clientDisplayName;
+    
+    const company = author.companyName && author.companyName !== 'Empresa No Especificada' && author.companyName !== clientName
+        ? ` (${author.companyName})`
+        : '';
+        
+    const orderSeq = pqr.orders?.sequence_id ? `Pedido #${pqr.orders.sequence_id}` : 'tu pedido de hoy';
+
+    return `Hola *${clientName}*${company} 👋, te saludamos de *Control de Calidad FruFresco* 🌿.\n\nDurante nuestro abastecimiento de la madrugada en Corabastos, nos informan que *${originalProduct}* no cumplió el estándar de calidad y no hubo disponibilidad óptima en plaza.\n\nPara no afectar tu operación matutina te proponemos:\n\n1️⃣ *Sustitución recomendada:* Enviarte *${suggestedSubstitute}* alistado de inmediato en bodega.\n2️⃣ *Retiro limpio:* Excluir el ítem de la remisión (cero cobro en tu factura).\n3️⃣ *Anexar a tu próximo pedido:* Enviártelo consolidado en tu siguiente entrega programada.\n\n⏳ Agradecemos tu confirmación en los próximos *${timeoutMinutes} minutos* para no retrasar la salida del furgón a tu sede.\n\n¡Quedamos atentos a tu indicación!`;
+};
+
 export const buildPqrWhatsAppMessage = (
     pqr: PQR, 
     templateType: WhatsAppPqrTemplateType = 'initial'
@@ -380,6 +467,12 @@ export const buildPqrWhatsAppMessage = (
     const subjectClean = (pqr.subject || '').replace(/^\[[^\]]+\]\s*/, '').trim() || 'Novedad de entrega/calidad';
 
     switch (templateType) {
+        case 'shortage_substitution':
+            return buildShortageWhatsAppMessage(pqr, subjectClean, 'variedad sustituta de primera calidad', 30);
+
+        case 'shortage_autorelease':
+            return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nPara garantizar que tu *${orderSeq}* llegue dentro de la franja horaria pactada en tu cocina, despachamos tu furgón a tiempo retirando el producto escaso de la remisión.\n\n✅ Tu factura neta refleja únicamente lo efectivamente entregado sin cobros adicionales.\n\n¡Gracias por tu confianza y que tengas un excelente servicio!`;
+
         case 'replacement':
             return `Hola *${clientName}*${company} 👋, te saludamos de *FruFresco* 🌿.\n\nTe confirmamos que ya dejamos programada la *reposición sin costo ($0 COP)* correspondiente a tu *${orderSeq}* ("${subjectClean}") para tu próxima entrega en ruta.\n\n¡Seguimos atentos para apoyarte en lo que necesites!`;
 

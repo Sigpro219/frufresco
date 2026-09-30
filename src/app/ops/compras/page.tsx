@@ -952,6 +952,44 @@ export default function ProcurementPage() {
         resolution_action: 'marked_as_shortage'
       }]);
 
+      // 3.5 Generar PQRS Proactiva en Servicio al Cliente (SAC) para gestión inmediata de sustitución HORECA
+      try {
+        const { data: targetOrders } = await supabase
+          .from('orders')
+          .select('id, profile_id, sequence_id, profiles(company_name, contact_name)')
+          .eq('delivery_date', targetDate)
+          .in('status', ['draft', 'pending', 'approved', 'alistamiento']);
+
+        if (targetOrders && targetOrders.length > 0) {
+          for (const ord of targetOrders) {
+            const { data: ordItem } = await supabase
+              .from('order_items')
+              .select('id, quantity')
+              .eq('order_id', ord.id)
+              .eq('product_id', selectedTask.product_id)
+              .maybeSingle();
+
+            if (ordItem) {
+              await supabase.from('customer_service_pqrs').insert([{
+                order_id: ord.id,
+                client_id: ord.profile_id,
+                type: 'queja',
+                priority: 'urgent',
+                status: 'pending',
+                subject: `[🚨 Quiebre en Plaza: Requiere Acción Inmediata] ${selectedTask.product_name} (${ordItem.quantity} ${selectedTask.unit})`,
+                description: `El comprador en Corabastos reportó quiebre de abastecimiento ("NO LO HAY") a las ${new Date().toLocaleTimeString('es-CO')}.\nMotivo: ${shortageReason}.\n\nSe requiere contactar al cliente de inmediato para acordar: 1) Sustitución de SKU en bodega, 2) Retiro limpio de remisión (Col K), o 3) Anexión a próximo pedido (D+1).`,
+                defect_category_l1: 'comercial_cliente',
+                defect_subtype_l2: 'producto_agotado_plaza',
+                imputed_responsible: 'proveedor',
+                resolution_notes: `[ALERTA TEMPRANA CORABASTOS]: Notificado por Compras (${(profile as any)?.full_name || user?.email || 'Comprador'})`
+              }]);
+            }
+          }
+        }
+      } catch (pqrErr) {
+        console.warn("Error creando PQRS proactiva para escasez:", pqrErr);
+      }
+
       // 4. Actualizar la tarea en procurement_tasks
       const newTotalPurchased = (selectedTask.total_purchased || 0);
       const isTotallyCovered = (newTotalPurchased + qtyToDeclare) >= selectedTask.total_requested;

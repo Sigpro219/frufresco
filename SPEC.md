@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.38 (Plantillas Humanizadas de Comunicación WhatsApp SAC, Consola Maestra 1600px, Sticky Magnético 2-Line, Dashboard Histórico Lean con Pareto Dual 80/20, KPIs FTR/CoQ/MTTR/CRI/VQR/CDR/PAR & Tracker de Planes de Acción CAPA Poka-Yoke)
+> **Versión:** 1.9.42 (PQRS Proactivas por Quiebre en Plaza con Auto-Liberación Poka-Yoke & Anexión D+1, Auditoría con Checkboxes Selectivos y Cortes AM/PM, Doble Consecutivo Fiscal FAC/NC, Exportación Contable World Office, Cartera B2B con Pagarés & Dossiers, Dashboard Lean con KPIs FTR/CoQ/MTTR/CRI/VQR/CDR/PAR, Run-Chart Histórico y RNC Físico)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -2458,6 +2458,26 @@ flowchart TD
   - **Modo Catálogo Ciego Completo:** Muestra todas las referencias del grupo para conteo general.
   - **Modo Solo con Existencias:** Filtra exclusivamente los productos con stock $> 0$ o movimientos tras la operación activa.
 
+#### 7. Reporte Oficial de No Conformidad (RNC) de Calidad & PQRS (`/admin/customer-service/rnc/[id]/print`)
+* **Propósito Operativo:** Documento legal y técnico de auditoría de calidad emitido ante reclamaciones de clientes o rechazos de patio, utilizado para imputación de costos a proveedores o planes de acción correctiva en bodega/transporte.
+* **Formato Físico:** Carta Vertical (*Letter Portrait* 215.9 mm × 279.4 mm) con layout de alta densidad.
+* **Secciones Estructuradas Mandatorias:**
+  1. **Membrete Oficial:** Razón social `INVESTMENTS CORTES SAS`, NIT, código correlativo `RNC-XXXX` y fecha/hora de auditoría.
+  2. **Identidad del Caso & Trazabilidad:** Cliente/Sucursal, Pedido `#PED-XXXX`, Producto, Lote/Fecha de Despacho y Transportador asignado.
+  3. **Tipificación RCA Canónica:** Categoría L1 (Fisiología, Fitopatología, Daño Mecánico, etc.), Subtipo L2 y Entidad Responsable Imputada (Proveedor / Bodega / Transporte / Comercial / Cliente).
+  4. **Evidencia Fotográfica de Calidad:** Matriz de 2 a 4 fotografías en alta definición tomadas en Gemba o enviadas por el cliente con marca de tiempo.
+  5. **Análisis de Causa Raíz & Plan CAPA:** Diagnóstico de los 5 Porqués, acción inmediata de contención, contramedida definitiva, responsable y fecha compromiso.
+  6. **Cierre Financiero & Firmas:** Valoración económica del reclamo ($ COP), compensación acordada (Nota Crédito / Reenvío / Descuento) y casillas de firma del Auditor de Calidad y el Responsable del Proceso.
+
+#### 8. Factura Electrónica / Remisión Valorizada Impresa (`/admin/commercial/billing/print/[id]`)
+* **Propósito Operativo:** Soporte contable y fiscal para clientes institucionales que exigen factura física impresa o remisión con precios al momento de la entrega en muelle.
+* **Formato Físico:** Carta Vertical (*Letter Portrait* 215.9 mm × 279.4 mm).
+* **Contenido Contractual:**
+  - Membrete legal con resolución DIAN, prefijo y consecutivo continuo `FAC-XXXX` (o `NC-XXXX` para Notas Crédito).
+  - Datos completos de facturación del cliente (Razón social, NIT, dirección fiscal, teléfono, régimen tributario).
+  - Referencia cruzada a Orden de Compra (`purchase_order_number`) y fecha de vencimiento de crédito (`due_date`).
+  - Tabla de liquidación con discriminación de base gravable e IVA (19% o 0% según SKU) y total en letras.
+
 #### 19.7.1 Centro de Mando de Documentos Imprimibles (`PrintDocumentSwitcher`) con Persistencia Temporal
 Para garantizar fluidez y velocidad en el Gemba, la barra superior de los documentos físicos incorpora el componente de conmutación canónica `PrintDocumentSwitcher`:
 1. **Navegación Cruzada Unificada:** Permite alternar de manera instantánea entre los 7 documentos de la suite sin salir a menús principales.
@@ -3019,3 +3039,257 @@ sequenceDiagram
        - Línea 3: `Ent: {fecha_entrega} · {ventana_horaria}` (ej. `Ent: 30 sep · 06:30 - 11:00`), con tooltip contextual `title` que despliega la restricción completa de recepción de la sucursal.
      - **Columna 5 (`Novedades QA / PQRS`):** Badge dinámico `<AlertTriangle /> {N} PQRS Abierta / Novedad` en `#FEF2F2` / `#991B1B` con el asunto o motivo de la incidencia.
      - **Columna 7 (`Estado & Gracia`):** Badge de estado, micro-telemetría vectorizada en Lucide (`Clock`, `CheckCircle2`, `AlertTriangle`) y barra de progreso con efecto glassmorphism / sombra fantasma para pedidos en espera de entrega.
+
+---
+
+## 20. MÓDULO DE GESTIÓN DE CALIDAD, SERVICIO AL CLIENTE (SAC) & AUDITORÍA LEAN CAPA (`/admin/customer-service`) (SDD v1.9.40)
+
+### 20.1 Misión & Filosofía de Calidad Total (Lean Gemba Quality)
+El Módulo de Calidad & SAC de FruFresco gobierna el tratamiento ágil, técnico y no confrontacional de las incidencias operativas, rechazos de patio y no conformidades post-entrega (PQRS). Su propósito es triple:
+1. **Protección y Fidelización del Cliente:** Solución inmediata y compensación monetaria/física sin fricciones administrativas ni demoras burocráticas.
+2. **Protección Financiera & Auditoría:** Imputación precisa de pérdidas y mermas a proveedores de Corabastos o procesos internos de planta mediante análisis sistemático de causa raíz (RCA).
+3. **Mejora Continua Poka-Yoke (CAPA):** Detección temprana de patrones de falla para erradicar defectos recurrentes en compras, almacenamiento, picking y transporte.
+
+### 20.2 Arquitectura de Datos & Máquina de Estados de Reclamos
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Radicación de PQRS / Novedad
+    pending --> in_progress: Auditoría & Diagnóstico RCA (PqrAuditModal)
+    in_progress --> resolved: Aprobación Financiera (NC / Descuento / Reposición)
+    in_progress --> rejected: Rechazo Técnico Motivado con Evidencia
+    resolved --> [*]
+    rejected --> [*]
+```
+
+- **Entidad `public.customer_service_pqrs`:**
+  - `id`: UUID clave primaria.
+  - `order_id`: Enlace mandatorio a `public.orders`.
+  - `client_id`: Perfil del cliente reclamante (`profiles.id`).
+  - `type`: `reclamacion_calidad`, `devolucion`, `pqr`, `solicitud_comercial`.
+  - `status`: `pending` (Pendiente), `in_progress` (En Auditoría), `resolved` (Resuelta / Compensada), `rejected` (Rechazada).
+  - `photos`: Array JSON de URLs con soporte fotográfico en alta resolución.
+  - `defect_category_l1` / `defect_subtype_l2`: Taxonomía RCA normalizada.
+  - `imputed_entity`: `proveedor`, `bodega`, `picking`, `transporte`, `comercial`, `cliente`.
+  - `imputed_provider_id` / `imputed_collaborator_id`: Identidad específica del responsable (tabla `providers` o `collaborators`).
+  - `financial_compensation_type`: `credit_note`, `invoice_adjustment`, `product_reship`, `none`.
+  - `financial_compensation_amount`: Valor monetario compensado ($ COP).
+  - `replacement_order_id`: Pedido de reposición generado (si aplica).
+  - `capa_plan`: Objeto JSON con el plan de acción correctiva y preventiva.
+
+- **Entidad `public.billing_returns` (Novedades de Patio & Devoluciones en Ruta):**
+  - Registra las mermas o rechazos físicos capturados en caliente por el conductor o el inspector de báscula.
+  - Campos: `order_id`, `product_id`, `quantity_returned`, `reason`, `defect_category_l1`, `defect_subtype_l2`, `status` (`pending_review`, `approved`, `rejected`).
+
+### 20.3 Taxonomía Canónica de Causa Raíz (RCA) & Gobernanza Dinámica
+Para erradicar la ambigüedad en los reportes de calidad, el sistema adopta una taxonomía estándar de 2 niveles gobernada por `src/lib/rcaTaxonomy.ts`:
+1. **Fisiología & Maduración (`fisiologia_maduracion`):** `sobremaduro_blando`, `verde_inmaduro`, `deshidratado_arrugado`, `browning_interno`, `helado_quemado_frio`.
+2. **Daño Mecánico & Manipulación (`dano_mecanico`):** `golpe_magulladura`, `aplastamiento_sobrepeso`, `corte_herida_piel`, `friccion_vibracion_transporte`.
+3. **Fitopatología & Biológico (`fitopatologia`):** `pudricion_origen`, `moho_hongos`, `plaga_insectos_larvas`, `antracnosis_mancha_negra`.
+4. **Cadena de Frío & Termocontrol (`cadena_frio`):** `perdida_frio_transito`, `condensacion_humedad_empaque`, `congelamiento_cristales`.
+5. **Calibre & Especificación (`calibre_especificacion`):** `calibre_pequeno_vs_pactado`, `calibre_grande_vs_pactado`, `variedad_erronea`, `corte_incorrecto`.
+6. **Error de Montaje & Alistamiento (`error_montaje_pedido`):** `faltante_producto_incompleto`, `sobrante_trocado`, `empaque_roto_sucio`, `producto_cambiado`.
+7. **Comercial & Cliente (`comercial_cliente`):** `pedido_tardio_cancelado`, `rechazo_precio_factura`, `no_recibido_porteria`, `duplicidad_pedido`.
+
+- **Gobernanza Dinámica (`app_settings.rca_taxonomy_custom`):**
+  El administrador o jefe de calidad puede agregar nuevas categorías L1 o subtipos L2 desde la interfaz `PqrTaxonomyModal` sin alterar el código fuente.
+
+### 20.4 Dashboard Lean de Calidad & Métricas Industriales (`PqrLeanDashboard.tsx`)
+El módulo calcula reactivamente 7 KPIs operativos de clase mundial:
+1. **FTR (First Time Right %):**
+   $$\text{FTR} = \frac{\text{Pedidos Entregados Sin Reclamos}}{\text{Total Pedidos Entregados}} \times 100$$
+2. **CoQ (Cost of Quality / Costo de No Calidad $):**
+   $$\text{CoQ} = \sum \text{Monto Notas Crédito} + \sum \text{Ajustes Factura} + \sum \text{Costo Pedidos de Reposición}$$
+3. **MTTR (Mean Time to Resolution en horas):**
+   $$\text{MTTR} = \frac{\sum (\text{resolved\_at} - \text{created\_at})}{\text{Total Casos Resueltos}}$$
+4. **CRI (Customer Retention Impact):** Índice de alerta que detecta cuentas en riesgo de deserción ($\ge 2$ reclamos en el mes o impacto acumulado $> \$500.000$ COP).
+5. **VQR (Vendor Quality Rating %):**
+   $$\text{VQR} = 100 - \left(\frac{\text{Reclamos Imputados a Proveedor}}{\text{Total Compras}}\right) \times 100$$
+6. **CDR (Claim Defect Rate %):**
+   $$\text{CDR} = \frac{\text{Total PQRS}}{\text{Total Pedidos Entregados}} \times 100$$
+7. **PAR (Preventive Action Rate %):**
+   $$\text{PAR} = \frac{\text{Planes CAPA Cerrados / Verificados}}{\text{Total Planes CAPA Registrados}} \times 100$$
+- **Pareto Dual 80/20:** Gráfica interactiva que jerarquiza el 80% del impacto financiero según Causa Raíz L1 y según Proveedor o Proceso Imputado.
+
+### 20.5 Ciclo de Vida de Planes de Acción CAPA (Poka-Yoke)
+Todo caso auditado en `PqrAuditModal` puede originar un plan CAPA estructurado:
+1. **Acción Inmediata (Contención):** Compensación o reenvío en $< 24$ horas.
+2. **Causa Raíz (Análisis de los 5 Porqués):** Identificación del fallo sistémico en origen o tránsito.
+3. **Contramedida Preventiva Definitiva:** Modificación del protocolo de compra, calibración de báscula, o cambio de empaque.
+4. **Responsable Asignado & Fecha Compromiso:** Asignación individual con trazabilidad.
+
+### 20.6 Protocolo de Comunicación Humanizada WhatsApp SAC (`whatsappSAC.ts`)
+Para preservar la relación comercial B2B, el sistema genera mensajes estructurados de WhatsApp con un clic:
+- Saludo personalizado con el nombre del contacto institucional.
+- Referencia exacta al `#PED-XXXX` y fecha de entrega.
+- Reconocimiento explícito del producto afectado y cantidad reportada.
+- Solución acordada (Nota Crédito por $X COP o pedido de reposición `#PED-YYYY` en camino).
+- Despedida con compromiso de calidad y enlace de trazabilidad.
+
+---
+
+## 21. MÓDULO DE FACTURACIÓN MASIVA, CARTERA B2B & INTEGRACIÓN CONTABLE WORLD OFFICE (`/admin/commercial/billing`) (SDD v1.9.40)
+
+### 21.1 Misión & Principios Fiscales-Contables
+El Módulo de Facturación centraliza la emisión masiva de facturas electrónicas, remisiones valorizadas, notas crédito y la gestión de cartera corriente y vencida. Garantiza:
+1. **Continuidad e Inviolabilidad Numérica:** Prohibición absoluta de saltos o números duplicados en consecutivos fiscales DIAN.
+2. **Poka-Yoke Anti-Facturación Prematura:** Bloqueo automático de pedidos con PQRS o mermas sin resolver dentro de la ventana de gracia de 120 minutos.
+3. **Paridad con ERP World Office:** Generación de archivos planos de importación estructurados bajo la normativa contable colombiana.
+
+### 21.2 Doble Consecutivo Fiscal Independiente (Facturas vs Notas Crédito)
+Para evitar colisiones entre documentos de débito y crédito:
+- **Facturas Electrónicas (`billing_invoices`):** Gobernadas por `billing_invoice_prefix` (ej. `FAC`) y `billing_invoice_next_number` (ej. `1001`).
+- **Notas Crédito / Ajustes (`billing_returns` / `billing_invoices` tipo NC):** Gobernadas por `billing_nc_prefix` (ej. `NC`) y `billing_nc_next_number` (ej. `501`).
+- **Avance Atómico:** Al confirmar un corte masivo o selectivo, la secuencia global en `public.app_settings` se incrementa atómicamente en $+N$ (`N = cantidad de documentos emitidos`).
+
+### 21.3 Matriz de Tipos de Emisión Documental por Cliente & Sucursal
+El motor `resolveOrderBillingInfo` evalúa el tipo de documento aplicable:
+1. **Factura Impresa:** Clientes B2B con `print_invoice = true` o empresas que exigen factura física al momento de la descarga.
+2. **Remisión con Valor:** Clientes B2B con `document_type = 'remission'` y `remission_with_prices = true`.
+3. **Remisión sin Precios:** Clientes con entrega a ciegas en muelle (`document_type = 'remission'` y `remission_with_prices = false`).
+4. **Factura Digital:** Clientes B2C o clientes B2B con radicación electrónica vía email/XML DIAN.
+- **Plazos de Pago:**
+  - **B2B Institucional:** Hereda `payment_days` de la sucursal o matriz (ej. 15, 30, 45, 60 días de crédito; nunca contado).
+  - **B2C Hogar:** `Contra Entrega` o `Pasarela de Pagos (Pagado Previamente)`.
+
+### 21.4 Protocolo de Auditoría y Corte Masivo / Selectivo AM/PM
+1. **Selección Granular por Checkboxes:**
+   - Checkbox individual en cada fila de pedido con aislamiento de eventos (`e.stopPropagation()`).
+   - Checkbox maestro en el thead sticky (`top: 169px`) para selección total de pedidos filtrados.
+2. **Helpers Inteligentes de Auditoría:**
+   - `[✓ Solo Listos (N)]`: Marca únicamente pedidos con gracia expirada y cero reclamaciones.
+   - `[Todos (N)]`: Marca el universo filtrado por el omnibox o fecha.
+   - `[Limpiar]`: Deselecciona el lote actual.
+3. **Emisión de Corte Selectivo:**
+   - El modal de previsualización asigna números consecutivos DIAN en orden estricto de ruta y parada exclusivamente a los pedidos seleccionados, preservando la continuidad fiscal.
+
+### 21.5 Módulo de Cartera B2B, Aging Buckets & Expedientes de Crédito (Dossiers)
+- **Aging Buckets (Antigüedad de Saldos):**
+  - `Al Día`: Facturas dentro del plazo de crédito pactado.
+  - `Vencido 1 a 15 días`: Recordatorio preventivo amigable.
+  - `Vencido 16 a 30 días`: Alerta comercial de suspensión de crédito.
+  - `Vencido > 30 días`: Bloqueo automático para nuevos despachos.
+  - `Pagado`: Registro histórico con soporte de transferencia o consignación.
+- **Expediente Digital B2B (Dossier de Crédito & Pagaré):**
+  - Formulario estructurado en 6 capítulos: Datos Generales, Contactos Contables/Compras, Información Financiera & Tributaria, Referencias Comerciales/Bancarias, Negociación & Cupo Solicitado, Codeudores & Firmas.
+  - Generación de **Pagaré en Blanco con Carta de Instrucciones** debidamente firmado por el representante legal y codeudor.
+  - Aprobación formal de cupo monetario y plazo en días registrada con fecha, responsable y observaciones.
+
+### 21.6 Integración Contable World Office (`.xlsx`)
+El módulo exporta el archivo plano oficial estructurado bajo el estándar de importación masiva de World Office (`src/lib/worldOfficeExport.ts`):
+- **Columnas Requeridas:** Tipo de Documento (`FAC` o `NC`), Consecutivo, Fecha, NIT de Tercero, Código de Cuenta Contable (PUC 4135 Ingresos, PUC 1305 Clientes, PUC 2408 IVA Generado, PUC 2365 Retenciones), Centro de Costos, Valor Débito, Valor Crédito, Detalle/Concepto y Referencia de Pedido.
+- **Validación de Balance Débito/Crédito:** El exportador asegura que $\sum \text{Débitos} = \sum \text{Créditos}$ con tolerancia 0 COP.
+
+---
+
+### 21.7 Criterios de Aceptación BDD Adicionales (Gherkin)
+
+#### Escenario 59: Emisión Oficial de RNC y Análisis de Causa Raíz en Calidad
+- **Given** una reclamación de calidad (`customer_service_pqrs`) radicada para el cliente "Hotel Tequendama" sobre el pedido `#2609_1045` por 15 kg de "Fresas con pudrición".
+- **When** el auditor de calidad abre `PqrAuditModal`, selecciona Categoría `fitopatologia`, Subtipo `pudricion_origen` e imputa la responsabilidad al proveedor "Agrícola del Valle".
+- **Then**:
+  1. Se actualiza el registro en `customer_service_pqrs` con la taxonomía y el proveedor imputado.
+  2. El sistema habilita el botón `[Imprimir RNC]` enlazado a `/admin/customer-service/rnc/[id]/print`.
+  3. El documento RNC se genera en tamaño Carta con membrete de Investments Cortés S.A.S., evidencias fotográficas, análisis de los 5 Porqués y casillas de firma reglamentarias.
+
+#### Escenario 60: Bloqueo Poka-Yoke de Facturación y Desbloqueo por Resolución Monetaria
+- **Given** un pedido `#PED-2001` entregado a las 08:00 AM con total de $500.000 COP.
+- **And** a las 08:30 AM el cliente radica una PQRS por producto no conforme valorado en $80.000 COP.
+- **When** el departamento de facturación consulta la galería `/admin/commercial/billing`.
+- **Then**:
+  1. El pedido muestra el badge `⚠️ PQRS Abierta / Retenido por Calidad` y queda excluido del corte automático (`isReadyForCut = false`).
+  2. Cuando Calidad resuelve el caso aprobando una Nota Crédito por $80.000 COP, el pedido se actualiza a `subtotal = $420.000` y `status = 'resolved'`.
+  3. En Facturación el pedido pasa de inmediato a `✓ Listo para Facturación` con el valor neto depurado.
+
+#### Escenario 61: Generación Dinámica de Mensaje Humanizado WhatsApp SAC
+- **Given** un caso de PQR resuelto a favor del cliente "Restaurante Wok 93" con compensación por Nota Crédito de $45.000 COP.
+- **When** el agente de SAC hace clic en el botón `[WhatsApp SAC]` en la fila del caso.
+- **Then**:
+  1. El motor `buildPqrWhatsAppMessage` genera el enlace `https://wa.me/57...` con el texto pre-redactado profesional y empático.
+  2. El mensaje incluye el nombre del contacto, `#PED-XXXX`, el valor exacto compensado y el compromiso de calidad sin errores ortográficos ni lenguaje hostil.
+
+#### Escenario 62: Telemetría de KPIs Lean (FTR, CoQ, CRI) y Pareto Dual
+- **Given** 100 pedidos entregados en el mes, de los cuales 95 no tuvieron incidencias y 5 tuvieron reclamos con un costo total de $320.000 COP.
+- **When** el jefe de calidad ingresa a la pestaña `Lean Dashboard` en `/admin/customer-service`.
+- **Then**:
+  1. El indicador FTR reporta exactamente `95.0%`.
+  2. El indicador CoQ reporta `$320.000 COP`.
+  3. El Pareto Dual 80/20 grafica las causas L1 y proveedores acumulando el 80% del valor para priorización de planes CAPA.
+
+#### Escenario 63: Consecutivos Fiscales Duales Independientes (Facturas vs Notas Crédito)
+- **Given** la configuración de facturación con `billing_invoice_next_number = 1050` y `billing_nc_next_number = 520`.
+- **When** se emite un corte de facturación con 10 facturas y simultáneamente se aprueban 2 notas crédito en devoluciones.
+- **Then**:
+  1. Las facturas reciben los números `FAC-1050` al `FAC-1059` y `billing_invoice_next_number` se actualiza a `1060`.
+  2. Las notas crédito reciben los números `NC-520` y `NC-521` y `billing_nc_next_number` se actualiza a `522`.
+  3. No ocurre ninguna colisión ni salto numérico en ambas secuencias.
+
+#### Escenario 64: Generación de Corte Selectivo con Checkboxes y Helpers de Auditoría
+- **Given** 30 pedidos pendientes en la galería de facturación, de los cuales 12 están en estado `Listos` y 18 en `En Gracia`.
+- **When** el operador pulsa el helper `[✓ Solo Listos (12)]` y hace clic en `Auditar y Generar Corte AM (12 sel)`.
+- **Then**:
+  1. La tabla resalta las 12 filas seleccionadas con fondo verde suave (`#F0FDF4`) y borde izquierdo verde (`#0D7A57`).
+  2. El modal de previsualización carga única y exclusivamente los 12 pedidos seleccionados.
+  3. Al confirmar el corte, se emiten 12 facturas correlativas continuas y la selección de checkboxes se limpia automáticamente.
+
+#### Escenario 65: Mapeo y Exportación de Plano Contable World Office (.xlsx)
+- **Given** un corte de facturación `CUT-045` generado con 20 facturas electrónicas.
+- **When** el usuario pulsa `[Plano World Office (.xlsx)]` en la fila del corte.
+- **Then**:
+  1. El exportador `src/lib/worldOfficeExport.ts` genera el archivo Excel con las cuentas PUC 4135 (Ingresos), 1305 (Clientes) y 2408 (IVA).
+  2. La sumatoria de débitos y créditos del archivo resultante es idéntica ($\Delta = 0$).
+  3. El archivo se descarga automáticamente en el navegador listo para importar en el software World Office.
+
+#### Escenario 66: Radicación y Aprobación de Expediente B2B con Pagaré y Límites de Crédito
+- **Given** un cliente corporativo nuevo "Cadena Gastronómica SAS" que solicita crédito a 30 días por cupo de $10.000.000 COP.
+- **When** el analista de cartera completa las 6 secciones del Dossier en `/admin/commercial/billing` (pestaña Cartera -> Expedientes B2B) y adjunta el pagaré firmado.
+- **Then**:
+  1. El registro se persiste en `b2b_dossiers` con estado `radicado`.
+  2. Al ser aprobado por la gerencia, el cupo y plazo se asocian al perfil del cliente y el expediente pasa a estado `aprobado`.
+  3. El cliente queda habilitado para emitir pedidos con plazo de crédito a 30 días.
+
+#### Escenario 67: Análisis de Tendencia Temporal e Histogramas Run-Chart de Causas Raíz
+- **Given** una serie histórica de 30 días con incidencias recurrentes de *Daño Físico & Mecánico* y la implementación de un plan CAPA el día 15.
+- **When** el auditor de calidad consulta la sección *Histograma de Evolución & Tendencia Temporal* en `PqrLeanDashboard.tsx` y selecciona la Macrocausa L1 "Daño Físico & Mecánico".
+- **Then**:
+  1. El motor agrupa temporalmente las incidencias por la granularidad activa (`Diario`, `Semanal` o `Mensual`) y calcula la métrica seleccionada (`# Casos` vs `$ Costo COP`).
+  2. El sistema calcula la tasa de cambio interperiódica $\Delta\% = \frac{\sum(\text{Segunda Mitad}) - \sum(\text{Primera Mitad})}{\sum(\text{Primera Mitad})} \times 100$.
+  3. Si $\Delta\% \le -15\%$, muestra el badge verde `📉 Mejorando (-X%)`; si $\Delta\% \ge +15\%$, muestra el badge rojo crítico `🚨 Empeorando (+X%)`; de lo contrario, muestra `➡️ Estable`.
+  4. La gráfica SVG renderiza las barras temporales con su curva polilínea de tendencia suavizada e hito de plan CAPA, y la tabla de desglose dibuja mini sparklines SVG de 6 barras con botones directos `[+ Plan CAPA]`.
+  5. La barra de selección de macrocausas se distribuye en modo fluido multi-línea (`flex-wrap`) con micro-contadores reactivos de incidencias (`[🔴 Daño Mecánico (N)]`), eliminando al 100% las barras de desplazamiento horizontal del navegador.
+---
+
+### 20.8 Protocolo de PQRS Proactiva por Quiebre de Abastecimiento en Plaza con Auto-Liberación Poka-Yoke & Anexión al Siguiente Pedido (D+1) (SDD v1.9.41)
+
+Para erradicar la fricción y el colapso operativo en cocinas HORECA cuando un producto se agota en la Central de Abastos (Corabastos):
+
+1. **Génesis & Autogeneración Proactiva (03:30 AM):**
+   - Al marcar `status = 'shortage'` ("NO LO HAY") en la planilla o terminal de compras (`/ops/compras`), el sistema crea automáticamente un caso en `customer_service_pqrs` en estado `pending` con la etiqueta `[🚨 Quiebre en Plaza: Requiere Acción Inmediata]`.
+2. **Triángulo de Decisión HORECA en Calidad & SAC:**
+   - El agente de SAC recibe la alerta en tiempo real y contacta al chef o comprador institucional vía WhatsApp antes de las 05:30 AM ofreciendo:
+     - **Opción A (Sustitución Inmediata en Bodega):** Sugiere un SKU equivalente (ej. *Papa Sabanera Cero* o *Papa Pastusa* en lugar de *Papa R-12*). Si el cliente acepta, se actualiza el ítem en `order_items` y bodega empaca el sustituto.
+     - **Opción B (Cancelación / Retiro sin Costo):** Se retira el ítem a `logistics_data.cancelled_items`, se recalcula la remisión neta y los kilos se asientan automáticamente en la **Columna K (Producto Escaso)** del inventario.
+     - **Opción C (Anexión al Siguiente Pedido Programado D+1):** Se agenda el producto para que viaje consolidado en el siguiente pedido habitual del cliente, **prohibiendo estrictamente desviar rutas vehiculares o generar fletes individuales improductivos para micro-cantidades**.
+3. **Temporizador de Cuenta Regresiva & Auto-Liberación Poka-Yoke por Timeout:**
+   - Para garantizar que **ningún camión quede retenido en muelle**, la consulta al cliente tiene un tiempo límite estricto:
+     $$\text{Timeout} = \min(\text{Hora Salida de Ruta} - 20\text{ minutos},\; \text{Hora Alerta SAC} + 30\text{ minutos})$$
+   - Si el temporizador llega a `00:00` sin respuesta del cliente:
+     1. El sistema ejecuta automáticamente la **Opción B (Auto-Retiro Seguro)**.
+     2. La orden se libera en bodega, la canastilla se sella y el camión parte puntual a su ruta.
+     3. Se envía automáticamente un mensaje de cortesía por WhatsApp informando que el pedido fue despachado a tiempo con la remisión depurada para proteger su franja de entrega.
+4. **Regla de Respuesta Tardía (Consolidación en Próximo Pedido):**
+   - Si el cliente responde después de la salida del vehículo (ej. 10:30 AM), el sistema **NUNCA desvía un camión ni fuerza un flete aislado**.
+   - El agente de SAC pulsa `[Anexar a Próximo Pedido]`, inyectando el producto o sustituto directamente a la orden programada de mañana ($D+1$) o a la siguiente fecha habitual de entrega del cliente.
+
+---
+
+#### Escenario 68: Protocolo de PQRS Proactiva por Quiebre de Abastecimiento con Auto-Liberación Poka-Yoke por Timeout y Anexión al Siguiente Pedido (D+1)
+- **Given** un pedido de 20 kg de "Papa R-12" para el cliente "Restaurante La Casona" con salida de ruta programada para las 06:00 AM.
+- **And** el comprador en Corabastos reporta a las 03:45 AM que la Papa R-12 está agotada en plaza (`shortage`).
+- **When** se procesa la novedad en el sistema.
+- **Then**:
+  1. Se crea automáticamente una PQRS Proactiva en `customer_service_pqrs` vinculada al pedido y cliente.
+  2. El agente de SAC envía la propuesta de sustitución (Papa Sabanera) por WhatsApp a las 04:30 AM con un temporizador de 30 minutos (vencimiento: 05:00 AM).
+  3. **Caso A (Respuesta a Tiempo a las 04:45 AM):** El cliente acepta la sustitución; el sistema reemplaza el SKU en `order_items` y bodega empaca 20 kg de Papa Sabanera.
+  4. **Caso B (Timeout sin Respuesta a las 05:00 AM):** Al vencer el temporizador, el sistema ejecuta la Auto-Liberación Poka-Yoke: retira los 20 kg de Papa R-12, recalcula la remisión sin cobro, asienta los 20 kg en la Columna K de Inventarios y libera el despacho para salida puntual a las 06:00 AM.
+  5. **Caso C (Respuesta Tardía a las 09:30 AM):** El cliente solicita que le envíen la papa; el sistema no desvía el camión y anexa automáticamente los 20 kg al pedido programado de mañana ($D+1$) del restaurante.
