@@ -702,3 +702,353 @@ Operador Agro-Logístico • FruFresco Institucional
 Gestión Comercial: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com`;
 }
 
+// ------------------------------------------------------------------------------------------------
+// BOLETÍN SEMANAL AGRO-COMERCIAL DE COSECHAS & ESCASEZ CON SUSTITUTOS (EVT-10)
+// ------------------------------------------------------------------------------------------------
+
+export interface HarvestOpportunityItem {
+  id?: string;
+  name: string;
+  unit: string;
+  suggested_price: number | string;
+  origin?: string;
+  trend?: 'down' | 'stable';
+  culinary_note?: string;
+}
+
+export interface ScarcitySubstituteItem {
+  name: string;
+  unit: string;
+  ratio_description?: string;
+  price_comparison?: string;
+}
+
+export interface ScarcityAlertItem {
+  id?: string;
+  name: string;
+  unit: string;
+  reason: string;
+  substitutes: ScarcitySubstituteItem[];
+}
+
+export interface WeeklyHarvestBulletinEmailData {
+  client_name: string;
+  bulletin_title?: string;
+  week_label?: string;
+  harvest_items: HarvestOpportunityItem[];
+  scarcity_items: ScarcityAlertItem[];
+  responsible_agent?: string;
+  notes?: string;
+}
+
+export function generateWeeklyHarvestBulletinHtml(data: WeeklyHarvestBulletinEmailData): string {
+  const clientName = data.client_name || 'Estimado Cliente Institucional';
+  const weekLabel = data.week_label || 'Semana en Curso';
+  const responsibleAgent = data.responsible_agent || 'Dirección Comercial & Agronómica';
+  const harvestItems = data.harvest_items || [];
+  const scarcityItems = data.scarcity_items || [];
+  const notes = data.notes || '';
+  const preheaderText = `Boletín Semanal Agro-Comercial FruFresco (${weekLabel}). Oportunidades de cosecha, alertas de escasez y alternativas gastronómicas para optimizar costos de cocina.`;
+
+  // Render Harvest Rows
+  const harvestRowsHtml = harvestItems.map((item, idx) => {
+    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F0FDF4';
+    const priceNum = typeof item.suggested_price === 'number' ? item.suggested_price : parseFloat(String(item.suggested_price).replace(/[^0-9.-]+/g, '')) || 0;
+    const priceStr = priceNum.toLocaleString('es-CO');
+
+    return `
+      <tr style="background-color: ${rowBg}; border-bottom: 1px solid #DCFCE7;">
+        <td style="padding: 12px 14px; vertical-align: middle;">
+          <div style="font-weight: 700; color: #0F172A; font-size: 13.5px; font-family: 'Outfit', sans-serif;">
+            ${item.name}
+          </div>
+          ${item.culinary_note ? `
+            <div style="font-size: 11px; color: #166534; font-weight: 500; margin-top: 2px; line-height: 1.3;">
+              ${LUCIDE_ICONS.check}${item.culinary_note}
+            </div>
+          ` : ''}
+        </td>
+        <td style="padding: 12px 10px; text-align: center; color: #475569; font-size: 12px; font-weight: 600; white-space: nowrap; vertical-align: middle;">
+          ${item.unit || 'Kg'}
+        </td>
+        <td style="padding: 12px 10px; text-align: center; vertical-align: middle; white-space: nowrap;">
+          <span style="display: inline-block; background-color: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.4px;">
+            ${item.origin || 'Boyacá / Sabana'}
+          </span>
+        </td>
+        <td style="padding: 12px 14px; text-align: right; font-weight: 800; color: #047857; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle;">
+          $${priceStr} <span style="font-size: 10px; font-weight: 600; color: #64748B;">COP</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Render Scarcity Cards
+  const scarcityCardsHtml = scarcityItems.map((item) => {
+    const subsHtml = item.substitutes.map(sub => `
+      <div style="background-color: #FFFFFF; border: 1px solid #FECACA; border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: table; width: 100%; box-sizing: border-box;">
+        <div style="display: table-cell; vertical-align: middle; width: 50%;">
+          <strong style="color: #991B1B; font-size: 12px; font-family: 'Outfit', sans-serif;">
+            👉 Sustituto Sugerido: ${sub.name}
+          </strong>
+          <span style="font-size: 11px; color: #64748B; margin-left: 4px;">(${sub.unit})</span>
+        </div>
+        <div style="display: table-cell; vertical-align: middle; text-align: right; width: 50%; font-size: 11px; color: #475569;">
+          ${sub.ratio_description ? `<span style="background-color: #FEF2F2; color: #991B1B; font-weight: 700; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 6px;">${sub.ratio_description}</span>` : ''}
+          ${sub.price_comparison ? `<strong style="color: #047857; font-variant-numeric: tabular-nums;">${sub.price_comparison}</strong>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div style="background-color: #FFF5F5; border: 1px solid #FCA5A5; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;">
+        <table role="presentation" width="100%" style="border-collapse: collapse;">
+          <tr>
+            <td style="vertical-align: top;">
+              <span style="display: inline-block; background-color: #DC2626; color: #FFFFFF; font-size: 9.5px; font-weight: 800; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                ${LUCIDE_ICONS.alert}ALERTA DE PLAZA / ESCASO
+              </span>
+              <div style="font-size: 14.5px; font-weight: 800; color: #991B1B; font-family: 'Outfit', sans-serif;">
+                ${item.name} <span style="font-size: 12px; font-weight: 600; color: #7F1D1D;">(${item.unit})</span>
+              </div>
+              <div style="font-size: 11.5px; color: #7F1D1D; margin-top: 2px; line-height: 1.35;">
+                <strong>Causa agronómica:</strong> ${item.reason}
+              </div>
+            </td>
+          </tr>
+        </table>
+        ${subsHtml}
+      </div>
+    `;
+  }).join('');
+
+  return `
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <title>Boletín Semanal Agro-Comercial - FruFresco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table {
+      border-collapse: collapse;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+    }
+    @media (prefers-color-scheme: dark) {
+      .email-bg { background-color: #0B0F19 !important; }
+      .card-bg { background-color: #111827 !important; border-color: #1F2937 !important; color: #F9FAFB !important; }
+      .box-bg { background-color: #1F2937 !important; border-color: #374151 !important; color: #F3F4F6 !important; }
+      .text-dark { color: #F9FAFB !important; }
+    }
+  </style>
+</head>
+<body class="email-bg" style="margin: 0; padding: 25px 10px; background-color: #F1F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1E293B; -webkit-font-smoothing: antialiased;">
+
+  <!-- PREHEADER -->
+  <div style="display: none; max-height: 0px; overflow: hidden; font-size: 1px; line-height: 1px; opacity: 0;">
+    ${preheaderText} &zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+
+  <div class="card-bg" style="max-width: 650px; margin: 0 auto; background-color: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(8, 28, 21, 0.08); border: 1px solid #E2E8F0;">
+    
+    <!-- 1. TOP CORPORATE BAR (Membrete Canónico Oficial Remisión) -->
+    <table role="presentation" width="100%" style="background-color: #FFFFFF; border-bottom: 2px solid #F1F5F9; padding: 18px 28px;">
+      <tr>
+        <td style="vertical-align: middle; text-align: left; width: 170px;">
+          <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="160" height="auto" alt="Investments Cortés" style="border: 0; display: block; max-height: 54px; object-fit: contain;">
+        </td>
+        <td style="vertical-align: middle; text-align: right; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="font-size: 13px; font-weight: 800; color: #0F172A; text-transform: uppercase; letter-spacing: 0.5px;">
+            Investments Cortés S.A.S.
+          </div>
+          <div style="font-size: 11px; color: #64748B; font-weight: 600; margin-top: 2px;">
+            NIT 901.393.217-5 • Régimen Común
+          </div>
+          <div style="font-size: 10px; color: #0D7A57; font-weight: 700; margin-top: 1px;">
+            Operador Agro-Logístico • FruFresco Institucional
+          </div>
+          <div style="font-size: 10px; color: #64748B; margin-top: 1px;">
+            Mesa Comercial: 301 542 1761 • pedidos@frufresco.com
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- 2. HERO BANNER -->
+    <div style="background: linear-gradient(135deg, #064E3B 0%, #065F46 45%, #0F172A 100%); padding: 24px 28px 22px; text-align: left; color: white;">
+      <div style="margin-bottom: 8px;">
+        <span style="display: inline-block; background-color: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.3); color: #FDE68A; font-size: 10px; font-weight: 800; padding: 4px 12px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.8px; font-family: 'Outfit', sans-serif;">
+          BOLETÍN AGRO-COMERCIAL SEMANAL • INTELIGENCIA DE MERCADO
+        </span>
+      </div>
+      <h1 style="font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 22px; font-weight: 900; margin: 0 0 4px 0; color: #FFFFFF; letter-spacing: -0.3px; line-height: 1.2;">
+        Cosechas, Oportunidades & Alertas de Plaza
+      </h1>
+      <p style="margin: 0; font-size: 13px; color: #E2E8F0; font-weight: 500;">
+        Preparado especialmente para el equipo de cocina y compras de: <span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; color: #FDE68A; font-size: 16px;">${clientName}</span>
+      </p>
+    </div>
+
+    <!-- 3. METADATA STRIP -->
+    <div style="padding: 16px 28px 10px;">
+      <table role="presentation" width="100%" class="box-bg" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; padding: 12px 16px;">
+        <tr>
+          <td width="50%" style="vertical-align: top;">
+            <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">
+              ${LUCIDE_ICONS.calendar}Ciclo de Mercado
+            </span>
+            <strong class="text-dark" style="font-size: 12.5px; color: #0F172A; font-family: 'Outfit', sans-serif;">${weekLabel}</strong>
+          </td>
+          <td width="50%" style="vertical-align: top;">
+            <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">
+              ${LUCIDE_ICONS.clock}Dirección Técnica
+            </span>
+            <strong class="text-dark" style="font-size: 12.5px; color: #0F172A; font-family: 'Outfit', sans-serif;">${responsibleAgent}</strong>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 4. SECCIÓN DE COSECHAS & ABUNDANCIA -->
+    ${harvestItems.length > 0 ? `
+    <div style="padding: 12px 28px;">
+      <div style="margin-bottom: 10px;">
+        <span style="display: inline-block; background-color: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+          🟢 ALTA DISPONIBILIDAD & MEJOR COSTO
+        </span>
+        <h3 class="text-dark" style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 800; color: #0F172A; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">
+          Productos en Pico de Cosecha (${harvestItems.length} oportunidades)
+        </h3>
+        <p style="font-size: 11.5px; color: #64748B; margin: 2px 0 0 0;">
+          Excelente calidad de campo, mayor rendimiento y tarifas favorables para incluir en menús de temporada.
+        </p>
+      </div>
+
+      <table role="presentation" width="100%" style="border-collapse: collapse; font-size: 13px; border: 1px solid #DCFCE7; border-radius: 10px; overflow: hidden;">
+        <thead>
+          <tr style="background-color: #F0FDF4; border-bottom: 2px solid #BBF7D0; color: #166534; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <th style="padding: 10px 14px; text-align: left; font-weight: 800; font-family: 'Outfit', sans-serif;">Producto & Recomendación</th>
+            <th style="padding: 10px 10px; text-align: center; font-weight: 800; font-family: 'Outfit', sans-serif;">Unidad</th>
+            <th style="padding: 10px 10px; text-align: center; font-weight: 800; font-family: 'Outfit', sans-serif;">Zona Origen</th>
+            <th style="padding: 10px 14px; text-align: right; font-weight: 800; font-family: 'Outfit', sans-serif;">Precio Sugerido</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${harvestRowsHtml}
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+    <!-- 5. SECCIÓN DE ESCASEZ & SUSTITUTOS CULINARIOS -->
+    ${scarcityItems.length > 0 ? `
+    <div style="padding: 16px 28px 10px;">
+      <div style="margin-bottom: 12px;">
+        <span style="display: inline-block; background-color: #FEE2E2; color: #B91C1C; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+          🔴 CONTINUIDAD DE MENÚ & CONTROL DE COSTOS
+        </span>
+        <h3 class="text-dark" style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 800; color: #0F172A; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">
+          Alertas de Escasez & Sustitutos Gastronómicos (${scarcityItems.length} alertas)
+        </h3>
+        <p style="font-size: 11.5px; color: #64748B; margin: 2px 0 0 0;">
+          Estos productos presentan quiebre o alza por condiciones climáticas en plaza. Presentamos alternativas directas para proteger tu margen.
+        </p>
+      </div>
+
+      <div>
+        ${scarcityCardsHtml}
+      </div>
+    </div>
+    ` : ''}
+
+    ${notes ? `
+    <!-- OBSERVACIONES AGRONÓMICAS -->
+    <div style="margin: 6px 28px 16px; background-color: #F8FAFC; border-left: 3px solid #047857; border-radius: 6px; padding: 12px 16px; font-size: 12px; color: #475569; line-height: 1.4;">
+      <strong>Nota Técnica de la Mesa Agro-Logística:</strong> ${notes}
+    </div>
+    ` : ''}
+
+    <!-- 6. BANNER DE SOPORTE & ATENCIÓN DIRECTA -->
+    <div style="margin: 10px 28px 24px;">
+      <table role="presentation" width="100%" class="box-bg" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 18px; font-size: 12px; color: #475569; line-height: 1.5;">
+        <tr>
+          <td>
+            <strong>¿Deseas adaptar los insumos de tu menú semanal o programar pedidos con estas alternativas?</strong><br>
+            Comunícate con tu asesor comercial asignado o escríbenos a: 
+            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> • <a href="mailto:pedidos@frufresco.com" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.com</a>.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 7. FOOTER CORPORATIVO -->
+    <div class="box-bg" style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 20px 28px; text-align: center; font-size: 11px; color: #94A3B8;">
+      <p style="margin: 0 0 4px 0; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; font-family: 'Outfit', sans-serif;">
+        Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común
+      </p>
+      <p style="margin: 0; color: #0D7A57; font-weight: 700;">
+        Operador Agro-Logístico • FruFresco Institucional • Bogotá & Sabana
+      </p>
+      <p style="margin: 6px 0 0 0; font-size: 9.5px; color: #94A3B8;">
+        Boletín Semanal de Inteligencia Agro-Comercial • Uso Exclusivo Clientes B2B
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+export function generateWeeklyHarvestBulletinText(data: WeeklyHarvestBulletinEmailData): string {
+  const clientName = data.client_name || 'Cliente Institucional';
+  const weekLabel = data.week_label || 'Semana en Curso';
+  const harvestItems = data.harvest_items || [];
+  const scarcityItems = data.scarcity_items || [];
+
+  const harvestText = harvestItems.map(h => 
+    `• ${h.name} (${h.unit}): $${h.suggested_price} COP [Origen: ${h.origin || 'Sabana'}] - ${h.culinary_note || ''}`
+  ).join('\n');
+
+  const scarcityText = scarcityItems.map(s => {
+    const subs = s.substitutes.map(sub => `   👉 Sustituto: ${sub.name} (${sub.unit}) [${sub.ratio_description || ''} | ${sub.price_comparison || ''}]`).join('\n');
+    return `• ${s.name} (${s.unit}) - Causa: ${s.reason}\n${subs}`;
+  }).join('\n\n');
+
+  return `BOLETÍN AGRO-COMERCIAL SEMANAL • FRUFRESCO (${weekLabel})
+
+Estimado equipo de ${clientName},
+
+Compartimos las oportunidades de cosecha y novedades de abastecimiento para optimizar el rendimiento de sus costos de cocina:
+
+--- PRODUCTOS EN PICO DE COSECHA (Mejor Costo & Calidad) ---
+${harvestText || 'Sin novedades destacadas esta semana.'}
+
+--- ALERTAS DE ESCASEZ & ALTERNATIVAS GASTRONÓMICAS ---
+${scarcityText || 'Abastecimiento en plaza 100% normalizado.'}
+
+Para pedidos o ajustes de programación:
+Investments Cortés S.A.S. • NIT 901.393.217-5
+Mesa Comercial: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com`;
+}
+
+

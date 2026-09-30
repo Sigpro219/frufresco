@@ -39,11 +39,13 @@ import {
     Globe,
     LayoutGrid,
     Navigation,
-    Sparkles
+    Sparkles,
+    Sprout
 } from 'lucide-react';
 import Link from 'next/link';
 import { Map as GoogleMap, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import { evaluateCostFreshness, getFreshnessSLA } from '@/lib/commercial/costFreshnessPolicy';
+import WeeklyMarketBulletinModal from './WeeklyMarketBulletinModal';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month' | 'all';
 
@@ -496,6 +498,16 @@ export default function CommercialUnifiedDashboard({
     const [selectedPin, setSelectedPin] = useState<ClientMapPin | null>(null);
     const [focusTarget, setFocusTarget] = useState<{ lat: number; lng: number } | null>(null);
 
+    // Weekly Market Bulletin HITL state
+    const [isBulletinModalOpen, setIsBulletinModalOpen] = useState(false);
+    const [lastBulletinDispatch, setLastBulletinDispatch] = useState<{
+        dispatched_at: string;
+        week_label: string;
+        author_name: string;
+        clients_count: number;
+        emails_enqueued?: number;
+    } | null>(null);
+
     // Calculate dates based on timeRange
     const getDateRanges = useCallback((range: TimeRange) => {
         const now = new Date();
@@ -557,8 +569,8 @@ export default function CommercialUnifiedDashboard({
             const profileMap = new Map<string, any>();
             (profilesData || []).forEach(p => profileMap.set(p.id, p));
 
-            // 2. Fetch Active Products Catalog, Matrix Costs, Purchases, Leads & Quotes
-            const [productsRes, matrixRes, appSettingsRes, purchasesRes, leadsRes, quotesRes] = await Promise.all([
+            // 2. Fetch Active Products Catalog, Matrix Costs, Purchases, Leads, Quotes & Bulletin Audit
+            const [productsRes, matrixRes, appSettingsRes, purchasesRes, leadsRes, quotesRes, bulletinAuditRes] = await Promise.all([
                 supabase
                     .from('products')
                     .select('id, name, sku, accounting_id, category, unit_of_measure, is_active, base_price')
@@ -582,8 +594,24 @@ export default function CommercialUnifiedDashboard({
                 supabase
                     .from('quotes')
                     .select('id, quote_number, client_id, lead_id, client_name, total_amount, subtotal_amount, status, valid_until, start_date, created_at')
-                    .order('created_at', { ascending: false })
+                    .order('created_at', { ascending: false }),
+                supabase
+                    .from('app_settings')
+                    .select('key, value')
+                    .eq('key', 'last_weekly_bulletin_dispatch')
+                    .maybeSingle()
             ]);
+
+            if (bulletinAuditRes?.data?.value) {
+                try {
+                    const parsed = typeof bulletinAuditRes.data.value === 'string'
+                        ? JSON.parse(bulletinAuditRes.data.value)
+                        : bulletinAuditRes.data.value;
+                    setLastBulletinDispatch(parsed);
+                } catch (e) {
+                    // Ignore parsing error
+                }
+            }
 
             const leadsRaw = leadsRes.data || [];
             const quotesRaw = quotesRes.data || [];
@@ -1435,6 +1463,140 @@ export default function CommercialUnifiedDashboard({
                         }}
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
+
+            {/* TACTICAL WEEKLY TASK: BOLETÍN AGRO-COMERCIAL DE COSECHAS & ESCASEZ (HITL) */}
+            <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderLeft: '5px solid #059669',
+                borderRadius: THEME.radius.lg,
+                padding: '1.25rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1.25rem',
+                boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
+                color: '#FFFFFF'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '320px', flex: 1 }}>
+                    <div style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '14px',
+                        backgroundColor: 'rgba(5, 150, 105, 0.2)',
+                        border: '1px solid rgba(5, 150, 105, 0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: '#34D399'
+                    }}>
+                        <Sprout size={26} />
+                    </div>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <span style={{
+                                fontSize: '0.7rem',
+                                fontWeight: '800',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.8px',
+                                backgroundColor: '#065F46',
+                                color: '#A7F3D0',
+                                padding: '2px 8px',
+                                borderRadius: '100px'
+                            }}>
+                                Centro de Tareas Semanales • HITL
+                            </span>
+                            {lastBulletinDispatch ? (
+                                <span style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    backgroundColor: '#064E3B',
+                                    color: '#6EE7B7',
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}>
+                                    ✓ Despachado: {new Date(lastBulletinDispatch.dispatched_at).toLocaleDateString('es-CO')} ({lastBulletinDispatch.clients_count} cuentas)
+                                </span>
+                            ) : (
+                                <span style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    backgroundColor: '#78350F',
+                                    color: '#FDE68A',
+                                    padding: '2px 8px',
+                                    borderRadius: '6px'
+                                }}>
+                                    ● Pendiente de Envío Semanal
+                                </span>
+                            )}
+                        </div>
+                        <h3 style={{
+                            margin: '4px 0 2px 0',
+                            fontSize: '1.05rem',
+                            fontWeight: '900',
+                            color: '#FFFFFF',
+                            fontFamily: 'Outfit, sans-serif',
+                            letterSpacing: '-0.2px'
+                        }}>
+                            Boletín Agro-Comercial: Oportunidades de Cosecha & Alertas con Sustitutos B2B
+                        </h3>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8', lineHeight: 1.4 }}>
+                            Filtro inteligente por consumo real histórico $\le 60$d. Solo notifica a cuentas que compran los productos afectados (cero spam y protección de contratos).
+                        </p>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
+                        <span style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            color: '#A7F3D0',
+                            fontWeight: '700'
+                        }}>
+                            🌿 {costDecreases.length > 0 ? costDecreases.length : 4} Cosechas
+                        </span>
+                        <span style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            color: '#FCA5A5',
+                            fontWeight: '700'
+                        }}>
+                            ⚠️ {costIncreases.length > 0 ? costIncreases.length : 3} Alertas Plaza
+                        </span>
+                    </div>
+
+                    <button
+                        onClick={() => setIsBulletinModalOpen(true)}
+                        style={{
+                            backgroundColor: '#059669',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            padding: '0.65rem 1.25rem',
+                            borderRadius: '10px',
+                            fontSize: '0.86rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        <Sparkles size={16} /> Iniciar Despacho de Boletín Semanal
                     </button>
                 </div>
             </div>
@@ -3032,6 +3194,23 @@ export default function CommercialUnifiedDashboard({
 
                 </div>
             </div>
+
+            {/* WEEKLY MARKET BULLETIN HITL MODAL */}
+            <WeeklyMarketBulletinModal
+                isOpen={isBulletinModalOpen}
+                onClose={() => setIsBulletinModalOpen(false)}
+                onDispatchSuccess={(payload) => {
+                    setLastBulletinDispatch({
+                        dispatched_at: new Date().toISOString(),
+                        week_label: payload.weekLabel,
+                        author_name: 'German Higuera',
+                        clients_count: payload.clientsCount,
+                        emails_enqueued: payload.emailsCount
+                    });
+                    handleRefresh();
+                }}
+                currentUser={{ id: '', name: 'German Higuera', role: 'Dirección Comercial' }}
+            />
 
         </div>
     );

@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
+import { 
+  generateOrderConfirmationHtml, 
+  generateOrderConfirmationText,
+  generateAgreementNotificationHtml,
+  generateAgreementNotificationText,
+  generateWeeklyHarvestBulletinHtml,
+  generateWeeklyHarvestBulletinText
+} from '@/lib/emailTemplates';
 
 // Helper function to send email for a single mail record
 async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
@@ -27,6 +34,12 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
       if (tName === 'order_confirmation' || tName === 'order_correction') {
         htmlContent = generateOrderConfirmationHtml(tData);
         textContent = generateOrderConfirmationText(tData);
+      } else if (tName === 'agreement_notification' || tName === 'agreement_price_diff') {
+        htmlContent = generateAgreementNotificationHtml(tData);
+        textContent = generateAgreementNotificationText(tData);
+      } else if (tName === 'weekly_market_bulletin' || tName === 'weekly_harvest_bulletin') {
+        htmlContent = generateWeeklyHarvestBulletinHtml(tData);
+        textContent = generateWeeklyHarvestBulletinText(tData);
       } else {
         htmlContent = `<p>${JSON.stringify(template)}</p>`;
         textContent = JSON.stringify(template);

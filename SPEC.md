@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.49 (Adendas de Modificación Parcial de Precios por Cosecha/Consumo con Justificación Agronómica & Despacho Unificado Diff Email/WhatsApp, Protocolo HITL de Notificaciones Transaccionales B2B, Banner de Alta Visibilidad, Audit Trail Forense)
+> **Versión:** 1.9.50 (Boletín Semanal Agro-Comercial de Cosechas & Escasez con Sustitutos Culinarios B2B, Filtrado por Consumo Real Histórico ≤60d / Acuerdos Activos, Módulo de Tareas Tácticas Semanales HITL en Dashboard Comercial BI, Protocolo Multi-Fase de Despacho Asistido, EVT-10, Escenario BDD 87)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -801,6 +801,29 @@ El Dashboard Comercial centraliza la inteligencia de negocios (BI) de ventas, re
 3. **Alertas de Erosión de Margen (Andon Comercial):** Detección de productos vendidos por debajo del umbral mínimo de rentabilidad ($le 12\%$).
 4. **Desempeño de KAMs & Cumplimiento de Cuotas:** Trazabilidad de cuentas asignadas, volumen facturado y tasa de retención por ejecutivo de cuenta.
 5. **Filtros Temporales Reactivos:** `Hoy`, `7 días`, `15 días`, `30 días`, `Mes en curso`, `Histórico total`.
+
+#### D. Centro de Tareas Tácticas Semanales & Asistente de Despacho de Boletín de Mercado (HITL)
+1. **Misión & Ubicación en Dashboard:**
+   - Un widget / tarjeta táctica destacada en la cabecera del Dashboard Comercial (`CommercialUnifiedDashboard.tsx`), con diseño de alta precisión industrial (*Swiss Precision Slate & Obsidian Titanium* - Skin 1). Sincroniza la inteligencia agronómica y de plaza con la estrategia comercial semanal.
+   - **Indicador de Estado Semanal:** Muestra el estado del ciclo corriente (*"Pendiente de envío esta semana"* con badge ámbar, o *"Despachado exitosamente el [Fecha] por [Usuario]"* con badge verde esmeralda).
+   - **Disparador Principal:** Botón `[🚀 Iniciar Despacho de Boletín Semanal de Cosechas & Escasez]`.
+
+2. **Arquitectura del Asistente HITL en 3 Fases:**
+   - **Fase 1: Selección de Oportunidades de Cosecha & Escasez con Sustitutos Culinarios:**
+     * El sistema identifica automáticamente los productos en pico de cosecha (abundancia, precios bajos, oportunidad de colocación comercial) y productos escasos o con quiebre de abastecimiento en Corabastos.
+     * Para cada ítem escaso, el motor propone 1 a 2 **Sustitutos Culinarios Recomendados** (ej. *Cebolla Morada $\rightarrow$ Cebolla Puerro / Chalota*, *Papa Pastusa $\rightarrow$ Papa R-12 / Sabanera*, *Cilantro $\rightarrow$ Perejil Crespo*).
+     * Cada producto y alternativa cuenta con casillas de verificación (`checkboxes`) individuales, permitiendo al Jefe Comercial desmarcar ítems que decida no comunicar.
+   - **Fase 2: Segmentación y Filtrado Dinámico por Consumo Real B2B (Matriz / Sucursales):**
+     * **Principio Anti-Spam & Respeto Contractual:** Solo se pre-seleccionan y activan clientes y casas matrices cuyo historial de pedidos en los últimos 60 días (`order_items` con `created_at >= now() - interval '60 days'`) o acuerdos contractuales vigentes (`quote_items` en acuerdos activos) incluyan al menos uno de los productos escasos o en cosecha seleccionados.
+     * **Regla de No-Consumo:** *«Si una cuenta institucional jamás ha comprado fresas o aguacates en su histórico, el sistema NO le envía notificación de escasez de dicho producto, preservando sus tarifas contractuales intactas y evitando alarmas innecesarias»*.
+     * **Jerarquía Matriz / Sedes:** Agrupación visual por Casas Matrices corporativas activas con desglose de sedes operativas. El operador puede desmarcar individualmente cualquier matriz o sucursal antes de proceder.
+   - **Fase 3: Previsualización Ejecutiva & Despacho en Bloque (Live Preview):**
+     * Renderizado en vivo del correo HTML responsivo con membrete legal de *Investments Cortés S.A.S. (NIT 901.393.217-5, Tel: 301 542 1761, pedidos@frufresco.com)*, sin dirección administrativa física y sin códigos SKU internos.
+     * Bloques editoriales diferenciados:
+       - 🟢 **Oportunidades de Cosecha & Abundancia:** Tarjetas esmeralda con producto, unidad, precio sugerido / tendencia a la baja y sugerencia de menú.
+       - 🔴 **Alerta de Escasez & Alternativas Sugeridas:** Tarjetas terracota / carmesí con el ítem escaso, motivo de plaza y píldoras con los sustitutos culinarios recomendados y su factor de equivalencia.
+     * Checkbox mandatorio: `[x] He validado el boletín agronómico y autorizo el despacho a las N cuentas seleccionadas`.
+     * Encolado asíncrono atómico en `public.mail` (`inbox_type = 'commercial'`, `source_module = 'weekly_market_bulletin'`) con procesamiento por `/api/mail/process`.
 
 ---
 
@@ -1802,7 +1825,7 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
   2. El mapa en memoria de acuerdos `agreementPrices` registra el 100% de los acuerdos sin omisiones.
   3. Ningún contrato ubicado después de la fila 1.000 queda huérfano de precios en el cliente web.
 
-### 11.10 Adendas de Modificación Parcial de Precios por Cosecha/Consumo con Justificación Agronómica & Despacho Unificado Diff (SDD v1.9.49)
+### 11.10 Adendas de Modificación Parcial de Precios por Cosecha/Consumo con Justificación Agronómica & Despacho Unificado Diff (SDD v1.9.50)
 
 1. **Principio de Ajuste Parcial sin Destrucción Contractual:**
    - En contratos institucionales (HORECA / Food Service), los acuerdos comerciales congelan más de 100-200 productos. Ante fluctuaciones climáticas, de cosecha o de plaza, el sistema permite realizar **modificaciones parciales de precios exclusivamente para el subconjunto de productos afectados** (ej. 5 a 15 SKUs), preservando inalterados todos los demás precios y condiciones del acuerdo.
@@ -1821,6 +1844,16 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
    - La plantilla de correo y el texto transaccional de WhatsApp incorporan la **quinta columna de Justificación de Abastecimiento** junto con los badges automáticos de variación (`🔴 +$X Sube` / `🟢 -$X Baja`).
    - El banner de alta visibilidad en el Drawer de acuerdos detecta los productos modificados y permite al comercial revisar las justificaciones y despachar la notificación formal en 1 solo clic.
 
+#### 11.10.1 Herramientas de Carga Masiva y Productividad en el Asistente de Adendas
+1. **Asignador Masivo de Justificación en Lote (1-Click Bulk Justification):**
+   - Cuando múltiples productos varían por la misma causa agronómica (ej. 8 frutas afectadas por lluvias), la barra de herramientas del asistente provee un selector de justificación global con el botón `[⚡ Aplicar a todos los modificados]`.
+   - Con un solo clic, se actualiza la justificación de todas las filas que posean variación de precio detectada (`newPrice !== oldPrice`), eliminando la fricción de seleccionar el desplegable fila por fila.
+
+2. **Importador Rápido de Mini-Excel / Portapapeles de Novedades (Partial Variation Ingestion):**
+   - Soporta la carga de archivos Excel pequeños (`.xlsx`, `.xls`) o el pegado directo desde portapapeles (`Copiar y Pegar celdas de Excel`) conteniendo únicamente los ítems que sufrieron cambio de precio (`ID Producto / Nombre`, `Nuevo Precio`, `Justificación [opcional]`).
+   - El motor de mapeo inteligente normaliza el texto, busca coincidencias por `accounting_id` o `product_name` dentro del acuerdo actual y rellena automáticamente los campos de `Nuevo Precio` y `Justificación` en la tabla interactiva.
+   - Provee telemetría de coincidencia (*"X de Y productos emparejados con éxito"*), preservando intactos todos los demás productos del acuerdo.
+
 #### Escenario 9: Modificación Parcial de Precios con Justificación Agronómica y Despacho Diff
 - **Given** un acuerdo comercial activo con el cliente "Diplomat Embajada Hotel Tryp" con 148 productos.
 - **When** el ejecutivo comercial abre el acuerdo y modifica el precio de "Fresa Richy" de \$5.200 a \$5.900 con justificación "Menor ingreso de fruta fresca; oferta limitada en cosecha", y "Limón Tahití" de \$5.400 a \$4.900 con justificación "Pico de cosecha; abundancia de producto".
@@ -1829,6 +1862,16 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
   2. El banner reactivo en el Drawer indica: `Novedades de Precios Registradas (2 productos modificados) ● Pendiente Notificar`.
   3. Al pulsar `[✈️ Notificar al Cliente]`, el modal de despacho precarga los 2 ítems con sus precios anteriores, nuevos, variación (`Sube`/`Baja`) y la justificación de abastecimiento respectiva.
   4. El correo HTML y el mensaje de WhatsApp se generan con la tabla de 5 columnas oficial lista para autorizar por la mesa de compras del cliente.
+
+#### Escenario 10: Importación de Mini-Excel de Novedades & Asignación Masiva de Justificaciones
+- **Given** un acuerdo comercial activo con 200 productos acordados.
+- **And** el área de compras envía un archivo Excel con solo 6 productos que variaron por temporada de lluvias.
+- **When** el ejecutivo comercial abre el Asistente de Adenda Parcial y sube el archivo de novedades o pega las celdas en el importador rápido.
+- **Then**:
+  1. El sistema empareja los 6 productos en la tabla y asigna sus nuevos precios de manera instantánea.
+  2. El comercial selecciona la justificación *"🌧️ Menor ingreso de fruta fresca; oferta limitada en cosecha / clima"* y pulsa `[⚡ Aplicar a todos los modificados]`.
+  3. Los 6 productos adoptan la justificación simultáneamente.
+  4. Al pulsar `[Aplicar Adenda y Despachar Notificación (Diff)]`, se persisten los cambios y se abre el módulo de despacho con los 6 productos listos para enviar al cliente.
 
 ---
 
@@ -3675,6 +3718,7 @@ El sistema de mensajería y notificaciones transaccionales de FruFresco gobierna
 | **EVT-07** | **Código OTP de Recuperación** | Pantalla de Autenticación (`/login`) | Solicitud de restablecimiento de contraseña. | Correo de la cuenta | Instantáneo con Cooldown (60 seg) |
 | **EVT-08** | **Activación de Acuerdo Comercial B2B** | Acuerdos Comerciales (`/admin/commercial?tab=clients&clientTab=agreements`) | Creación o réplica de nuevo acuerdo institucional con vigencia formalizada. | `profiles.email` / Contacto Compras / Sucursales | Modal Asistido HITL (Autorización explícita + Vista Previa) |
 | **EVT-09** | **Actualización de Precios en Acuerdo Vigente** | Acuerdos Comerciales (Drawer In-Situ / Batch) | Modificación de 1 o varios precios unitarios de productos pactados. | `profiles.email` / `additional_billing_emails` | Modal Asistido HITL (Visual Diff con precios anteriores vs nuevos) |
+| **EVT-10** | **Boletín Semanal Agro-Comercial de Cosechas & Escasez con Sustitutos** | Dashboard Comercial (`/admin/commercial?tab=dashboard`) | Tarea semanal táctica del Jefe Comercial con filtrado por consumo real histórico ($\le 60$d / Acuerdos). | Cuentas B2B / Matrices activas consumidoras (`profiles.email`) | Wizard HITL Multi-Fase (Selección de productos/sustitutos + segmentación matrices) |
 
 ---
 
@@ -3876,6 +3920,18 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
   4. La tabla muestra los nombres comerciales limpios sin códigos SKU, el precio anterior tachado en gris, el nuevo precio en negrita esmeralda (`font-variant-numeric: tabular-nums`) y el badge de variación (`+$400 COP`, `+$250 COP`).
   5. El sistema identifica y muestra en la cabecera del correo al asesor responsable del cambio y la fecha/hora exacta de vigencia.
   6. Tras la autorización explícita del operador (`[x] Autorizo el despacho formal...`), el correo se encola en `mail` asegurando trazabilidad forense completa y emitiendo un único correo consolidado al cliente.
+
+#### Escenario 87: Asistente HITL de Despacho de Boletín Semanal Agro-Comercial con Filtro por Consumo Real B2B y Sustitutos Culinarios (EVT-10)
+- **Given** el inicio del ciclo operativo semanal en el Dashboard Comercial BI (`/admin/commercial?tab=dashboard`).
+- **When** el Jefe Comercial hace clic en el widget de Tareas Semanales `[🚀 Iniciar Despacho de Boletín de Cosechas & Escasez]`.
+- **Then**:
+  1. El **Paso 1 (Oportunidades & Escasez)** presenta la lista de productos en pico de cosecha (Mango Tommy, Mandarina Arrayana, Calabacín Verde) y productos escasos (Cebolla Morada, Papa Pastusa) con sus sustitutos agronómicos propuestos (Cebolla Puerro / Chalota, Papa R-12).
+  2. Cada producto y cada sustituto cuenta con su casilla de verificación interactiva (`checkbox`), permitiendo al Jefe Comercial desmarcar ítems que decida no comunicar.
+  3. En el **Paso 2 (Segmentación B2B por Consumo)**, el sistema evalúa las cuentas B2B y casas matrices activas que registran compras de los productos seleccionados en los últimos 60 días (`order_items` con `created_at >= now() - interval '60 days'`) o en sus acuerdos contractuales vigentes (`quote_items` en acuerdos activos). Aquellas cuentas que NO consumen los productos escasos son excluidas automáticamente para no alarmar ni generar fricción en precios no pactados.
+  4. El operador visualiza las Casas Matrices corporativas seleccionadas con sus sedes dependientes y desmarca 1 matriz específica por solicitud comercial previa.
+  5. En el **Paso 3 (Previsualización & Despacho)**, el operador revisa el correo HTML responsivo con membrete legal de Investments Cortés S.A.S., tarjetas visuales de cosecha/escasez, cero códigos SKU y sin dirección física de oficina.
+  6. Al marcar `[x] He validado el boletín agronómico y autorizo el despacho a las N cuentas seleccionadas` y presionar `[Aprobar y Despachar Boletín]`, se encolan los correos en la tabla `mail` con `status = 'pending'`, registrando la autoría del Jefe Comercial y marcando la tarea semanal como completada con éxito.
+
 
 
 

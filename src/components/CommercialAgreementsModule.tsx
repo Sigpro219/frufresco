@@ -320,6 +320,9 @@ export default function CommercialAgreementsModule() {
         justification: string;
     }>>([]);
     const [isSavingPartialBatch, setIsSavingPartialBatch] = useState(false);
+    const [bulkJustification, setBulkJustification] = useState('');
+    const [isMiniImportOpen, setIsMiniImportOpen] = useState(false);
+    const [pasteText, setPasteText] = useState('');
     
     // HITL Email Dispatch Modal State
     const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
@@ -1370,6 +1373,148 @@ export default function CommercialAgreementsModule() {
             showToast('Error al guardar adenda: ' + err.message, 'error');
         } finally {
             setIsSavingPartialBatch(false);
+        }
+    };
+
+    const handleApplyBulkJustification = (justificationToApply?: string) => {
+        const targetJust = (justificationToApply ?? bulkJustification).trim();
+        if (!targetJust) {
+            showToast('Selecciona o escribe una justificación para aplicar.', 'warning');
+            return;
+        }
+        const modifiedCount = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice).length;
+        if (modifiedCount === 0) {
+            showToast('Modifica primero los precios de los productos para asignarles la justificación.', 'warning');
+            return;
+        }
+        setPartialBatchItems(prev => prev.map(p => {
+            const isMod = Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice;
+            return isMod ? { ...p, justification: targetJust } : p;
+        }));
+        showToast(`✓ Justificación aplicada a ${modifiedCount} productos modificados`, 'success');
+    };
+
+    const handleMiniExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const XLSX = await import('xlsx');
+            const buffer = await file.arrayBuffer();
+            const wb = XLSX.read(buffer, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            
+            if (!rawRows || rawRows.length === 0) {
+                showToast('El archivo Excel está vacío.', 'warning');
+                return;
+            }
+
+            let updatedCount = 0;
+            setPartialBatchItems(prev => {
+                const next = [...prev];
+                for (const row of rawRows) {
+                    if (!Array.isArray(row) || row.length === 0) continue;
+                    let foundPrice: number | null = null;
+                    let foundNameOrId: string = '';
+                    let foundJustification: string = '';
+
+                    for (let c = 0; c < row.length; c++) {
+                        const cellVal = row[c];
+                        const num = parsePriceValue(cellVal);
+                        if (num > 0 && foundPrice === null && (typeof cellVal === 'number' || (typeof cellVal === 'string' && /[\d]/.test(cellVal) && !isNaN(num) && num > 100))) {
+                            foundPrice = num;
+                        } else if (typeof cellVal === 'string' && cellVal.trim().length > 1) {
+                            if (!foundNameOrId) {
+                                foundNameOrId = cellVal.trim();
+                            } else if (!foundJustification && cellVal.length > 5) {
+                                foundJustification = cellVal.trim();
+                            }
+                        }
+                    }
+
+                    if (foundPrice && foundPrice > 0 && foundNameOrId) {
+                        const normSearch = normalizeExcelText(foundNameOrId);
+                        const matchIdx = next.findIndex(p => {
+                            const normPName = normalizeExcelText(p.name);
+                            return normPName === normSearch || normPName.includes(normSearch) || normSearch.includes(normPName);
+                        });
+
+                        if (matchIdx !== -1) {
+                            next[matchIdx] = {
+                                ...next[matchIdx],
+                                newPrice: String(foundPrice),
+                                justification: foundJustification || next[matchIdx].justification || (bulkJustification || 'Ajuste de cosecha / abastecimiento')
+                            };
+                            updatedCount++;
+                        }
+                    }
+                }
+                return next;
+            });
+
+            if (updatedCount > 0) {
+                showToast(`✓ ${updatedCount} productos emparejados y actualizados desde el Excel`, 'success');
+                setIsMiniImportOpen(false);
+            } else {
+                showToast('No se encontraron coincidencias de productos en el archivo de novedades.', 'warning');
+            }
+        } catch (err: any) {
+            console.error('Error parsing mini excel:', err);
+            showToast('Error al procesar archivo: ' + err.message, 'error');
+        } finally {
+            e.target.value = '';
+        }
+    };
+
+    const handlePasteRowsFromClipboard = (text: string) => {
+        if (!text.trim()) {
+            showToast('Pega texto con productos y precios primero.', 'warning');
+            return;
+        }
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        let updatedCount = 0;
+
+        setPartialBatchItems(prev => {
+            const next = [...prev];
+            for (const line of lines) {
+                const tokens = line.split(/[\t;|,]+/).map(t => t.trim()).filter(Boolean);
+                if (tokens.length < 2) continue;
+
+                let nameOrId = tokens[0];
+                let price = parsePriceValue(tokens[1]);
+                let just = tokens[2] || '';
+
+                if (price === 0 && parsePriceValue(tokens[0]) > 0) {
+                    price = parsePriceValue(tokens[0]);
+                    nameOrId = tokens[1];
+                }
+
+                if (price > 0 && nameOrId) {
+                    const normSearch = normalizeExcelText(nameOrId);
+                    const matchIdx = next.findIndex(p => {
+                        const normPName = normalizeExcelText(p.name);
+                        return normPName === normSearch || normPName.includes(normSearch) || normSearch.includes(normPName);
+                    });
+
+                    if (matchIdx !== -1) {
+                        next[matchIdx] = {
+                            ...next[matchIdx],
+                            newPrice: String(price),
+                            justification: just || next[matchIdx].justification || (bulkJustification || 'Ajuste de cosecha / abastecimiento')
+                        };
+                        updatedCount++;
+                    }
+                }
+            }
+            return next;
+        });
+
+        if (updatedCount > 0) {
+            showToast(`✓ ${updatedCount} productos actualizados desde el portapapeles`, 'success');
+            setPasteText('');
+            setIsMiniImportOpen(false);
+        } else {
+            showToast('No se identificaron coincidencias en el texto pegado.', 'warning');
         }
     };
 
@@ -6747,25 +6892,80 @@ export default function CommercialAgreementsModule() {
                                         )}
                                     </div>
 
-                                    {/* If NO file uploaded, show info card */}
+                                    {/* If NO file uploaded, show info card & shortcut to partial adenda */}
                                     {!editExcelPreviewData && (
-                                        <div style={{ 
-                                            padding: '1rem 1.25rem', 
-                                            backgroundColor: '#F0FDF4', 
-                                            border: '1.5px solid #BBF7D0', 
-                                            borderRadius: '10px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '12px'
-                                        }}>
-                                            <CheckCircle2 size={22} color="#16A34A" />
-                                            <div>
-                                                <strong style={{ color: '#166534', fontSize: '0.85rem', display: 'block' }}>
-                                                    Conservando precios vigentes del acuerdo
-                                                </strong>
-                                                <span style={{ fontSize: '0.75rem', color: '#15803D' }}>
-                                                    No has cargado ningún Excel, por lo que se mantendrán intactos los precios congelados actuales y solo se actualizará la vigencia.
-                                                </span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <div style={{ 
+                                                padding: '0.85rem 1.15rem', 
+                                                backgroundColor: '#F0FDF4', 
+                                                border: '1.5px solid #BBF7D0', 
+                                                borderRadius: '10px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px'
+                                            }}>
+                                                <CheckCircle2 size={20} color="#16A34A" style={{ flexShrink: 0 }} />
+                                                <div>
+                                                    <strong style={{ color: '#166534', fontSize: '0.82rem', display: 'block' }}>
+                                                        Conservando precios vigentes del acuerdo
+                                                    </strong>
+                                                    <span style={{ fontSize: '0.74rem', color: '#15803D' }}>
+                                                        No has cargado ningún Excel, por lo que se mantendrán intactos los precios acordados actuales y solo se actualizará la vigencia.
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Acceso Directo a Modificación Parcial / Adenda */}
+                                            <div style={{
+                                                padding: '0.85rem 1.15rem',
+                                                backgroundColor: '#F8FAFC',
+                                                border: '1.5px solid #CBD5E1',
+                                                borderRadius: '10px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: '12px',
+                                                flexWrap: 'wrap'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
+                                                    <ClipboardList size={22} color="#0D7A57" style={{ flexShrink: 0 }} />
+                                                    <div>
+                                                        <strong style={{ color: '#1E293B', fontSize: '0.82rem', display: 'block' }}>
+                                                            ¿Solo necesitas modificar algunos precios puntuales por cosecha / consumo?
+                                                        </strong>
+                                                        <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                                                            No requieres subir un Excel completo. Abre el asistente para modificar únicamente los productos con variación y enviar la notificación comparativa al cliente.
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        if (editingAgreement) {
+                                                            const target = editingAgreement;
+                                                            setIsEditModalOpen(false);
+                                                            await handleViewPrices(target);
+                                                            handleOpenPartialBatchModal();
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        backgroundColor: '#0D7A57',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        whiteSpace: 'nowrap',
+                                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                                    }}
+                                                >
+                                                    <ClipboardList size={14} /> Abrir Asistente de Adenda Parcial
+                                                </button>
                                             </div>
                                         </div>
                                     )}
@@ -7727,7 +7927,7 @@ export default function CommercialAgreementsModule() {
                             gap: '12px',
                             flexWrap: 'wrap'
                         }}>
-                            <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
+                            <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
                                 <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                                 <input
                                     type="text"
@@ -7746,51 +7946,223 @@ export default function CommercialAgreementsModule() {
                                 />
                             </div>
 
-                            {(() => {
-                                const modified = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice);
-                                const upCount = partialBatchItems.filter(p => Number(p.newPrice) > p.oldPrice).length;
-                                const downCount = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) < p.oldPrice).length;
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMiniImportOpen(!isMiniImportOpen)}
+                                    style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '8px',
+                                        backgroundColor: isMiniImportOpen ? '#0D7A57' : '#FFFFFF',
+                                        color: isMiniImportOpen ? 'white' : '#0D7A57',
+                                        border: `1.5px solid ${THEME.colors.primary}`,
+                                        fontSize: '0.78rem',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                    }}
+                                    title="Importar archivo Excel pequeño o pegar filas con variaciones de precios"
+                                >
+                                    <UploadCloud size={14} />
+                                    {isMiniImportOpen ? 'Cerrar Importador' : '📥 Importar Mini-Excel / Pegar'}
+                                </button>
 
-                                return (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                        <span style={{
-                                            padding: '4px 10px',
-                                            borderRadius: '6px',
-                                            backgroundColor: modified.length > 0 ? '#EFF6FF' : '#F1F5F9',
-                                            color: modified.length > 0 ? '#1D4ED8' : '#64748B',
-                                            border: '1px solid #CBD5E1'
-                                        }}>
-                                            {modified.length} {modified.length === 1 ? 'producto modificado' : 'productos modificados'} de {partialBatchItems.length}
-                                        </span>
-                                        {upCount > 0 && (
-                                            <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#FEE2E2', color: '#991B1B' }}>
-                                                🔴 {upCount} Sube
+                                {(() => {
+                                    const modified = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice);
+                                    const upCount = partialBatchItems.filter(p => Number(p.newPrice) > p.oldPrice).length;
+                                    const downCount = partialBatchItems.filter(p => Number(p.newPrice) > 0 && Number(p.newPrice) < p.oldPrice).length;
+
+                                    return (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                            <span style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '6px',
+                                                backgroundColor: modified.length > 0 ? '#EFF6FF' : '#F1F5F9',
+                                                color: modified.length > 0 ? '#1D4ED8' : '#64748B',
+                                                border: '1px solid #CBD5E1'
+                                            }}>
+                                                {modified.length} de {partialBatchItems.length} modificados
                                             </span>
-                                        )}
-                                        {downCount > 0 && (
-                                            <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534' }}>
-                                                🟢 {downCount} Baja
-                                            </span>
-                                        )}
+                                            {upCount > 0 && (
+                                                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                                                    🔴 {upCount} Sube
+                                                </span>
+                                            )}
+                                            {downCount > 0 && (
+                                                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534' }}>
+                                                    🟢 {downCount} Baja
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Collapsible Mini-Excel & Clipboard Importer Panel */}
+                        {isMiniImportOpen && (
+                            <div style={{
+                                padding: '1rem 1.5rem',
+                                backgroundColor: '#F0FDF4',
+                                borderBottom: '2px solid #86EFAC',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                                gap: '1.25rem'
+                            }}>
+                                {/* Option A: Subir Mini-Excel */}
+                                <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '10px', border: '1px solid #BBF7D0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontWeight: 'bold', fontSize: '0.82rem' }}>
+                                        <FileText size={16} color="#16A34A" />
+                                        Opción A: Subir Mini-Excel de Novedades (.xlsx)
                                     </div>
-                                );
-                            })()}
+                                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B' }}>
+                                        Sube un archivo con solo los 5 a 15 productos que cambiaron (Columnas: Producto / Código, Precio Nuevo, Motivo opcional).
+                                    </p>
+                                    <input
+                                        type="file"
+                                        accept=".xlsx, .xls"
+                                        onChange={handleMiniExcelUpload}
+                                        style={{ fontSize: '0.78rem', marginTop: '4px', cursor: 'pointer' }}
+                                    />
+                                </div>
+
+                                {/* Option B: Pegar desde Portapapeles */}
+                                <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '10px', border: '1px solid #BBF7D0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontWeight: 'bold', fontSize: '0.82rem' }}>
+                                        <Sparkles size={16} color="#16A34A" />
+                                        Opción B: Pegar Celdas de Excel / Portapapeles
+                                    </div>
+                                    <textarea
+                                        rows={2}
+                                        placeholder="Pega filas copiadas de Excel... ej:&#10;Aguacate	10500	Clima y lluvias&#10;Tomate chonto	4800	Pico de cosecha"
+                                        value={pasteText}
+                                        onChange={(e) => setPasteText(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '6px 8px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #CBD5E1',
+                                            fontSize: '0.72rem',
+                                            fontFamily: 'monospace',
+                                            outline: 'none',
+                                            resize: 'vertical'
+                                        }}
+                                    />
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                        <button
+                                            type="button"
+                                            disabled={!pasteText.trim()}
+                                            onClick={() => handlePasteRowsFromClipboard(pasteText)}
+                                            style={{
+                                                padding: '5px 12px',
+                                                borderRadius: '6px',
+                                                backgroundColor: pasteText.trim() ? '#16A34A' : '#CBD5E1',
+                                                color: 'white',
+                                                border: 'none',
+                                                fontSize: '0.74rem',
+                                                fontWeight: 'bold',
+                                                cursor: pasteText.trim() ? 'pointer' : 'not-allowed'
+                                            }}
+                                        >
+                                            ✓ Procesar Texto Pegado
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Bulk Justification 1-Click Applicator Bar */}
+                        <div style={{
+                            padding: '0.6rem 1.5rem',
+                            backgroundColor: '#F8FAFC',
+                            borderBottom: '1px solid #E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            flexWrap: 'wrap'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '320px' }}>
+                                <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                                    <Sparkles size={14} color="#D97706" /> Asignar motivo en lote:
+                                </span>
+                                <select
+                                    value={bulkJustification}
+                                    onChange={(e) => setBulkJustification(e.target.value)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '4px 8px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.74rem',
+                                        backgroundColor: 'white',
+                                        color: '#334155'
+                                    }}
+                                >
+                                    <option value="">-- Seleccionar motivo común para todos los modificados --</option>
+                                    {SUPPLY_JUSTIFICATION_PRESETS.map((pres, pIdx) => (
+                                        <option key={pIdx} value={pres.value === 'CUSTOM' ? '' : pres.value}>{pres.label}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="text"
+                                    placeholder="O motivo personalizado..."
+                                    value={bulkJustification}
+                                    onChange={(e) => setBulkJustification(e.target.value)}
+                                    style={{
+                                        maxWidth: '180px',
+                                        padding: '4px 8px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.74rem',
+                                        backgroundColor: 'white',
+                                        color: '#334155'
+                                    }}
+                                />
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => handleApplyBulkJustification()}
+                                disabled={!bulkJustification.trim()}
+                                style={{
+                                    padding: '5px 12px',
+                                    borderRadius: '6px',
+                                    backgroundColor: bulkJustification.trim() ? '#D97706' : '#E2E8F0',
+                                    color: bulkJustification.trim() ? 'white' : '#94A3B8',
+                                    border: 'none',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 'bold',
+                                    cursor: bulkJustification.trim() ? 'pointer' : 'not-allowed',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    whiteSpace: 'nowrap'
+                                }}
+                                title="Aplica esta justificación a todas las filas con precio modificado"
+                            >
+                                <Sparkles size={13} />
+                                ⚡ Aplicar a todos los modificados
+                            </button>
                         </div>
 
                         {/* Informational Guidance Notice */}
                         <div style={{
-                            padding: '0.6rem 1.5rem',
+                            padding: '0.55rem 1.5rem',
                             backgroundColor: '#F0FDF4',
                             borderBottom: '1px solid #BBF7D0',
-                            fontSize: '0.74rem',
+                            fontSize: '0.73rem',
                             color: '#166534',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px'
                         }}>
-                            <Info size={15} color="#16A34A" style={{ flexShrink: 0 }} />
+                            <Info size={14} color="#16A34A" style={{ flexShrink: 0 }} />
                             <span>
-                                <strong>Flujo Automatizado:</strong> Al presionar <em>"Aplicar Adenda y Despachar Notificación"</em>, se actualizarán los precios en el acuerdo comercial, se registrará el log forense y se abrirá directamente el despachador de correo con la <strong>tabla comparativa de 5 columnas</strong> (Producto, Antes, Nuevo, Variación, Justificación).
+                                <strong>Flujo Automatizado:</strong> Al presionar <em>"Aplicar Adenda y Despachar Notificación"</em>, se actualizarán los precios en el acuerdo, se registrará la auditoría forense y se abrirá el despachador de correo con la <strong>tabla comparativa de 5 columnas</strong> lista para enviar.
                             </span>
                         </div>
 
