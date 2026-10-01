@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.73 (Estándar de Resiliencia Mobile-First, Viewport Dinámico en Modales, Paridad en Navegación Móvil y Header Compacto 64px, Escenario BDD 106)
+> **Versión:** 1.9.74 (Integración Telemática M2M de Flota, Protocolo API GPS-Server/Apps-360 y Telemetría Vehicular en Tiempo Real, Escenario BDD 107)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -2415,7 +2415,7 @@ La Torre de Control de Transporte (`src/app/admin/transport/page.tsx`) es el epi
 
 1. **Monitor Global en Vivo (`map`):**
    - Integración con `@vis.gl/react-google-maps` (Map ID institucional `bf725916f72f2fd`).
-   - Telemetría en tiempo real: Marcadores inteligentes de vehículos disponibles en patio (esmeralda), en ruta (azul) y en mantenimiento (ámbar/rojo).
+   - Telemetría satelital M2M en tiempo real alimentada desde hardware GPS vehicular (`apps-360.online` / GPS-Server): Marcadores inteligentes de vehículos disponibles en patio (esmeralda), en tránsito (azul) y en mantenimiento (ámbar/rojo) posicionados por coordenadas geodésicas vivas (`last_latitude`, `last_longitude`), con rumbo dinámico (`heading`) y estado de ignición.
    - Feed lateral de rutas activas (`activeRoutes`): cálculo dinámico de avance porcentual de paradas completadas vs. pendientes, volumen total a bordo (kg) y acceso directo a WhatsApp del conductor en 1 clic.
    - HUD flotante con estadísticas consolidadas: En Tránsito, Entregas Hoy, Volumen Total (kg) y Alertas/Novedades (`delivery_events`).
 
@@ -2494,6 +2494,13 @@ Si la suma supera la capacidad, el planeador emite una advertencia visual inmedi
 │ current_odometer    │    │   │ crate_balance       │
 │ driver_id (FK) ─────┼────┼───┤ logistics_data      │
 │ status              │    │   └─────────────────────┘
+│ last_latitude       │    │
+│ last_longitude      │    │
+│ speed (km/h)        │    │
+│ heading (0-360°)    │    │
+│ ignition_status     │    │
+│ last_gps_sync       │    │
+│ gps_imei            │    │
 └──────────┬──────────┘    │              ▲
            │ 1             │              │ driver_id
            │               │              │
@@ -2519,6 +2526,15 @@ Si la suma supera la capacidad, el planeador emite una advertencia visual inmedi
                            │       │ status              │    delivery_slot)
                            │       └─────────────────────┘
 ```
+
+#### Atributos Canónicos de Telemetría Vehicular en Tiempo Real (`fleet_vehicles`):
+- `last_latitude numeric(10, 7)`: Última latitud geográfica WGS84 transmitida por el módem satelital.
+- `last_longitude numeric(10, 7)`: Última longitud geográfica WGS84 transmitida por el módem satelital.
+- `speed numeric(5, 2)`: Velocidad instantánea en km/h reportada por el hardware vehicular.
+- `heading numeric(5, 2)`: Rumbo o azimut de desplazamiento (0° a 360°) utilizado para rotar la orientación del icono del camión sobre Google Maps.
+- `ignition_status boolean`: Estado del switch de encendido (`ACC`): `true` = motor encendido, `false` = apagado.
+- `last_gps_sync timestamp with time zone`: Marca de tiempo UTC del último paquete de telemetría recibido e ingerido.
+- `gps_imei text`: Identificador único de hardware/módem GPS configurado en la plataforma externa.
 
 ---
 
@@ -2604,10 +2620,40 @@ La planificación algorítmica de despachos de FruFresco se articula directament
 4. **Fallback Heurístico de Alta Resiliencia:** Si la cuota de GCP se agota o hay microcortes de red, el motor conmuta automáticamente a un clusterer heurístico territorial por centroides y vecinos cercanos (*nearest-neighbor*), impidiendo que la planta de despacho se detenga.
 5. **Síntesis Explicativa Multimodal (Gemini 2.5 Flash):** Al recibir la solución de Google, se ejecuta una consulta con Gemini para generar un resumen ejecutivo en lenguaje natural que explica al despachador el porqué de la agrupación de cada camión.
 
-#### B. Respaldo Satelital con Chips GPS Físicos (`apps-360.online`)
-Como salvaguarda ante zonas sin señal de telefonía celular o teléfonos de conductor apagados:
-- Se integra en el Monitor Global un acceso directo / Drawer de Inspección Satelital apuntando a la consola de rastreo de hardware vehicular `https://plataforma.apps-360.online/ui/map/objects/list`.
-- Permite al despachador cotejar en una sola pantalla la posición telemática calculada por la ruta frente a la ubicación geofísica real transmitida por el chip satelital del camión.
+#### B. Protocolo de Integración Telemática M2M con Hardware GPS Vehicular (`plataforma.apps-360.online` / GPS-Server.net)
+
+1. **Fundamento Operativo & Erradicación de Fricción Humana:**
+   - La captura de posición geolocalizada de la flota no depende de que el conductor mantenga abierta una aplicación web móvil o conceda permisos continuos en su smartphone personal.
+   - Cada camión de la flota cuenta con hardware telemático GPS cableado a la batería e ignición del vehículo, transmitiendo satelitalmente a la plataforma de rastreo corporativa `https://plataforma.apps-360.online` (motor telemático industrial **GPS-Server.net v4.5**).
+
+2. **Arquitectura de Ingesta M2M (Pull & Push):**
+   - **Mecanismo Primario (Pull API REST Oficial):**
+     * **Endpoint Estándar:** `GET https://plataforma.apps-360.online/api/api.php?api=user&key={APPS360_API_KEY}&cmd=USER_GET_OBJECTS`
+     * **Frecuencia de Muestreo:** Cron serverless o polling reactivo desde la Torre de Control cada 30 a 60 segundos a través del conector `/api/transport/sync-gps`.
+     * **Normalización de Atributos:**
+       - `name` / `plate` $\longrightarrow$ Mapeo 1-a-1 con `fleet_vehicles.plate`.
+       - `imei` $\longrightarrow$ Identificador de módem GPS mapeado con `fleet_vehicles.gps_imei`.
+       - `lat` / `lng` $\longrightarrow$ Coordenadas WGS84 persistidas en `fleet_vehicles.last_latitude` y `fleet_vehicles.last_longitude`.
+       - `speed` $\longrightarrow$ Velocidad instantánea en km/h persistida en `fleet_vehicles.speed`.
+       - `course` $\longrightarrow$ Ángulo de rumbo (0° a 360°) persistido en `fleet_vehicles.heading`.
+       - `acc` / `params.acc` $\longrightarrow$ Ignición binaria (1 = ON, 0 = OFF) persistida en `fleet_vehicles.ignition_status`.
+       - `odometer` $\longrightarrow$ Odómetro satelital acumulado para actualizar automáticamente `fleet_vehicles.current_odometer` y disparar alertas de mantenimiento preventivo en `maintenance_schedules`.
+       - `dt_tracker` $\longrightarrow$ Marca temporal UTC guardada en `fleet_vehicles.last_gps_sync`.
+   - **Mecanismo Secundario (Push / Webhook Event-Driven):**
+     * Endpoint receptor en FruFresco: `POST /api/transport/telemetry-webhook`.
+     * Recepción de eventos inmediatos de geocerca, ignición (encendido/apagado de motor) y excesos de velocidad.
+
+3. **Comportamiento Reactivo en Torre de Control (`/admin/transport/page.tsx`):**
+   - **Erradicación del Mock Trigonométrico:** Supresión definitiva de la fórmula artificial `4.633653 + (Math.sin(i) * 0.01)`.
+   - **Marcadores Vivos:** Los marcadores inteligentes de Google Maps (`AdvancedMarker`) consumen directamente `v.last_latitude` y `v.last_longitude`.
+   - **Orientación Geográfica Dinámica:** El icono vehicular aplica rotación de rumbo según su azimut real (`transform: rotate(${v.heading}deg)`).
+   - **Telemetría de Estado Tripartita:**
+     * 🟢 **En Movimiento:** `speed > 0` e `ignition_status = true` (Verde esmeralda).
+     * 🟡 **Ralentí / Detenido con Motor Encendido:** `speed == 0` e `ignition_status = true` (Ámbar operativo).
+     * ⚪ **Apagado / En Reposo:** `ignition_status = false` o sin sincronización $> 15\text{ min}$ (Gris neutro con badge de última conexión).
+
+4. **Respaldo y Auditoría Visual (Drawer Satelital):**
+   - Se mantiene el botón de auditoría rápida en la Torre de Control para abrir en Drawer lateral o pestaña externa `https://plataforma.apps-360.online/ui/map/objects/list` ante verificaciones de plataforma o soporte técnico con el proveedor de telecomunicaciones satelitales.
 
 ---
 
@@ -4668,4 +4714,23 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   2. El botón primario *"Agregar al Carrito"* permanece accesible mediante scroll interno fluido sin desbordar el documento.
   3. En la barra superior móvil compactada a 64px de alto, el usuario dispone del selector de idioma (ES / EN) y el acceso al Carrito dentro del menú o barra de acciones.
   4. Para colaboradores autorizados, el menú móvil despliega la totalidad de módulos operativos incluyendo *Conciliación Post-Despacho* y *Gestión de Calidad*.
+
+---
+
+#### Escenario 107: Ingesta Telemática M2M desde Plataforma Satelital Externa (GPS-Server / Apps-360) y Actualización Dinámica de Flota en Torre de Control
+- **Given** un vehículo de flota con placa `"WOP-123"` registrado en `fleet_vehicles` y dotado de hardware telemático satelital que transmite hacia `https://plataforma.apps-360.online`.
+- **When** el subsistema telemático ejecuta la sincronización programada vía API REST oficial (`GET /api/api.php?api=user&cmd=USER_GET_OBJECTS`) o recibe un webhook de telemetría en `/api/transport/telemetry-webhook`.
+- **Then**:
+  1. El conector normaliza la carga útil e inserta/actualiza de forma atómica en `fleet_vehicles`:
+     - `last_latitude` y `last_longitude` con las coordenadas WGS84 satelitales exactas.
+     - `speed` con la velocidad instantánea en km/h.
+     - `heading` con el ángulo de azimut (0° a 360°).
+     - `ignition_status` con el estado booleano de la llave de encendido (`ACC`).
+     - `current_odometer` con el kilometraje acumulado reportado por el computador a bordo/odómetro GPS.
+     - `last_gps_sync` con el timestamp UTC de la transmisión.
+  2. En la consola de Torre de Control (`/admin/transport`), el componente del mapa:
+     - Renderiza el marcador del camión en su posición geofísica viva, eliminando de forma definitiva la traslación trigonométrica simulada.
+     - Orienta el icono del vehículo rotándolo según su `heading` real.
+     - Expone en el popover telemático la velocidad actual (km/h), el estado del motor (Encendido/Apagado) y el tiempo transcurrido desde el último reporte.
+  3. Si el odómetro satelital acumulado supera el umbral de `next_due_km` en `maintenance_schedules`, el sistema eleva de forma automática la bandera de alerta preventiva en la consola de mantenimiento vehicular.
 
