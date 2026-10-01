@@ -2875,43 +2875,6 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                         )}
                                                     </th>
 
-                                                    {/* DEV (REVISADO) */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                            <span>DEV (REVISADO)</span>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2b_dev' ? null : 'b2b_dev'); }}
-                                                                style={{ 
-                                                                    background: filterDevHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
-                                                                    color: filterDevHeader !== 'all' ? 'white' : '#475569', 
-                                                                    border: 'none', 
-                                                                    borderRadius: '4px', 
-                                                                    padding: '2px 4px', 
-                                                                    cursor: 'pointer', 
-                                                                    display: 'flex', 
-                                                                    alignItems: 'center' 
-                                                                }}
-                                                                title="Filtrar por Revisión Dev"
-                                                            >
-                                                                <ChevronDown size={12} />
-                                                            </button>
-                                                        </div>
-                                                        {openHeaderDropdown === 'b2b_dev' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                                <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
-                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos
-                                                                </div>
-                                                                <div onClick={() => { setFilterDevHeader('verified'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'verified' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'verified' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ✅ Revisados
-                                                                </div>
-                                                                <div onClick={() => { setFilterDevHeader('pending'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pending' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pending' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ⏳ Pendientes
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </th>
-
                                                     <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', borderTopRightRadius: '12px', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -2921,7 +2884,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                     if (filtered.length === 0) {
                                                         return (
                                                             <tr>
-                                                                <td colSpan={7} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                                <td colSpan={6} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                                                                         <Filter size={28} style={{ color: '#CBD5E1' }} />
                                                                         <span style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>No se encontraron clientes B2B</span>
@@ -3088,43 +3051,6 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                                                 </div>
                                                                 <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
                                                                     🔴 Inactivos
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </th>
-
-                                                    {/* DEV (REVISADO) */}
-                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'sticky', top: '148px', zIndex: 40, backgroundColor: '#F9FAFB', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.05)', ...THEME.typography.tableHeader }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                            <span>DEV (REVISADO)</span>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2c_dev' ? null : 'b2c_dev'); }}
-                                                                style={{ 
-                                                                    background: filterDevHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
-                                                                    color: filterDevHeader !== 'all' ? 'white' : '#475569', 
-                                                                    border: 'none', 
-                                                                    borderRadius: '4px', 
-                                                                    padding: '2px 4px', 
-                                                                    cursor: 'pointer', 
-                                                                    display: 'flex', 
-                                                                    alignItems: 'center' 
-                                                                }}
-                                                                title="Filtrar por Revisión Dev"
-                                                            >
-                                                                <ChevronDown size={12} />
-                                                            </button>
-                                                        </div>
-                                                        {openHeaderDropdown === 'b2c_dev' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                                <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
-                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos
-                                                                </div>
-                                                                <div onClick={() => { setFilterDevHeader('verified'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'verified' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'verified' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ✅ Revisados
-                                                                </div>
-                                                                <div onClick={() => { setFilterDevHeader('pending'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pending' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pending' ? '#F1F5F9' : 'transparent' }}>
-                                                                    ⏳ Pendientes
                                                                 </div>
                                                             </div>
                                                         )}
@@ -4245,33 +4171,6 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     gap: '6px'
                 }}
             >
-                {/* DEV REVISIÓN TOGGLE */}
-                {profileData && (
-                    <button
-                        type="button"
-                        onClick={() => onUpdateDevVerified && onUpdateDevVerified(profileData.id, !isVerifiedDev)}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 9px',
-                            borderRadius: '20px',
-                            border: `1px solid ${isVerifiedDev ? '#A7F3D0' : '#FDE68A'}`,
-                            backgroundColor: isVerifiedDev ? '#ECFDF5' : '#FFFBEB',
-                            color: isVerifiedDev ? '#065F46' : '#92400E',
-                            fontSize: '0.65rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                        }}
-                        title="Etapa Dev: Click para cambiar estado de revisión del cliente"
-                    >
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{isVerifiedDev ? <><CheckCircle2 size={11} /> REVISADO</> : <><Clock size={11} /> PENDIENTE</>}</span>
-                    </button>
-                )}
-
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     {isMatriz && (
                         <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(30,58,138,0.25)' }}><Building2 size={11} strokeWidth={2} style={{ color: '#FFFFFF' }} /> MATRIZ</span>
@@ -5155,36 +5054,6 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                         ) : null}
                     </div>
                 )}
-            </td>
-            <td style={{ padding: '0.65rem 0.6rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                {(() => {
-                    const isVerifiedDev = client.is_verified_dev || (client.tags && client.tags.includes('verified_dev'));
-                    return (
-                        <button
-                            type="button"
-                            onClick={() => onUpdateDevVerified && onUpdateDevVerified(client.id, !isVerifiedDev)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                padding: '4px 9px',
-                                borderRadius: '20px',
-                                border: `1px solid ${isVerifiedDev ? '#A7F3D0' : '#FDE68A'}`,
-                                backgroundColor: isVerifiedDev ? '#ECFDF5' : '#FFFBEB',
-                                color: isVerifiedDev ? '#065F46' : '#92400E',
-                                fontSize: '0.68rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                            }}
-                            title="Etapa Dev: Click para cambiar estado de revisión del cliente"
-                        >
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{isVerifiedDev ? <><CheckCircle2 size={11} /> REVISADO</> : <><Clock size={11} /> PENDIENTE</>}</span>
-                        </button>
-                    );
-                })()}
             </td>
             <td style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px' }}>
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
@@ -6328,51 +6197,6 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginLeft: 'auto', marginRight: '1.5rem' }}>
                         {!isLead && (
                             <>
-                                <button
-                                    type="button"
-                                    onClick={async () => {
-                                        const isVerified = Boolean((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev'));
-                                        const nextVal = !isVerified;
-                                        const currentTags: string[] = (formData as any).tags || [];
-                                        const updatedTags = nextVal 
-                                            ? Array.from(new Set([...currentTags, 'verified_dev']))
-                                            : currentTags.filter(t => t !== 'verified_dev');
-                                        setFormData((prev: any) => ({ ...prev, is_verified_dev: nextVal, tags: updatedTags }));
-                                        if (editData?.id) {
-                                            if (onUpdateDevVerified) {
-                                                onUpdateDevVerified(editData.id, nextVal);
-                                            } else {
-                                                const { error } = await supabase
-                                                    .from('profiles')
-                                                    .update({ is_verified_dev: nextVal, tags: updatedTags })
-                                                    .eq('id', editData.id);
-                                                if (error && error.message?.includes('column "is_verified_dev" does not exist')) {
-                                                    await supabase.from('profiles').update({ tags: updatedTags }).eq('id', editData.id);
-                                                }
-                                            }
-                                        }
-                                    }}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '0.45rem 0.95rem',
-                                        borderRadius: '16px',
-                                        border: `1px solid ${((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#A7F3D0' : '#FDE68A'}`,
-                                        backgroundColor: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#ECFDF5' : '#FFFBEB',
-                                        color: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#065F46' : '#92400E',
-                                        fontSize: '0.78rem',
-                                        fontWeight: '900',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    title="Etapa Dev: Click para cambiar estado de revisión del cliente"
-                                >
-                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#10B981' : '#F59E0B' }} />
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? <><CheckCircle2 size={11} /> REVISADO (DEV)</> : <><Clock size={11} /> PENDIENTE (DEV)</>}</span>
-                                </button>
-
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: formData.is_active ? '#F0FDF4' : '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '16px', border: '1px solid', borderColor: formData.is_active ? '#BBF7D0' : '#FCA5A5' }}>
                                     <div style={{ textAlign: 'right' }}>
                                         <span style={{ fontSize: '0.6rem', fontWeight: '900', color: formData.is_active ? '#166534' : '#991B1B', textTransform: 'uppercase', letterSpacing: '0.02rem', display: 'block' }}>
