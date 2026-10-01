@@ -106,7 +106,7 @@ export default function DeliveryConfirmationPage() {
                     orders:order_id (
                         id, sequence_id, shipping_address, payment_method, payment_status, total,
                         profiles:profile_id (
-                            id, company_name, contact_name, role
+                            id, company_name, contact_name, role, needs_crates, crate_balance
                         ),
                         order_items (
                             id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
@@ -499,13 +499,47 @@ export default function DeliveryConfirmationPage() {
 
             // 3. Inventory Integration (Returns ya registrados canónicamente arriba como 'route_return' hacia Columna O)
             
-            // 4. Record Canastillas movement
+            // 4. Record Canastillas movement & atomic balance update
             if (canastillasDelivered > 0 || canastillasReceived > 0) {
+                const targetProfileId = (stop?.orders as any)?.profiles?.id;
+                const targetOrderId = stop?.orders?.id;
+                const netChange = canastillasDelivered - canastillasReceived;
+
+                let newBalance: number | null = null;
+                if (targetProfileId) {
+                    try {
+                        const { data: profData } = await supabase
+                            .from('profiles')
+                            .select('crate_balance')
+                            .eq('id', targetProfileId)
+                            .single();
+                        
+                        const currentBal = Number(profData?.crate_balance || 0);
+                        newBalance = Math.max(0, currentBal + netChange);
+
+                        await supabase
+                            .from('profiles')
+                            .update({ crate_balance: newBalance })
+                            .eq('id', targetProfileId);
+                    } catch (profErr) {
+                        console.error('Error actualizando crate_balance en profile:', profErr);
+                    }
+                }
+
                 await supabase.from('asset_movements').insert({
                     route_id: stop.route_id,
-                    type: 'adjustment',
-                    quantity: canastillasDelivered - canastillasReceived,
-                    notes: `Entrega a ${stop.orders?.customer_name || 'Cliente'}`
+                    order_id: targetOrderId || null,
+                    profile_id: targetProfileId || null,
+                    type: netChange >= 0 ? 'delivery' : 'pickup',
+                    movement_type: canastillasDelivered > 0 && canastillasReceived > 0 
+                        ? 'exchange' 
+                        : (canastillasDelivered > 0 ? 'delivery_loan' : 'driver_pickup'),
+                    delivered_qty: canastillasDelivered,
+                    received_qty: canastillasReceived,
+                    quantity: netChange,
+                    balance_after: newBalance,
+                    notes: `Despacho Remisión #${(stop?.orders as any)?.sequence_id || 'S/N'}: ${canastillasDelivered} ent. / ${canastillasReceived} rec. (${stop.orders?.customer_name || 'Cliente'})`,
+                    evidence_url: evidenceUrl || null
                 });
             }
 

@@ -533,7 +533,7 @@ export default function BillingDashboard() {
     const [billingSearchQuery, setBillingSearchQuery] = useState('');
     const [includeAllStatuses, setIncludeAllStatuses] = useState(true);
     const [graceMinutes, setGraceMinutes] = useState<number>(120);
-    const [pendingStatusFilter, setPendingStatusFilter] = useState<'all' | 'ready' | 'grace' | 'in_route' | 'novelties'>('all');
+    const [pendingStatusFilter, setPendingStatusFilter] = useState<'all' | 'ready' | 'grace' | 'in_route' | 'novelties' | 'in_process'>('all');
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'sequence_id', direction: 'desc' });
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
@@ -568,9 +568,8 @@ export default function BillingDashboard() {
 
     const getBogotaDate = (offsetDays: number = 0) => {
         const d = new Date();
-        d.setMinutes(d.getMinutes() + d.getTimezoneOffset() - 300);
         d.setDate(d.getDate() + offsetDays);
-        return d.toISOString().split('T')[0];
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(d);
     };
 
     const [selectedBillingDate, setSelectedBillingDate] = useState<string>(getBogotaDate(0));
@@ -1020,7 +1019,7 @@ export default function BillingDashboard() {
                 .order('created_at', { ascending: false });
 
             if (includeAllStatuses) {
-                pOrdersQuery = pOrdersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido']);
+                pOrdersQuery = pOrdersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']);
             } else {
                 pOrdersQuery = pOrdersQuery.eq('status', 'delivered');
             }
@@ -1031,21 +1030,22 @@ export default function BillingDashboard() {
 
             const { data: pOrdersData, error: pOrdersErr } = await pOrdersQuery;
             if (!pOrdersErr && pOrdersData) {
-                // Enrich first rows in development/test so live countdown bar and ready states are immediately visible
-                const enriched = (pOrdersData as any[]).map((ord, idx) => {
-                    if (idx === 0) {
-                        return { ...ord, status: 'delivered', manual_delivery_time: new Date(Date.now() - 45 * 60 * 1000).toISOString() };
+                // Si la fecha seleccionada fue 'Hoy' y no hay pedidos pendientes, verificar automáticamente si 'Ayer' tiene pedidos pendientes
+                if (pOrdersData.length === 0 && selectedBillingDate === getBogotaDate(0)) {
+                    const { data: yesterdayOrders, error: yErr } = await supabase
+                        .from('orders')
+                        .select('id')
+                        .is('billing_cut_id', null)
+                        .eq('delivery_date', getBogotaDate(-1))
+                        .limit(1);
+                    if (!yErr && yesterdayOrders && yesterdayOrders.length > 0) {
+                        setSelectedBillingDate(getBogotaDate(-1));
+                        return;
                     }
-                    if (idx === 1) {
-                        return { ...ord, status: 'delivered', manual_delivery_time: new Date(Date.now() - 150 * 60 * 1000).toISOString() };
-                    }
-                    if (idx === 2) {
-                        return { ...ord, status: 'shipped' };
-                    }
-                    return ord;
-                });
-                setPendingOrders(enriched);
-                setPendingOrdersCount(enriched.length);
+                }
+
+                setPendingOrders(pOrdersData as any[]);
+                setPendingOrdersCount(pOrdersData.length);
 
                 // Fetch parent profiles for branch inheritance
                 const parentIds = Array.from(new Set((pOrdersData as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
@@ -1162,6 +1162,7 @@ export default function BillingDashboard() {
         let grace = 0;
         let inRoute = 0;
         let novelties = 0;
+        let inProcess = 0;
 
         pendingOrders.forEach(o => {
             const statusType = getOrderGraceInfo(o, graceMinutes).statusType;
@@ -1169,12 +1170,13 @@ export default function BillingDashboard() {
             else if (statusType === 'grace') grace++;
             else if (statusType === 'in_route') inRoute++;
             else if (statusType === 'novelty') novelties++;
+            else if (statusType === 'in_process') inProcess++;
         });
 
-        return { ready, grace, inRoute, novelties };
+        return { ready, grace, inRoute, novelties, inProcess };
     }, [pendingOrders, graceMinutes]);
 
-    const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount } = pendingGraceCounts;
+    const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount, inProcess: inProcessCount } = pendingGraceCounts;
     const openConsumptionCount = useMemo(() => {
         return pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO')).length;
     }, [pendingOrders]);
@@ -1210,6 +1212,7 @@ export default function BillingDashboard() {
                 if (pendingStatusFilter === 'grace') return info.statusType === 'grace';
                 if (pendingStatusFilter === 'in_route') return info.statusType === 'in_route';
                 if (pendingStatusFilter === 'novelties') return info.statusType === 'novelty';
+                if (pendingStatusFilter === 'in_process') return info.statusType === 'in_process';
                 return true;
             });
         }
@@ -2683,6 +2686,29 @@ export default function BillingDashboard() {
                                                             <Truck size={11} />
                                                             <span>En Ruta ({inRouteCount})</span>
                                                         </button>
+                                                        {inProcessCount > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPendingStatusFilter('in_process')}
+                                                                title="Pedidos en preparación, por aprobar o en tanda operativa"
+                                                                style={{
+                                                                    border: 'none',
+                                                                    padding: '2px 8px',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '0.65rem',
+                                                                    fontWeight: pendingStatusFilter === 'in_process' ? '800' : '600',
+                                                                    backgroundColor: pendingStatusFilter === 'in_process' ? '#475569' : 'transparent',
+                                                                    color: pendingStatusFilter === 'in_process' ? 'white' : '#475569',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
+                                                                }}
+                                                            >
+                                                                <Layers size={11} />
+                                                                <span>En Prep. ({inProcessCount})</span>
+                                                            </button>
+                                                        )}
                                                         {noveltiesCount > 0 && (
                                                             <button
                                                                 type="button"

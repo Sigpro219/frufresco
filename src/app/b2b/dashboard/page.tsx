@@ -115,6 +115,12 @@ export default function B2BDashboard() {
     const catalogSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, { id: string; sku: string; name: string; disabledAt: string; message: string; disabledBy: string }>>({});
+    const [crateMovements, setCrateMovements] = useState<any[]>([]);
+    const [isLoadingCrateMovements, setIsLoadingCrateMovements] = useState(false);
+    const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
+    const [pickupQuantity, setPickupQuantity] = useState<number>(1);
+    const [pickupNotes, setPickupNotes] = useState('');
+    const [isSubmittingPickup, setIsSubmittingPickup] = useState(false);
 
     useEffect(() => {
         const fetchScarcity = async () => {
@@ -932,6 +938,64 @@ export default function B2BDashboard() {
         };
 
         fetchAgreements();
+    }, [activeTab, activeProfile?.id, user?.id]);
+
+    // Fetch Crate Movements (Kardex en Tiempo Real)
+    useEffect(() => {
+        const targetProfileId = activeProfile?.id || user?.id;
+        if (activeTab !== 'crates' || !targetProfileId) return;
+
+        const fetchCrateMovements = async () => {
+            setIsLoadingCrateMovements(true);
+            try {
+                let profileIds = [targetProfileId];
+                if ((activeProfile as any)?.is_corporate_parent) {
+                    const { data: branches } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .eq('parent_id', targetProfileId);
+                    if (branches && branches.length > 0) {
+                        profileIds = [...profileIds, ...branches.map((b: any) => b.id)];
+                    }
+                }
+
+                const { data, error } = await supabase
+                    .from('asset_movements')
+                    .select(`
+                        id,
+                        route_id,
+                        order_id,
+                        profile_id,
+                        type,
+                        movement_type,
+                        quantity,
+                        delivered_qty,
+                        received_qty,
+                        balance_after,
+                        notes,
+                        evidence_url,
+                        created_at,
+                        orders:order_id (
+                            id,
+                            sequence_id
+                        )
+                    `)
+                    .in('profile_id', profileIds)
+                    .order('created_at', { ascending: false });
+
+                if (error) {
+                    console.warn('[crateMovements] Error consultando movimientos:', error);
+                } else if (isMounted.current) {
+                    setCrateMovements(data || []);
+                }
+            } catch (err) {
+                console.error('Error en fetchCrateMovements:', err);
+            } finally {
+                if (isMounted.current) setIsLoadingCrateMovements(false);
+            }
+        };
+
+        fetchCrateMovements();
     }, [activeTab, activeProfile?.id, user?.id]);
 
     const handleClearOrder = () => {
@@ -3524,7 +3588,8 @@ export default function B2BDashboard() {
 
                             <button
                                 onClick={() => {
-                                    window.showToast?.('Notificación enviada a Logística. Programaremos la recogida en tu próximo despacho.', 'success');
+                                    setPickupQuantity(Math.min(Math.max(1, (activeProfile as any)?.crate_balance || 1), 30));
+                                    setIsPickupModalOpen(true);
                                 }}
                                 className="btn-premium"
                                 style={{
@@ -3607,37 +3672,96 @@ export default function B2BDashboard() {
                                             <th style={{ padding: '0.75rem 1rem' }}>Fecha</th>
                                             <th style={{ padding: '0.75rem 1rem' }}>Tipo de Movimiento</th>
                                             <th style={{ padding: '0.75rem 1rem' }}>Referencia / Pedido</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Cantidad</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Entregadas</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Recogidas</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Saldo Resultante</th>
                                             <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Evidencia</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontWeight: '600' }}>Hoy (Último Despacho)</td>
-                                            <td style={{ padding: '0.85rem 1rem' }}>
-                                                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF2F2', color: '#991B1B', fontWeight: '800', border: '1px solid #FCA5A5', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Package size={12} /> ENTREGADAS (PRESTADAS)
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '0.85rem 1rem', color: '#0F172A', fontWeight: '800' }}>Pedido #639</td>
-                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#EF4444', fontWeight: '900', fontSize: '0.95rem' }}>+14 und</td>
-                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>Planilla Firmada</span>
-                                            </td>
-                                        </tr>
-                                        <tr style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
-                                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontWeight: '600' }}>24 de Jul 2026</td>
-                                            <td style={{ padding: '0.85rem 1rem' }}>
-                                                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <CheckCircle2 size={12} /> RECOGIDAS POR CONDUCTOR
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '0.85rem 1rem', color: '#0F172A', fontWeight: '800' }}>Ruta #WFW369</td>
-                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#10B981', fontWeight: '900', fontSize: '0.95rem' }}>-2 und</td>
-                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                                                <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '700' }}>Verificada Patio</span>
-                                            </td>
-                                        </tr>
+                                        {isLoadingCrateMovements ? (
+                                            <tr>
+                                                <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748B', fontWeight: '600' }}>
+                                                    Cargando extracto de Kardex en vivo...
+                                                </td>
+                                            </tr>
+                                        ) : crateMovements.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={7} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: '#64748B' }}>
+                                                    <Package size={40} style={{ color: '#CBD5E1', margin: '0 auto 10px', display: 'block' }} />
+                                                    <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.95rem' }}>Sin movimientos de canastillas registrados</div>
+                                                    <div style={{ fontSize: '0.78rem', color: '#94A3B8', marginTop: '4px' }}>Cada entrega y recolección realizada por nuestros transportadores actualizará automáticamente este extracto.</div>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            crateMovements.map((mov) => {
+                                                const dateStr = mov.created_at ? new Date(mov.created_at).toLocaleDateString('es-CO', {
+                                                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                                }) : 'N/A';
+                                                
+                                                const isDelivered = (mov.delivered_qty || 0) > 0 || mov.type === 'delivery';
+                                                const isReceived = (mov.received_qty || 0) > 0 || mov.type === 'pickup';
+                                                const isBoth = (mov.delivered_qty || 0) > 0 && (mov.received_qty || 0) > 0;
+                                                const isYard = mov.movement_type === 'yard_direct_return';
+
+                                                return (
+                                                    <tr key={mov.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                        <td style={{ padding: '0.85rem 1rem', color: '#475569', fontWeight: '600', fontSize: '0.8rem' }}>
+                                                            {dateStr}
+                                                        </td>
+                                                        <td style={{ padding: '0.85rem 1rem' }}>
+                                                            {isBoth ? (
+                                                                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#EFF6FF', color: '#1E40AF', fontWeight: '800', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <RotateCcw size={11} /> ENTREGA Y RECOGIDA (CANJE)
+                                                                </span>
+                                                            ) : isYard ? (
+                                                                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#F0FDF4', color: '#166534', fontWeight: '800', border: '1px solid #BBF7D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <CheckCircle2 size={11} /> RETORNO DIRECTO A PATIO
+                                                                </span>
+                                                            ) : isDelivered ? (
+                                                                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF2F2', color: '#991B1B', fontWeight: '800', border: '1px solid #FCA5A5', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <Package size={11} /> ENTREGADAS (PRESTADAS)
+                                                                </span>
+                                                            ) : isReceived ? (
+                                                                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <CheckCircle2 size={11} /> RECOGIDAS POR CONDUCTOR
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#F8FAFC', color: '#475569', fontWeight: '800', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    AJUSTE DE KARDEX
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td style={{ padding: '0.85rem 1rem', color: '#0F172A', fontWeight: '800' }}>
+                                                            {mov.orders?.sequence_id ? `Remisión #${mov.orders.sequence_id}` : (mov.notes || `Movimiento #${mov.id.substring(0, 8)}`)}
+                                                        </td>
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: (mov.delivered_qty || 0) > 0 ? '#EF4444' : '#94A3B8', fontWeight: '900', fontSize: '0.9rem' }}>
+                                                            {(mov.delivered_qty || 0) > 0 ? `+${mov.delivered_qty} und` : '-'}
+                                                        </td>
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: (mov.received_qty || 0) > 0 ? '#10B981' : '#94A3B8', fontWeight: '900', fontSize: '0.9rem' }}>
+                                                            {(mov.received_qty || 0) > 0 ? `-${mov.received_qty} und` : '-'}
+                                                        </td>
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#0F172A', fontWeight: '900', fontSize: '0.9rem' }}>
+                                                            {mov.balance_after != null ? `${mov.balance_after} und` : '-'}
+                                                        </td>
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                                                            {mov.evidence_url ? (
+                                                                <a 
+                                                                    href={mov.evidence_url} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer"
+                                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: '#0284C7', fontWeight: '800', textDecoration: 'none' }}
+                                                                >
+                                                                    <ExternalLink size={12} /> Ver Soporte
+                                                                </a>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>Remisión Digital</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -4693,6 +4817,102 @@ export default function B2BDashboard() {
                                     }}
                                 >
                                     <CheckCircle2 size={18} /> ¡Entendido! Empezar a Pedir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: SOLICITUD DE RECOGIDA DE CANASTILLAS VACÍAS */}
+            {isPickupModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '20px', maxWidth: '480px', width: '100%', padding: '1.75rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ backgroundColor: '#E0F2FE', padding: '8px', borderRadius: '12px', color: '#0284C7' }}>
+                                    <Truck size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A' }}>Solicitar Recogida de Canastillas</h3>
+                                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B' }}>Torre de Control de Transporte FruFresco</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsPickupModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                            <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                                <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: '800', textTransform: 'uppercase' }}>Saldo Actual en Custodia</div>
+                                <div style={{ fontSize: '1.4rem', fontWeight: '950', color: '#15803D' }}>{(activeProfile as any)?.crate_balance || 0} canastillas prestadas</div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                    ¿Cuántas canastillas vacías tienes listas para entregar?
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max={(activeProfile as any)?.crate_balance || 500}
+                                    value={pickupQuantity}
+                                    onChange={(e) => setPickupQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                    Instrucciones de Recepción / Horario
+                                </label>
+                                <textarea
+                                    value={pickupNotes}
+                                    onChange={(e) => setPickupNotes(e.target.value)}
+                                    placeholder="Ej: En muelle de descarga con el chef ejecutivo, disponible de 14:00 a 17:00..."
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '0.85rem', color: '#0F172A', minHeight: '80px', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem', paddingTop: '0.85rem', borderTop: '1px solid #E2E8F0' }}>
+                                <button
+                                    onClick={() => setIsPickupModalOpen(false)}
+                                    style={{ padding: '0.65rem 1.25rem', borderRadius: '10px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#64748B', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    disabled={isSubmittingPickup}
+                                    onClick={async () => {
+                                        setIsSubmittingPickup(true);
+                                        try {
+                                            const clientId = activeProfile?.id || user?.id;
+                                            const clientName = (activeProfile as any)?.company_name || (activeProfile as any)?.contact_name || 'Cliente B2B';
+
+                                            await supabase.from('customer_service_pqrs').insert({
+                                                client_id: clientId,
+                                                type: 'peticion',
+                                                category: 'logistica',
+                                                priority: pickupQuantity > 20 ? 'urgent' : 'medium',
+                                                subject: `[Logística] Recogida de ${pickupQuantity} Canastillas Vacías - ${clientName}`,
+                                                description: `El cliente solicita recolección de ${pickupQuantity} canastillas vacías en comodato.\nSaldo en custodia: ${(activeProfile as any)?.crate_balance || 0} und.\nInstrucciones: ${pickupNotes || 'Sin instrucciones adicionales'}.\nDirección: ${(activeProfile as any)?.address || 'Sede principal'}.`,
+                                                status: 'pending'
+                                            });
+
+                                            (window as any).showToast?.(`Solicitud radicada con éxito. Programaremos la recolección de las ${pickupQuantity} canastillas en tu próximo despacho.`, 'success');
+                                            setIsPickupModalOpen(false);
+                                            setPickupNotes('');
+                                        } catch (err: any) {
+                                            console.error('Error enviando solicitud de recogida:', err);
+                                            (window as any).showToast?.('Error al radicar solicitud: ' + (err.message || 'Intente nuevamente'), 'error');
+                                        } finally {
+                                            setIsSubmittingPickup(false);
+                                        }
+                                    }}
+                                    style={{ padding: '0.65rem 1.5rem', borderRadius: '10px', border: 'none', backgroundColor: '#0284C7', color: 'white', fontWeight: '900', fontSize: '0.85rem', cursor: isSubmittingPickup ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <Truck size={16} /> {isSubmittingPickup ? 'Radicando...' : 'Confirmar Solicitud'}
                                 </button>
                             </div>
                         </div>

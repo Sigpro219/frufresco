@@ -273,6 +273,13 @@ export default function OpsInventoryPage() {
     const [auditCounts, setAuditCounts] = useState<Record<string, string>>({});
     const [pendingReturns, setPendingReturns] = useState<any[]>([]);
     const [isWasteModalOpen, setIsWasteModalOpen] = useState(false);
+    // Recepción Directa de Canastillas en Patio
+    const [isYardReturnModalOpen, setIsYardReturnModalOpen] = useState(false);
+    const [yardClients, setYardClients] = useState<any[]>([]);
+    const [selectedYardClientId, setSelectedYardClientId] = useState('');
+    const [yardQuantity, setYardQuantity] = useState(1);
+    const [yardNotes, setYardNotes] = useState('');
+    const [savingYardReturn, setSavingYardReturn] = useState(false);
 
     const cellByGroup = useMemo(() => {
         const map = new Map<string, WorkCell>();
@@ -1870,8 +1877,23 @@ export default function OpsInventoryPage() {
                                 </div>
                             </div>
                             <button
-                                onClick={() => {
-                                    (window as any).showToast?.('Ingrese el nombre de la sucursal y la cantidad de canastillas recibidas físicamente en patio.', 'info');
+                                onClick={async () => {
+                                    setIsYardReturnModalOpen(true);
+                                    if (yardClients.length === 0) {
+                                        try {
+                                            const { data } = await supabase
+                                                .from('profiles')
+                                                .select('id, company_name, contact_name, crate_balance, needs_crates')
+                                                .or('needs_crates.eq.true,crate_balance.gt.0')
+                                                .order('company_name');
+                                            if (data && data.length > 0) {
+                                                setYardClients(data);
+                                                setSelectedYardClientId(data[0].id);
+                                            }
+                                        } catch (e) {
+                                            console.error('Error cargando clientes para devolución en patio:', e);
+                                        }
+                                    }
                                 }}
                                 style={{ padding: '0.8rem 1.25rem', borderRadius: '14px', border: 'none', backgroundColor: '#10B981', color: 'white', fontWeight: '900', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)' }}
                             >
@@ -2021,6 +2043,141 @@ export default function OpsInventoryPage() {
                 onSuccess={() => fetchCountProducts()}
                 warehouseId={warehouseId}
             />
+
+            {/* Modal de Recepción Directa de Canastillas en Patio */}
+            {isYardReturnModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'var(--ops-surface, #1E293B)', borderRadius: '24px', maxWidth: '500px', width: '100%', padding: '1.75rem', border: '1px solid var(--ops-border, #334155)', color: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--ops-border, #334155)', paddingBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ backgroundColor: '#064E3B', padding: '8px', borderRadius: '12px', color: '#10B981' }}>
+                                    <Package size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900' }}>Recepción Directa en Patio</h3>
+                                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--ops-text-muted, #94A3B8)' }}>Descargo inmediato en Kardex de cliente</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsYardReturnModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#CBD5E1', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                    Cliente / Sucursal que Entrega
+                                </label>
+                                <select
+                                    value={selectedYardClientId}
+                                    onChange={(e) => setSelectedYardClientId(e.target.value)}
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--ops-border, #334155)', backgroundColor: 'var(--ops-bg, #0F172A)', color: 'white', fontWeight: '700', fontSize: '0.85rem' }}
+                                >
+                                    {yardClients.map(c => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.company_name || c.contact_name} (Saldo actual: {c.crate_balance || 0} und)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#CBD5E1', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                    Cantidad de Canastillas Físicas Recibidas
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={yardQuantity}
+                                    onChange={(e) => setYardQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--ops-border, #334155)', backgroundColor: 'var(--ops-bg, #0F172A)', color: 'white', fontWeight: '900', fontSize: '1.2rem', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#CBD5E1', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                    Observaciones / Persona que entrega
+                                </label>
+                                <input
+                                    type="text"
+                                    value={yardNotes}
+                                    onChange={(e) => setYardNotes(e.target.value)}
+                                    placeholder="Ej: Entregadas por camión propio del restaurante / Recibió operario Juan..."
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--ops-border, #334155)', backgroundColor: 'var(--ops-bg, #0F172A)', color: 'white', fontSize: '0.85rem', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem', paddingTop: '0.85rem', borderTop: '1px solid var(--ops-border, #334155)' }}>
+                                <button
+                                    onClick={() => setIsYardReturnModalOpen(false)}
+                                    style={{ padding: '0.65rem 1.25rem', borderRadius: '10px', border: '1px solid var(--ops-border, #334155)', backgroundColor: 'transparent', color: '#CBD5E1', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    disabled={savingYardReturn || !selectedYardClientId}
+                                    onClick={async () => {
+                                        setSavingYardReturn(true);
+                                        try {
+                                            const { data: prof } = await supabase
+                                                .from('profiles')
+                                                .select('crate_balance, company_name')
+                                                .eq('id', selectedYardClientId)
+                                                .single();
+                                            
+                                            const currentBal = Number(prof?.crate_balance || 0);
+                                            const newBal = Math.max(0, currentBal - yardQuantity);
+
+                                            // 1. Descontar saldo de canastillas del cliente
+                                            await supabase
+                                                .from('profiles')
+                                                .update({ crate_balance: newBal })
+                                                .eq('id', selectedYardClientId);
+
+                                            // 2. Incrementar stock en patio en app_settings
+                                            const { data: settingData } = await supabase
+                                                .from('app_settings')
+                                                .select('value')
+                                                .eq('key', 'warehouse_crate_stock')
+                                                .limit(1);
+                                            
+                                            const currentPatio = parseInt(settingData?.[0]?.value || '0', 10);
+                                            await supabase
+                                                .from('app_settings')
+                                                .upsert({ key: 'warehouse_crate_stock', value: String(currentPatio + yardQuantity) }, { onConflict: 'key' });
+
+                                            // 3. Registrar movimiento en asset_movements
+                                            await supabase
+                                                .from('asset_movements')
+                                                .insert({
+                                                    profile_id: selectedYardClientId,
+                                                    type: 'pickup',
+                                                    movement_type: 'yard_direct_return',
+                                                    received_qty: yardQuantity,
+                                                    quantity: -yardQuantity,
+                                                    balance_after: newBal,
+                                                    notes: `Recepción directa en patio Bodega Central: ${yardQuantity} vacías (${yardNotes || 'Entrega física'})`
+                                                });
+
+                                            (window as any).showToast?.(`Ingreso registrado: +${yardQuantity} canastillas en patio. Nuevo saldo del cliente: ${newBal} und.`, 'success');
+                                            setIsYardReturnModalOpen(false);
+                                            setYardNotes('');
+                                        } catch (err: any) {
+                                            console.error('Error registrando retorno en patio:', err);
+                                            (window as any).showToast?.('Error al procesar devolución: ' + err.message, 'error');
+                                        } finally {
+                                            setSavingYardReturn(false);
+                                        }
+                                    }}
+                                    style={{ padding: '0.65rem 1.5rem', borderRadius: '10px', border: 'none', backgroundColor: '#10B981', color: 'white', fontWeight: '900', fontSize: '0.85rem', cursor: savingYardReturn ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <CheckCircle2 size={16} /> {savingYardReturn ? 'Guardando...' : 'Confirmar Ingreso a Patio'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }

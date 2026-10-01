@@ -1,8 +1,8 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.70 (Compuerta Shift-Left de Rectificación de Cargue en Muelle /ops/rectificacion, Gestión Preventiva de Escasez y Agotados en Plaza, Radicación Automática en Gestión de Calidad, Reimpresión de Remisión Neta y Cierre de Ciclo en Facturación, Escenario BDD 103)
-> **Fecha:** 30 de Septiembre, 2026  
+> **Versión:** 1.9.72 (Mega Menú Industrial SCOS en 2 Columnas Semánticas, Resiliencia de Viewport Dinámico 100dvh, Contención de Scroll en Eje Y y Poka-Yoke Anti-Desbordamiento en Pantallas Bajas, Escenario BDD 105)
+> **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
 
@@ -4447,5 +4447,194 @@ Al certificar una ruta con novedades de cargue por escasez:
      - Un ticket de PQR en `customer_service_pqrs` asignado a la mesa de Calidad.
   5. En facturación matutina, el pedido se factura por el neto efectivamente despachado sin generar notas crédito ni fricciones con el chef.
 
+---
 
+## 27. PROTOCOLO CANÓNICO DE GESTIÓN DE CANASTILLAS EN COMODATO, TRAZABILIDAD 4-ACTORES Y KARDEX TRANSACCIONAL MULTI-NIVEL (SDD v1.9.71)
+
+### 27.1 Principio de Comodato Industrial & Gobernanza del Activo
+La canastilla plástica estándar perforada ($60 \times 40 \times 25\text{ cm}$, tara estimada de $2.0\text{ kg}$, capacidad operativa de $12.5\text{ a }25\text{ kg}$) es el activo circulante más crítico de la cadena agro-logística de FruFresco.
+1. **Naturaleza Jurídica y Propiedad:**
+   - La canastilla **no es un empaque consumible ni un producto de venta**; se entrega bajo la figura jurídica de **Comodato Precario de Bien Mueble**.
+   - La propiedad patrimonial pertenece exclusivamente a FruFresco. La custodia material se transfiere de forma transitoria y condicional a los clientes institucionales durante el ciclo de consumo.
+2. **Diferenciación Operativa y Fiscal: B2B vs B2C:**
+   - **Clientes Institucionales B2B (HORECA / Cadenas):**
+     * Cuentan con el atributo `profiles.needs_crates = true`.
+     * Los pedidos se despachan en canastillas cerradas directamente a las cocinas y zonas de recepción.
+     * Tienen habilitado el **Kardex Digital de Canastillas** en `/b2b/dashboard` (pestaña `crates`) para seguimiento de saldo vivo y solicitud de recogida.
+   - **Clientes Residenciales / Hogar B2C (Web & Checkout):**
+     * **NO aplica comodato.** Queda estrictamente prohibido dejar canastillas plásticas en domicilios residenciales.
+     * En muelle o al descender del vehículo, el producto se trasiega a cajas biodegradables o bolsas de papel kraft entregadas a mano al cliente, cerrando de raíz el riesgo de extravío y pasivos ficticios.
+
+---
+
+### 27.2 Arquitectura de Custodia y Circuito Cerrado de los 4 Actores
+
+```
+ ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │                                CIRCUITO CIRCULAR DE 4 ACTORES                                   │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                  
+                                   [ACTOR 1: BODEGA CENTRAL]
+                                    (/ops/picking, /ops/inventory)
+                                     - Stock en Patio (warehouse_crate_stock)
+                                     - Cubicaje automático (12.5 kg/canastilla)
+                                     - Recepción Directa en Patio
+                                                  │
+                                                  ▼ Despacho Llenas
+                                   [ACTOR 2: TRANSPORTISTA]
+                                    (/ops/driver/delivery/[id])
+                                     - Entrega canastillas llenas
+                                     - Recoge canastillas vacías
+                                     - Cierre con firma/evidencia remisión
+                                                  │
+                                                  ▼ Entrega física
+                     ┌────────────────────────────┴────────────────────────────┐
+                     ▼                                                         ▼
+         [ACTOR 4: CLIENTE B2B]                                   [ACTOR 3: CONTROLADOR]
+          (/b2b/dashboard tab crates)                              (/admin/transport tab crates)
+           - Consulta de saldo vivo                                 - Balance Global 100%
+           - Kardex transaccional ACID                              - Alerta Roja Retención (>40 und)
+           - 1-Clic "Solicitar Recogida"                            - Ajustes Patio (Compra / Daño)
+```
+
+#### Actor 1: Bodega en Operaciones (`/ops/picking`, `/ops/rectificacion`, `/ops/inventory`)
+1. **Cubicaje Volumétrico Algorítmico:**
+   $$\text{Canastillas Requeridas} = \max\left(1,\ \left\lceil \frac{\text{Peso Total (kg)}}{12.5\text{ kg}} \right\rceil\right)$$
+   Al emitir los rótulos térmicos ($100\text{mm} \times 50\text{mm}$ con QR), cada canastilla se numera en muelle (`[CANASTILLA X / Y]`) y se asigna a una de las 150 bahías físicas.
+2. **Recepción Directa en Patio (`/ops/inventory` tab `returns`):**
+   - Modal interactivo de descargo para clientes que entregan canastillas vacías directamente en planta con vehículo propio.
+   - Actualización simultánea: descuenta saldo al cliente (`profiles.crate_balance`), incrementa stock en patio (`warehouse_crate_stock`) e inserta movimiento tipo `yard_direct_return` en `asset_movements`.
+
+#### Actor 2: Transportista en Operaciones (`/ops/driver/delivery/[id]`)
+1. **Registro Segregado en Muelle del Cliente:**
+   El chofer declara explícitamente en la terminal móvil:
+   - `canastillasDelivered`: Canastillas llenas dejadas al cliente.
+   - `canastillasReceived`: Canastillas vacías recogidas.
+2. **Impacto Transaccional Atómico:**
+   - Variación Neta: $\Delta = \text{Delivered} - \text{Received}$.
+   - Actualiza el saldo en el perfil del cliente:
+     $$\text{profiles.crate\_balance} = \max(0,\ \text{crate\_balance} + \Delta)$$
+   - Inserta el registro oficial en `asset_movements` vinculando `profile_id`, `order_id`, `route_id`, evidencia fotográfica de remisión firmada y saldo resultante `balance_after`.
+
+#### Actor 3: Controlador de Logística en Transporte (`/admin/transport` tab `crates`)
+1. **Ecuación Maestra de Masa de Activos:**
+   $$\text{Total Activos FruFresco} = \text{Canastillas en Calle (Clientes)} + \text{En Tránsito (Camiones)} + \text{Disponibles en Patio (Bodega)}$$
+2. **Poka-Yoke de Alertas de Retención:**
+   - Saldo $\le 20$ und: 🟢 **Normal**.
+   - Saldo $21 - 40$ und: 🟡 **Atención Preventiva**.
+   - Saldo $> 40$ und: 🔴 **Alerta Roja / Retención Crítica** (Exige recolección prioritaria en el planeador de rutas).
+3. **Consolidado Jerárquico Matriz vs Sucursal:**
+   - Proyecta el saldo de cada sede individual y suma automáticamente el balance acumulado de la Casa Matriz.
+4. **Inspección de Kardex & Ajustes de Patio:**
+   - Botón `[📋 Kardex]` por cliente para auditar en tiempo real el historial de movimientos.
+   - Modal de Ajuste de Patio: Auditoría física de patio, compras de canastillas nuevas (`new_purchase`) y bajas por rotura (`damage_writeoff`) persistidas en `crates_ledger` y `app_settings`.
+
+#### Actor 4: Autoservicio del Cliente B2B (`/b2b/dashboard` tab `crates`)
+1. **Transparencia Total en Tiempo Real:**
+   El cliente visualiza sus tarjetas de saldo, estado de habilitación de comodato y el libro mayor del Kardex.
+2. **Kardex Transaccional 360°:**
+   Tabla conectada en vivo a `asset_movements` que detalla:
+   - Fecha y hora exacta del despacho/recolección.
+   - Tipo de movimiento (`ENTREGADAS (PRESTADAS)`, `RECOGIDAS POR CONDUCTOR`, `CANJE`, `RETORNO A PATIO`).
+   - Remisión de despacho o ruta de soporte con enlace a la firma digital / evidencia.
+   - Desglose de unidades entregadas (+), unidades recogidas (-) y saldo resultante.
+3. **Botón Poka-Yoke «Solicitar Recogida de Vacías»:**
+   - Modal interactivo donde el cliente declara el número de vacías acumuladas y las instrucciones de recepción.
+   - Radica una solicitud prioritaria en `customer_service_pqrs` vinculada a la mesa de control de Transporte, sin necesidad de llamadas telefónicas.
+
+---
+
+### 27.3 Contrato de Datos & Modelo Relacional de Activos
+
+```sql
+-- Estructura de Movimientos de Activos (Kardex)
+CREATE TABLE asset_movements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+    route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
+    type TEXT NOT NULL, -- 'delivery', 'pickup', 'adjustment'
+    movement_type TEXT NOT NULL, -- 'delivery_loan', 'driver_pickup', 'exchange', 'yard_direct_return', 'yard_adjustment', 'loss_writeoff'
+    delivered_qty INTEGER DEFAULT 0,
+    received_qty INTEGER DEFAULT 0,
+    quantity INTEGER NOT NULL, -- Variación neta (delivered - received)
+    balance_after INTEGER,
+    notes TEXT,
+    evidence_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Libro Mayor de Bodega Central (Patio)
+CREATE TABLE crates_ledger (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    movement_type TEXT NOT NULL, -- 'initial_count', 'new_purchase', 'damage_writeoff'
+    quantity INTEGER NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+### 27.4 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 104: Circuito Cerrado de Entrega de Canastillas, Recolección de Vacías e Impacto Inmediato en Kardex B2B
+- **Given** el cliente B2B "Restaurante Le Grand Gourmet" (`profile_id: p-882`) con saldo inicial de 10 canastillas prestadas.
+- **And** tiene un pedido #1048 despachado con 12 canastillas llenas en la ruta `PMW071`.
+- **When** el transportista arriba al restaurante en `/ops/driver/delivery/stop-45`.
+- **And** entrega las 12 canastillas llenas y recoge 7 canastillas vacías acumuladas en cocina.
+- **And** captura la firma del chef en la remisión y pulsa `[Finalizar Entrega]`.
+- **Then**:
+  1. El sistema inserta un registro en `asset_movements` con `delivered_qty: 12`, `received_qty: 7`, `quantity: +5`, `movement_type: 'exchange'` y `balance_after: 15`.
+  2. El saldo `profiles.crate_balance` del restaurante se actualiza atómicamente de 10 a 15 und.
+  3. En `/b2b/dashboard` (pestaña `crates`), el ecónomo del restaurante observa de inmediato:
+     - Tarjeta "CANASTILLAS PRESTADAS: 15 und".
+     - Nueva fila en el Kardex: `Remisión #1048 | CANJE | +12 ent / -7 rec | Saldo: 15 und | Ver Firma`.
+  4. En la Torre de Control (`/admin/transport` tab `crates`), el controlador logístico visualiza al restaurante con 15 canastillas y en semáforo verde normal ($\le 20$ und).
+
+---
+
+## 28. ESTANDARIZACIÓN DE NAVEGACIÓN GLOBAL: MEGA MENÚ INDUSTRIAL SCOS (2 COLUMNAS SEMÁNTICAS & RESILIENCIA EN EJE Y)
+
+### 28.1 Principio de Ergonomía Visual y Resiliencia en Pantallas Reducidas
+En un Sistema Operativo de Cadena de Suministro (SCOS) con más de 15 módulos especializados, las listas desplegables verticales monocolumna generan un defecto ergonómico severo en pantallas de baja altura (laptops de 1366x768 px o monitores con escalado DPI de 125%/150%):
+1. **Trampa de Desbordamiento:** Al estar ancladas a un `<header>` con `position: sticky; top: 0`, si el menú carece de `maxHeight` y `overflowY: 'auto'`, los módulos ubicados al final de la lista quedan por fuera del viewport de la ventana.
+2. **Inaccesibilidad Funcional:** Cualquier intento de desplazar la página con la rueda del ratón mueve el contenido inferior (`<body>`), dejando el menú congelado e impidiendo alcanzar las opciones de la base.
+
+### 28.2 Regla de Arquitectura de UI: Protocolo Bimodal de 2 Columnas
+El desplegable de navegación central "Operaciones" en `Navbar.tsx` se divide en dos columnas semánticas estandarizadas:
+* **Columna 1: Cadena Logística & Gemba Operativo:**
+  - Pedidos (`/admin/orders/loading`)
+  - Conciliación Post-Despacho (`/admin/orders/contingency-reconciliation`)
+  - Previsualización Impresión (`/admin/orders/contingency-print?mode=remissions`)
+  - Transporte y Flota (`/admin/transport`)
+  - Control de Inventarios (`/admin/commercial/inventory`)
+  - Compras & Abastecimiento (`/admin/procurement`)
+  - Portal Operacional Muelle/Bodega (`/ops`)
+* **Columna 2: Gestión Administrativa, Comercial & Estratégica:**
+  - Panel Admin (`/admin/dashboard`)
+  - Facturación y Cartera (`/admin/commercial/billing`)
+  - Comercial y Cotizaciones (`/admin/commercial`)
+  - Gestión de Calidad & PQRS (`/admin/customer-service`)
+  - Talento Humano (`/admin/hr`)
+  - Catálogo Web (`/admin/products`)
+  - Maestro SKU (`/admin/master/products`)
+  - Inteligencia & Estrategia (`/admin/strategy`)
+
+### 28.3 Contrato de Restricción Técnica
+1. **Contención Dinámica:** El contenedor debe definir estrictamente `maxHeight: 'calc(100dvh - 100px)'` y `maxWidth: 'calc(100vw - 24px)'`.
+2. **Scroll Interno Aislado:** Aplica `overflowY: 'auto'` y `overscrollBehavior: 'contain'`, garantizando que el evento de scroll pertenezca exclusivamente al menú y no transfiera inercia al documento base.
+3. **Micro-estilizado Swiss Precision:** Uso de la clase `.custom-scrollbar` con track transparente y pulgar redondeado de 5px en `#CBD5E1` (`#94A3B8` en hover), evitando barras toscas del sistema operativo.
+4. **Footprint Vertical Optimizado:** La altura del menú se reduce de 630px a ~320px, erradicando la necesidad de scroll en el 98% de pantallas y permitiendo acceso inmediato en un solo clic.
+
+---
+
+#### Escenario 105: Navegación Resiliente en Pantalla de Baja Altura con Mega Menú de 2 Columnas y Poka-Yoke Anti-Desbordamiento
+- **Given** un colaborador con perfil administrativo u operativo autenticado en FruFresco.
+- **And** visualiza la aplicación en un dispositivo con resolución vertical reducida (ej. laptop de 768px de alto o ventana redimensionada).
+- **When** hace clic en el selector "Operaciones" de la barra de navegación superior.
+- **Then**:
+  1. El sistema despliega un Mega Menú estructurado en 2 columnas simétricas (*Operación & Logística* vs *Gestión & Administración*) con un ancho de 560px anclado a la derecha del botón.
+  2. La totalidad de los 15 módulos operacionales se visualiza de forma simultánea sin quedar cortados por el borde inferior de la pantalla.
+  3. En caso de pantallas ultra-bajas o consolas de desarrollador abiertas, el menú no rebasa la pantalla, limitándose a `calc(100dvh - 100px)` y permitiendo el desplazamiento vertical interno fluido sin mover la página de fondo.
 

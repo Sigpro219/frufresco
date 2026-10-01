@@ -166,6 +166,43 @@ export default function TransportControlTower() {
     const [patioModalType, setPatioModalType] = useState<'initial' | 'purchase' | 'damage'>('initial');
     const [patioModalQty, setPatioModalQty] = useState<number>(0);
     const [patioModalReason, setPatioModalReason] = useState<string>('');
+    const [selectedClientForKardex, setSelectedClientForKardex] = useState<any | null>(null);
+    const [clientKardexMovements, setClientKardexMovements] = useState<any[]>([]);
+    const [isLoadingClientKardex, setIsLoadingClientKardex] = useState(false);
+
+    const handleOpenClientKardex = async (client: any) => {
+        setSelectedClientForKardex(client);
+        setIsLoadingClientKardex(true);
+        try {
+            let profileIds = [client.id];
+            if (client.is_corporate_parent) {
+                const { data: branches } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('parent_id', client.id);
+                if (branches && branches.length > 0) {
+                    profileIds = [...profileIds, ...branches.map((b: any) => b.id)];
+                }
+            }
+            const { data, error } = await supabase
+                .from('asset_movements')
+                .select(`
+                    id, route_id, order_id, profile_id, type, movement_type,
+                    quantity, delivered_qty, received_qty, balance_after,
+                    notes, evidence_url, created_at,
+                    orders:order_id (id, sequence_id)
+                `)
+                .in('profile_id', profileIds)
+                .order('created_at', { ascending: false });
+            if (!error && data) {
+                setClientKardexMovements(data);
+            }
+        } catch (e) {
+            console.error('Error fetching client kardex in transport:', e);
+        } finally {
+            setIsLoadingClientKardex(false);
+        }
+    };
     const [loading, setLoading] = useState(true);
     const isMounted = useRef(true);
 
@@ -1106,7 +1143,7 @@ export default function TransportControlTower() {
                                             <div style={{ padding: '0.75rem 1.1rem', backgroundColor: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <Package size={15} color={THEME.colors.primary} /> Consolidado de Canastillas por Casa Matriz y Sucursales
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                                 <thead>
                                                     <tr style={{ backgroundColor: THEME.colors.background, color: THEME.colors.textSecondary, textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.68rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                         <th style={{ padding: '0.65rem 1rem' }}>Cliente / Sucursal</th>
@@ -1114,12 +1151,13 @@ export default function TransportControlTower() {
                                                         <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Préstamo Autorizado</th>
                                                         <th style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>Canastillas Retenidas</th>
                                                         <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Estado</th>
+                                                        <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Kardex</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {activeCrateProfiles.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                                            <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
                                                                 No hay clientes con saldo de canastillas registradas
                                                             </td>
                                                         </tr>
@@ -1157,6 +1195,27 @@ export default function TransportControlTower() {
                                                                         }}>
                                                                             {isHighAlert ? <><AlertTriangle size={11} /> Retención Alta</> : <><CheckCircle2 size={11} /> Normal</>}
                                                                         </span>
+                                                                    </td>
+                                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>
+                                                                        <button
+                                                                            onClick={() => handleOpenClientKardex(p)}
+                                                                            style={{
+                                                                                padding: '3px 8px',
+                                                                                borderRadius: '6px',
+                                                                                backgroundColor: '#F1F5F9',
+                                                                                border: '1px solid #CBD5E1',
+                                                                                color: '#334155',
+                                                                                fontSize: '0.72rem',
+                                                                                fontWeight: '800',
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px'
+                                                                            }}
+                                                                            title="Ver extracto Kardex del cliente"
+                                                                        >
+                                                                            <FileText size={12} style={{ color: THEME.colors.primary }} /> Kardex
+                                                                        </button>
                                                                     </td>
                                                                 </tr>
                                                             );
@@ -1274,6 +1333,105 @@ export default function TransportControlTower() {
                                     <Save size={15} strokeWidth={2} /> Guardar Ajuste Kardex
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: KARDEX DETALLADO DEL CLIENTE */}
+            {selectedClientForKardex && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(26, 35, 30, 0.65)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1.5rem' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, maxWidth: '780px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <FileText size={18} style={{ color: THEME.colors.primary }} /> Extracto Kardex de Canastillas
+                                </h3>
+                                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>
+                                    {selectedClientForKardex.company_name || selectedClientForKardex.contact_name} &bull; Saldo Actual: <span style={{ color: THEME.colors.primary, fontWeight: '900' }}>{selectedClientForKardex.crate_balance || 0} und</span>
+                                </p>
+                            </div>
+                            <button onClick={() => setSelectedClientForKardex(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, padding: '4px' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ overflowY: 'auto', padding: '1rem 1.5rem', flex: 1 }}>
+                            {isLoadingClientKardex ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                    Cargando movimientos de Kardex...
+                                </div>
+                            ) : clientKardexMovements.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>
+                                    <Package size={36} style={{ color: '#CBD5E1', margin: '0 auto 8px', display: 'block' }} />
+                                    <div style={{ fontWeight: '800', color: THEME.colors.textMain }}>Sin movimientos registrados</div>
+                                    <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>No hay registros de despachos o devoluciones para este cliente.</div>
+                                </div>
+                            ) : (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: THEME.colors.background, color: THEME.colors.textSecondary, textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.68rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                            <th style={{ padding: '0.6rem 0.8rem' }}>Fecha</th>
+                                            <th style={{ padding: '0.6rem 0.8rem' }}>Operación</th>
+                                            <th style={{ padding: '0.6rem 0.8rem' }}>Referencia</th>
+                                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>Entregadas</th>
+                                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>Recogidas</th>
+                                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>Saldo</th>
+                                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>Soporte</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {clientKardexMovements.map(mov => (
+                                            <tr key={mov.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                <td style={{ padding: '0.65rem 0.8rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                                    {mov.created_at ? new Date(mov.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.8rem' }}>
+                                                    {(mov.delivered_qty || 0) > 0 && (mov.received_qty || 0) > 0 ? (
+                                                        <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#EFF6FF', color: '#1E40AF', fontWeight: '800' }}>Canje</span>
+                                                    ) : mov.movement_type === 'yard_direct_return' ? (
+                                                        <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#F0FDF4', color: '#166534', fontWeight: '800' }}>Patio</span>
+                                                    ) : (mov.delivered_qty || 0) > 0 || mov.type === 'delivery' ? (
+                                                        <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEF2F2', color: '#991B1B', fontWeight: '800' }}>Entrega</span>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800' }}>Recogida</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.8rem', fontWeight: '700', color: THEME.colors.textMain }}>
+                                                    {mov.orders?.sequence_id ? `Remisión #${mov.orders.sequence_id}` : (mov.notes || `ID #${mov.id.substring(0, 6)}`)}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.8rem', textAlign: 'right', fontWeight: '800', color: (mov.delivered_qty || 0) > 0 ? '#DC2626' : '#94A3B8' }}>
+                                                    {(mov.delivered_qty || 0) > 0 ? `+${mov.delivered_qty}` : '-'}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.8rem', textAlign: 'right', fontWeight: '800', color: (mov.received_qty || 0) > 0 ? '#10B981' : '#94A3B8' }}>
+                                                    {(mov.received_qty || 0) > 0 ? `-${mov.received_qty}` : '-'}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.8rem', textAlign: 'right', fontWeight: '900', color: THEME.colors.textMain }}>
+                                                    {mov.balance_after != null ? `${mov.balance_after} und` : '-'}
+                                                </td>
+                                                <td style={{ padding: '0.65rem 0.8rem', textAlign: 'center' }}>
+                                                    {mov.evidence_url ? (
+                                                        <a href={mov.evidence_url} target="_blank" rel="noopener noreferrer" style={{ color: THEME.colors.primary, display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '700', fontSize: '0.7rem' }}>
+                                                            <ExternalLink size={11} /> Ver
+                                                        </a>
+                                                    ) : (
+                                                        <span style={{ color: '#94A3B8', fontSize: '0.68rem' }}>-</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+
+                        <div style={{ padding: '0.85rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setSelectedClientForKardex(null)}
+                                style={{ padding: '0.45rem 1.1rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}
+                            >
+                                Cerrar
+                            </button>
                         </div>
                     </div>
                 </div>
