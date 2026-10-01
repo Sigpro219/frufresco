@@ -165,7 +165,7 @@ export interface InventoryDailyRow {
     // T: Inventario agregado bodega (conteo a ciegas)
     colT_physicalCount: number | null;
     hasPhysicalCount: boolean;
-    // U: Inventario bodega post-10 AM (U = T + O)
+    // U: Inventario en bodega (devoluciones) (U = T + O)
     colU_bodegaPost10am: number | null;
     // V: Faltantes (min(0, T - S))
     colV_missing: number;
@@ -480,9 +480,11 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
 
                 if (prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
                     prevCloseData.snapshot_items.forEach((item: any) => {
-                        const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
-                            ? Number(item.physicalCount)
-                            : Number(item.calculatedStock || 0);
+                        const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
+                            ? Number(item.bodegaPost10am)
+                            : (item.physicalCount !== null && item.physicalCount !== undefined
+                                ? Number(item.physicalCount)
+                                : Number(item.calculatedStock || 0));
                         if (item.productId) {
                             prevClosingSnapshots[item.productId] = finalStock;
                         }
@@ -702,19 +704,31 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             });
 
             // Inventario Inicial (Col E):
-            // 1. Si existe Cierre Oficial del día anterior (D-1), se hereda su saldo final de forma inmutable (SPEC.md v1.5.0)
-            // 2. Si no existe cierre oficial, se aplica reconstrucción retroactiva: Stock Actual - sum(deltas posteriores).
+            // 1. Si existe Cierre Oficial previo (D-1), se hereda su saldo de Columna U (Inventario en bodega [devoluciones]) de forma inmutable
+            // 2. Si es una fecha futura (balanceDate > todayStr) sin cierre, el saldo inicial es 0 (no proyectar stock vivo al futuro)
+            // 3. Si es la jornada actual en curso (balanceDate === todayStr), se calcula: Stock Actual - movimientos de hoy
+            // 4. Si es una fecha pasada sin cierre formal previo, solo si hubo movimientos registrados en ese día o posteriores se computa el delta, de lo contrario 0
             const sumDeltasSinceStart = dayMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0) +
                                        laterMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0);
-            const initialStock = previousClosingMap[p.id] !== undefined
-                ? previousClosingMap[p.id]
-                : Math.max(0, currentStock - sumDeltasSinceStart);
+            
+            let initialStock = 0;
+            if (previousClosingMap[p.id] !== undefined) {
+                initialStock = previousClosingMap[p.id];
+            } else if (balanceDate > todayStr) {
+                initialStock = 0;
+            } else if (balanceDate === todayStr) {
+                const todayDeltas = dayMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0);
+                initialStock = Math.max(0, currentStock - todayDeltas);
+            } else {
+                const hasAnyMovements = dayMovs.length > 0 || laterMovs.length > 0;
+                initialStock = hasAnyMovements ? Math.max(0, currentStock - sumDeltasSinceStart) : 0;
+            }
 
             // S: Inventario Calculado
             // S = E + F + G - H - J - K + L - M - N + O - P - Q - R
             const calculatedStock = initialStock + f_corrections + g_purchases - h_salesKg - j_weightSalesUnits - k_shortage + l_unshipped - m_additionalSales - n_employeeSales + o_returns - p_weighingWaste - q_damageWaste - r_cleaningWaste;
 
-            // U: Inventario Bodega post-10 AM = T + O
+            // U: Inventario en bodega (devoluciones) = T + O
             const bodegaPost10 = physicalCount !== null ? physicalCount + o_returns : null;
 
             // V & W: Faltantes y Sobrantes (Magnitudes positivas como en el Excel del cliente)
@@ -1254,7 +1268,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                     'Basura': Number(rowObj.colR_cleaningWaste.toFixed(2)),
                     'Inventario calculado': Number(rowObj.colS_calculated.toFixed(2)),
                     'Inventario agregado bodega': rowObj.colT_physicalCount !== null ? Number(rowObj.colT_physicalCount.toFixed(2)) : '',
-                    'Inventario bodega': rowObj.colU_bodegaPost10am !== null ? Number(rowObj.colU_bodegaPost10am.toFixed(2)) : '',
+                    'Inventario en bodega (devoluciones)': rowObj.colU_bodegaPost10am !== null ? Number(rowObj.colU_bodegaPost10am.toFixed(2)) : '',
                     'Faltantes': rowObj.colV_missing > 0 ? Number(rowObj.colV_missing.toFixed(2)) : 0,
                     'Sobrantes': rowObj.colW_surplus > 0 ? Number(rowObj.colW_surplus.toFixed(2)) : 0,
                     'Banco de alimentos': Number(rowObj.colX_foodBank.toFixed(2))
@@ -1285,7 +1299,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             'Basura': Number(ch.colR_cleaningWaste.toFixed(2)),
                             'Inventario calculado': Number(ch.colS_calculated.toFixed(2)),
                             'Inventario agregado bodega': ch.colT_physicalCount !== null ? Number(ch.colT_physicalCount.toFixed(2)) : '',
-                            'Inventario bodega': ch.colU_bodegaPost10am !== null ? Number(ch.colU_bodegaPost10am.toFixed(2)) : '',
+                            'Inventario en bodega (devoluciones)': ch.colU_bodegaPost10am !== null ? Number(ch.colU_bodegaPost10am.toFixed(2)) : '',
                             'Faltantes': ch.colV_missing > 0 ? Number(ch.colV_missing.toFixed(2)) : 0,
                             'Sobrantes': ch.colW_surplus > 0 ? Number(ch.colW_surplus.toFixed(2)) : 0,
                             'Banco de alimentos': Number(ch.colX_foodBank.toFixed(2))
@@ -1305,9 +1319,9 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 const calcFormula = `F${rNum}+G${rNum}+H${rNum}-I${rNum}-K${rNum}-L${rNum}+M${rNum}-N${rNum}-O${rNum}+P${rNum}-Q${rNum}-R${rNum}-S${rNum}`;
                 ws[`T${rNum}`] = { t: 'n', f: calcFormula, v: rowsForExcel[i]['Inventario calculado'] };
 
-                // Col V: Bodega Post-10 AM (U + P)
+                // Col V: Inventario en bodega (devoluciones) (U + P)
                 const post10Formula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), "", U${rNum}+P${rNum})`;
-                ws[`V${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario bodega'] };
+                ws[`V${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario en bodega (devoluciones)'] };
 
                 // Col W: Faltantes (Si U < T => T - U)
                 const missingFormula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), 0, IF(U${rNum}<T${rNum}, T${rNum}-U${rNum}, 0))`;
@@ -1357,7 +1371,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 { wch: 12 }, // S Basura
                 { wch: 18 }, // T Calculado
                 { wch: 20 }, // U Agregado Bodega
-                { wch: 16 }, // V Bodega Post-10
+                { wch: 24 }, // V Inventario en bodega (devoluciones)
                 { wch: 14 }, // W Faltantes
                 { wch: 14 }, // X Sobrantes
                 { wch: 16 }  // Y Banco Alimentos
@@ -2248,8 +2262,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 {/* T: Conteo Físico Real */}
                 {renderEditableCell(row.productId, 'T', row.colT_physicalCount, { width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderBottom: cellBorderBottom }, 2)}
 
-                {/* U: Bodega Post-10 AM */}
-                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }}>
+                {/* U: Inventario en bodega (devoluciones) */}
+                <td style={{ width: '95px', minWidth: '95px', maxWidth: '95px', padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', backgroundColor: isParent ? rowBg : (isChild ? '#FFFFFF' : '#F8FAFC'), borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }} title="Inventario en bodega (devoluciones) = Conteo Real (T) + Devoluciones (O)">
                     {row.colU_bodegaPost10am !== null ? renderNumericCell(row.colU_bodegaPost10am) : <span style={{ color: '#CBD5E1' }}>-</span>}
                 </td>
 
@@ -3639,7 +3653,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                     </div>
                                 </th>
                                 <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px' }}>T: Conteo Real</th>
-                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px' }}>U: Bodega Post-10</th>
+                                <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, padding: '6px 4px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', borderRight: '2px solid #334155', width: '95px', minWidth: '95px', maxWidth: '95px', fontSize: '0.60rem' }} title="Inventario en bodega (devoluciones) (U = T + O)">U: Inv. Bodega (Dev)</th>
 
                                 {/* Columnas V - X */}
                                 <th style={{ height: '32px', boxSizing: 'border-box', position: 'sticky', top: '32px', zIndex: 40, backgroundColor: '#0F172A', padding: '6px 8px', textAlign: 'right', color: '#F87171', width: '95px', minWidth: '95px', maxWidth: '95px' }}>V: Faltantes</th>
@@ -3843,7 +3857,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 <td style={{ position: 'sticky', bottom: 0, zIndex: 30, padding: '6px 8px', textAlign: 'right', color: '#34D399', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalT)}
                                 </td>
-                                {/* U: Bodega Post-10 */}
+                                {/* U: Inventario en bodega (devoluciones) */}
                                 <td style={{ position: 'sticky', bottom: 0, zIndex: 30, padding: '6px 8px', textAlign: 'right', color: '#F8FAFC', backgroundColor: '#1E293B', width: '95px', minWidth: '95px', maxWidth: '95px', borderRight: '2px solid #334155', borderTop: '2px solid #334155' }}>
                                     {renderNumericCell(columnTotals.totalU)}
                                 </td>

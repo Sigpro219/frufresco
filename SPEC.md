@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.55 (Estándar de Hoja Membreteada Universal A-Z, Exportación Excel .xlsx y Registro de Deuda Técnica 17: Modernización de Marcadores Google Maps AdvancedMarkerElement)
+> **Versión:** 1.9.56 (Gobernanza de Cierre de Inventario en daily_inventory_closings, Herencia Estricta de Saldo Inicial D-1 desde Columna U, Renombramiento a Inventario en bodega [devoluciones], Escenario BDD 93)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -1078,7 +1078,7 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 | **R** | `colR_cleaningWaste` | **Basura / Descapote** | Pérdida (-) | Limpieza de hojas, tallos o cáscaras con foto (`ref = 'waste_cleaning'`). |
 | **S** | `colS_calculated` | **INVENTARIO CALCULADO**| Teórico | **$S = E + F + G - H - J - K + L - M - N + O - P - Q - R$** |
 | **T** | `colT_physicalCount` | **Conteo Agregado** | Físico | Conteo físico ciego realizado en bodega (`ref = 'blind_count'`). |
-| **U** | `colU_bodegaPost10am` | **Inv. Bodega Post-10AM**| Físico Final | $U = T + O$ (Conteo físico adicionando devoluciones de ruta). |
+| **U** | `colU_bodegaPost10am` | **Inventario en bodega (devoluciones)**| Físico Final | $U = T + O$ (Conteo físico más devoluciones de ruta). Saldo final inmutable de jornada que hereda $D+1$ como Inventario Inicial (Col E). |
 | **V** | `colV_missing` | **FALTANTE** | Descuadre | Si $T < S \implies \|T - S\|$ |
 | **W** | `colW_surplus` | **SOBRANTE** | Descuadre | Si $T > S \implies (T - S)$ |
 | **X** | `colX_foodBank` | **Banco de Alimentos** | Salida Social | Donaciones y producto entregado al banco de alimentos (`ref = 'food_bank'`). |
@@ -1117,9 +1117,9 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 
 #### 2. Protocolo de Cierre Diario y Congelación Contable
 - **Botón Manual de "Cierre Diario Oficial":** La jornada contable no se congela por cron ciego; requiere la ejecución explícita del botón de Cierre Diario por parte del Administrador o Supervisor de Operaciones.
-- **Congelación Estricta:** Al ejecutar el cierre, los registros de la fecha quedan en estado `locked` (congelados), bloqueando modificaciones retroactivas no auditadas salvo autorización de superadmin.
-- **Traslado Automático de Saldos:** El **Saldo Físico Final (Col T / Col U)** de la fecha cerrada se traslada automáticamente como **Saldo Inicial (Col E)** de la jornada siguiente ($D+1$).
-- **Trazabilidad:** Se registra en auditoría: `closed_at`, `closed_by_user_id`, `closed_by_name` y hash de verificación del balance de masa.
+- **Congelación Estricta:** Al ejecutar el cierre, los registros de la fecha se persisten atómicamente en la tabla `daily_inventory_closings` en estado `is_locked = true`, capturando el snapshot completo de ítems auditados y bloqueando modificaciones retroactivas no auditadas salvo autorización de superadmin.
+- **Herencia Estricta de Saldos (Col U $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente el saldo de la **Columna U** (*Inventario en bodega [devoluciones]*, $U = T + O$) del último cierre oficial registrado anterior a dicha fecha ($D-1$). Si no existe cierre previo en una fecha no operada o futura, el sistema no clona el stock vivo actual; presenta saldo inicial cero ($0$).
+- **Trazabilidad:** Se registra en auditoría: `closed_at`, `closed_by_name`, `total_calculated`, `total_physical`, `total_missing`, `total_surplus` y snapshot JSON inmutable.
 
 #### 3. Política de Desvío en Auditoría Cíclica: Tolerancia Cero (0%)
 - Todo desvío entre el saldo teórico ($S$) y el conteo físico ciego ($T$) se computa y visibiliza de inmediato:
@@ -4070,4 +4070,15 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
   5. Todas las representaciones gráficas emplean iconos vectoriales de `lucide-react` con cero emojis unicode.
   6. Al presionar **`[🖨️ Imprimir]`**, se abre una ventana limpia con los estilos `@media print` en formato Carta (*Letter Portrait*).
   7. Al presionar **`[📊 Descargar Excel]`**, la biblioteca `xlsx` genera y descarga de inmediato el libro estructurado con las 11 columnas corporativas oficiales para el cliente.
+
+#### Escenario 93: Gobernanza de Cierres de Inventario, Herencia de Saldo D-1 y Renombramiento de Columna U
+- **Given** la Sábana Diaria de Balance de Masa en `/admin/commercial/inventory` (componente `InventoryDailyBalanceTab`).
+- **When** el supervisor u operador consulta una fecha $D$:
+- **Then**:
+  1. La **Columna U** se rotula oficialmente como **`Inventario en bodega (devoluciones)`** (en encabezados de tabla, modales, resúmenes y archivo Excel).
+  2. Su valor se computa como $U = T + O$ (Conteo físico ciego auditado más devoluciones de ruta recibidas).
+  3. Al presionar **`[🔒 Cierre Diario Oficial]`**, el sistema persiste atómicamente la jornada en la tabla `daily_inventory_closings` con `is_locked = true`, capturando el snapshot inmutable de las 24 columnas.
+  4. Al consultar la jornada contable siguiente ($D+1$), el **Inventario Inicial (Columna E)** hereda exactamente el saldo de la **Columna U** (*Inventario en bodega [devoluciones]*) del cierre previo.
+  5. Si el operador consulta una fecha futura o una fecha sin movimientos ni cierre previo, el sistema no clona ni arrastra el stock actual vivo de bodega; presenta saldo inicial cero ($0$) evitando distorsiones contables.
+
 
