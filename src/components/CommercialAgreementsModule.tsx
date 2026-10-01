@@ -864,13 +864,33 @@ export default function CommercialAgreementsModule() {
 
     const fetchCatalogProducts = async () => {
         try {
-            const { data, error } = await supabase
-                .from('products')
-                .select('id, name, accounting_id, sku, unit_of_measure, is_active, base_price, iva_rate')
-                .order('name');
-            if (!error && data) {
-                setCatalogProducts(data);
+            const allProducts: any[] = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+
+            while (hasMore) {
+                const from = page * pageSize;
+                const to = from + pageSize - 1;
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('id, name, accounting_id, sku, unit_of_measure, is_active, base_price, iva_rate')
+                    .range(from, to)
+                    .order('name');
+
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    allProducts.push(...data);
+                    if (data.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                    }
+                } else {
+                    hasMore = false;
+                }
             }
+            setCatalogProducts(allProducts);
         } catch (err) {
             console.warn('Error fetching catalog products for autocomplete:', err);
         }
@@ -5748,13 +5768,14 @@ export default function CommercialAgreementsModule() {
                         style={{ 
                             backgroundColor: 'white', 
                             borderRadius: THEME.radius.lg, 
-                            width: '95%', 
-                            maxWidth: '900px', 
+                            width: '96vw', 
+                            maxWidth: '1600px', 
                             boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', 
                             overflow: 'hidden',
                             display: 'flex',
                             flexDirection: 'column',
-                            maxHeight: '92vh'
+                            height: '92vh',
+                            maxHeight: '94vh'
                         }}
                     >
                         {/* Modal Header */}
@@ -6899,9 +6920,22 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             )}
 
-                                            {/* Preview Search & Filter toolbar */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                            {/* Preview Search & Filter toolbar - Sticky Docked */}
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                justifyContent: 'space-between', 
+                                                alignItems: 'center', 
+                                                gap: '12px', 
+                                                backgroundColor: '#FFFFFF', 
+                                                padding: '8px 12px', 
+                                                borderRadius: '8px', 
+                                                border: '1px solid #E2E8F0',
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 20,
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                            }}>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     {(['all', 'matched', 'unmatched', 'inactive'] as const).map(flt => {
                                                         if (flt === 'inactive' && (!excelPreviewData.inactiveCount || excelPreviewData.inactiveCount === 0)) return null;
                                                         return (
@@ -6910,62 +6944,73 @@ export default function CommercialAgreementsModule() {
                                                                 type="button"
                                                                 onClick={() => setExcelPreviewFilter(flt)}
                                                                 style={{
-                                                                    padding: '4px 10px',
+                                                                    padding: '5px 12px',
                                                                     borderRadius: '6px',
                                                                     border: 'none',
                                                                     fontSize: '0.75rem',
                                                                     fontWeight: 'bold',
                                                                     cursor: 'pointer',
                                                                     backgroundColor: excelPreviewFilter === flt ? (flt === 'unmatched' ? '#DC2626' : flt === 'inactive' ? '#D97706' : THEME.colors.primary) : '#E2E8F0',
-                                                                    color: excelPreviewFilter === flt ? 'white' : '#475569'
+                                                                    color: excelPreviewFilter === flt ? 'white' : '#475569',
+                                                                    transition: 'all 0.15s ease'
                                                                 }}
                                                             >
                                                                 {flt === 'all' && `Todos (${excelPreviewData.items.length})`}
                                                                 {flt === 'matched' && `Reconocidos (${excelPreviewData.matchedCount})`}
-                                                                {flt === 'unmatched' && `⚠️ Sin Coincidencia (${excelPreviewData.unmatchedCount})`}
-                                                                {flt === 'inactive' && `⚠️ Inactivos (${excelPreviewData.inactiveCount})`}
+                                                                {flt === 'unmatched' && `Sin Coincidencia (${excelPreviewData.unmatchedCount})`}
+                                                                {flt === 'inactive' && `Inactivos (${excelPreviewData.inactiveCount})`}
                                                             </button>
                                                         );
                                                     })}
                                                 </div>
-                                                <div style={{ position: 'relative', width: '260px' }}>
-                                                    <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                                    <input 
-                                                        type="text"
-                                                        placeholder="Filtrar por código o nombre..."
-                                                        value={excelPreviewSearch}
-                                                        onChange={(e) => setExcelPreviewSearch(e.target.value)}
-                                                        style={{
-                                                            width: '100%',
-                                                            padding: '6px 8px 6px 28px',
-                                                            borderRadius: '6px',
-                                                            border: '1px solid #CBD5E1',
-                                                            fontSize: '0.75rem',
-                                                            outline: 'none'
-                                                        }}
-                                                    />
-                                                </div>
+                                                
+                                                <GalleryOmnibox
+                                                    value={excelPreviewSearch}
+                                                    onChange={setExcelPreviewSearch}
+                                                    placeholder="Buscar producto, #ID contable, SKU o coincidencia..."
+                                                    filteredCount={excelPreviewData.items.filter(item => {
+                                                        if (excelPreviewFilter === 'matched' && !item.matched_product) return false;
+                                                        if (excelPreviewFilter === 'unmatched' && item.matched_product) return false;
+                                                        if (excelPreviewFilter === 'inactive' && (!item.matched_product || !item.is_inactive)) return false;
+                                                        if (!excelPreviewSearch.trim()) return true;
+                                                        return matchesUniversalSearch(
+                                                            [
+                                                                item.accounting_id,
+                                                                item.client_product_name,
+                                                                item.product_name,
+                                                                item.matched_product?.name,
+                                                                item.matched_product?.accounting_id,
+                                                                item.matched_product?.sku,
+                                                                item.unit
+                                                            ],
+                                                            excelPreviewSearch
+                                                        );
+                                                    }).length}
+                                                    totalCount={excelPreviewData.items.length}
+                                                    style={{ flex: '1 1 300px', maxWidth: '420px' }}
+                                                />
                                             </div>
 
                                             {/* Preview Table with Expanded Height and In-Cell Predictive Reconciliation (Orders Module UX Parity) */}
                                             <div style={{ 
-                                                maxHeight: isKpiCollapsed ? '480px' : '340px', 
+                                                maxHeight: isKpiCollapsed ? '560px' : '440px', 
                                                 overflowY: 'auto', 
                                                 border: '1.5px solid #E2E8F0', 
                                                 borderRadius: '8px',
                                                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                                position: 'relative'
+                                                position: 'relative',
+                                                backgroundColor: '#FFFFFF'
                                             }}>
                                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
-                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                                                        <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '60px' }}>#</th>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '28%' }}>Producto en Documento</th>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '38%' }}>Match Catálogo Maestro (Buscador Predictivo)</th>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '12%' }}>Costo Base</th>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '12%' }}>Precio Acordado</th>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '10%' }}>Margen %</th>
-                                                            <th style={{ padding: '8px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1', width: '60px' }}>Acción</th>
+                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
+                                                        <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '50px' }}>#</th>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '28%' }}>Producto en Documento</th>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '36%' }}>Match Catálogo Maestro (Buscador Predictivo)</th>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Costo Base</th>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Precio Acordado</th>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '10%' }}>Margen %</th>
+                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '60px' }}>Acción</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -6975,11 +7020,17 @@ export default function CommercialAgreementsModule() {
                                                                 if (excelPreviewFilter === 'unmatched' && item.matched_product) return false;
                                                                 if (excelPreviewFilter === 'inactive' && (!item.matched_product || !item.is_inactive)) return false;
                                                                 if (!excelPreviewSearch.trim()) return true;
-                                                                const q = excelPreviewSearch.toLowerCase().trim();
-                                                                return (
-                                                                    (item.accounting_id || '').toLowerCase().includes(q) ||
-                                                                    (item.client_product_name || item.product_name || '').toLowerCase().includes(q) ||
-                                                                    (item.matched_product?.name || '').toLowerCase().includes(q)
+                                                                return matchesUniversalSearch(
+                                                                    [
+                                                                        item.accounting_id,
+                                                                        item.client_product_name,
+                                                                        item.product_name,
+                                                                        item.matched_product?.name,
+                                                                        item.matched_product?.accounting_id,
+                                                                        item.matched_product?.sku,
+                                                                        item.unit
+                                                                    ],
+                                                                    excelPreviewSearch
                                                                 );
                                                             })
                                                             .map((item, rowIdx) => {
@@ -6989,14 +7040,18 @@ export default function CommercialAgreementsModule() {
                                                                 const searchCandidates = catalogProducts
                                                                     .filter(p => {
                                                                         if (!currentQuery.trim()) return true;
-                                                                        const q = currentQuery.toLowerCase().trim();
-                                                                        const isNum = /^\d+$/.test(q);
-                                                                        if (isNum && p.accounting_id && String(p.accounting_id).includes(q)) return true;
-                                                                        if (p.sku && p.sku.toLowerCase().includes(q)) return true;
-                                                                        if (p.name && p.name.toLowerCase().includes(q)) return true;
-                                                                        return false;
+                                                                        return matchesUniversalSearch(
+                                                                            [
+                                                                                p.accounting_id,
+                                                                                p.sku,
+                                                                                p.name,
+                                                                                p.category,
+                                                                                p.unit_of_measure
+                                                                            ],
+                                                                            currentQuery
+                                                                        );
                                                                     })
-                                                                    .slice(0, 10);
+                                                                    .slice(0, 15);
 
                                                                 return (
                                                                     <tr 
@@ -7105,9 +7160,10 @@ export default function CommercialAgreementsModule() {
 
                                                                                     {/* Predictive search input */}
                                                                                     <div style={{ position: 'relative' }}>
+                                                                                        <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
                                                                                         <input 
                                                                                             type="text"
-                                                                                            placeholder="🔍 Escribe nombre o ID para buscar..."
+                                                                                            placeholder="Escribe nombre o #ID para buscar..."
                                                                                             value={isSearchingInCell ? activeCellSearchQuery : ''}
                                                                                             onFocus={() => {
                                                                                                 setActiveCellSearchRowIdx(rowIdx);
@@ -7137,7 +7193,7 @@ export default function CommercialAgreementsModule() {
                                                                                             }}
                                                                                             style={{
                                                                                                 width: '100%',
-                                                                                                padding: '5px 8px',
+                                                                                                padding: '5px 8px 5px 26px',
                                                                                                 borderRadius: '6px',
                                                                                                 border: isSearchingInCell ? '2px solid #2563EB' : '1.5px solid #F59E0B',
                                                                                                 backgroundColor: 'white',

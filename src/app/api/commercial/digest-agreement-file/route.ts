@@ -167,17 +167,36 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Obtener catálogo maestro de productos
-    const { data: dbProducts, error: prodErr } = await supabaseAdmin
-      .from('products')
-      .select('id, sku, accounting_id, name, unit_of_measure, base_price, is_active, iva_rate, category');
+    // 1. Obtener catálogo maestro de productos COMPLETO con paginación exhaustiva (sin límite de 1000 filas)
+    const catalog: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (prodErr) {
-      console.error('[Digest Agreement File] Error fetching products:', prodErr);
-      throw prodErr;
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      const { data: batch, error: prodErr } = await supabaseAdmin
+        .from('products')
+        .select('id, sku, accounting_id, name, unit_of_measure, base_price, is_active, iva_rate, category')
+        .range(from, to);
+
+      if (prodErr) {
+        console.error('[Digest Agreement File] Error fetching paginated products:', prodErr);
+        throw prodErr;
+      }
+
+      if (batch && batch.length > 0) {
+        catalog.push(...batch);
+        if (batch.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
     }
-
-    const catalog = dbProducts || [];
 
     // 2. Obtener precios del Modelo General Institucional
     let generalPricesMap: Record<string, number> = {};
@@ -226,7 +245,18 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Emparejamiento Semántico y Cálculo Financiero Fila por Fila
+    // 5. Helper de Normalización Robusta (Tildes, Diacríticos, Mayúsculas, Puntuación)
+    const normalizeFruFresco = (str: string): string => {
+      return (str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    // 6. Emparejamiento Semántico y Cálculo Financiero Fila por Fila (Paridad SDD Módulo de Pedidos)
     let matchedCount = 0;
     let unmatchedCount = 0;
     let inactiveCount = 0;
@@ -239,34 +269,87 @@ export async function POST(req: Request) {
       const rawUnit = (rawItem.unit || 'Kg').trim();
       const rawAccId = (rawItem.accounting_id || '').trim();
 
-      // Búsqueda en memoria de aprendizaje
-      const normalizedName = sanitizeDocText(rawName);
+      const normalizedName = normalizeFruFresco(rawName);
       let matchedProd: any = null;
       let matchConfidence: 'high' | 'medium' | 'low' | 'unmatched' = 'unmatched';
 
+      // Capa 1: Memoria de auto-aprendizaje histórico del cliente
       if (clientLearnedMap[normalizedName]) {
         const learnedId = clientLearnedMap[normalizedName];
         matchedProd = catalog.find((p: any) => p.id === learnedId);
         if (matchedProd) matchConfidence = 'high';
       }
 
-      // Búsqueda por Accounting ID o SKU directo
+      // Capa 2: Coincidencia por Código Contable (#ID) o SKU explícito
       if (!matchedProd && rawAccId) {
-        matchedProd = catalog.find(
-          (p: any) =>
-            (p.accounting_id && String(p.accounting_id).trim() === rawAccId) ||
-            (p.sku && p.sku.toLowerCase() === rawAccId.toLowerCase())
-        );
+        const cleanAccId = rawAccId.replace(/[^0-9a-zA-Z_-]/g, '').trim();
+        const numAccId = parseInt(cleanAccId, 10);
+        matchedProd = catalog.find((p: any) => {
+          const pAccStr = p.accounting_id !== null && p.accounting_id !== undefined ? String(p.accounting_id).trim() : '';
+          const pSkuStr = (p.sku || '').toLowerCase().trim();
+          return (
+            (pAccStr && pAccStr === cleanAccId) ||
+            (!isNaN(numAccId) && Number(p.accounting_id) === numAccId) ||
+            (pSkuStr && pSkuStr === cleanAccId.toLowerCase())
+          );
+        });
         if (matchedProd) matchConfidence = 'high';
       }
 
-      // Búsqueda semántica / fuzzy con motor central
+      // Capa 3: Extracción de ID embebido en el nombre del documento (ej. "Tomate #1504", "(ID: 1504)", "Doc ID: 1504")
+      if (!matchedProd && rawName) {
+        const embeddedIdMatch = rawName.match(/(?:#|id[:\s]*|c[oó]d(?:igo)?[:\s]*)(\d+)/i);
+        if (embeddedIdMatch && embeddedIdMatch[1]) {
+          const embId = parseInt(embeddedIdMatch[1], 10);
+          matchedProd = catalog.find((p: any) => Number(p.accounting_id) === embId);
+          if (matchedProd) matchConfidence = 'high';
+        }
+      }
+
+      // Capa 4: Coincidencia EXACTA Normalizada (insensible a tildes, mayúsculas, signos)
+      if (!matchedProd && normalizedName) {
+        matchedProd = catalog.find((p: any) => {
+          const pNorm = normalizeFruFresco(p.name);
+          return pNorm === normalizedName;
+        });
+        if (matchedProd) matchConfidence = 'high';
+      }
+
+      // Capa 5: Coincidencia exacta sin unidades ni presentaciones (ej. "kg", "gr", "1000g", "und", "paquete")
+      if (!matchedProd && normalizedName) {
+        const stripUnits = (s: string) =>
+          s
+            .replace(/\b\d+(?:[\.,]\d+)?\s*(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+            .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const strippedDoc = stripUnits(normalizedName);
+        if (strippedDoc && strippedDoc.length >= 3) {
+          matchedProd = catalog.find((p: any) => {
+            const strippedCat = stripUnits(normalizeFruFresco(p.name));
+            return strippedCat === strippedDoc;
+          });
+          if (matchedProd) matchConfidence = 'high';
+        }
+      }
+
+      // Capa 6: Coincidencia por Tokens (Fuzzy / Token Inclusivity) & Motor Central
       if (!matchedProd && rawName) {
         const matchDetails = findBestProductMatchDetails(rawName, catalog);
-        if (matchDetails.product && matchDetails.confidenceScore >= 0.55) {
+        if (matchDetails.product && (matchDetails.confidenceScore >= 70 || matchDetails.confidenceScore >= 0.7)) {
           matchedProd = matchDetails.product;
-          matchConfidence = matchDetails.confidenceScore >= 0.8 ? 'high' : 'medium';
+          matchConfidence = matchDetails.confidence === 'HIGH' ? 'high' : 'medium';
         }
+      }
+
+      // Capa 7: Coincidencia por Inclusión de Frase Completa (Substring Match)
+      if (!matchedProd && normalizedName && normalizedName.length >= 4) {
+        matchedProd = catalog.find((p: any) => {
+          const pNorm = normalizeFruFresco(p.name);
+          return pNorm.includes(normalizedName) || normalizedName.includes(pNorm);
+        });
+        if (matchedProd) matchConfidence = 'medium';
       }
 
       // Cálculo de Costos y Márgenes
