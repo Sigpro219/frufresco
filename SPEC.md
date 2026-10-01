@@ -4934,3 +4934,15 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
      - El modal expone la fecha de entrega con disparador nativo de calendario interactivo al clic y una botonera horizontal de **Píldoras de Fechas Disponibles** (calculadas dinámicamente: Mañana y los días permitidos por la ficha logística del cliente).
      - El operador puede hacer clic en cualquier píldora para seleccionar al instante la fecha deseada sin bloqueos.
 
+---
+
+#### Escenario 117: Sincronización Reactiva Atómica y Purga de Variantes Eliminadas en Mesa de Trabajo (SDD v1.9.81)
+- **Given** el modal de configuración de variantes (`VariantModal.tsx`) invocado desde la mesa de pedidos (`EmailDraftsModule.tsx` vía "⚙️ Editar Variantes" o `Alt+V`).
+- **When** el usuario desmarca valores, elimina atributos o modifica opciones y guarda los cambios:
+- **Then**:
+  1. **Persistencia Atómica en Supabase:** La mutación actualiza inmediatamente las columnas `options_config` y `variants` de la tabla `products`.
+  2. **Sincronización Reactiva en Memoria:** El estado global `products` y el modal activo `customizingModalItem` actualizan su definición de producto en caliente.
+  3. **Purga Inmediata de Claves Obsoletas:** Las opciones eliminadas se limpian instantáneamente de `customizingModalItem.options` y de `editableItems[].selected_options`, impidiendo que variables borradas reaparezcan al reabrir el modal o el customizador.
+  4. **Referencia a Producto Fresco:** La apertura del configurador de variantes obtiene siempre el objeto más reciente de `products.find(p => p.id === product.id)`.
+
+
