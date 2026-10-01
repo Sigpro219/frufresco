@@ -1822,17 +1822,35 @@ El endpoint `/api/ai/health` opera como sonda de telemetría y diagnóstico acti
   2. En la tabla de productos, "Ahuyama" muestra: fecha reciente, badge `Modificado` y usuario `admin@frufresco.com`.
   3. Todos los demás 105 productos continúan mostrando su fecha de carga original y su autor `Julissa Arévalo Ramirez`.
   4. Ningún producto expone el UUID interno del usuario.
-### 11.6 Ergonomía de Búsqueda Rápida y Fijación Sticky en Acuerdos Comerciales
+### 11.6 Ergonomía de Búsqueda Rápida, Ancho Maestro (1600px) y Fijación Sticky en Creación y Modificación de Acuerdos
 
-1. **Botón de Limpieza Inmediata `[X]` en Input de Búsqueda:**
+1. **Paridad Canónica entre Modales de Creación y Modificación de Acuerdos:**
+   - Tanto el Asistente de **Creación de Acuerdo** (`isCreateModalOpen`) como el Asistente de **Modificación de Acuerdo** (`isEditModalOpen`) operan con las mismas dimensiones de cabina ancha industrial: `width: '96vw'`, `maxWidth: '1600px'`, `height: '92vh'`, `maxHeight: '94vh'`.
+   - Queda estrictamente erradicado el uso de modales estrechos (`maxWidth: 900px`) en edición, garantizando ergonomía de mesa de control, visualización sin compresión de columnas de costos y márgenes, y uniformidad de diseño.
+
+2. **Protocolo de Acople Magnético Multi-Línea (Magnetic Stacking con Tolerancia Cero - 0px Gap):**
+   - **Línea 1 Sticky (Toolbar de Filtros & Superbuscador Omnibox):**
+     - Anclada en `position: sticky; top: 0px; zIndex: 40; minHeight: 48px; backgroundColor: #FFFFFF;`.
+     - Integra el componente oficial `GalleryOmnibox` con telemetría reactiva de conteo y búsqueda multi-criterio.
+   - **Línea 2 Sticky (Thead & Celdas `<th>` de la Tabla de Precios):**
+     - Declarada explícitamente en cada celda `<th>` con `position: sticky; top: 48px; zIndex: 30; backgroundColor: #F8FAFC; borderBottom: 2px solid #CBD5E1;`.
+     - Cumple con la regla de tablas Chromium: `borderCollapse: 'separate'; borderSpacing: 0;`.
+   - **Eliminación de Scroll Hijacking y Vacío Superior (Zero Top Gap):**
+     - Prohibido anidar tablas en contenedores de altura fija con scroll local (`maxHeight / overflowY: auto`).
+     - El scroll pertenece de forma unificada al cuerpo del modal (`overflowY: auto`), cuyo contenedor declara `paddingTop: 0` para asegurar que la barra de herramientas haga contacto hermético con la barra de pasos superior al desplazarse.
+
+3. **Botón de Limpieza Inmediata `[X]` en Input de Búsqueda:**
    - Todo campo de búsqueda en la galería de acuerdos y en el visor de precios congelados cuenta con un botón de limpieza rápida `[X]` anclado a la derecha del input.
    - El botón se muestra dinámicamente cuando el término de búsqueda no está vacío (`searchTerm.length > 0`) y restablece el filtro a vacío en un solo clic, devolviendo el foco visual de forma instantánea.
    - El input cuenta con `paddingRight` adaptativo para evitar cualquier superposición visual entre el texto ingresado y el ícono de borrado.
 
-2. **Fijación Sticky de la Barra de Herramientas y Encabezados de Tabla:**
-   - **Barra Superior de Herramientas (`TOP TOOLBAR CONTROLS`):** Se mantiene fija (`position: sticky; top: 0px; zIndex: 30; background-color: #FFFFFF;`) al desplazarse verticalmente sobre el listado de acuerdos, permitiendo al usuario cambiar filtros de estado ("Todos", "Vigentes", "Por Vencer", "Vencidos"), buscar clientes o crear acuerdos sin perder el contexto visual.
-   - **Encabezados de la Tabla (`thead`):** Se mantienen fijos inmediatamente debajo de la barra de controles (`position: sticky; top: 65px; zIndex: 25; background-color: #F8FAFC;`), garantizando que los nombres de las columnas ("Código", "Cliente B2B", "Vigencia", "Duración", "Estado", "Margen Promedio", "Acciones") permanezcan siempre visibles durante el scroll de largas listas de contratos.
-   - **Visor Lateral de Productos Congelados (Drawer):** Los encabezados de la tabla de productos del acuerdo también adoptan fijación sticky (`position: sticky; top: 0px; zIndex: 10; background-color: #F8FAFC;`) dentro de su contenedor de scroll, facilitando la auditoría de catálogos extensos (100+ SKUs).
+4. **Fijación Sticky de la Galería Principal:**
+   - **Barra Superior de Herramientas (`TOP TOOLBAR CONTROLS`):** Se mantiene fija (`position: sticky; top: 0px; zIndex: 30; background-color: #FFFFFF;`).
+   - **Encabezados de la Tabla (`thead`):** Se mantienen fijos inmediatamente debajo de la barra de controles (`position: sticky; top: 65px; zIndex: 25; background-color: #F8FAFC;`).
+   - **Visor Lateral de Productos Congelados (Drawer):** Encabezados con fijación sticky (`position: sticky; top: 0px; zIndex: 10; background-color: #F8FAFC;`).
+
+5. **Iconografía Vectorial Exclusiva (100% Lucide React):**
+   - Prohibición absoluta de emojis Unicode en la interfaz. Toda señalización de estado, subidas/bajadas de precio y analítica utiliza íconos vectoriales oficiales (`TrendingUp`, `TrendingDown`, `Sparkles`, `AlertTriangle`, `FileSpreadsheet`, `Bot`).
 
 #### Escenario 6: Navegación y Búsqueda Ágil en Galería de Acuerdos
 - **Given** un operador comercial navegando en la pestaña "Acuerdos Institucionales" con más de 20 acuerdos listados.

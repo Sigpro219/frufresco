@@ -7504,14 +7504,15 @@ export default function CommercialAgreementsModule() {
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '1rem' }}>
                     <div style={{ 
                         backgroundColor: 'white', 
-                        borderRadius: '16px', 
-                        width: '95%', 
-                        maxWidth: '900px', 
-                        boxShadow: '0 25px 60px -15px rgba(0,0,0,0.3)', 
+                        borderRadius: THEME.radius.lg, 
+                        width: '96vw', 
+                        maxWidth: '1600px', 
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', 
                         overflow: 'hidden',
                         display: 'flex',
                         flexDirection: 'column',
-                        maxHeight: '92vh',
+                        height: '92vh',
+                        maxHeight: '94vh',
                         border: `1px solid ${THEME.colors.border}`
                     }}>
                         {/* Modal Header */}
@@ -7602,11 +7603,11 @@ export default function CommercialAgreementsModule() {
                         </div>
 
                         {/* STEP CONTENT CONTAINER */}
-                        <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div style={{ padding: '0 2rem 1.75rem 2rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
                             
                             {/* ================= STEP 1: VIGENCIA & DATES ================= */}
                             {editStep === 1 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingTop: '1.5rem' }}>
                                     {/* Client details card */}
                                     <div style={{ 
                                         backgroundColor: '#F8FAFC', 
@@ -7755,7 +7756,7 @@ export default function CommercialAgreementsModule() {
 
                             {/* ================= STEP 2: PRICE LIST & EXCEL UPLOAD ================= */}
                             {editStep === 2 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingTop: '1.5rem' }}>
                                     {/* Toolbar */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                                         <div>
@@ -8057,9 +8058,25 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             )}
 
-                                            {/* Preview Search & Filter toolbar */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                            {/* Preview Search & Filter toolbar - Sticky Docked Line 1 */}
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                justifyContent: 'space-between', 
+                                                alignItems: 'center', 
+                                                gap: '12px', 
+                                                backgroundColor: '#FFFFFF', 
+                                                padding: '8px 12px', 
+                                                borderRadius: '8px 8px 0 0', 
+                                                border: '1px solid #CBD5E1', 
+                                                borderBottom: 'none',
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 40,
+                                                minHeight: '48px',
+                                                boxSizing: 'border-box',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+                                            }}>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     {(['all', 'matched', 'unmatched', 'inactive'] as const).map(flt => {
                                                         if (flt === 'inactive' && (!editExcelPreviewData.inactiveCount || editExcelPreviewData.inactiveCount === 0)) return null;
                                                         return (
@@ -8068,14 +8085,15 @@ export default function CommercialAgreementsModule() {
                                                                 type="button"
                                                                 onClick={() => setEditExcelPreviewFilter(flt)}
                                                                 style={{
-                                                                    padding: '4px 10px',
+                                                                    padding: '5px 12px',
                                                                     borderRadius: '6px',
                                                                     border: 'none',
                                                                     fontSize: '0.75rem',
                                                                     fontWeight: 'bold',
                                                                     cursor: 'pointer',
                                                                     backgroundColor: editExcelPreviewFilter === flt ? (flt === 'inactive' ? '#D97706' : THEME.colors.primary) : '#E2E8F0',
-                                                                    color: editExcelPreviewFilter === flt ? 'white' : '#475569'
+                                                                    color: editExcelPreviewFilter === flt ? 'white' : '#475569',
+                                                                    transition: 'all 0.15s ease'
                                                                 }}
                                                             >
                                                                 {flt === 'all' && `Todos (${editExcelPreviewData.items.length})`}
@@ -8086,44 +8104,50 @@ export default function CommercialAgreementsModule() {
                                                         );
                                                     })}
                                                 </div>
-                                                <div style={{ position: 'relative', width: '240px' }}>
-                                                    <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                                    <input 
-                                                        type="text"
-                                                        placeholder="Filtrar por código o nombre..."
-                                                        value={editExcelPreviewSearch}
-                                                        onChange={(e) => setEditExcelPreviewSearch(e.target.value)}
-                                                        style={{
-                                                            width: '100%',
-                                                            padding: '6px 8px 6px 28px',
-                                                            borderRadius: '6px',
-                                                            border: '1px solid #CBD5E1',
-                                                            fontSize: '0.75rem',
-                                                            outline: 'none'
-                                                        }}
-                                                    />
-                                                </div>
+                                                <GalleryOmnibox
+                                                    value={editExcelPreviewSearch}
+                                                    onChange={setEditExcelPreviewSearch}
+                                                    placeholder="Buscar producto, #ID contable, SKU o coincidencia..."
+                                                    filteredCount={editExcelPreviewData.items.filter(item => {
+                                                        if (editExcelPreviewFilter === 'matched' && !item.matched_product) return false;
+                                                        if (editExcelPreviewFilter === 'unmatched' && item.matched_product) return false;
+                                                        if (editExcelPreviewFilter === 'inactive' && (!item.matched_product || !item.is_inactive)) return false;
+                                                        if (!editExcelPreviewSearch.trim()) return true;
+                                                        return matchesUniversalSearch(
+                                                            [
+                                                                item.accounting_id,
+                                                                item.product_name,
+                                                                item.matched_product?.name,
+                                                                item.matched_product?.accounting_id,
+                                                                item.matched_product?.sku
+                                                            ],
+                                                            editExcelPreviewSearch
+                                                        );
+                                                    }).length}
+                                                    totalCount={editExcelPreviewData.items.length}
+                                                    style={{ flex: '1 1 300px', maxWidth: '420px' }}
+                                                />
                                             </div>
 
                                             {/* Preview Table with Expanded Height and Sticky Headers */}
                                             <div style={{ 
-                                                maxHeight: isEditKpiCollapsed ? '460px' : '300px', 
-                                                overflowY: 'auto', 
-                                                border: '1.5px solid #E2E8F0', 
-                                                borderRadius: '8px',
+                                                border: '1px solid #CBD5E1', 
+                                                borderRadius: '0 0 8px 8px', 
                                                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                                transition: 'max-height 0.25s ease'
+                                                position: 'relative',
+                                                backgroundColor: '#FFFFFF',
+                                                overflow: 'visible'
                                             }}>
                                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
-                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                                                        <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Accounting ID</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Producto en Archivo</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Match en Catálogo</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Costo Base FruFresco</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Precio Acordado</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Margen %</th>
-                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Estado</th>
+                                                    <thead style={{ position: 'sticky', top: '48px', zIndex: 30 }}>
+                                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1' }}>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Accounting ID</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '28%' }}>Producto en Archivo</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '28%' }}>Match en Catálogo</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Costo Base FruFresco</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Precio Acordado</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '8%' }}>Margen %</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '10%' }}>Estado</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -8207,7 +8231,7 @@ export default function CommercialAgreementsModule() {
 
                             {/* ================= STEP 3: SECURITY CONFIRMATION ================= */}
                             {editStep === 3 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'center', textAlign: 'center', padding: '1rem 0' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'center', textAlign: 'center', padding: '1rem 0', paddingTop: '1.5rem' }}>
                                     <div style={{ backgroundColor: '#FEF3C7', padding: '16px', borderRadius: '50%', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <AlertTriangle size={44} strokeWidth={2.2} />
                                     </div>
