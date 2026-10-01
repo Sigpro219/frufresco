@@ -2198,14 +2198,46 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   };
 
   const openVariantModalForItem = (product: any, rowIndex: number) => {
-    setSelectedProductForVariant(product);
+    const freshProduct = products.find(p => p.id === product.id) || product;
+    setSelectedProductForVariant(freshProduct);
     setSelectedRowForVariant(rowIndex);
     
-    const item = editableItems[rowIndex];
+    const item = editableItems[rowIndex] || {};
+    const opts = { ...(item.selected_options || {}) };
+    const validOptionNames = new Set((freshProduct.options_config || []).map((o: any) => o.name.toLowerCase()));
+    
+    const exc = clientExceptions.find(e => e.product_id === freshProduct.id);
+    if (Object.keys(opts).length === 0 && exc?.preferred_options && typeof exc.preferred_options === 'object') {
+      Object.entries(exc.preferred_options).forEach(([k, v]) => {
+        if (v && validOptionNames.has(k.toLowerCase())) opts[k] = String(v);
+      });
+    }
+
+    const presOpt = (freshProduct.options_config || []).find((opt: any) =>
+      opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
+    );
+    if (presOpt) {
+      const isKg = (freshProduct.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+      const kgVal = (presOpt.values || []).find((v: string) => {
+        const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+        return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+      }) || (isKg ? 'Kg' : (presOpt.values?.[0] || ''));
+
+      const hasClientPref = exc?.preferred_options && (
+        exc.preferred_options[presOpt.name] || 
+        exc.preferred_options['Presentación'] || 
+        exc.preferred_options['Presentacion']
+      );
+
+      if (!opts[presOpt.name] || opts[presOpt.name] === '' || (!hasClientPref && !item.isConfirmed)) {
+        opts[presOpt.name] = hasClientPref ? (exc.preferred_options[presOpt.name] || exc.preferred_options['Presentación'] || exc.preferred_options['Presentacion']) : kgVal;
+      }
+    }
+
     setVariantQuantity(item.quantity ? Number(Number(item.quantity).toFixed(2)).toString().replace('.', ',') : '1');
-    setSelectedUnit(item.unit || product.unit_of_measure || 'Kg');
+    setSelectedUnit(item.unit || freshProduct.unit_of_measure || 'Kg');
     setSelectedConversionFactor(item.conversion_factor || 1);
-    setSelectedOptions(item.selected_options || {});
+    setSelectedOptions(opts);
   };
 
   const closeVariantModal = () => {
@@ -3100,13 +3132,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       });
     }
 
-    // Pre-populate default presentation option if not already selected
+    // Pre-populate default presentation option: ALWAYS defaults to 'Kg' (unless structured preferred_options exists)
     const presOpt = (freshProduct.options_config || []).find((opt: any) =>
       opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
     );
-    if (presOpt && (!opts[presOpt.name] || opts[presOpt.name] === '')) {
-      if (presOpt.values && presOpt.values.length > 0) {
-        opts[presOpt.name] = presOpt.values[0];
+    if (presOpt) {
+      const kgVal = (presOpt.values || []).find((v: string) => {
+        const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+        return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+      }) || (isKg ? 'Kg' : (presOpt.values?.[0] || ''));
+
+      const hasClientPref = exc?.preferred_options && (
+        exc.preferred_options[presOpt.name] || 
+        exc.preferred_options['Presentación'] || 
+        exc.preferred_options['Presentacion']
+      );
+
+      if (!opts[presOpt.name] || opts[presOpt.name] === '' || (!hasClientPref && !item.isConfirmed)) {
+        opts[presOpt.name] = hasClientPref ? (exc.preferred_options[presOpt.name] || exc.preferred_options['Presentación'] || exc.preferred_options['Presentacion']) : kgVal;
       }
     }
 
@@ -3117,7 +3160,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if (optVal) {
           const clean = (optVal.includes('|') ? optVal.split('|')[0] : optVal).trim();
           const cleanLower = clean.toLowerCase();
-          if (cleanLower === 'kg' || cleanLower === 'kilo') {
+          if (cleanLower === 'kg' || cleanLower === 'kilo' || cleanLower === 'kilogramo') {
             unit = defaultUnit;
             factor = 1;
           } else if (cleanLower === defaultUnit.toLowerCase()) {
@@ -11418,7 +11461,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   return null;
                 }
 
-                const defaultVal = isPresentation && isKgProduct ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : (isGram ? 'Estándar' : ''));
+                const kgValInOpt = isPresentation ? ((opt.values || []).find((v: string) => {
+                  const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                  return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+                }) || (isKgProduct ? 'Kg' : (opt.values?.[0] || ''))) : '';
+
+                const defaultVal = isPresentation ? kgValInOpt : (isGram ? 'Estándar' : '');
                 const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
 
                 return (
@@ -12616,7 +12664,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   return null;
                 }
 
-                const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : (isGram ? 'Estándar' : ''));
+                const kgValInOpt = isPresentation ? ((opt.values || []).find((v: string) => {
+                  const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                  return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+                }) || (isKg ? 'Kg' : (opt.values?.[0] || ''))) : '';
+
+                const defaultVal = isPresentation ? kgValInOpt : (isGram ? 'Estándar' : '');
                 const selectVal = options[opt.name] !== undefined && options[opt.name] !== '' ? options[opt.name] : defaultVal;
 
                 return (

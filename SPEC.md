@@ -4895,9 +4895,12 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
      - La **Unidad de Medida** en el modal de personalización **NUNCA** debe ser un selector `<select>` ni un control interactivo.
      - Es una consecuencia física y matemática derivada automáticamente de la `Presentación` seleccionada (ej. `Unidad 500 gr` $\rightarrow$ `0.5 Kg`).
      - Se renderiza como una pastilla/caja estática informativa con `tabIndex={-1}`, completamente excluida de la secuencia de tabulación para evitar fricción innecesaria.
-  3. **Sincronización Bidireccional Accesible (`Shift + Tab`):**
+  3. **Invariante de Presentación por Defecto (Siempre Kg):**
+     - Para cualquier producto que disponga de la opción `Presentación` (o `Unidad`), la opción seleccionada por defecto al abrir el modal de personalización o inicializar el borrador **SIEMPRE SERÁ `Kg`** (o el valor de peso en kilogramos), a menos que el cliente posea una preferencia explícita guardada (`clientExceptions.preferred_options`).
+     - Queda estrictamente prohibido preseleccionar arbitrariamente unidades discretas, porciones o empaques (ej. `Unidad 250 gr`) por encima del estándar base `Kg`.
+  4. **Sincronización Bidireccional Accesible (`Shift + Tab`):**
      - Presionar `Shift + Tab` dentro del modal retrocede con exactitud al control anterior: `Botón Agregar` $\rightarrow$ `Cantidad` $\rightarrow$ `Maduración` $\rightarrow$ `Presentación`.
-  4. **Paridad Transversal Universal:**
+  5. **Paridad Transversal Universal:**
      - Esta regla aplica de forma idéntica e inviolable en todos los canales de ingesta y montaje de pedidos de FruFresco.
 
 ---
