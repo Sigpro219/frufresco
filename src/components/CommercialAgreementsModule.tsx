@@ -3819,6 +3819,50 @@ export default function CommercialAgreementsModule() {
                                             </span>
                                         );
                                     })()}
+                                    {selectedAgreement.profiles?.parent_id ? (
+                                        <span style={{ 
+                                            fontSize: '0.72rem', 
+                                            backgroundColor: '#EFF6FF', 
+                                            color: '#1D4ED8', 
+                                            border: '1px solid #BFDBFE', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '6px', 
+                                            fontWeight: '700',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                        }}>
+                                            <Building size={12} /> Sucursal
+                                        </span>
+                                    ) : (
+                                        <span style={{ 
+                                            fontSize: '0.72rem', 
+                                            backgroundColor: '#F5F3FF', 
+                                            color: '#6D28D9', 
+                                            border: '1px solid #DDD6FE', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '6px', 
+                                            fontWeight: '700',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                        }}>
+                                            <Building2 size={12} /> Matriz
+                                        </span>
+                                    )}
+                                    {(selectedAgreement.model_snapshot_name?.includes('[CONSUMO ABIERTO]') || selectedAgreement.subtotal_amount === 0) && (
+                                        <span style={{ 
+                                            fontSize: '0.72rem', 
+                                            backgroundColor: '#F5F3FF', 
+                                            color: '#6D28D9', 
+                                            border: '1px solid #C4B5FD', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '6px', 
+                                            fontWeight: '800' 
+                                        }}>
+                                            🔓 Consumo Abierto ($0)
+                                        </span>
+                                    )}
                                 </div>
                                 {/* Subtítulo de trazabilidad idéntico a la fotografía de referencia */}
                                 {(() => {
