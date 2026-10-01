@@ -4877,3 +4877,26 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   2. **Poka-Yoke Anti-Redundancia con el Nombre (`isRedundantAttribute`):** Si un producto contiene en su nombre la palabra del atributo (ej. `"Plátano maduro"` o `"Plátano verde"`), se suprime cualquier badge homónimo, erradicando pleonasmos visuales en la tabla.
   3. **Exclusividad para Maduraciones Diferenciales:** Únicamente se generan badges visuales cuando la maduración representa una instrucción operativa excepcional no dicha en el nombre (ej. `[Pintón]`, `[Verde]`, `[Biche]`, `[Listo para tajar]`).
 
+---
+
+#### Escenario 114: Protocolo Canónico de Ergonomía de Teclado Industrial (Tab vs Enter) en Mesa de Trabajo y Modal de Personalización (SDD v1.9.80)
+- **Given** el flujo de transcripción ágil y captura de pedidos en la Mesa de Trabajo (`EmailDraftsModule.tsx`, `/admin/orders/create`, `/admin/orders/loading` e Ingesta PDF/WhatsApp).
+- **When** el analista o digitador interactúa con el teclado en la tabla principal y en el modal de personalización de variantes:
+- **Then**:
+  1. **Diferenciación Semántica Estricta entre `Tab` y `Enter`:**
+     - **`Tab` (Navegación / Desplazamiento):** Controla el flujo secuencial de avance paso a paso sin forzar guardados prematuros.
+       * *En la Mesa de Trabajo:* Si el producto cuenta con variantes u opciones configurables (`options_config.length > 0`), presionar `Tab` en la celda de SKU **abre y entra directamente al modal de personalización**.
+       * *Dentro del Modal:* Presionar `Tab` navega ordenadamente: `Presentación (Select 0)` $\rightarrow$ `Maduración (Select 1)` $\rightarrow$ `Cantidad (Input)` $\rightarrow$ `Botón Agregar`.
+     - **`Enter` (Aceptación / Confirmación):** Acepta el estado actual en el que se encuentra el operador.
+       * *En la Mesa de Trabajo:* Presionar `Enter` en la celda de SKU **acepta inmediatamente el producto y su match actual por defecto**, cerrando el dropdown y pasando directamente al campo de `Cantidad` de la fila sin abrir el modal.
+       * *En la Cantidad del Renglón:* Presionar `Enter` guarda la cantidad y salta automáticamente al SKU de la siguiente fila (`sku-input-${i+1}`).
+       * *Dentro del Modal:* Presionar `Enter` en el campo `Cantidad` o en el botón `[Agregar]` confirma y guarda la personalización, cerrando el modal y retornando el foco a la tabla.
+  2. **Invariante de Unidad de Medida (Cero Desplegable / Campo Fijo):**
+     - La **Unidad de Medida** en el modal de personalización **NUNCA** debe ser un selector `<select>` ni un control interactivo.
+     - Es una consecuencia física y matemática derivada automáticamente de la `Presentación` seleccionada (ej. `Unidad 500 gr` $\rightarrow$ `0.5 Kg`).
+     - Se renderiza como una pastilla/caja estática informativa con `tabIndex={-1}`, completamente excluida de la secuencia de tabulación para evitar fricción innecesaria.
+  3. **Sincronización Bidireccional Accesible (`Shift + Tab`):**
+     - Presionar `Shift + Tab` dentro del modal retrocede con exactitud al control anterior: `Botón Agregar` $\rightarrow$ `Cantidad` $\rightarrow$ `Maduración` $\rightarrow$ `Presentación`.
+  4. **Paridad Transversal Universal:**
+     - Esta regla aplica de forma idéntica e inviolable en todos los canales de ingesta y montaje de pedidos de FruFresco.
+

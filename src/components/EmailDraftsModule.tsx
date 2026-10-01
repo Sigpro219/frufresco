@@ -8684,23 +8684,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     selectProduct(selectedProd, i);
                                     setActiveRowSearchQuery(null);
                                     setActiveDropdownRowIndex(null);
-                                    if (selectedProd.options_config && selectedProd.options_config.length > 0) {
-                                      openCustomizingModal(selectedProd, i);
+                                    const qtyInput = document.getElementById(`draft-qty-input-${i}`) as HTMLInputElement | null;
+                                    if (qtyInput) {
+                                      qtyInput.focus();
+                                      qtyInput.select();
                                     } else {
-                                      const qtyInput = document.getElementById(`draft-qty-input-${i}`) as HTMLInputElement | null;
-                                      if (qtyInput) {
-                                        qtyInput.focus();
-                                        qtyInput.select();
+                                      const nextIdx = i + 1;
+                                      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                      if (nextInput) {
+                                        nextInput.focus({ preventScroll: true });
+                                        nextInput.select();
+                                        scrollToDraftRow(nextIdx);
                                       } else {
-                                        const nextIdx = i + 1;
-                                        const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                        if (nextInput) {
-                                          nextInput.focus({ preventScroll: true });
-                                          nextInput.select();
-                                          scrollToDraftRow(nextIdx);
-                                        } else {
-                                          document.getElementById('btn-approve-draft')?.focus();
-                                        }
+                                        document.getElementById('btn-approve-draft')?.focus();
                                       }
                                     }
                                   } else {
