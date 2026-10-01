@@ -5882,11 +5882,11 @@ export default function CommercialAgreementsModule() {
                         </div>
 
                         {/* Modal Body */}
-                        <div style={{ padding: '1.75rem 2rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
+                        <div style={{ padding: '0 2rem 1.75rem 2rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', flex: 1 }}>
                             
                             {/* ================= STEP 1: CLIENT SELECTION (CASAS MATRICES ONLY) ================= */}
                             {createStep === 1 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingTop: '1.5rem' }}>
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                                         <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', color: THEME.colors.textMain, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <Building2 size={18} color="#0D7A57" /> Paso 1: Selección de Cliente(s) Institucional(es)
@@ -6349,7 +6349,7 @@ export default function CommercialAgreementsModule() {
 
                             {/* ================= STEP 2: DATES, DURATION & AGREEMENT NAME ================= */}
                             {createStep === 2 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingTop: '1.5rem' }}>
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>
@@ -6531,7 +6531,7 @@ export default function CommercialAgreementsModule() {
 
                             {/* ================= STEP 3: AI DIGESTOR & INTERACTIVE RECONCILIATION WORKBENCH ================= */}
                             {createStep === 3 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingTop: '1.5rem' }}>
                                     {/* Action bar, Mode Switcher and instructions */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                                         <div>
