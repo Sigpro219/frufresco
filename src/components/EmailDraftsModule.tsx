@@ -11383,12 +11383,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       }, 10);
                     } else if (e.key === 'Enter') {
                       e.preventDefault();
-                      const unitSel = document.getElementById('modal-unit-select');
-                      if (unitSel) {
-                        unitSel.focus();
-                      } else {
-                        confirmVariantAdd();
-                      }
+                      confirmVariantAdd();
+                    } else if (e.key === 'Tab' && !e.shiftKey) {
+                      e.preventDefault();
+                      const addBtn = document.getElementById('modal-add-button');
+                      if (addBtn) addBtn.focus();
                     }
                   }}
                   style={{
@@ -11465,48 +11464,36 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     return null;
                   })()}
                 </div>
-                <select
-                  id="modal-unit-select"
-                  tabIndex={(selectedProductForVariant.options_config?.length || 0) + 2}
-                  value={selectedUnit}
-                  onChange={(e) => {
-                    const opt = optionsList.find(o => o.unit === e.target.value);
-                    if (opt) {
-                      setSelectedUnit(opt.unit);
-                      setSelectedConversionFactor(opt.factor);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      confirmVariantAdd();
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '0.8rem',
-                    border: '2px solid #E2E8F0',
-                    borderRadius: '10px',
-                    fontSize: '1rem',
-                    backgroundColor: '#F9FAFB',
-                    outline: 'none',
-                    transition: 'all 0.2s ease-in-out'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3B82F6';
-                    e.target.style.backgroundColor = 'white';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#E2E8F0';
-                    e.target.style.backgroundColor = '#F9FAFB';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                >
-                  {optionsList.map(o => (
-                    <option key={o.unit} value={o.unit}>{o.label}</option>
-                  ))}
-                </select>
+                {(() => {
+                  const matched = optionsList.find(o => o.unit.toLowerCase() === selectedUnit.toLowerCase());
+                  const baseUnit = selectedProductForVariant.unit_of_measure || 'Kg';
+                  let displayLabel = matched ? matched.label : (selectedConversionFactor !== 1 ? `${selectedUnit} (${selectedConversionFactor} ${baseUnit})` : `${selectedUnit || baseUnit} (Base)`);
+                  return (
+                    <div 
+                      tabIndex={-1}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 0.9rem',
+                        borderRadius: '10px',
+                        border: '2px solid #E2E8F0',
+                        fontWeight: '800',
+                        fontSize: '1rem',
+                        backgroundColor: '#F8FAFC',
+                        color: '#1E293B',
+                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        userSelect: 'none',
+                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                      }}
+                    >
+                      <Scale size={16} color="#64748B" />
+                      <span>{displayLabel}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -12555,24 +12542,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
                           e.preventDefault();
-                          if (index < normalizedOptionsConfig.length - 1) {
-                            const nextSelect = document.getElementById(`modal-opt-select-${index + 1}`);
-                            if (nextSelect) (nextSelect as HTMLElement).focus();
+                          let nextEl: HTMLElement | null = null;
+                          for (let k = index + 1; k < normalizedOptionsConfig.length; k++) {
+                            const el = document.getElementById(`modal-opt-select-${k}`);
+                            if (el) {
+                              nextEl = el;
+                              break;
+                            }
+                          }
+                          if (nextEl) {
+                            nextEl.focus();
                           } else {
-                            const qtyInput = document.getElementById('modal-qty-input');
+                            const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
                             if (qtyInput) {
-                              (qtyInput as HTMLElement).focus();
-                              (qtyInput as HTMLInputElement).select();
+                              qtyInput.focus();
+                              qtyInput.select();
                             }
                           }
                         } else if (e.key === 'Tab' && e.shiftKey) {
-                          if (index > 0) {
-                            e.preventDefault();
-                            const prevSelect = document.getElementById(`modal-opt-select-${index - 1}`);
-                            if (prevSelect) (prevSelect as HTMLElement).focus();
+                          e.preventDefault();
+                          let prevEl: HTMLElement | null = null;
+                          for (let k = index - 1; k >= 0; k--) {
+                            const el = document.getElementById(`modal-opt-select-${k}`);
+                            if (el) {
+                              prevEl = el;
+                              break;
+                            }
+                          }
+                          if (prevEl) {
+                            prevEl.focus();
                           }
                         }
                       }}
+                      tabIndex={index + 1}
                       style={{
                         width: '100%',
                         padding: '0.8rem',
@@ -12634,6 +12636,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
                   <input
                     id="modal-qty-input"
+                    tabIndex={(normalizedOptionsConfig?.length || 0) + 1}
                     autoComplete="off"
                     type="text"
                     value={quantity}
@@ -12645,25 +12648,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (e.key === 'Enter') {
                         e.preventDefault();
                         const evaluated = evaluateMathExpression(quantity);
-                        const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : '1';
+                        const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : (quantity || '1');
                         setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
-                        const unitSel = document.getElementById('modal-unit-select');
-                        if (unitSel) {
-                          unitSel.focus();
-                        } else {
-                          saveCustomizingModal();
-                        }
+                        saveCustomizingModal();
                       } else if (e.key === 'Tab' && !e.shiftKey) {
                         e.preventDefault();
                         const evaluated = evaluateMathExpression(quantity);
-                        const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : '1';
+                        const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : (quantity || '1');
                         setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
-                        const unitSel = document.getElementById('modal-unit-select');
-                        if (unitSel) {
-                          unitSel.focus();
-                        } else {
-                          const confirmBtn = document.getElementById('btn-modal-add');
-                          if (confirmBtn) confirmBtn.focus();
+                        const confirmBtn = document.getElementById('btn-modal-add');
+                        if (confirmBtn) confirmBtn.focus();
+                      } else if (e.key === 'Tab' && e.shiftKey) {
+                        e.preventDefault();
+                        let prevEl: HTMLElement | null = null;
+                        for (let k = (normalizedOptionsConfig?.length || 0) - 1; k >= 0; k--) {
+                          const el = document.getElementById(`modal-opt-select-${k}`);
+                          if (el) {
+                            prevEl = el;
+                            break;
+                          }
+                        }
+                        if (prevEl) {
+                          prevEl.focus();
                         }
                       }
                     }}
@@ -12687,7 +12693,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       e.target.style.borderColor = '#E2E8F0';
                       e.target.style.boxShadow = 'none';
                       const evaluated = evaluateMathExpression(quantity);
-                      const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : '1';
+                      const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : (quantity || '1');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
                     }}
                   />
@@ -12737,103 +12743,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       );
                     })()}
                   </div>
-                  {modalOptionsList.length > 1 ? (
-                    <select
-                      id="modal-unit-select"
-                      tabIndex={-1}
-                      value={unit}
-                      onChange={(e) => {
-                        const selected = e.target.value;
-                        const matched = modalOptionsList.find(o => o.unit.toLowerCase() === selected.toLowerCase());
-                        const newFactor = matched ? matched.factor : 1;
-
-                        // Sincronización inversa de UNIDAD DE MEDIDA -> PRESENTACIÓN
-                        const updatedOptions = { ...options };
-                        normalizedOptionsConfig.forEach((opt: any) => {
-                          if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
-                            const matchedValue = opt.values?.find((val: string) => {
-                              const cleanVal = val.includes('|') ? val.split('|')[0] : val;
-                              return cleanVal.toLowerCase() === selected.toLowerCase();
-                            });
-                            if (matchedValue) {
-                              updatedOptions[opt.name] = matchedValue;
-                            } else {
-                              const defaultUnit = product.unit_of_measure || 'Kg';
-                              if (selected.toLowerCase() === defaultUnit.toLowerCase()) {
-                                const matchedDefault = opt.values?.find((val: string) => {
-                                  const cleanVal = val.includes('|') ? val.split('|')[0] : val;
-                                  return cleanVal.toLowerCase() === defaultUnit.toLowerCase() || cleanVal.toLowerCase() === 'kg';
-                                });
-                                if (matchedDefault) {
-                                  updatedOptions[opt.name] = matchedDefault;
-                                }
-                              }
-                            }
-                          }
-                        });
-
-                        setCustomizingModalItem(prev => prev ? {
-                          ...prev,
-                          unit: selected,
-                          factor: newFactor,
-                          options: updatedOptions
-                        } : null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          saveCustomizingModal();
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '0.7rem 0.8rem',
-                        borderRadius: '10px',
-                        border: '2px solid #E2E8F0',
-                        fontWeight: '700',
-                        fontSize: '1.1rem',
-                        backgroundColor: '#F9FAFB',
-                        outline: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease-in-out'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#3B82F6';
-                        e.target.style.backgroundColor = 'white';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#E2E8F0';
-                        e.target.style.backgroundColor = '#F9FAFB';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    >
-                      {modalOptionsList.map(o => (
-                        <option key={o.unit} value={o.unit}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      readOnly
-                      tabIndex={-1}
-                      type="text"
-                      value={factor !== 1 ? `${unit} (${factor} ${baseUnit})` : `${baseUnit} (Base)`}
-                      style={{
-                        width: '100%',
-                        padding: '0.7rem 0.8rem',
-                        borderRadius: '10px',
-                        border: '2px solid #E2E8F0',
-                        fontWeight: '700',
-                        fontSize: '1.1rem',
-                        backgroundColor: '#F3F4F6',
-                        color: '#1E293B',
-                        textAlign: 'center',
-                        outline: 'none'
-                      }}
-                    />
-                  )}
+                  {(() => {
+                    const matched = modalOptionsList.find(o => o.unit.toLowerCase() === unit.toLowerCase());
+                    let displayLabel = matched ? matched.label : (factor !== 1 ? `${unit} (${factor} ${baseUnit})` : `${unit || baseUnit} (Base)`);
+                    if (factor !== 1 && !displayLabel.includes('(')) {
+                      displayLabel = `${displayLabel} (${factor} ${baseUnit})`;
+                    }
+                    return (
+                      <div 
+                        id="modal-unit-display"
+                        tabIndex={-1}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem 0.9rem',
+                          borderRadius: '10px',
+                          border: '2px solid #E2E8F0',
+                          fontWeight: '800',
+                          fontSize: '1rem',
+                          backgroundColor: '#F8FAFC',
+                          color: '#1E293B',
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          userSelect: 'none',
+                          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                        }}
+                      >
+                        <Scale size={16} color="#64748B" />
+                        <span>{displayLabel}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -12874,8 +12816,33 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <button
                   id="btn-modal-add"
                   type="button"
-                  tabIndex={-1}
+                  tabIndex={(normalizedOptionsConfig?.length || 0) + 2}
                   onClick={saveCustomizingModal}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      saveCustomizingModal();
+                    } else if (e.key === 'Tab' && !e.shiftKey) {
+                      e.preventDefault();
+                      const firstSel = document.getElementById('modal-opt-select-0');
+                      if (firstSel) {
+                        firstSel.focus();
+                      } else {
+                        const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+                        if (qtyInput) {
+                          qtyInput.focus();
+                          qtyInput.select();
+                        }
+                      }
+                    } else if (e.key === 'Tab' && e.shiftKey) {
+                      e.preventDefault();
+                      const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+                      if (qtyInput) {
+                        qtyInput.focus();
+                        qtyInput.select();
+                      }
+                    }
+                  }}
                   style={{
                     flex: 1,
                     padding: '0.85rem 1.8rem',
