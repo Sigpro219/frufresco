@@ -446,3 +446,32 @@ export async function recordLearningMemory(
     console.log('[OrderParserEngine] Error guardando memoria:', e);
   }
 }
+
+/**
+ * 🔍 Extractor Heurístico y Regex de Orden de Compra (OC / OCC / PO / SOLPED)
+ * Permite capturar números de OC desde el asunto del correo, cabeceras o texto libre.
+ */
+export function extractPurchaseOrderFromText(text: string): string | null {
+  if (!text || typeof text !== 'string') return null;
+  const clean = text.trim();
+  if (!clean) return null;
+
+  const patterns = [
+    /\b(?:orden\s+de\s+compra|orden\s+compra|orden\s+de\s+pedido|o\.c\.|o\/c|occ|oc|p\.o\.|po|solped|pedido)\s*(?:n[°o\.]*|num(?:ero)?|#)?\s*[:=\s-]*([A-Za-z0-9\-_]{3,25})\b/i,
+    /\b(?:OCC|OC|PO|SOLPED)[\s_-]*([0-9]{4,15})\b/i,
+    /\b(OC[0-9]{4,15})\b/i
+  ];
+
+  for (const rx of patterns) {
+    const match = clean.match(rx);
+    if (match && match[1]) {
+      const candidate = match[1].trim();
+      const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|lunes|martes|miercoles|jueves|viernes|sabado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+      if (!forbidden.test(candidate) && candidate.length >= 3) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+

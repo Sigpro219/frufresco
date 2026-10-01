@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.79 (Dogma de Maduración Estándar, Supresión Canónica del Badge 'Maduro' y Purga de Redundancias Nominales en Montaje de Pedidos, Escenario BDD 112)
+> **Versión:** 1.9.81 (Extracción Multimodal de Orden de Compra OC/OCC/PO en Ingesta IA, Respeto de Fecha de Entrega Solicitada en Documentos y Sincronización con Restricciones Logísticas D+1, Escenario BDD 115)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4899,4 +4899,19 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
      - Presionar `Shift + Tab` dentro del modal retrocede con exactitud al control anterior: `Botón Agregar` $\rightarrow$ `Cantidad` $\rightarrow$ `Maduración` $\rightarrow$ `Presentación`.
   4. **Paridad Transversal Universal:**
      - Esta regla aplica de forma idéntica e inviolable en todos los canales de ingesta y montaje de pedidos de FruFresco.
+
+---
+
+#### Escenario 115: Extracción Multimodal de Orden de Compra (OC/OCC/PO/SOLPED) y Fidelidad de Fecha Solicitada en Documento con Validación Logística
+- **Given** un borrador de pedido recibido por correo electrónico (`order_drafts`) con documento adjunto (PDF, Excel o Imagen) o texto de solicitud formal.
+- **When** el motor de inteligencia artificial multimodal procesa el correo y el operador abre el modal de confirmación (`EmailDraftsModule.tsx`):
+- **Then**:
+  1. **Extracción Multimodal Exhaustiva de Orden de Compra (OC):**
+     - El pipeline de IA (`genericPrompt`, `excelPrompt`, `order-parser-engine.ts`, `reparse-draft`) rastrea con prioridad absoluta recuadros de encabezado, cajas de datos y firmas con etiquetas `"Orden de Compra"`, `"O/C"`, `"PO Number"`, `"OCC"`, `"SOLPED"` o `"Pedido N°"`.
+     - Se activa una capa heurística / regex resiliente (`extractPurchaseOrderFromText`) que inspecciona el asunto del correo (`email_subject`, ej. `FW: OCC 66351 EUROFARMA`) y el cuerpo del mensaje como salvaguarda inmediata.
+     - El valor detectado se inyecta en el estado reactivo `purchaseOrder` y en los metadatos del borrador, mostrándose de forma destacada en la tarjeta del cliente y persistiendo en `client_po_number` de `orders`.
+  2. **Fidelidad de Fecha de Entrega Solicitada en el Documento:**
+     - Si el documento del cliente especifica una fecha explícita de entrega (ej. `Entrega 2026-10-02`) y dicha fecha es vigente ($\ge$ hoy en Bogotá `todayBogotaStr`), el sistema adopta `2026-10-02` como fecha base inicial.
+     - Queda estrictamente prohibido que la hora del día del operador en jornada nocturna/tarde (e.g. después de las 17:00) fuerce un salto artificial a D+2/D+4 ignorando la fecha requerida por el cliente en compras institucionales.
+     - El algoritmo `getNextAllowedDeliveryDate` evalúa la fecha base contra los `allowed_days` configurados en la ficha logística del cliente (`matchedProfile.logistics_data.allowed_days`). Si el día solicitado (ej. Viernes = 5) está permitido en la matriz del cliente (`[1, 3, 5]`), la fecha `2026-10-02` se preserva con exactitud matemática 100%.
 

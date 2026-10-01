@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-import { fetchGeminiExtraction, findBestProductMatchDetails } from '@/lib/orders/order-parser-engine';
+import { fetchGeminiExtraction, findBestProductMatchDetails, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,6 +56,7 @@ export async function POST(req: Request) {
       nit?: string;
       address?: string;
       deliveryDate?: string;
+      purchaseOrder?: string;
       items: Array<{ 
         name: string; 
         quantity: number; 
@@ -149,6 +150,7 @@ ${csvContent}`;
             if (!extractedData.nit && gJson.nit) extractedData.nit = gJson.nit;
             if (!extractedData.address && gJson.address) extractedData.address = gJson.address;
             if (!extractedData.deliveryDate && gJson.deliveryDate) extractedData.deliveryDate = gJson.deliveryDate;
+            if (!extractedData.purchaseOrder && gJson.purchaseOrder) extractedData.purchaseOrder = gJson.purchaseOrder;
 
             gJson.items.forEach((it: any) => {
               if (it && it.name && !isNaN(Number(it.quantity)) && Number(it.quantity) > 0) {
@@ -175,7 +177,7 @@ Analiza este documento adjunto ("${att.name}") y extrae la orden de compra en fo
 - nit: NIT o documento de identificación fiscal.
 - address: Dirección de entrega completa.
 - deliveryDate: Fecha de entrega solicitada (formato YYYY-MM-DD o DD/MM/YYYY).
-- purchaseOrder: Número de orden de compra (OC, OP, SOLPED) si está presente.
+- purchaseOrder: Número de orden de compra (OC, OCC, OP, SOLPED, Pedido N°) si está presente en la cabecera o recuadro de 'Orden de Compra'.
 - items: Lista de productos ordenados. Ignora filas con cantidad 0 o vacías.
 Cada item debe tener:
   * name: Nombre comercial del producto limpio en español. NUNCA uses códigos PLU o IDs como nombre.
@@ -201,6 +203,7 @@ Responde ÚNICAMENTE en JSON válido:
             if (!extractedData.nit && gJson.nit) extractedData.nit = gJson.nit;
             if (!extractedData.address && gJson.address) extractedData.address = gJson.address;
             if (!extractedData.deliveryDate && gJson.deliveryDate) extractedData.deliveryDate = gJson.deliveryDate;
+            if (!extractedData.purchaseOrder && gJson.purchaseOrder) extractedData.purchaseOrder = gJson.purchaseOrder;
 
             gJson.items.forEach((it: any) => {
               if (it && it.name && !isNaN(Number(it.quantity)) && Number(it.quantity) > 0) {
@@ -326,6 +329,19 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     if (extractedData.nit) metadata.nit = extractedData.nit;
     if (extractedData.address) metadata.address = extractedData.address;
     if (extractedData.deliveryDate) metadata.deliveryDate = extractedData.deliveryDate;
+    
+    const resolvedPo = extractedData.purchaseOrder
+      || (cleanItems.find(it => it.purchase_order)?.purchase_order)
+      || extractPurchaseOrderFromText(draft.email_subject || '')
+      || extractPurchaseOrderFromText(draft.email_body || '')
+      || null;
+
+    if (resolvedPo) {
+      metadata.purchaseOrder = resolvedPo;
+      metadata.purchase_order = resolvedPo;
+      metadata.poNumber = resolvedPo;
+    }
+
     if (attachmentsList.length > 0) {
       metadata.attachments = attachmentsList.map((att: any, attIdx: number) => ({
         ...att,

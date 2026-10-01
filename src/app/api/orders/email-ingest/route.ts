@@ -12,7 +12,7 @@ const getSupabaseAdmin = () => {
   return createClient(url, key);
 };
 
-import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory } from '@/lib/orders/order-parser-engine';
+import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
 
 async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
   try {
@@ -648,7 +648,11 @@ export async function POST(req: Request) {
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
         5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
-        6. Extrae todos los productos solicitados y su cantidad numérica.
+        6. Identifica el NÚMERO DE ORDEN DE COMPRA (OC / OCC / PO / SOLPED / Pedido N° / O/C / Referencia de Pedido):
+           - Busca en recuadros destacados de cabecera o esquinas con títulos como "Orden de Compra", "O/C", "PO Number", "No. Pedido", "No. Orden", "OCC", "Pedido" (ej. "OC00066351", "OCC 66351", "PO-9812", "SOLPED-4521").
+           - Revisa también el ASUNTO DEL CORREO (ej. "FW: OCC 66351 EUROFARMA") o texto del cuerpo.
+           - Extrae el código limpio en el campo "purchaseOrder". Si no existe ninguna orden de compra, pon null.
+        7. Extrae todos los productos solicitados y su cantidad numérica.
              - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
              - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
              - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
@@ -662,7 +666,7 @@ export async function POST(req: Request) {
                 Si un ítem NO tiene fecha de entrega específica diferente a la general, coloca null en su "deliveryDate".
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
-        7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
+        8. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
            - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
            - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
         
@@ -679,6 +683,7 @@ export async function POST(req: Request) {
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre o Empresa Detectada",
+          "purchaseOrder": "Número de Orden de Compra o null",
           "documentType": "Imagen/WhatsApp/PDF",
           "address": "Dirección física limpia extraída o vacio",
           "phone": "Teléfono extraído o vacio",
@@ -798,17 +803,19 @@ export async function POST(req: Request) {
 
           TAREA:
           1. Identifica el nombre o empresa del CLIENTE matriz, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega.
-          2. Extrae la lista completa de productos del Excel/CSV en la propiedad 'items':
+          2. Identifica el NÚMERO DE ORDEN DE COMPRA (OC / OCC / PO / SOLPED / Pedido N° / O/C / Referencia) en el Excel o asunto del correo y guárdalo en "purchaseOrder" o null.
+          3. Extrae la lista completa de productos del Excel/CSV en la propiedad 'items':
              - "originalName": Nombre comercial del alimento en español limpio (ej. "AGUACATE", "AJO", "APIO", "BANANO CRIOLLO", "CEBOLLA CABEZONA BLANCA", "CILANTRO"). NUNCA uses columnas de códigos PLU, ID, CÓDIGO o números como el nombre del producto; extrae SIEMPRE la descripción o nombre del producto en español.
              - "quantity": Cantidad numérica solicitada mayor a cero. Si hay columnas para una sede o destino específico (ej. "JARDIN RICAURTE"), toma la cantidad indicada para ese destino.
              - "unit": Unidad de medida o presentación exacta ("KG", "UND", "UNIDAD", "KILO", "BOLSA", etc.).
              - "observations": Código PLU, especificación de calidad o corte si existe.
-          3. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
-          4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
-          5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" o null.
+          4. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
+          5. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
+          6. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" o null.
           FORMATO DE RESPUESTA ESPERADO:
           {
             "clientInDocument": "Nombre o Empresa Detectada",
+            "purchaseOrder": "Número de Orden de Compra o null",
             "documentType": "Email con Excel adjunto",
             "address": "Dirección física limpia extraída o vacio",
             "phone": "Teléfono extraído o vacio",
@@ -872,11 +879,14 @@ export async function POST(req: Request) {
           }
         }
 
+        const detectedPoInAtt = attExtractedData.purchaseOrder || attExtractedData.poNumber || extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(cleanedBodyText) || null;
+
         return {
           name: attFileName,
           url: publicUrl,
           processed: false,
           orderId: null,
+          purchaseOrder: detectedPoInAtt,
           deliveryDate: attExtractedData.deliveryDate || null,
           deliverySlot: attExtractedData.deliverySlot || null,
           clientInDocument: attExtractedData.clientInDocument || null,
@@ -895,7 +905,7 @@ export async function POST(req: Request) {
       // DIAGNOSTIC LOG: Show per-attachment AI extraction results for deliveryDate per item
       parsedAttachments.forEach((att, i) => {
         const uniqueDates = [...new Set((att.items || []).map((itm: any) => itm.deliveryDate || null))];
-        console.log(`[Email Inbound] [DIAG] Adjunto ${i+1}/${parsedAttachments.length}: "${att.name}" | globalDate=${att.deliveryDate} | itemDates=[${uniqueDates.join(', ')}] | items=${(att.items || []).length}`);
+        console.log(`[Email Inbound] [DIAG] Adjunto ${i+1}/${parsedAttachments.length}: "${att.name}" | globalDate=${att.deliveryDate} | po=${att.purchaseOrder} | itemDates=[${uniqueDates.join(', ')}] | items=${(att.items || []).length}`);
       });
 
       if (uploadedAttachments.length > 0) {
@@ -906,6 +916,7 @@ export async function POST(req: Request) {
       if (parsedAttachments.length > 0) {
         extractedData = {
           clientInDocument: parsedAttachments[0].clientInDocument,
+          purchaseOrder: parsedAttachments[0].purchaseOrder || extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(cleanedBodyText) || null,
           documentType: parsedAttachments[0].documentType,
           address: parsedAttachments[0].address,
           phone: parsedAttachments[0].phone,
@@ -976,6 +987,7 @@ export async function POST(req: Request) {
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre o Empresa Detectada",
+          "purchaseOrder": "Número de Orden de Compra o null",
           "documentType": "Email",
           "address": "Dirección física limpia extraída o vacio",
           "deliverySlot": "AM / PM / Cualquier hora / null",
@@ -1003,6 +1015,10 @@ export async function POST(req: Request) {
         }
       } catch (e) {
         console.error('Failed to parse Gemini output for email text:', e);
+      }
+
+      if (!extractedData.purchaseOrder) {
+        extractedData.purchaseOrder = extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(cleanedBodyText) || null;
       }
       
       // FALLBACK: If Gemini failed to extract items, try regex extraction
@@ -1432,6 +1448,7 @@ export async function POST(req: Request) {
         const clientDetected = (att.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
         const hasValid = processedItems.length > 0;
 
+        const attPo = att.purchaseOrder || extractedData.purchaseOrder || extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(currentPlainText) || null;
         draftsToInsert.push({
           id: draftId,
           profile_id: profile ? profile.id : null,
@@ -1442,6 +1459,9 @@ export async function POST(req: Request) {
           extracted_items: [
             {
               isMetadata: true,
+              purchaseOrder: attPo,
+              purchase_order: attPo,
+              poNumber: attPo,
               address: att.address || extractedData.address || null,
               addressDetected: addressDetected,
               deliverySlot: att.deliverySlot || finalDeliverySlot,
@@ -1472,6 +1492,7 @@ export async function POST(req: Request) {
       const processedItems = processItemsArray(sourceItems, 0, primarySource.name || null);
       const clientDetected = (primarySource.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
       const hasValid = processedItems.length > 0;
+      const primaryPo = primarySource.purchaseOrder || extractedData.purchaseOrder || extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(currentPlainText) || null;
 
       draftsToInsert.push({
         id: draftUuid,
@@ -1483,6 +1504,9 @@ export async function POST(req: Request) {
         extracted_items: [
           {
             isMetadata: true,
+            purchaseOrder: primaryPo,
+            purchase_order: primaryPo,
+            poNumber: primaryPo,
             address: primarySource.address || extractedData.address || null,
             addressDetected: addressDetected,
             deliverySlot: primarySource.deliverySlot || finalDeliverySlot,

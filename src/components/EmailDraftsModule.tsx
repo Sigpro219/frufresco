@@ -153,6 +153,24 @@ const getNextAllowedDeliveryDate = (baseDateStr: string, allowedDays: number[]):
   return baseDateStr;
 };
 
+const extractPoFallback = (text: string): string => {
+  if (!text || typeof text !== 'string') return '';
+  const clean = text.trim();
+  if (!clean) return '';
+  const rx = /\b(?:orden\s+de\s+compra|orden\s+compra|orden\s+de\s+pedido|o\.c\.|o\/c|occ|oc|p\.o\.|po|solped|pedido)\s*(?:n[°o\.]*|num(?:ero)?|#)?\s*[:=\s-]*([A-Za-z0-9\-_]{3,25})\b/i;
+  const rx2 = /\b(?:OCC|OC|PO|SOLPED)[\s_-]*([0-9]{4,15})\b/i;
+  const rx3 = /\b(OC[0-9]{4,15})\b/i;
+  const m = clean.match(rx) || clean.match(rx2) || clean.match(rx3);
+  if (m && m[1]) {
+    const cand = m[1].trim();
+    const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|lunes|martes|miercoles|jueves|viernes|sabado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+    if (!forbidden.test(cand) && cand.length >= 3) {
+      return cand;
+    }
+  }
+  return '';
+};
+
 const getAccountingIdDisplay = (product: any) => {
     if (!product) return '';
     if (product.accounting_id) {
@@ -1792,10 +1810,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
     const bogotaNow = new Date(utc + (3600000 * -5));
-    const currentHour = bogotaNow.getHours();
-    const daysToAdd = currentHour >= 17 ? 2 : 1;
     const result = new Date(bogotaNow);
-    result.setDate(bogotaNow.getDate() + daysToAdd);
+    result.setDate(bogotaNow.getDate() + 1);
     return result.toISOString().split('T')[0];
   };
   const minDeliveryDate = getMinDeliveryDate();
@@ -4508,7 +4524,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           setPriceList('');
         }
         setOrderDocument(meta.orderDocument || 'Remisión');
-        const detectedPo = (meta as any).purchaseOrder || (meta as any).purchase_order || (meta as any).po_number || (selectedDraft as any).client_po_number || (selectedDraft as any).po_number || (selectedDraft as any).purchase_order || (Array.isArray(selectedDraft.extracted_items) ? selectedDraft.extracted_items.find((i: any) => i.purchase_order)?.purchase_order : '') || '';
+        const detectedPo = (meta as any)?.purchaseOrder 
+          || (meta as any)?.purchase_order 
+          || (meta as any)?.po_number 
+          || (meta as any)?.poNumber
+          || (selectedDraft as any)?.client_po_number 
+          || (selectedDraft as any)?.po_number 
+          || (selectedDraft as any)?.purchase_order 
+          || (Array.isArray(selectedDraft.extracted_items) ? selectedDraft.extracted_items.find((i: any) => i.purchase_order)?.purchase_order : '') 
+          || extractPoFallback(selectedDraft.email_subject || '')
+          || extractPoFallback(selectedDraft.email_body || '')
+          || '';
         setPurchaseOrder(detectedPo);
       } else {
         if (currentAtt && currentAtt.deliverySlot) {
@@ -4520,13 +4546,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if (!priceList && meta.priceList) {
           setPriceList(meta.priceList);
         }
-        const detectedPo = (meta as any).purchaseOrder || (meta as any).purchase_order || (meta as any).po_number || (selectedDraft as any).client_po_number || (selectedDraft as any).po_number || (selectedDraft as any).purchase_order || (Array.isArray(selectedDraft.extracted_items) ? selectedDraft.extracted_items.find((i: any) => i.purchase_order)?.purchase_order : '') || '';
+        const detectedPo = (meta as any)?.purchaseOrder 
+          || (meta as any)?.purchase_order 
+          || (meta as any)?.po_number 
+          || (meta as any)?.poNumber
+          || (selectedDraft as any)?.client_po_number 
+          || (selectedDraft as any)?.po_number 
+          || (selectedDraft as any)?.purchase_order 
+          || (Array.isArray(selectedDraft.extracted_items) ? selectedDraft.extracted_items.find((i: any) => i.purchase_order)?.purchase_order : '') 
+          || extractPoFallback(selectedDraft.email_subject || '')
+          || extractPoFallback(selectedDraft.email_body || '')
+          || '';
         if (!purchaseOrder && detectedPo) {
           setPurchaseOrder(detectedPo);
         }
       }
-      let initialDateStr = currentAtt?.deliveryDate || meta.deliveryDate || minDeliveryDate;
-      if (initialDateStr < minDeliveryDate) {
+      const docDate = currentAtt?.deliveryDate || meta?.deliveryDate || '';
+      let initialDateStr = '';
+      if (docDate && /^\d{4}-\d{2}-\d{2}$/.test(docDate) && docDate >= todayBogotaStr) {
+        initialDateStr = docDate;
+      } else {
         initialDateStr = minDeliveryDate;
       }
       if (matchedProfile?.logistics_data) {
