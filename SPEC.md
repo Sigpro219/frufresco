@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.74 (Integración Telemática M2M de Flota, Protocolo API GPS-Server/Apps-360 y Telemetría Vehicular en Tiempo Real, Escenario BDD 107)
+> **Versión:** 1.9.75 (Arquitectura Telemática Dual M2M/Móvil, Tracker Resiliente 60s para Vehículos Tercerizados, Watchdog de Señal 15min y Purgado Nocturno 48h, Escenario BDD 108)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -2536,6 +2536,7 @@ Si la suma supera la capacidad, el planeador emite una advertencia visual inmedi
 - `ignition_status boolean`: Estado del switch de encendido (`ACC`): `true` = motor encendido, `false` = apagado.
 - `last_gps_sync timestamp with time zone`: Marca de tiempo UTC del último paquete de telemetría recibido e ingerido.
 - `gps_imei text`: Identificador único de hardware/módem GPS configurado en la plataforma externa.
+- `tracking_source text`: Origen primario de telemetría (`'hardware_gps'` para satelital fijo Apps-360 / GPS-Server, `'mobile_app'` para smartphone de furgón tercerizado/alquilado en `/ops/driver`).
 
 ---
 
@@ -2655,6 +2656,36 @@ La planificación algorítmica de despachos de FruFresco se articula directament
 
 4. **Respaldo y Auditoría Visual (Drawer Satelital):**
    - Se mantiene el botón de auditoría rápida en la Torre de Control para abrir en Drawer lateral o pestaña externa `https://plataforma.apps-360.online/ui/map/objects/list` ante verificaciones de plataforma o soporte técnico con el proveedor de telecomunicaciones satelitales.
+
+#### C. Arquitectura Telemática Dual & Tracker Móvil Resiliente 60s (/ops/driver)
+
+1. **Activación Selectiva por Tipo de Flota (`tracking_source`):**
+   - **Flota Propia (`'hardware_gps'`):** El rastreo se alimenta de forma pasiva e ininterrumpida desde el chip satelital cableado a la ignición (`apps-360.online`). El conductor no requiere interactuar con el GPS en su teléfono.
+   - **Flota Tercerizada / Camiones Alquilados de Contingencia (`'mobile_app'`):** Al despachar una ruta asignada a un vehículo de terceros o sin chip fijo, el sistema activa automáticamente el módulo de telemetría móvil en la aplicación web del chofer (`/ops/driver`).
+
+2. **Protocolo Heartbeat Móvil Inteligente (Cadencia 60s & Presupuesto Energético):**
+   - **Cadencia de Muestreo:** La app emite un latido (Heartbeat) GPS ligero cada **60 segundos** o ante desplazamientos mayores a **100 metros**.
+   - **Consumo Mínimo de Recursos:** Carga útil optimizada de ~120 bytes (`{ lat, lng, speed, heading, accuracy, battery, timestamp }`), resultando en menos de **1.5 MB de datos móviles por jornada de 10 horas** y previniendo el sobrecalentamiento o drenaje prematuro de la batería del smartphone.
+   - **Persistencia en Segundo Plano (WakeLock):** Implementación de `Screen WakeLock API` para mantener la geolocalización activa durante la ruta activa.
+   - **Buffer Offline Anti-Sombra:** En tramos viales sin cobertura celular (ej. túneles o corredores intermunicipales), los pings se encolan en `IndexedDB` / `LocalStorage` local y se transmiten en ráfaga (*burst upload*) al restablecer la conexión 3G/4G.
+
+3. **Watchdog de Torre de Control & Alarma Lógica de Pérdida de Señal (15 min):**
+   - Si un vehículo en estado `in_transit` (en reparto) deja de emitir telemetría (satelital o móvil) durante más de **15 minutos consecutivos**:
+     * La Torre de Control (`/admin/transport`) eleva un badge visual de alerta crítica: `⚠️ Pérdida de Señal (>15m)`.
+     * Se habilita en 1-clic el botón de contacto de emergencia vía WhatsApp y llamada telefónica directa al conductor.
+
+#### D. Gobernanza de Almacenamiento & Ciclo de Vida de Datos (Purga Nocturna 48h)
+
+1. **Separación Estricta de Capas (Estado Vivo vs Auditoría Histórica):**
+   - **Capa Viva (Zero Storage Growth):** El monitor de Google Maps consume el estado actual realizando `UPDATE` en la fila única de `fleet_vehicles`. **Crecimiento neto en base de datos: 0 MB**.
+   - **Capa Histórica (Auditoría de Ruta):** Los pings secuenciales se almacenan en `vehicle_gps_logs` exclusivamente para trazar la miga de pan (*breadcrumb trail*) ante reclamaciones de clientes.
+2. **Cron Nocturno de Purga Automática (02:00 AM):**
+   - Ejecución programada diaria de la rutina de mantenimiento:
+     ```sql
+     DELETE FROM vehicle_gps_logs 
+     WHERE created_at < NOW() - INTERVAL '48 hours';
+     ```
+   - Garantiza que la base de datos retenga únicamente el rastro necesario para resolver disputas del día hábil anterior, manteniendo las tablas en tamaño ultra liviano y optimizando el rendimiento de consultas e índices.
 
 ---
 
@@ -4734,4 +4765,17 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
      - Orienta el icono del vehículo rotándolo según su `heading` real.
      - Expone en el popover telemático la velocidad actual (km/h), el estado del motor (Encendido/Apagado) y el tiempo transcurrido desde el último reporte.
   3. Si el odómetro satelital acumulado supera el umbral de `next_due_km` en `maintenance_schedules`, el sistema eleva de forma automática la bandera de alerta preventiva en la consola de mantenimiento vehicular.
+
+---
+
+#### Escenario 108: Rastreo Telemático de Vehículo Tercerizado con Heartbeat Móvil 60s, Detección de Pérdida de Señal y Purga Nocturna 48h
+- **Given** un furgón alquilado `"ALQ-901"` configurado con `tracking_source = 'mobile_app'` asignado a una ruta activa nocturna (`in_transit`).
+- **When** el conductor inicia la jornada en su terminal móvil (`/ops/driver`):
+- **Then**:
+  1. La aplicación activa `Screen WakeLock` y el observador de geolocalización, emitiendo un latido (Heartbeat) GPS ligero cada 60 segundos hacia `/api/transport/telemetry`.
+  2. La tabla `fleet_vehicles` actualiza atómicamente `last_latitude`, `last_longitude`, `speed`, `heading` y `last_gps_sync`, consumiendo 0 MB de espacio adicional.
+  3. Cada punto geográfico se registra en `vehicle_gps_logs` para reconstrucción de ruta forense.
+  4. Si el camión entra en zona sin cobertura celular, la app almacena los pings en cola local y los sincroniza en ráfaga (*burst sync*) al recuperar señal.
+  5. Si el vehículo permanece más de 15 minutos sin reportar telemetría mientras está en tránsito, la Torre de Control (`/admin/transport`) activa una alerta visual roja en el HUD y el botón de contacto de emergencia 1-clic con el conductor.
+  6. A las 02:00 AM, el cron de mantenimiento ejecuta la purga de registros de `vehicle_gps_logs` con antigüedad superior a 48 horas, preservando el estado vivo en `fleet_vehicles` sin degradación de rendimiento en base de datos.
 
