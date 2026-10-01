@@ -484,7 +484,8 @@ export default function InventoryAdminPage() {
     };
 
     // --- KARDEX STATES & TOGGLES ---
-    const [movementsDateRange, setMovementsDateRange] = useState<'8days' | 'today' | 'custom'>('8days');
+    const [sharedInventoryDate, setSharedInventoryDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [movementsDateRange, setMovementsDateRange] = useState<'selected_day' | '8days' | 'today' | 'custom'>('selected_day');
     const [customStartDate, setCustomStartDate] = useState<string>(() => {
         const d = new Date();
         d.setDate(d.getDate() - 7);
@@ -780,7 +781,14 @@ export default function InventoryAdminPage() {
                 let endDateIso = '';
                 const now = new Date();
 
-                if (movementsDateRange === 'today') {
+                if (movementsDateRange === 'selected_day') {
+                    const targetDateStr = sharedInventoryDate || now.toISOString().split('T')[0];
+                    const [sY, sM, sD] = targetDateStr.split('-').map(Number);
+                    const start = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 0, 0, 0, 0);
+                    const end = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 23, 59, 59, 999);
+                    startDateIso = start.toISOString();
+                    endDateIso = end.toISOString();
+                } else if (movementsDateRange === 'today') {
                     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
                     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
                     startDateIso = start.toISOString();
@@ -855,7 +863,7 @@ export default function InventoryAdminPage() {
                 setRefreshing(false);
             }
         }
-    }, [activeTab, movementsDateRange, customStartDate, customEndDate, stocks.length]);
+    }, [activeTab, movementsDateRange, customStartDate, customEndDate, sharedInventoryDate, stocks.length]);
 
     const handleGenerateAudit = useCallback(async (isAuto: boolean = false) => {
         try {
@@ -2099,7 +2107,8 @@ export default function InventoryAdminPage() {
             XLSX.utils.book_append_sheet(wb, wsTrans, "Detalle_Transacciones");
 
             let rangeLabel = 'Ultimos_8_Dias';
-            if (movementsDateRange === 'today') rangeLabel = 'Hoy';
+            if (movementsDateRange === 'selected_day') rangeLabel = `Dia_${sharedInventoryDate}`;
+            else if (movementsDateRange === 'today') rangeLabel = 'Hoy';
             else if (movementsDateRange === 'custom') rangeLabel = `${customStartDate}_al_${customEndDate}`;
 
             const todayStr = new Date().toISOString().split('T')[0];
@@ -2112,7 +2121,7 @@ export default function InventoryAdminPage() {
         } finally {
             setExportingExcel(false);
         }
-    }, [kardexFamilies, movements, movementsDateRange, customStartDate, customEndDate]);
+    }, [kardexFamilies, movements, movementsDateRange, customStartDate, customEndDate, sharedInventoryDate]);
 
     const handleExportGovernanceExcel = useCallback(async () => {
         try {
@@ -2474,7 +2483,15 @@ export default function InventoryAdminPage() {
                     </div>
                 ) : activeTab === 'daily_balance' ? (
                     <div style={{ marginTop: '0.5rem' }}>
-                        <InventoryDailyBalanceTab workCells={workCells} />
+                        <InventoryDailyBalanceTab 
+                            workCells={workCells} 
+                            externalDate={sharedInventoryDate}
+                            onDateChange={(d) => {
+                                setSharedInventoryDate(d);
+                                setCustomStartDate(d);
+                                setCustomEndDate(d);
+                            }}
+                        />
                     </div>
                 ) : (
                     <>
@@ -2489,7 +2506,7 @@ export default function InventoryAdminPage() {
                                         ? (kardexKpis.totalEntriesKg >= 1000 
                                             ? `≈ ${(kardexKpis.totalEntriesKg / 1000).toFixed(2)} Ton recepciones` 
                                             : `≈ ${formatNumber(kardexKpis.totalEntriesKg, 1)} kg recepciones`)
-                                        : "Recepciones en período"} 
+                                        : (movementsDateRange === 'selected_day' ? "Recepciones del día" : "Recepciones en período")} 
                                 />
                                 <KPICard 
                                     title="Total Salidas (-)" 
@@ -2499,7 +2516,7 @@ export default function InventoryAdminPage() {
                                         ? (kardexKpis.totalExitsKg >= 1000 
                                             ? `≈ ${(kardexKpis.totalExitsKg / 1000).toFixed(2)} Ton despachos` 
                                             : `≈ ${formatNumber(kardexKpis.totalExitsKg, 1)} kg despachos`)
-                                        : "Despachos a clientes"} 
+                                        : (movementsDateRange === 'selected_day' ? "Despachos del día" : "Despachos a clientes")} 
                                 />
                                 <KPICard 
                                     title="Flujo Neto" 
@@ -2509,7 +2526,7 @@ export default function InventoryAdminPage() {
                                         ? (Math.abs(kardexKpis.netBalanceKg) >= 1000 
                                             ? `≈ ${kardexKpis.netBalanceKg >= 0 ? '+' : ''}${(kardexKpis.netBalanceKg / 1000).toFixed(2)} Ton balance` 
                                             : `≈ ${kardexKpis.netBalanceKg >= 0 ? '+' : ''}${formatNumber(kardexKpis.netBalanceKg, 1)} kg balance`)
-                                        : "Balance del período"} 
+                                        : (movementsDateRange === 'selected_day' ? "Balance del día" : "Balance del período")} 
                                 />
                                 <KPICard 
                                     title="SKUs con Rotación" 
@@ -3158,6 +3175,25 @@ export default function InventoryAdminPage() {
                                 }}>
                                     <button
                                         type="button"
+                                        onClick={() => setMovementsDateRange('selected_day')}
+                                        style={{
+                                            padding: '0.35rem 0.75rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            fontSize: '0.74rem',
+                                            fontWeight: movementsDateRange === 'selected_day' ? '700' : '500',
+                                            backgroundColor: movementsDateRange === 'selected_day' ? '#FFFFFF' : 'transparent',
+                                            color: movementsDateRange === 'selected_day' ? '#0F172A' : '#64748B',
+                                            cursor: 'pointer',
+                                            boxShadow: movementsDateRange === 'selected_day' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title={`Ver Kardex del día de la Sábana (${sharedInventoryDate})`}
+                                    >
+                                        Día Sábana ({sharedInventoryDate ? sharedInventoryDate.split('-').slice(1).reverse().join('/') : 'Hoy'})
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => setMovementsDateRange('8days')}
                                         style={{
                                             padding: '0.35rem 0.75rem',
@@ -3214,6 +3250,35 @@ export default function InventoryAdminPage() {
                                         Personalizado
                                     </button>
                                 </div>
+
+                                {/* Selector de fecha única cuando está en Día Sábana */}
+                                {movementsDateRange === 'selected_day' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '35px' }}>
+                                        <input 
+                                            type="date" 
+                                            value={sharedInventoryDate} 
+                                            onChange={(e) => {
+                                                if (e.target.value) {
+                                                    setSharedInventoryDate(e.target.value);
+                                                    setCustomStartDate(e.target.value);
+                                                    setCustomEndDate(e.target.value);
+                                                }
+                                            }} 
+                                            style={{
+                                                height: '35px',
+                                                padding: '0 0.5rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid #CBD5E1',
+                                                fontSize: '0.74rem',
+                                                color: '#334155',
+                                                backgroundColor: '#FFFFFF',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            title="Cambiar fecha del día en Kardex (sincronizada con la Sábana Diaria)"
+                                        />
+                                    </div>
+                                )}
 
                                 {/* Custom Date Range Inputs */}
                                 {movementsDateRange === 'custom' && (
@@ -4448,7 +4513,13 @@ export default function InventoryAdminPage() {
                                                 <th style={dynamicThStyle}>Unidad</th>
                                                 <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Entradas (+)</th>
                                                 <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Salidas (-)</th>
-                                                <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Neto Período</th>
+                                                <th style={{ ...dynamicThStyle, textAlign: 'center' }}>
+                                                    {movementsDateRange === 'selected_day' 
+                                                        ? `Neto Día (${sharedInventoryDate ? sharedInventoryDate.split('-').slice(1).reverse().join('/') : ''})` 
+                                                        : movementsDateRange === 'today' 
+                                                            ? 'Neto Hoy' 
+                                                            : 'Neto Período'}
+                                                </th>
                                                 <th style={{ ...dynamicThStyle, textAlign: 'center' }}>Stock en Bodega</th>
                                                 <th style={{ ...dynamicThStyle, textAlign: 'right', borderTopRightRadius: '12px' }}>Trazabilidad</th>
                                             </tr>

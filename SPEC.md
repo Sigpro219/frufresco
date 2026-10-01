@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.56 (Gobernanza de Cierre de Inventario en daily_inventory_closings, Herencia Estricta de Saldo Inicial D-1 desde Columna U, Renombramiento a Inventario en bodega [devoluciones], Escenario BDD 93)
+> **Versión:** 1.9.59 (Sincronización Bidireccional de Fechas entre Sábana Diaria 24 Col y Kardex / Movimientos, Rango selected_day, Columna Dinámica Neto Día, Escenario BDD 97)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
+> **Área:** Dirección de Talento Humano, Nómina, Jefatura de Inventarios, Mesa de Control Logística & Facturación
 
 ---
 
@@ -1130,6 +1130,15 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 #### 4. Exportación a Excel (XLSX) de Grado Fiscal y Contable
 - La exportación debe respetar estrictamente la estructura de las 24 columnas canónicas (A a X), agrupadas por Célula de Trabajo.
 - Las columnas de balance y descuadre deben exportarse con **fórmulas nativas de Excel** (`=SUMA(...)`, `=E+F...`, etc.), acompañadas de una fila de totales matemáticos al pie para permitir la auditoría de revisoría fiscal y contabilidad.
+
+#### 5. Hoja Manual y Evaluación de Expresiones Aritméticas Inline (Estilo Excel)
+- **Operaciones Aritméticas en Celda:** En el modo de edición de la Hoja Manual (`sheetMode === 'manual_edit'`), cualquier celda editable permite la digitación de expresiones aritméticas básicas directas o precedidas de signo igual o adición (ej. `=10+20`, `+15-5`, `=50-10`, `2*5`, `2x5`, `100/4`).
+- **Ejecución y Confirmación:** Al presionar `Enter`, `Tab` o perder el foco (`blur`), el motor de evaluación aritmética (`evaluateExcelExpression`):
+  1. Remueve el prefijo opcional `=` o `+`.
+  2. Normaliza multiplicadores (`x` o `X` $\rightarrow$ `*`) y decimales colombianos (reemplazo seguro de `,` por `.`).
+  3. Valida contra whitelist estricta (`/^[\d\s.+\-*/()]+$/`), impidiendo ejecución arbitraria de código o inyecciones maliciosas.
+  4. Resuelve el cálculo en sandbox estricto, computando y redondeando el total a 4 decimales.
+- **Trazabilidad en Auditoría de Movimientos:** Cuando la celda se actualiza mediante una fórmula aritmética, la nota descriptiva en la tabla `inventory_movements` almacena el valor liquidado final junto con la fórmula original digitada (ej. `[AJUSTE AUTORIZADO - Supervisor] Columna G: 30,00 (Fórmula: =10+20)`), garantizando un rastro de auditoría 100% verificable.
 
 ---
 
@@ -4081,4 +4090,127 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
   4. Al consultar la jornada contable siguiente ($D+1$), el **Inventario Inicial (Columna E)** hereda exactamente el saldo de la **Columna U** (*Inventario en bodega [devoluciones]*) del cierre previo.
   5. Si el operador consulta una fecha futura o una fecha sin movimientos ni cierre previo, el sistema no clona ni arrastra el stock actual vivo de bodega; presenta saldo inicial cero ($0$) evitando distorsiones contables.
 
+#### Escenario 94: Evaluación de Operaciones Aritméticas Básicas Inline en Celdas de la Hoja Manual de Inventario
+- **Given** la Sábana Diaria de Balance de Masa en `/admin/commercial/inventory` con el modo **Hoja Manual** activado (`sheetMode === 'manual_edit'`).
+- **When** un supervisor autorizado hace clic sobre una celda editable (ej. Compras Columna G, Devoluciones Columna O o Corrección Columna F).
+- **And** digita una expresión matemática básica con o sin signo igual (ej. `=10+20`, `+15-5`, o `2*10`) y presiona `Enter` o `Tab`.
+- **Then**:
+  1. El sistema intercepta el valor mediante `evaluateExcelExpression` antes de persistir.
+  2. Valida la expresión en sandbox estricto contra caracteres no autorizados.
+  3. Evalúa la suma, resta, multiplicación o división matemática y totaliza automáticamente (ej. computando `30`).
+  4. Persiste el valor final de forma idempotente en `inventory_movements`.
+  5. Inserta en el registro de auditoría (`notes`) la traza del ajuste junto a la fórmula original digitada: `[AJUSTE AUTORIZADO - ...] Columna G: 30,00 (Fórmula: =10+20)`.
+  6. Si la celda recibe una entrada inválida o vacía, mantiene el estándar canónico o retorna 0 sin romper el ciclo de vida del componente.
 
+---
+
+## 23. MÓDULO DE TALENTO HUMANO, GESTIÓN DE COLABORADORES & DEDUCCIONES DE NÓMINA (`/admin/hr`) (SDD v1.9.58)
+
+### 23.1 Misión del Dominio de Talento Humano & Principio de Trazabilidad Salarial
+El módulo de Talento Humano centraliza la administración del capital humano de FruFresco (personal operativo de planta, alistadores, conductores de distribución, líderes de celda, auxiliares contables y personal administrativo), asegurando:
+1. **Directorio Unificado de Personal (`collaborators` & `profiles`):** Registro de hoja de vida operativa, cargos, sedes/especialidades, tipificación contractual (fijos vs temporales) y emisión de credenciales digitales o carnets físicos con tokens QR criptográficos para control de acceso y enrolamiento en terminales de báscula.
+2. **Principio Rector de Cruce de Nómina (Cero Descalce Inventario ⇄ Salarios):**
+   > *«Todo producto extraído físicamente de bodega por concepto de consumo personal o venta a colaborador (Columna N de la Sábana Diaria de Inventario) constituye un anticipo o deducción obligatoria de nómina. Ningún movimiento de venta a empleado puede quedar huérfano de identidad ('Empleado no especificado'). El sistema garantiza la trazabilidad bidireccional entre el balance de masa de inventarios y el pasivo liquidable en nómina por el área de Talento Humano.»*
+
+### 23.2 Modelo de Entidades & Contrato de Datos
+
+#### 1. Entidad Colaborador (`collaborators` y `profiles` staff)
+- `id`: UUID identificador primario del trabajador.
+- `contact_name`: Nombre y apellidos completos del colaborador.
+- `document_id`: Cédula de ciudadanía o documento de identidad oficial.
+- `role`: Cargo formal dentro de la estructura corporativa (`CONDUCTOR`, `AUX DE BODEGA`, `LIDER DE INVENTARIO`, `AUX DE RUTA`, `COMPRADOR`, etc.).
+- `specialty`: Sede o frente de trabajo (`Sede Administrativa`, `Sede Operativa`, `Ruta Bogotá`, `BODEGA`, `LOGISTICA`, `Externo`).
+- `phone` / `contact_phone`: Número de contacto para mensajería y alertas operativas.
+- `email`: Correo institucional o personal (opcional para operarios de piso, obligatorio para cuentas con acceso web).
+- `is_active`: Estado binario de vigencia laboral.
+- `is_temporary`: Indicador de refuerzo estacional / temporal de cosecha.
+- `qr_token`: UUID criptográfico único persistido para escaneo en portería y báscula.
+
+#### 2. Entidad Movimiento de Consumo a Colaborador (`inventory_movements`)
+- `product_id`: SKU del producto agrícola o procesado adquirido por el empleado.
+- `warehouse_id`: Bodega de despacho (Bodega Central Bogotá).
+- `quantity`: Cantidad física deducida del inventario (almacenada con signo negativo, ej: `-3.00`).
+- `type`: `'exit'`.
+- `reference_type`: `'employee_sale'`.
+- `notes`: Cadena canónica estructurada con separador pipe (`|`) que encapsula:
+  `[AJUSTE AUTORIZADO - <Supervisor>] Columna N: <cant> | Empleado: <Nombre Colaborador> | Valor Nómina: $<total_cop> (Fórmula: <expresión_original>)`
+- `created_at`: Marca temporal ISO con la fecha contable del turno.
+
+### 23.3 Superbuscador Omnibox Universal en Deducciones de Nómina (`InventoryPayrollModal`)
+Siguiendo las directrices arquitectónicas de la skill `estandar-galerias-frufresco`:
+1. **Multi-Criterio Simultáneo:** Permite buscar concurrentemente por:
+   - Nombre o documento del Colaborador.
+   - Nombre del Producto o Categoría.
+   - Código interno o SKU precedido de `#` (ej. `#270`, `#663`).
+   - Fecha de compra (ej. `26 de sept`, `2026-09-28`).
+   - Valor monetario o cantidad.
+2. **Insensibilidad Semántica:** Normalización NFD para coincidencia exacta sin importar tildes (`Maracuya` encuentra `Maracuyá`) ni mayúsculas/minúsculas.
+3. **Multi-Término AND:** Permite consultas combinadas espaciadas (ej. `maracuya diana` valida que la fruta sea maracuyá y la colaboradora sea Diana).
+4. **Atajo Universal de Foco:** Tecla rápida `/` para enfocar la barra omnibox sin necesidad del ratón.
+
+### 23.4 Combobox Reactivo Autocomplete para Asignación de Colaboradores
+1. **Ergonomía de Entrada Dinámica (Búsqueda en Vivo):**
+   - Se erradica el dropdown tradicional estático (`<select>`).
+   - En su lugar, se implementa un **Combobox Reactivo Autocomplete**: un campo de texto interactivo con apertura de menú flotante filtrado en tiempo real conforme el usuario digita letras o números (nombre, cargo o cédula).
+2. **Doble Modalidad (Personal Registrado vs Operario Temporal):**
+   - El combobox despliega la lista instantánea de coincidencias de colaboradores activos (`collaborators` y `profiles` staff).
+   - Si se trata de un jornalero, transportador provisional o persona recién ingresada que aún no cuenta con ficha en el sistema, el combobox permite registrar y confirmar el nombre en texto libre (*"Asignar como nuevo operario: [Nombre]"*).
+3. **Asignación Rápida con 1 Clic en Filas No Asignadas:**
+   - En la tabla de deducciones, cada renglón que presente el estado `👤 Empleado no especificado` cuenta con un control interactivo `[✏️ Asignar Colaborador]`. Al seleccionarlo y confirmar, el sistema actualiza de forma atómica el campo `notes` en `inventory_movements`, eliminando la fricción y resolviendo los saldos pendientes sin recargar la pantalla.
+4. **Botón `[+ Registrar Venta a Empleado]`:**
+   - La cabecera del modal incorpora un botón de registro directo que abre un formulario ligero (Producto, Colaborador mediante el Combobox Reactivo, Cantidad y Precio) para asentar consumos sin tener que navegar por la sábana de 24 columnas.
+
+### 23.5 Gobernanza en la Sábana de Inventario (Hoja Manual • Columna N)
+1. **Captura Asistida:** Cuando el operador o auditor modifica una celda en la Columna N de la Sábana Diaria y confirma con `Enter` o `Tab`, el sistema no persiste el valor en silencio; activa el selector asistido con el Combobox Reactivo para vincular al trabajador responsable.
+2. **Idempotencia y Deshacer:** Si el valor de la celda se devuelve a `0`, el movimiento se suprime limpiamente tanto de inventarios como del reporte de nómina.
+
+### 23.6 Cruce de Deducciones & Cartera de Empleados en el Módulo de Talento Humano (`/admin/hr`)
+1. **Subpestaña de Deducciones de Bodega:** El módulo `/admin/hr` se enriquece con una vista especializada de **"Deducciones de Nómina & Consumos de Bodega"**.
+2. **Consolidado Quincenal por Trabajador:**
+   - Muestra el listado de colaboradores con compras vigentes en el corte seleccionado, su saldo total adeudado a la empresa y el desglose de ítems consumidos.
+3. **Exportación a Excel para Liquidación de Nómina:**
+   - Generación de libro `.xlsx` con columnas estandarizadas (Cédula, Nombre, Cargo, Total Deducir, Detalle de Artículos y Fechas) listo para el procesamiento de pagos en el software contable / nómina electrónica de FruFresco.
+
+---
+
+#### Escenario 95: Asignación Interactiva de Colaborador con Combobox Reactivo y Superbuscador Omnibox en Nómina
+- **Given** el modal de Deducciones de Nómina (`InventoryPayrollModal`) abierto desde la Sábana Diaria de Inventario.
+- **When** el analista de nómina visualiza registros con `👤 Empleado no especificado` generados por cargas masivas o ajustes de Columna N.
+- **And** hace clic en el selector interactivo de la fila o en el botón de registro de venta a empleado.
+- **Then**:
+  1. Se despliega el **Combobox Reactivo Autocomplete**, permitiendo tipear el nombre o rol del trabajador con filtrado instantáneo en vivo sobre el directorio de `collaborators` y `profiles`.
+  2. Si el trabajador no está en el catálogo, permite ingresar y confirmar el nombre en texto libre.
+  3. Al confirmar, el sistema actualiza de forma inmediata y atómica el registro en `inventory_movements` inyectando `Empleado: <Nombre Seleccionado>` y recalculando el valor de nómina.
+  4. La fila se refresca en pantalla con el nombre oficial del colaborador y los KPIs superiores (`Colaboradores con Compras`, `Total a Descontar`) se actualizan automáticamente.
+  5. El **Superbuscador Omnibox Universal** permite buscar por cualquier término (ej. `#663`, `huevos`, `maracuya`, `sept 26`) con filtrado inclusivo AND espaciado y tecla rápida `/`.
+
+#### Escenario 96: Cruce de Deducciones de Bodega y Consolidado Quincenal en el Módulo de Talento Humano (`/admin/hr`)
+- **Given** el módulo de Talento Humano en `/admin/hr`.
+- **When** el director o encargado de RRHH ingresa a la subpestaña o vista de **"Deducciones de Nómina"** y selecciona el rango quincenal de corte (ej. 16/09/2026 al 30/09/2026).
+- **Then**:
+  1. El sistema consulta todos los movimientos de `inventory_movements` con `reference_type = 'employee_sale'` dentro de dicho rango.
+  2. Consolida automáticamente los consumos por colaborador, exhibiendo el saldo total a descontar, número de transacciones y detalle de productos agrícolas adquiridos.
+  3. Identifica y alerta visualmente si existen transacciones rezagadas sin colaborador especificado para su subsanación antes del cierre de pagos.
+  4. Al presionar **`[📊 Exportar Consolidado Nómina (.xlsx)]`**, genera el archivo estructurado con cédulas, nombres, cargos y valores de descuento listos para aplicar a la nómina de la empresa.
+
+### 23.7 Sincronización Bidireccional de Fechas entre Sábana Diaria (24 Col) y Kardex / Movimientos (Solicitud 9)
+1. **Problema Operativo / Descalce de Navegación:**
+   - Previamente, al consultar una fecha específica en la Sábana Diaria (ej. 26/09/2026) y navegar a la pestaña **Movimientos / Kardex**, el filtro temporal por defecto era `'8days'` (ventana móvil acumulada de los últimos 8 días). Esto inducía al cliente o auditor a percibir un valor inflado o acumulado, creyendo erróneamente que las columnas de Entradas, Salidas y Flujo Neto no reflejaban el día consultado.
+2. **Sincronización Bidireccional de Estado (`sharedInventoryDate`):**
+   - La Sábana Diaria (`InventoryDailyBalanceTab`) y el Kardex (`InventoryAdminPage`) comparten un estado reactivo común de fecha `sharedInventoryDate`.
+   - Modificar la fecha en la Sábana Diaria propaga automáticamente el valor hacia el Kardex y viceversa.
+3. **Modo `selected_day` ("Día Sábana") como Predeterminado:**
+   - La pestaña Kardex incorpora la opción de rango `selected_day` (ej. `Día Sábana (26/09)`), permitiendo consultar con precisión quirúrgica las transacciones de las 00:00:00 a las 23:59:59 del día de operación activo.
+   - La columna de balance en la tabla se rotula dinámicamente como `Neto Día (DD/MM)` para despejar cualquier ambigüedad frente al acumulado semanal o stock consolidado de bodega.
+   - Selector directo de fecha integrado en la barra de herramientas del Kardex para navegar entre días sin requerir regresar a la sábana.
+
+#### Escenario 97: Sincronización de Fecha de Cuadre entre Sábana y Kardex (Solicitud 9)
+- **Given** el usuario ubicado en el módulo de Inventario (`/admin/commercial/inventory`).
+- **When** selecciona una fecha operativa en la Sábana Diaria (ej. 26 de septiembre de 2026).
+- **And** navega a la pestaña de **Movimientos / Kardex**.
+- **Then**:
+  1. El filtro temporal de movimientos se inicializa en modo `Día Sábana (26/09)`.
+  2. Las métricas de cabecera (`Total Entradas (+)`, `Total Salidas (-)`, `Flujo Neto`) y las columnas de la tabla totalizan estrictamente los movimientos ocurridos entre las 00:00:00 y las 23:59:59 del día 26 de septiembre.
+  3. El encabezado de la columna de flujo neto se actualiza a `Neto Día (26/09)`.
+  4. La columna `Stock en Bodega` aclara que corresponde a la existencia física en almacén, diferenciándola del balance neto del día.
+  5. Al cambiar la fecha desde el input de fecha del Kardex, la fecha compartida se sincroniza automáticamente con la Sábana Diaria.

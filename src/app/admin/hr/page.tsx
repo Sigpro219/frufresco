@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
     User, Users, Briefcase, FileText, Calendar, Plus, Search, Filter, Mail, Phone, 
     MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, 
     FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen,
-    QrCode, Printer, RefreshCw, Shield, Save, Check, AlertTriangle, Sparkles
+    QrCode, Printer, RefreshCw, Shield, Save, Check, AlertTriangle, Sparkles,
+    DollarSign, ChevronDown, ChevronUp, Edit3
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
@@ -124,6 +126,282 @@ export default function HRManagement() {
     const [saving, setSaving] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [printingUser, setPrintingUser] = useState<Profile | null>(null);
+
+    // ========================================================
+    // SUBMÓDULO DEDUCCIONES DE NÓMINA (COL N INVENTARIO)
+    // ========================================================
+    const [mainTab, setMainTab] = useState<'staff' | 'payroll_deductions'>('staff');
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const todayStr = now.toISOString().split('T')[0];
+
+    const [payrollStartDate, setPayrollStartDate] = useState(firstDayOfMonth);
+    const [payrollEndDate, setPayrollEndDate] = useState(todayStr);
+    const [payrollSales, setPayrollSales] = useState<any[]>([]);
+    const [loadingPayroll, setLoadingPayroll] = useState(false);
+    const [payrollSearch, setPayrollSearch] = useState('');
+    const [expandedCollab, setExpandedCollab] = useState<string | null>(null);
+    const [payrollAssigningRowId, setPayrollAssigningRowId] = useState<string | null>(null);
+    const [payrollAssignQuery, setPayrollAssignQuery] = useState('');
+    const [isSavingPayrollAssign, setIsSavingPayrollAssign] = useState(false);
+    const payrollSearchRef = useRef<HTMLInputElement>(null);
+
+    const normalizeSearch = (val: any): string => {
+        return (val || '')
+            .toString()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+    };
+
+    const fetchPayrollSales = useCallback(async () => {
+        setLoadingPayroll(true);
+        try {
+            const startIso = `${payrollStartDate}T00:00:00.000Z`;
+            const endIso = `${payrollEndDate}T23:59:59.999Z`;
+
+            const { data, error } = await supabase
+                .from('inventory_movements')
+                .select(`
+                    id, product_id, quantity, notes, created_at,
+                    products (id, name, sku, accounting_id, unit_of_measure, base_price)
+                `)
+                .eq('reference_type', 'employee_sale')
+                .gte('created_at', startIso)
+                .lte('created_at', endIso)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setPayrollSales(data || []);
+        } catch (err: any) {
+            console.error('Error fetching payroll sales in HR:', err);
+        } finally {
+            setLoadingPayroll(false);
+        }
+    }, [payrollStartDate, payrollEndDate]);
+
+    useEffect(() => {
+        if (mainTab === 'payroll_deductions') {
+            fetchPayrollSales();
+        }
+    }, [mainTab, fetchPayrollSales]);
+
+    // Atajo '/' para enfocar el Superbuscador de Nómina
+    useEffect(() => {
+        if (mainTab !== 'payroll_deductions') return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+                e.preventDefault();
+                payrollSearchRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [mainTab]);
+
+    const parsedPayrollRows = useMemo(() => {
+        return payrollSales.map((item: any) => {
+            const notes = item.notes || '';
+            let employee = 'Empleado no especificado';
+            let isUnassigned = true;
+
+            const empMatch = notes.match(/Empleado:\s*([^|]+)/i);
+            if (empMatch && empMatch[1].trim() && empMatch[1].trim().toLowerCase() !== 'empleado no especificado') {
+                employee = empMatch[1].trim();
+                isUnassigned = false;
+            }
+
+            const qty = Math.abs(item.quantity || 0);
+            const basePrice = item.products?.base_price || 0;
+            
+            let totalVal = Math.round(qty * basePrice);
+            const valMatch = notes.match(/Valor Nómina:\s*\$([0-9.,]+)/i);
+            if (valMatch) {
+                const parsed = parseInt(valMatch[1].replace(/\./g, ''), 10);
+                if (!isNaN(parsed)) totalVal = parsed;
+            }
+
+            return {
+                raw: item,
+                employee,
+                isUnassigned,
+                qty,
+                uom: item.products?.unit_of_measure || 'KG',
+                productName: item.products?.name || 'Producto Desconocido',
+                accountingId: item.products?.accounting_id || 'S/N',
+                sku: item.products?.sku || '',
+                unitPrice: basePrice,
+                totalVal,
+                date: new Date(item.created_at).toLocaleDateString('es-CO', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            };
+        });
+    }, [payrollSales]);
+
+    const filteredPayrollRows = useMemo(() => {
+        if (!payrollSearch.trim()) return parsedPayrollRows;
+
+        const rawQuery = payrollSearch.trim();
+        const orSegments = rawQuery.split(',').map(s => s.trim()).filter(Boolean);
+
+        return parsedPayrollRows.filter(r => {
+            const fullBlob = normalizeSearch([
+                r.employee,
+                r.productName,
+                r.accountingId,
+                `#${r.accountingId}`,
+                r.sku,
+                r.uom,
+                r.qty,
+                r.totalVal,
+                `$${r.totalVal}`,
+                r.date,
+                r.raw.notes || ''
+            ].join(' '));
+
+            return orSegments.some(segment => {
+                const andTokens = segment.split(/\s+/).map(normalizeSearch).filter(Boolean);
+                return andTokens.every(token => {
+                    if (token.startsWith('#')) {
+                        const idPart = token.substring(1);
+                        return normalizeSearch(r.accountingId).includes(idPart) || normalizeSearch(r.sku).includes(idPart);
+                    }
+                    return fullBlob.includes(token);
+                });
+            });
+        });
+    }, [parsedPayrollRows, payrollSearch]);
+
+    const consolidatedPayroll = useMemo(() => {
+        const groups: { [key: string]: { employee: string; isUnassigned: boolean; totalDeduction: number; totalQty: number; txCount: number; items: typeof parsedPayrollRows } } = {};
+
+        filteredPayrollRows.forEach(row => {
+            const key = row.employee.trim();
+            if (!groups[key]) {
+                groups[key] = {
+                    employee: row.employee,
+                    isUnassigned: row.isUnassigned,
+                    totalDeduction: 0,
+                    totalQty: 0,
+                    txCount: 0,
+                    items: []
+                };
+            }
+            groups[key].totalDeduction += row.totalVal;
+            groups[key].totalQty += row.qty;
+            groups[key].txCount += 1;
+            groups[key].items.push(row);
+        });
+
+        return Object.values(groups).sort((a, b) => b.totalDeduction - a.totalDeduction);
+    }, [filteredPayrollRows]);
+
+    const payrollTotalCOP = useMemo(() => filteredPayrollRows.reduce((acc, r) => acc + r.totalVal, 0), [filteredPayrollRows]);
+    const payrollTotalQty = useMemo(() => filteredPayrollRows.reduce((acc, r) => acc + r.qty, 0), [filteredPayrollRows]);
+    const payrollUnassignedCount = useMemo(() => filteredPayrollRows.filter(r => r.isUnassigned).length, [filteredPayrollRows]);
+    const payrollUniqueCollabs = useMemo(() => new Set(filteredPayrollRows.filter(r => !r.isUnassigned).map(r => r.employee.toLowerCase())).size, [filteredPayrollRows]);
+
+    const handleAssignPayrollInHR = async (rowId: string, collaboratorName: string, currentTotal: number) => {
+        if (!collaboratorName.trim()) return;
+        setIsSavingPayrollAssign(true);
+        try {
+            const targetRow = payrollSales.find(s => s.id === rowId);
+            if (!targetRow) return;
+
+            let currentNotes = targetRow.notes || '';
+            let newNotes = '';
+
+            if (currentNotes.includes('Empleado:')) {
+                newNotes = currentNotes.replace(/Empleado:\s*[^|]+/i, `Empleado: ${collaboratorName.trim()}`);
+            } else {
+                newNotes = currentNotes.trim() ? `${currentNotes} | Empleado: ${collaboratorName.trim()}` : `[VENTA NÓMINA] Empleado: ${collaboratorName.trim()}`;
+            }
+
+            if (!newNotes.includes('Valor Nómina:')) {
+                newNotes += ` | Valor Nómina: $${formatNumber(currentTotal)}`;
+            }
+
+            const { error } = await supabase
+                .from('inventory_movements')
+                .update({ notes: newNotes })
+                .eq('id', rowId);
+
+            if (error) throw error;
+
+            setPayrollSales(prev => prev.map(s => s.id === rowId ? { ...s, notes: newNotes } : s));
+            setPayrollAssigningRowId(null);
+            setPayrollAssignQuery('');
+            alert(`Colaborador "${collaboratorName.trim()}" asignado con éxito.`);
+        } catch (err: any) {
+            console.error('Error asignando colaborador en HR:', err);
+            alert('Error al asignar colaborador: ' + (err.message || 'Error en BD'));
+        } finally {
+            setIsSavingPayrollAssign(false);
+        }
+    };
+
+    const handleExportPayrollExcel = () => {
+        try {
+            const summaryData = consolidatedPayroll.map(c => {
+                const staffObj = users.find(u => normalizeSearch(u.contact_name) === normalizeSearch(c.employee));
+                return {
+                    'Colaborador': c.employee,
+                    'Cédula / Documento': staffObj?.document_id || 'N/A',
+                    'Cargo / Rol': staffObj?.role || 'Colaborador',
+                    'Sede / Especialidad': staffObj?.specialty || 'General',
+                    'Transacciones': c.txCount,
+                    'Kilos / Unidades': c.totalQty,
+                    'Total a Descontar COP': c.totalDeduction,
+                    'Estado Identificación': c.isUnassigned ? 'PENDIENTE ASIGNAR' : 'VERIFICADO'
+                };
+            });
+
+            summaryData.push({
+                'Colaborador': 'TOTAL CONSOLIDADO',
+                'Cédula / Documento': '',
+                'Cargo / Rol': '',
+                'Sede / Especialidad': '',
+                'Transacciones': filteredPayrollRows.length,
+                'Kilos / Unidades': payrollTotalQty,
+                'Total a Descontar COP': payrollTotalCOP,
+                'Estado Identificación': `${payrollUnassignedCount} pendientes`
+            });
+
+            const detailData = filteredPayrollRows.map(r => ({
+                'Fecha / Hora': r.date,
+                'Colaborador': r.employee,
+                'ID Contable': r.accountingId,
+                'SKU': r.sku,
+                'Producto': r.productName,
+                'Cantidad': r.qty,
+                'Unidad': r.uom,
+                'Precio Unitario COP': r.unitPrice,
+                'Total Deducir COP': r.totalVal,
+                'Notas Auditoría': r.raw.notes || ''
+            }));
+
+            const wb = XLSX.utils.book_new();
+            const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+            const wsDetail = XLSX.utils.json_to_sheet(detailData);
+
+            wsSummary['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 22 }];
+            wsDetail['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 12 }, { wch: 16 }, { wch: 32 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 20 }, { wch: 35 }];
+
+            XLSX.utils.book_append_sheet(wb, wsSummary, 'Consolidado_Nomina');
+            XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle_Compras_Bodega');
+
+            XLSX.writeFile(wb, `Consolidado_Nomina_FruFresco_${payrollStartDate}_al_${payrollEndDate}.xlsx`);
+        } catch (err: any) {
+            console.error('Error exportando Excel nómina en HR:', err);
+            alert('Error al exportar reporte: ' + err.message);
+        }
+    };
 
     useEffect(() => {
         const handleScroll = () => {
@@ -476,7 +754,71 @@ export default function HRManagement() {
                     </div>
                 </div>
 
+                {/* ========================================================
+                    SUBPESTAÑAS DE NAVEGACIÓN TALENTO HUMANO
+                ======================================================== */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.15rem', borderBottom: '1.5px solid #E2E8F0', paddingBottom: '2px', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('staff')}
+                        style={{
+                            padding: '0.55rem 1.15rem',
+                            borderRadius: '8px 8px 0 0',
+                            border: 'none',
+                            borderBottom: mainTab === 'staff' ? '3px solid #0D7A57' : '3px solid transparent',
+                            backgroundColor: mainTab === 'staff' ? '#EDF5F1' : 'transparent',
+                            color: mainTab === 'staff' ? '#0D7A57' : '#64748B',
+                            fontWeight: '800',
+                            fontSize: '0.84rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <Users size={16} />
+                        <span>Directorio de Personal ({users.length})</span>
+                    </button>
 
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('payroll_deductions')}
+                        style={{
+                            padding: '0.55rem 1.15rem',
+                            borderRadius: '8px 8px 0 0',
+                            border: 'none',
+                            borderBottom: mainTab === 'payroll_deductions' ? '3px solid #2563EB' : '3px solid transparent',
+                            backgroundColor: mainTab === 'payroll_deductions' ? '#EFF6FF' : 'transparent',
+                            color: mainTab === 'payroll_deductions' ? '#1D4ED8' : '#64748B',
+                            fontWeight: '800',
+                            fontSize: '0.84rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <DollarSign size={16} />
+                        <span>Deducciones de Nómina • Ventas Bodega (Col N)</span>
+                        {payrollUnassignedCount > 0 && (
+                            <span style={{
+                                backgroundColor: '#F59E0B',
+                                color: '#FFFFFF',
+                                fontSize: '0.65rem',
+                                fontWeight: '900',
+                                padding: '1px 6px',
+                                borderRadius: '10px'
+                            }}>
+                                {payrollUnassignedCount} pend.
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {mainTab === 'staff' && (
+                    <>
                 {/* ========================================================
                     KPI METRICS CARDS (5 TARJETAS COMPACTAS)
                 ======================================================== */}
@@ -1289,6 +1631,442 @@ export default function HRManagement() {
                         </table>
                     </div>
                 )}
+                </>
+            )}
+
+            {/* ========================================================
+                VISTA 2: DEDUCCIONES DE NÓMINA (COL N INVENTARIO)
+            ======================================================== */}
+            {mainTab === 'payroll_deductions' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {/* KPI CARDS (4 Tarjetas de Nómina) */}
+                    <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                        gap: '0.75rem' 
+                    }}>
+                        <div style={{ backgroundColor: '#FFFFFF', padding: '0.85rem 1.1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                            <div style={{ backgroundColor: '#EDF5F1', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57' }}>
+                                <DollarSign size={20} strokeWidth={2.4} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Total a Descontar Nómina</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>
+                                    ${payrollTotalCOP.toLocaleString('es-CO')}
+                                </div>
+                                <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>{filteredPayrollRows.length} compras auditadas</div>
+                            </div>
+                        </div>
+
+                        <div style={{ backgroundColor: '#FFFFFF', padding: '0.85rem 1.1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                            <div style={{ backgroundColor: '#F1F5F9', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1E293B' }}>
+                                <Briefcase size={20} strokeWidth={2.2} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Volumen Despachado</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#1E293B', fontVariantNumeric: 'tabular-nums' }}>
+                                    {payrollTotalQty.toFixed(2)}
+                                </div>
+                                <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Kilos / Unidades de bodega</div>
+                            </div>
+                        </div>
+
+                        <div style={{ backgroundColor: '#FFFFFF', padding: '0.85rem 1.1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                            <div style={{ backgroundColor: '#EFF6FF', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+                                <Users size={20} strokeWidth={2.2} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Colaboradores</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
+                                    {payrollUniqueCollabs}
+                                </div>
+                                <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Con compras registradas</div>
+                            </div>
+                        </div>
+
+                        <div style={{ 
+                            backgroundColor: payrollUnassignedCount > 0 ? '#FFFBEB' : '#FFFFFF', 
+                            padding: '0.85rem 1.1rem', 
+                            borderRadius: '12px', 
+                            border: payrollUnassignedCount > 0 ? '1.5px solid #FCD34D' : '1px solid #E2E8F0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.85rem',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}>
+                            <div style={{ backgroundColor: payrollUnassignedCount > 0 ? '#FEF3C7' : '#F1F5F9', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: payrollUnassignedCount > 0 ? '#B45309' : '#64748B' }}>
+                                <AlertCircle size={20} strokeWidth={2.2} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.66rem', fontWeight: '800', color: payrollUnassignedCount > 0 ? '#B45309' : '#64748B', textTransform: 'uppercase' }}>Por Asignar</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: payrollUnassignedCount > 0 ? '#D97706' : '#10B981', fontVariantNumeric: 'tabular-nums' }}>
+                                    {payrollUnassignedCount} pendientes
+                                </div>
+                                <div style={{ fontSize: '0.68rem', color: payrollUnassignedCount > 0 ? '#B45309' : '#94A3B8' }}>
+                                    {payrollUnassignedCount > 0 ? 'Requieren vincular colaborador' : '100% conciliado'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* TOOLBAR FLOTANTE DE NÓMINA (Filtros de Fecha + Superbuscador + Exportación) */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        backgroundColor: '#FFFFFF',
+                        padding: '0.75rem 1.1rem',
+                        borderRadius: '14px',
+                        border: '1px solid #E2E8F0',
+                        gap: '0.85rem',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                        flexWrap: 'wrap'
+                    }}>
+                        {/* Filtros de Fecha con Presets */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#475569' }}>Corte Nómina:</span>
+                            <input
+                                type="date"
+                                value={payrollStartDate}
+                                onChange={e => setPayrollStartDate(e.target.value)}
+                                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem', color: '#1E293B', outline: 'none' }}
+                            />
+                            <span style={{ fontSize: '0.78rem', color: '#94A3B8' }}>al</span>
+                            <input
+                                type="date"
+                                value={payrollEndDate}
+                                onChange={e => setPayrollEndDate(e.target.value)}
+                                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem', color: '#1E293B', outline: 'none' }}
+                            />
+                            <button
+                                type="button"
+                                onClick={fetchPayrollSales}
+                                style={{
+                                    padding: '0.4rem 0.75rem',
+                                    borderRadius: '6px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#F8FAFC',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    color: '#475569'
+                                }}
+                            >
+                                <RefreshCw size={13} className={loadingPayroll ? 'animate-spin' : ''} />
+                                <span>Actualizar</span>
+                            </button>
+                        </div>
+
+                        {/* Superbuscador Omnibox Universal */}
+                        <div style={{ position: 'relative', flex: 1, minWidth: '240px', maxWidth: '420px' }}>
+                            <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                            <input
+                                ref={payrollSearchRef}
+                                type="text"
+                                placeholder="Superbuscador: Colaborador, producto, #código, total... (Presiona '/')"
+                                value={payrollSearch}
+                                onChange={e => setPayrollSearch(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.45rem 4rem 0.45rem 2.2rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.8rem',
+                                    outline: 'none',
+                                    boxSizing: 'border-box'
+                                }}
+                            />
+                            {payrollSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => setPayrollSearch('')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '8px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        border: 'none',
+                                        background: '#E2E8F0',
+                                        borderRadius: '50%',
+                                        width: '18px',
+                                        height: '18px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        color: '#64748B'
+                                    }}
+                                >
+                                    <X size={12} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Botón Exportar a Excel */}
+                        <button
+                            type="button"
+                            onClick={handleExportPayrollExcel}
+                            disabled={filteredPayrollRows.length === 0}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#0D7A57',
+                                color: '#FFFFFF',
+                                fontSize: '0.8rem',
+                                fontWeight: '700',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.45rem',
+                                cursor: filteredPayrollRows.length === 0 ? 'not-allowed' : 'pointer',
+                                boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)',
+                                opacity: filteredPayrollRows.length === 0 ? 0.6 : 1
+                            }}
+                        >
+                            <FileSpreadsheet size={16} />
+                            <span>Exportar Nómina (.xlsx)</span>
+                        </button>
+                    </div>
+
+                    {/* TABLA CONSOLIDADA POR COLABORADOR */}
+                    <div style={{ backgroundColor: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Users size={16} color="#0D7A57" />
+                                <span>Consolidado de Descuentos por Colaborador ({consolidatedPayroll.length})</span>
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                                Haz clic en <span style={{ fontWeight: '700' }}>"Ver Detalle"</span> para inspeccionar cada artículo adquirido
+                            </div>
+                        </div>
+
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.82rem' }}>
+                                <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #CBD5E1' }}>
+                                    <tr>
+                                        <th style={{ padding: '0.7rem 1.25rem', textAlign: 'left', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Colaborador (Nómina)</th>
+                                        <th style={{ padding: '0.7rem 1rem', textAlign: 'center', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Transacciones</th>
+                                        <th style={{ padding: '0.7rem 1rem', textAlign: 'right', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Volumen (Kg/Un)</th>
+                                        <th style={{ padding: '0.7rem 1.25rem', textAlign: 'right', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Total a Deducir</th>
+                                        <th style={{ padding: '0.7rem 1.25rem', textAlign: 'center', fontWeight: '800', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loadingPayroll ? (
+                                        <tr>
+                                            <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                    <RefreshCw size={16} className="animate-spin" color="#0D7A57" />
+                                                    <span>Consultando deducciones de inventario...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : consolidatedPayroll.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                No se registran deducciones de nómina en este período.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        consolidatedPayroll.map(collab => {
+                                            const isExpanded = expandedCollab === collab.employee;
+                                            const staffObj = users.find(u => normalizeSearch(u.contact_name) === normalizeSearch(collab.employee));
+
+                                            return (
+                                                <React.Fragment key={collab.employee}>
+                                                    <tr style={{
+                                                        borderBottom: '1px solid #F1F5F9',
+                                                        backgroundColor: collab.isUnassigned ? '#FFFBEB' : (isExpanded ? '#F8FAFC' : '#FFFFFF'),
+                                                        transition: 'background 0.15s ease'
+                                                    }}>
+                                                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <div style={{
+                                                                    width: '32px',
+                                                                    height: '32px',
+                                                                    borderRadius: '8px',
+                                                                    backgroundColor: collab.isUnassigned ? '#FEF3C7' : '#EFF6FF',
+                                                                    color: collab.isUnassigned ? '#D97706' : '#2563EB',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center'
+                                                                }}>
+                                                                    {collab.isUnassigned ? <AlertCircle size={16} /> : <User size={16} />}
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ fontWeight: '800', color: collab.isUnassigned ? '#B45309' : '#0F172A', fontSize: '0.86rem' }}>
+                                                                        {collab.employee}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', gap: '6px', alignItems: 'center', marginTop: '1px' }}>
+                                                                        {staffObj?.document_id && <span>CC: {staffObj.document_id}</span>}
+                                                                        {staffObj?.role && (
+                                                                            <span style={{ backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '4px', fontWeight: '600' }}>
+                                                                                {staffObj.role}
+                                                                            </span>
+                                                                        )}
+                                                                        {collab.isUnassigned && (
+                                                                            <span style={{ backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.65rem' }}>
+                                                                                REQUIERE ASIGNAR
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: '700', color: '#475569' }}>
+                                                            <span style={{ backgroundColor: '#F1F5F9', padding: '3px 9px', borderRadius: '8px' }}>
+                                                                {collab.txCount} {collab.txCount === 1 ? 'compra' : 'compras'}
+                                                            </span>
+                                                        </td>
+
+                                                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: '800', color: '#1E293B', fontVariantNumeric: 'tabular-nums' }}>
+                                                            {collab.totalQty.toFixed(2)}
+                                                        </td>
+
+                                                        <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right', fontWeight: '900', color: '#0D7A57', fontSize: '0.95rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                            ${collab.totalDeduction.toLocaleString('es-CO')}
+                                                        </td>
+
+                                                        <td style={{ padding: '0.85rem 1.25rem', textAlign: 'center' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setExpandedCollab(isExpanded ? null : collab.employee)}
+                                                                style={{
+                                                                    padding: '0.35rem 0.75rem',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    backgroundColor: isExpanded ? '#0F172A' : '#FFFFFF',
+                                                                    color: isExpanded ? '#FFFFFF' : '#475569',
+                                                                    fontSize: '0.74rem',
+                                                                    fontWeight: '700',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                            >
+                                                                {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                                                <span>{isExpanded ? 'Ocultar' : 'Ver Detalle'}</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+
+                                                    {/* Subtabla Desplegable con los ítems adquiridos */}
+                                                    {isExpanded && (
+                                                        <tr>
+                                                            <td colSpan={5} style={{ padding: '0.75rem 1.5rem 1.25rem 1.5rem', backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                                                                <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                                                        <thead style={{ backgroundColor: '#F1F5F9', borderBottom: '1px solid #CBD5E1' }}>
+                                                                            <tr>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Fecha</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Producto</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Cantidad</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Tarifa Unit.</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>Total Deducir</th>
+                                                                                <th style={{ padding: '0.5rem 0.85rem', textAlign: 'left', fontWeight: '700', color: '#475569' }}>Asignación / Trazabilidad</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {collab.items.map(item => {
+                                                                                const isAssigningThis = payrollAssigningRowId === item.raw.id;
+                                                                                return (
+                                                                                    <tr key={item.raw.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem', color: '#64748B' }}>{item.date}</td>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem', fontWeight: '700', color: '#1E293B' }}>
+                                                                                            {item.productName}
+                                                                                        </td>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '700' }}>
+                                                                                            {item.qty.toFixed(2)} {item.uom}
+                                                                                        </td>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', color: '#64748B' }}>
+                                                                                            ${formatNumber(item.unitPrice)}
+                                                                                        </td>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>
+                                                                                            ${item.totalVal.toLocaleString('es-CO')}
+                                                                                        </td>
+                                                                                        <td style={{ padding: '0.5rem 0.85rem' }}>
+                                                                                            {isAssigningThis ? (
+                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                                    <input
+                                                                                                        type="text"
+                                                                                                        autoFocus
+                                                                                                        placeholder="Nombre colaborador..."
+                                                                                                        value={payrollAssignQuery}
+                                                                                                        onChange={e => setPayrollAssignQuery(e.target.value)}
+                                                                                                        onKeyDown={e => {
+                                                                                                            if (e.key === 'Enter') handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal);
+                                                                                                            if (e.key === 'Escape') setPayrollAssigningRowId(null);
+                                                                                                        }}
+                                                                                                        style={{ padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1.5px solid #2563EB', fontSize: '0.75rem', outline: 'none' }}
+                                                                                                    />
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        disabled={isSavingPayrollAssign}
+                                                                                                        onClick={() => handleAssignPayrollInHR(item.raw.id, payrollAssignQuery, item.totalVal)}
+                                                                                                        style={{ padding: '3px 8px', borderRadius: '4px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
+                                                                                                    >
+                                                                                                        {isSavingPayrollAssign ? '...' : 'OK'}
+                                                                                                    </button>
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => setPayrollAssigningRowId(null)}
+                                                                                                        style={{ padding: '3px 6px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                                                                    >
+                                                                                                        X
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            ) : (
+                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                                    <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                                                                        {item.raw.notes || 'Venta bodega'}
+                                                                                                    </span>
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => {
+                                                                                                            setPayrollAssigningRowId(item.raw.id);
+                                                                                                            setPayrollAssignQuery(item.isUnassigned ? '' : item.employee);
+                                                                                                        }}
+                                                                                                        style={{
+                                                                                                            background: 'none',
+                                                                                                            border: 'none',
+                                                                                                            color: '#2563EB',
+                                                                                                            cursor: 'pointer',
+                                                                                                            fontSize: '0.7rem',
+                                                                                                            fontWeight: '700',
+                                                                                                            textDecoration: 'underline'
+                                                                                                        }}
+                                                                                                        title="Cambiar o asignar colaborador"
+                                                                                                    >
+                                                                                                        [✏️ {item.isUnassigned ? 'Asignar' : 'Cambiar'}]
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                );
+                                                                            })}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
             </div>
 
             {/* MODAL EDITAR */}

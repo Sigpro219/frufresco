@@ -188,6 +188,8 @@ export interface DailyFamily {
 
 interface InventoryDailyBalanceTabProps {
     workCells: WorkCell[];
+    externalDate?: string;
+    onDateChange?: (date: string) => void;
 }
 
 const getCompactCellLabel = (name: string, shortName?: string | null): string => {
@@ -204,7 +206,7 @@ const getCompactCellLabel = (name: string, shortName?: string | null): string =>
     return name.split(/[,&/]/)[0].trim();
 };
 
-export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBalanceTabProps) {
+export default function InventoryDailyBalanceTab({ workCells, externalDate, onDateChange }: InventoryDailyBalanceTabProps) {
     const { user, profile } = useAuth();
 
     // Gobernanza SoD: Solo Yina Cortés (Jefatura de Inventario) o Superadmins tienen permiso de edición
@@ -228,8 +230,22 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
     }, [profile, user]);
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const balanceDateDefault = todayStr;
+    const balanceDateDefault = externalDate || todayStr;
     const [balanceDate, setBalanceDate] = useState<string>(balanceDateDefault);
+
+    useEffect(() => {
+        if (externalDate && externalDate !== balanceDate) {
+            setBalanceDate(externalDate);
+        }
+    }, [externalDate]);
+
+    const handleDateChange = (newDate: string) => {
+        setBalanceDate(newDate);
+        if (onDateChange) {
+            onDateChange(newDate);
+        }
+    };
+
     const [sheetMode, setSheetMode] = useState<'view' | 'manual_edit'>('view');
     const [selectedCell, setSelectedCell] = useState<string>('ALL');
 
@@ -1410,6 +1426,57 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         return isNaN(parsed) ? 0 : parsed;
     };
 
+    // Evaluador seguro de expresiones aritméticas tipo Excel (=10+20, +15-5, etc.)
+    const evaluateExcelExpression = (val: string | number | null | undefined): number => {
+        if (val === undefined || val === null || val === '') return 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+
+        let str = String(val).trim();
+        if (!str) return 0;
+
+        // Si empieza con '=', quitarlo
+        if (str.startsWith('=')) {
+            str = str.substring(1).trim();
+        }
+
+        // Si no contiene operadores aritméticos (+, -, *, /, x, X), usar el parseo directo colombiano
+        const hasOperators = /[+\-*/xX]/.test(str);
+        if (!hasOperators) {
+            return parseColombianInput(str);
+        }
+
+        // Normalizar operadores: 'x' o 'X' a '*'
+        let expr = str.replace(/x/gi, '*');
+
+        // Si tiene comas decimales, normalizarlas a puntos (ej: 2,5 + 3,5 -> 2.5 + 3.5)
+        expr = expr.replace(/,/g, '.');
+
+        // Validación estricta de seguridad: solo dígitos, espacios, puntos decimales, operadores y paréntesis
+        if (!/^[\d\s.+\-*/()]+$/.test(expr)) {
+            const fallback = parseColombianInput(str);
+            return isNaN(fallback) ? 0 : fallback;
+        }
+
+        try {
+            const result = new Function(`'use strict'; return (${expr});`)();
+            if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+                return parseFloat(result.toFixed(4));
+            }
+        } catch {
+            const sanitized = expr.replace(/[+\-*/]+$/, '');
+            try {
+                const result = new Function(`'use strict'; return (${sanitized});`)();
+                if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+                    return parseFloat(result.toFixed(4));
+                }
+            } catch {
+                return parseColombianInput(str);
+            }
+        }
+
+        return parseColombianInput(str);
+    };
+
     const numFormat = (n: number | null | undefined, decimals = 2) => {
         if (n === null || n === undefined || isNaN(n) || n === 0) return '-';
         return formatNumber(n, decimals);
@@ -1436,7 +1503,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
         }
 
         const { productId, colKey, initialValue, currentValue } = editingCell;
-        const newVal = parseColombianInput(currentValue);
+        const newVal = evaluateExcelExpression(currentValue);
 
         if (isNaN(newVal) || Math.abs(newVal - initialValue) < 0.0001) {
             setEditingCell(null);
@@ -1455,7 +1522,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
             let movType: 'entry' | 'exit' | 'adjustment' = 'adjustment';
             let refType: string = INVENTORY_MOVEMENT_SUBTYPES.CORRECTION;
             let qty = newVal;
-            let noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna ${colKey}: ${formatNumber(newVal, 2)}`;
+            const formulaAudit = (currentValue.trim() !== String(newVal) && /[+\-*/xX=]/.test(currentValue)) ? ` (Fórmula: ${currentValue.trim()})` : '';
+            let noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna ${colKey}: ${formatNumber(newVal, 2)}${formulaAudit}`;
 
             if (colKey === 'E' || colKey === 'F') {
                 movType = 'adjustment';
@@ -1490,6 +1558,26 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                 movType = 'exit';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.EMPLOYEE_SALE;
                 qty = -newVal;
+                const targetProd = products.find(p => p.id === productId);
+                const unitPrice = (targetProd as any)?.base_price || 0;
+                const totalPayroll = Math.round(newVal * unitPrice);
+
+                // Si ya existía un movimiento con colaborador asignado previamente en esta fecha, preservarlo
+                const existingEmpMov = movements.find(m => 
+                    m.product_id === productId && 
+                    m.reference_type === INVENTORY_MOVEMENT_SUBTYPES.EMPLOYEE_SALE &&
+                    (m.created_at || '').startsWith(balanceDate)
+                );
+                let preservedEmp = '';
+                if (existingEmpMov?.notes) {
+                    const match = existingEmpMov.notes.match(/Empleado:\s*([^|]+)/i);
+                    if (match && match[1].trim() && match[1].trim().toLowerCase() !== 'empleado no especificado') {
+                        preservedEmp = match[1].trim();
+                    }
+                }
+                const empPart = preservedEmp ? ` | Empleado: ${preservedEmp}` : ' | Empleado: Empleado no especificado';
+                const payrollPart = totalPayroll > 0 ? ` | Valor Nómina: $${formatNumber(totalPayroll)}` : '';
+                noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna N: ${formatNumber(newVal, 2)}${formulaAudit}${empPart}${payrollPart}`;
             } else if (colKey === 'O') {
                 movType = 'entry';
                 refType = 'route_return';
@@ -1625,6 +1713,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         type="text"
                         autoFocus
                         value={editingCell.currentValue}
+                        title="Permite operaciones tipo Excel (ej. =10+20 o +15-5). Presiona Enter para calcular y guardar."
                         onFocus={e => e.target.select()}
                         onChange={e => setEditingCell(prev => prev ? { ...prev, currentValue: e.target.value } : null)}
                         onKeyDown={e => {
@@ -1638,8 +1727,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                         onBlur={handleCommitCellEdit}
                         style={{
                             width: '100%',
-                            minWidth: '55px',
-                            maxWidth: '85px',
+                            minWidth: '65px',
+                            maxWidth: '110px',
                             padding: '2px 4px',
                             borderRadius: '4px',
                             border: '1.5px solid #0D7A57',
@@ -1650,7 +1739,8 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             backgroundColor: '#FFFFFF',
                             color: '#0F172A',
                             outline: 'none',
-                            boxShadow: '0 0 0 2px rgba(13, 122, 87, 0.25)'
+                            boxShadow: '0 0 0 2px rgba(13, 122, 87, 0.25)',
+                            boxSizing: 'border-box'
                         }}
                     />
                 </td>
@@ -2535,7 +2625,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                                 type="date"
                                 className="hide-native-date-picker-indicator"
                                 value={balanceDate}
-                                onChange={e => setBalanceDate(e.target.value)}
+                                onChange={e => handleDateChange(e.target.value)}
                                 onClick={(e) => {
                                     try {
                                         (e.target as any).showPicker?.();
@@ -2555,7 +2645,7 @@ export default function InventoryDailyBalanceTab({ workCells }: InventoryDailyBa
                             />
                             <button
                                 type="button"
-                                onClick={() => setBalanceDate(todayStr)}
+                                onClick={() => handleDateChange(todayStr)}
                                 style={{
                                     padding: '0.2rem 0.45rem',
                                     borderRadius: '5px',
