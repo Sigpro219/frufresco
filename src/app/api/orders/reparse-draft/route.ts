@@ -287,11 +287,22 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     // Load client exceptions / nicknames memory if profile is assigned
     let learnedMemory: any[] = [];
     if (draft.profile_id) {
-      const { data: memData } = await supabase
-        .from('product_nicknames')
-        .select('*')
-        .eq('customer_id', draft.profile_id);
-      if (memData) learnedMemory = memData;
+      try {
+        const [nicknamesRes, docMemRes] = await Promise.all([
+          supabase
+            .from('product_nicknames')
+            .select('*')
+            .eq('customer_id', draft.profile_id),
+          supabase
+            .from('document_learning_memory')
+            .select('*')
+            .eq('client_id', draft.profile_id)
+        ]);
+        if (nicknamesRes.data) learnedMemory.push(...nicknamesRes.data);
+        if (docMemRes.data) learnedMemory.push(...docMemRes.data);
+      } catch (memErr) {
+        console.warn('[reparse-draft] Error cargando memoria histórica:', memErr);
+      }
     }
 
     const cleanItems = (extractedData.items || []).filter(it => it.quantity > 0).map(it => {

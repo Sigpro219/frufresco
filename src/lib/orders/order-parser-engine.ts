@@ -330,15 +330,21 @@ export function findBestProductMatchDetails(
     .trim();
 
   // Prioridad 1: Memoria Histórica Aprendida para este Cliente
-  if (learnedMemory.length > 0) {
-    const memMatch = learnedMemory.find(m => 
-      m.normalized_text === cleanInput || 
-      (strippedInput && m.normalized_text === strippedInput) ||
-      cleanInput.includes(m.normalized_text) ||
-      m.normalized_text.includes(cleanInput)
-    );
+  if (Array.isArray(learnedMemory) && learnedMemory.length > 0) {
+    const memMatch = learnedMemory.find(m => {
+      if (!m) return false;
+      const memText = sanitizeDocText(m.normalized_text || m.nickname || m.raw_pdf_text || m.alias || '');
+      if (!memText) return false;
+      return (
+        memText === cleanInput || 
+        (strippedInput && memText === strippedInput) ||
+        cleanInput.includes(memText) ||
+        memText.includes(cleanInput)
+      );
+    });
     if (memMatch) {
-      const matchedProd = products.find(p => p.id === memMatch.matched_product_id);
+      const targetProdId = memMatch.matched_product_id || memMatch.product_id;
+      const matchedProd = products.find(p => p.id === targetProdId);
       if (matchedProd) {
         return {
           product: matchedProd,
