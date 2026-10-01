@@ -116,6 +116,7 @@ interface AgreementItem {
         unit_of_measure?: string;
         is_active?: boolean;
         category?: string;
+        sku?: string;
     };
 }
 
@@ -314,7 +315,6 @@ export default function CommercialAgreementsModule() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerSearchTerm, setDrawerSearchTerm] = useState('');
 
-    // Superbuscador Omnibox de Ítems de Acuerdo
     const filteredAgreementItems = useMemo(() => {
         if (!drawerSearchTerm.trim()) return agreementItems;
         return agreementItems.filter(item => matchesUniversalSearch(
@@ -324,8 +324,7 @@ export default function CommercialAgreementsModule() {
                 it.product_name || '',
                 (it.products?.accounting_id || '').toString(),
                 it.products?.category || '',
-                it.unit_of_measure || '',
-                it.notes || '',
+                it.products?.unit_of_measure || '',
                 it.products?.sku || ''
             ],
             it => it.products?.accounting_id || it.product_id
