@@ -1,10 +1,10 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.59 (Sincronización Bidireccional de Fechas entre Sábana Diaria 24 Col y Kardex / Movimientos, Rango selected_day, Columna Dinámica Neto Día, Escenario BDD 97)
+> **Versión:** 1.9.60 (Gobernanza de Ajustes del Sistema /admin/settings, Límite Máximo Hogar Contra Entrega max_order_hogar_cod a $400.000 COP, Poka-Yoke Checkout y Creación Manual, Escenarios BDD 98 y 99)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Dirección de Talento Humano, Nómina, Jefatura de Inventarios, Mesa de Control Logística & Facturación
+> **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
 
 ---
 
@@ -4214,3 +4214,59 @@ Siguiendo las directrices arquitectónicas de la skill `estandar-galerias-frufre
   3. El encabezado de la columna de flujo neto se actualiza a `Neto Día (26/09)`.
   4. La columna `Stock en Bodega` aclara que corresponde a la existencia física en almacén, diferenciándola del balance neto del día.
   5. Al cambiar la fecha desde el input de fecha del Kardex, la fecha compartida se sincroniza automáticamente con la Sábana Diaria.
+
+---
+
+## 24. Gobernanza de Ajustes del Sistema (`/admin/settings`) & Políticas de Control de Recaudo y Montos Límites por Segmento (SDD v1.9.60)
+
+### 24.1 Misión del Dominio de Ajustes Globales (`app_settings`)
+El módulo `/admin/settings` centraliza los parámetros maestros operativos, comerciales, logísticos y fiscales de la plataforma FruFresco. La persistencia se rige por la tabla `public.app_settings` (`key`, `value`, `description`), garantizando que cualquier cambio en políticas de servicio surta efecto inmediato en caliente sin requerir despliegues de código ni reinicios de servidor.
+
+### 24.2 Catálogo Canónico de Parámetros Operativos
+1. **`store_status`:** Estado de tienda (`open` / `closed`). Controla si los clientes pueden cursar pedidos en la tienda web.
+2. **`email_notifications_mode` & `email_sandbox_recipient`:** Gobernanza de correos salientes (`live`, `sandbox`, `disabled`).
+3. **`delivery_fee`:** Tarifa plana de flete estándar para envíos urbanos.
+4. **`min_order_hogar`:** Piso mínimo monetario para compras del segmento Hogar (B2C) (ej. $100.000 COP).
+5. **`min_order_institucional`:** Piso mínimo monetario para compras institucionales HORECA (B2B) (ej. $400.000 COP).
+6. **`max_order_hogar_cod` (NUEVO POKA-YOKE):** Monto máximo permitido para compras del segmento Hogar (B2C) bajo la modalidad de **Pago Contra Entrega** (`contra_entrega` / `Por Cobrar`), fijado en **$400.000 COP**.
+7. **`enable_b2b_lead_capture`:** Habilitación de formularios de prospección comercial en la tienda web.
+8. **`enable_cutoff_rules`:** Regla de corte de pedidos (5:00 PM) para programación de entregas en D+1 vs D+2.
+9. **`allow_sunday_deliveries` & `allow_holiday_deliveries`:** Parámetros de servicio para fines de semana y festivos en Colombia.
+10. **`packaging_fee_enabled`, `packaging_fee_percentage` & `packaging_fee_note`:** Gobernanza de cobro por canastillas o empaques plásticos en checkout.
+
+### 24.3 Política de Mitigación de Riesgo Financiero: Límite Máximo para Hogar Contra Entrega
+> **«En clientes del segmento Hogar (B2C), los pedidos pagaderos contra entrega (`contra_entrega`) conllevan un riesgo logístico y de seguridad crítico: el conductor no puede transportar sumas elevadas en efectivo ni asumir el riesgo de rechazo en puerta de cargas perecederas de alto valor. Por tanto, se establece un límite estricto de $400.000 COP (`max_order_hogar_cod`) para pedidos Hogar contra entrega. Cualquier pedido Hogar que supere este tope debe cancelarse obligatoriamente mediante pago electrónico anticipado (Wompi / PSE / Tarjeta / Transferencia Bancaria Verificada). Esta regla aplica con paridad 100% tanto en la tienda virtual (`/checkout`) como en el módulo de creación manual administrativa (`/admin/orders/create`).»**
+
+### 24.4 Mecanismos Poka-Yoke en Canales de Ingesta
+1. **Tienda Virtual Web (`src/app/checkout/page.tsx`):**
+   - Si `!isB2B` y `totalPrice > maxOrderHogarCod`:
+     - La tarjeta de "Pago Contra Entrega" se deshabilita visualmente (`opacity: 0.5`, `cursor: not-allowed`).
+     - Se conmuta automáticamente el método de pago activo a `wompi`.
+     - Se despliega una alerta visible informando que para compras superiores a $400.000 COP se requiere pago en línea anticipado.
+     - En el submit final, se valida estrictamente impidiendo la confirmación si se intenta forzar contra entrega.
+2. **Creación Manual en Panel Administrativo (`src/app/admin/orders/create/page.tsx`):**
+   - Cuando el operador selecciona el segmento `Hogar` (`clientType === 'B2C'`), se habilita y expone el selector de método de pago (`contra_entrega`, `transferencia`, `wompi`).
+   - Si el valor total del carrito supera `max_order_hogar_cod` y está seleccionado `contra_entrega`, el sistema despliega un banner de advertencia Poka-Yoke y bloquea la creación del pedido (`handleSubmit` y `handleDirectConfirmOrder`), exigiendo cambiar el método a `Transferencia Anticipada` o `Wompi / Link`.
+
+---
+
+#### Escenario 98: Restricción de Contra Entrega en Checkout Hogar para Montos Superiores al Límite
+- **Given** un cliente navegando la tienda web en el segmento Hogar (`B2C`).
+- **And** el parámetro `max_order_hogar_cod` configurado en `400000` en `app_settings`.
+- **When** el total del carrito de mercado supera los $400.000 COP (ej. $12.543.150 COP).
+- **Then**:
+  1. El sistema inhabilita la opción "Pago Contra Entrega".
+  2. Despliega un mensaje explicativo indicando que los pedidos contra entrega en Hogar aplican hasta $400.000 COP.
+  3. Obliga a seleccionar el método de pago online Wompi (PSE, Tarjeta o Nequi) para procesar la orden.
+  4. Impide la generación de la orden con estado "Por Cobrar".
+
+#### Escenario 99: Poka-Yoke en Creación Manual de Pedidos Hogar con Exceso de Monto Contra Entrega
+- **Given** un operador o comercial en el panel `/admin/orders/create`.
+- **When** monta un pedido para un cliente del segmento Hogar (`clientType === 'B2C'`).
+- **And** el valor total del pedido excede los $400.000 COP.
+- **And** el método de pago seleccionado es `contra_entrega`.
+- **Then**:
+  1. El sistema muestra una alerta de riesgo financiero en el resumen del pedido.
+  2. Al pulsar "Crear Pedido", se detiene el flujo y se notifica con un Toast de error: *"Los pedidos de Hogar contra entrega no pueden superar $400.000 COP. Por favor seleccione Transferencia Anticipada o Wompi / Link."*.
+  3. No se inserta ningún pedido en base de datos hasta que el método sea conmutado a pago anticipado.
+

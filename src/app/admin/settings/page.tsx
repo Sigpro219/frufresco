@@ -277,6 +277,7 @@ export default function AdminSettingsPage() {
             { key: 'email_notifications_mode', value: 'sandbox', description: 'Modo de Notificaciones por Correo Saliente' },
             { key: 'email_sandbox_recipient', value: 'auditoria.investment@gmail.com', description: 'Correo Destino para Modo Pruebas / Sandbox' },
             { key: 'min_order_hogar', value: '30000', description: 'Pedido mínimo para la Línea Hogar' },
+            { key: 'max_order_hogar_cod', value: '400000', description: 'Tope máximo para pedidos Hogar con pago Contra Entrega' },
             { key: 'min_order_institucional', value: '150000', description: 'Pedido mínimo para la Línea Institucional' },
             { key: 'enable_cutoff_rules', value: 'true', description: 'Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)' },
             { key: 'allow_sunday_deliveries', value: 'false', description: '¿Permitir entregas los Domingos?' },
@@ -647,7 +648,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -665,6 +666,7 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'email_notifications_mode' ? <><Mail size={14} style={{ color: 'var(--primary)' }} /> Notificaciones por Correo Saliente</> :
                                                  setting.key === 'email_sandbox_recipient' ? <><Mail size={14} style={{ color: '#D97706' }} /> Correo Destino Modo Pruebas (Sandbox)</> :
                                                  setting.key === 'min_order_hogar' ? 'Mínimo Hogar' :
+                                                 setting.key === 'max_order_hogar_cod' ? 'Máximo Hogar (Contra Entrega)' :
                                                  setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
                                                  setting.key === 'store_status' ? 'Estado Tienda' :
                                                  setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :

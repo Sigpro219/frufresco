@@ -28,6 +28,7 @@ import {
     Mail,
     Calendar,
     AlertCircle,
+    AlertTriangle,
     Info,
     X,
     ShieldCheck,
@@ -66,6 +67,7 @@ export default function CheckoutPage() {
     const [acceptHabeasData, setAcceptHabeasData] = useState(true);
     const [date, setDate] = useState('');
     const [minOrder, setMinOrder] = useState(0);
+    const [maxOrderHogarCod, setMaxOrderHogarCod] = useState(400000);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
@@ -298,9 +300,23 @@ export default function CheckoutPage() {
     };
 
     const handlePaymentMethodChange = (val: 'wompi' | 'contra_entrega') => {
+        if (val === 'contra_entrega' && !isB2B && totalPrice > maxOrderHogarCod) {
+            alert(locale === 'es' 
+                ? `Por políticas de seguridad, los pedidos para Hogar con pago contra entrega tienen un límite máximo de $${maxOrderHogarCod.toLocaleString('es-CO')}. Para pedidos superiores, por favor selecciona pago en línea con Wompi (PSE, Tarjeta o Nequi).`
+                : `For security reasons, Cash on Delivery for Household orders has a limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please select online payment via Wompi.`
+            );
+            return;
+        }
         setPaymentMethod(val);
         localStorage.setItem('checkout_payment_method', val);
     };
+
+    useEffect(() => {
+        if (!isB2B && totalPrice > maxOrderHogarCod && paymentMethod === 'contra_entrega') {
+            setPaymentMethod('wompi');
+            localStorage.setItem('checkout_payment_method', 'wompi');
+        }
+    }, [isB2B, totalPrice, maxOrderHogarCod, paymentMethod]);
 
     const handleNotesChange = (val: string) => {
         setSpecialNotes(val);
@@ -692,6 +708,17 @@ export default function CheckoutPage() {
                     .single();
                 if (minData) setMinOrder(parseInt(minData.value));
 
+                // 1b. Max Order Hogar COD
+                const { data: maxCodData } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'max_order_hogar_cod')
+                    .maybeSingle();
+                if (maxCodData?.value) {
+                    const parsed = parseInt(maxCodData.value, 10);
+                    if (!isNaN(parsed) && parsed > 0) setMaxOrderHogarCod(parsed);
+                }
+
                 // 2. Cutoff Rules
                 const { data: cutoffData } = await supabase
                     .from('app_settings')
@@ -774,8 +801,13 @@ export default function CheckoutPage() {
         if (!identification || !identification.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Identificación.' : 'Please enter your ID Number.');
         if (!phone || !phone.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.');
         if (!email || !email.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
-        if (!address || !address.trim()) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
         if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
+        if (!isB2B && paymentMethod === 'contra_entrega' && totalPrice > maxOrderHogarCod) {
+            return alert(locale === 'es' 
+                ? `Por políticas de seguridad, los pedidos para Hogar con pago contra entrega tienen un límite máximo de $${maxOrderHogarCod.toLocaleString('es-CO')}. Para este pedido de $${totalPrice.toLocaleString('es-CO')}, por favor selecciona el método Wompi (pago seguro online).`
+                : `For security reasons, Cash on Delivery for Household orders has a limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please select online payment via Wompi.`
+            );
+        }
         if (outOfZone) {
             fetch('/api/coverage/out-of-bounds', {
                 method: 'POST',
@@ -2635,46 +2667,93 @@ export default function CheckoutPage() {
                                     </div>
 
                                     {/* Opción Contra Entrega */}
-                                    <div 
-                                        onClick={() => handlePaymentMethodChange('contra_entrega')}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            padding: '1rem',
-                                            borderRadius: '16px',
-                                            border: `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'rgba(0,0,0,0.06)'}`,
-                                            backgroundColor: paymentMethod === 'contra_entrega' ? 'rgba(5, 150, 105, 0.03)' : 'white',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            boxShadow: paymentMethod === 'contra_entrega' ? '0 4px 20px rgba(5, 150, 105, 0.05)' : 'none'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <div style={{
-                                                width: '20px',
-                                                height: '20px',
-                                                borderRadius: '50%',
-                                                border: `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#CBD5E1'}`,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                backgroundColor: paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'transparent',
-                                                transition: 'all 0.2s'
-                                            }}>
-                                                {paymentMethod === 'contra_entrega' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                    {locale === 'es' ? 'Pago Contra Entrega' : 'Cash on Delivery'}
+                                    {(() => {
+                                        const isCodExceeded = !isB2B && totalPrice > maxOrderHogarCod;
+                                        return (
+                                            <>
+                                                <div 
+                                                    onClick={() => handlePaymentMethodChange('contra_entrega')}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        padding: '1rem',
+                                                        borderRadius: '16px',
+                                                        border: isCodExceeded 
+                                                            ? '2px dashed #E2E8F0' 
+                                                            : `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'rgba(0,0,0,0.06)'}`,
+                                                        backgroundColor: isCodExceeded 
+                                                            ? '#F8FAFC' 
+                                                            : (paymentMethod === 'contra_entrega' ? 'rgba(5, 150, 105, 0.03)' : 'white'),
+                                                        cursor: isCodExceeded ? 'not-allowed' : 'pointer',
+                                                        opacity: isCodExceeded ? 0.55 : 1,
+                                                        transition: 'all 0.2s ease',
+                                                        boxShadow: (!isCodExceeded && paymentMethod === 'contra_entrega') ? '0 4px 20px rgba(5, 150, 105, 0.05)' : 'none'
+                                                    }}
+                                                    title={isCodExceeded ? `Límite máximo para contra entrega en Hogar: $${maxOrderHogarCod.toLocaleString('es-CO')}` : undefined}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                        <div style={{
+                                                            width: '20px',
+                                                            height: '20px',
+                                                            borderRadius: '50%',
+                                                            border: `2px solid ${!isCodExceeded && paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#CBD5E1'}`,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            backgroundColor: !isCodExceeded && paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'transparent',
+                                                            transition: 'all 0.2s'
+                                                        }}>
+                                                            {!isCodExceeded && paymentMethod === 'contra_entrega' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />}
+                                                        </div>
+                                                        <div>
+                                                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: isCodExceeded ? '#94A3B8' : '#1E293B', fontFamily: 'var(--font-outfit), sans-serif', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span>{locale === 'es' ? 'Pago Contra Entrega' : 'Cash on Delivery'}</span>
+                                                                {isCodExceeded && (
+                                                                    <span style={{ fontSize: '0.68rem', backgroundColor: '#FEE2E2', color: '#991B1B', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                        Límite Excedido
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', color: isCodExceeded ? '#DC2626' : '#64748B', fontWeight: isCodExceeded ? '700' : '500', marginTop: '2px', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                                                {isCodExceeded
+                                                                    ? (locale === 'es' 
+                                                                        ? `Tope superado (Máx $${maxOrderHogarCod.toLocaleString('es-CO')} en Hogar). Paga online.` 
+                                                                        : `Exceeds max limit ($${maxOrderHogarCod.toLocaleString('en-US')}). Pay online.`)
+                                                                    : (locale === 'es' 
+                                                                        ? 'Paga en efectivo o transferencia al recibir' 
+                                                                        : 'Pay with cash or bank transfer on receipt.')}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <Truck size={20} color={!isCodExceeded && paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#94A3B8'} style={{ opacity: isCodExceeded ? 0.4 : 0.8 }} />
                                                 </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '500', marginTop: '2px', fontFamily: 'var(--font-inter), sans-serif' }}>
-                                                    {locale === 'es' ? 'Paga en efectivo o transferencia al recibir' : 'Pay with cash or bank transfer on receipt.'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <Truck size={20} color={paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#94A3B8'} style={{ opacity: 0.8 }} />
-                                    </div>
+
+                                                {isCodExceeded && (
+                                                    <div style={{
+                                                        marginTop: '0.55rem',
+                                                        padding: '0.7rem 0.9rem',
+                                                        backgroundColor: '#FEF2F2',
+                                                        border: '1px solid #FECACA',
+                                                        borderRadius: '12px',
+                                                        color: '#991B1B',
+                                                        fontSize: '0.78rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        lineHeight: 1.4
+                                                    }}>
+                                                        <AlertTriangle size={16} style={{ flexShrink: 0, color: '#DC2626' }} />
+                                                        <span>
+                                                            {locale === 'es' 
+                                                                ? `Por políticas de seguridad, los pedidos para Hogar con pago contra entrega tienen un tope máximo de $${maxOrderHogarCod.toLocaleString('es-CO')}. Para compras superiores, debes pagar online con Wompi (PSE, Tarjeta o Nequi).`
+                                                                : `For security reasons, Cash on Delivery for Household orders has a maximum limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please pay online via Wompi.`}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 

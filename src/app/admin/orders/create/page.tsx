@@ -573,6 +573,7 @@ function CreateOrderContent() {
 
     // Payment Method State
     const [paymentMethod, setPaymentMethod] = useState('contra_entrega');
+    const [maxOrderHogarCod, setMaxOrderHogarCod] = useState(400000);
 
     // Search States
     const [productSearch, setProductSearch] = useState('');
@@ -596,11 +597,16 @@ function CreateOrderContent() {
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod']);
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
                 const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
                 const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+                const maxCodVal = settingsData?.find(s => s.key === 'max_order_hogar_cod')?.value;
+                if (maxCodVal) {
+                    const parsed = parseInt(maxCodVal, 10);
+                    if (!isNaN(parsed) && parsed > 0) setMaxOrderHogarCod(parsed);
+                }
 
                 const now = new Date();
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -3760,6 +3766,12 @@ function CreateOrderContent() {
                 }
             }
 
+            // GAP-01b: Control de Riesgo y Límite Contra Entrega para Hogar (B2C)
+            if (clientType === 'B2C' && paymentMethod === 'contra_entrega' && total > maxOrderHogarCod) {
+                showToast(`❌ Límite Excedido: Los pedidos para Hogar con pago Contra Entrega no pueden superar ${formatMoney(maxOrderHogarCod)}. Por favor cambia el método a "Transferencia Anticipada" o "Wompi / Link".`, 'error');
+                return;
+            }
+
             let finalShippingAddress = 'Dirección Registrada';
             if (clientType === 'B2B') {
                 finalShippingAddress = clientDetails?.address || 'Dirección Registrada';
@@ -4319,6 +4331,14 @@ function CreateOrderContent() {
 
             } else {
                 if (!selectedClientB2C) return showToast('Debes buscar y seleccionar un cliente B2C existente.');
+            }
+
+            // B2C Payment Method & COD Limit Validation
+            if (paymentMethod === 'contra_entrega') {
+                const orderTotal = calculateTotal();
+                if (orderTotal > maxOrderHogarCod) {
+                    return showToast(`❌ Límite Excedido: Los pedidos para Hogar con pago Contra Entrega no pueden superar ${formatMoney(maxOrderHogarCod)}. Por favor cambia el método de pago a "Transferencia Anticipada" o "Wompi / Link".`, 'error');
+                }
             }
         }
 
@@ -8498,6 +8518,70 @@ function CreateOrderContent() {
                                         </span>
                                     </div>
                                 </div>
+
+                                {clientType === 'B2C' && (
+                                    <div style={{
+                                        marginBottom: '1rem',
+                                        padding: '0.75rem',
+                                        backgroundColor: '#F8FAFC',
+                                        borderRadius: '10px',
+                                        border: '1px solid #E2E8F0'
+                                    }}>
+                                        <label style={{
+                                            display: 'block',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '800',
+                                            color: '#334155',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.04em',
+                                            marginBottom: '0.35rem'
+                                        }}>
+                                            Método de Pago (Hogar)
+                                        </label>
+                                        <select
+                                            value={paymentMethod}
+                                            onChange={(e) => setPaymentMethod(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.45rem 0.65rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid #CBD5E1',
+                                                fontSize: '0.82rem',
+                                                fontWeight: '700',
+                                                color: '#1E293B',
+                                                backgroundColor: '#FFFFFF',
+                                                outline: 'none',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <option value="contra_entrega">🚚 Contra Entrega (Efectivo / Datáfono)</option>
+                                            <option value="transferencia">🏦 Transferencia Anticipada</option>
+                                            <option value="wompi">💳 Wompi / Link Digital</option>
+                                        </select>
+
+                                        {/* ALERTA POKA-YOKE SI EXCEDE TOPE HOGAR CONTRA ENTREGA */}
+                                        {paymentMethod === 'contra_entrega' && calculateTotal() > maxOrderHogarCod && (
+                                            <div style={{
+                                                marginTop: '0.5rem',
+                                                padding: '0.5rem 0.65rem',
+                                                backgroundColor: '#FEE2E2',
+                                                border: '1px solid #FCA5A5',
+                                                borderRadius: '8px',
+                                                color: '#991B1B',
+                                                fontSize: '0.74rem',
+                                                lineHeight: 1.35,
+                                                display: 'flex',
+                                                alignItems: 'flex-start',
+                                                gap: '6px'
+                                            }}>
+                                                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px', color: '#DC2626' }} />
+                                                <span>
+                                                    <strong>Tope Excedido:</strong> Pedidos Hogar contra entrega aplican hasta {formatMoney(maxOrderHogarCod)}. Por favor cambia a <strong>Transferencia</strong> o <strong>Wompi</strong>.
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <button
                                     onClick={handleSubmit}

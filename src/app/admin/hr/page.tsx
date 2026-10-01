@@ -206,10 +206,18 @@ export default function HRManagement() {
             let employee = 'Empleado no especificado';
             let isUnassigned = true;
 
-            const empMatch = notes.match(/Empleado:\s*([^|]+)/i);
-            if (empMatch && empMatch[1].trim() && empMatch[1].trim().toLowerCase() !== 'empleado no especificado') {
-                employee = empMatch[1].trim();
-                isUnassigned = false;
+            const isNumericString = (str: string) => /^[-+]?[0-9]+([.,][0-9]+)?$/.test(str.trim());
+            const empMatch = notes.match(/(?:\|\s*)?Empleado:\s*([^|]+)/i);
+            if (empMatch) {
+                const candidate = empMatch[1].trim();
+                if (
+                    candidate && 
+                    candidate.toLowerCase() !== 'empleado no especificado' && 
+                    !isNumericString(candidate)
+                ) {
+                    employee = candidate;
+                    isUnassigned = false;
+                }
             }
 
             const qty = Math.abs(item.quantity || 0);
@@ -2043,7 +2051,10 @@ export default function HRManagement() {
                                                                                                         }}
                                                                                                         title="Cambiar o asignar colaborador"
                                                                                                     >
-                                                                                                        [✏️ {item.isUnassigned ? 'Asignar' : 'Cambiar'}]
+                                                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                                            <Edit3 size={11} />
+                                                                                                            <span>{item.isUnassigned ? 'Asignar' : 'Cambiar'}</span>
+                                                                                                        </span>
                                                                                                     </button>
                                                                                                 </div>
                                                                                             )}
