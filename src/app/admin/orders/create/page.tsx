@@ -703,12 +703,18 @@ function CreateOrderContent() {
             return defaultResults;
         }
 
+        const phoneticQuery = cleanQuery.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
+        const queryTokens = phoneticQuery.split(/\s+/).filter(Boolean);
+
         const matched = eligibleProducts.filter(p => {
             const normName = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const phoneticName = normName.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
             const normSku = (p.sku || '').toLowerCase();
             const normAcc = (getAccountingIdDisplay(p) || '').toLowerCase();
+            const normKeywords = ((p as any).keywords || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/z/g, 's');
             const exc = clientExceptions.find(e => e.product_id === p.id);
             const normNickname = exc?.nickname ? exc.nickname.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+            const phoneticNickname = normNickname.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
 
             if (extractedId && (normAcc === extractedId || normSku === extractedId)) {
                 return true;
@@ -716,10 +722,38 @@ function CreateOrderContent() {
 
             if (!cleanQuery) return false;
 
-            return normName.includes(cleanQuery) ||
-                   normSku.includes(cleanQuery) ||
-                   normAcc.includes(cleanQuery) ||
-                   normNickname.includes(cleanQuery);
+            // 1. Coincidencia contigua directa
+            if (
+                normName.includes(cleanQuery) ||
+                normSku.includes(cleanQuery) ||
+                normAcc.includes(cleanQuery) ||
+                normNickname.includes(cleanQuery)
+            ) {
+                return true;
+            }
+
+            // 2. Coincidencia fonética (ej. tusa <-> tuza)
+            if (
+                phoneticName.includes(phoneticQuery) ||
+                phoneticNickname.includes(phoneticQuery) ||
+                normKeywords.includes(phoneticQuery)
+            ) {
+                return true;
+            }
+
+            // 3. Coincidencia multi-token (todas las palabras coinciden en cualquier orden)
+            if (queryTokens.length > 0) {
+                const matchesAll = queryTokens.every(tok => 
+                    phoneticName.includes(tok) ||
+                    phoneticNickname.includes(tok) ||
+                    normKeywords.includes(tok) ||
+                    normSku.includes(tok) ||
+                    normAcc.includes(tok)
+                );
+                if (matchesAll) return true;
+            }
+
+            return false;
         });
 
         if (matched.length === 0) {
@@ -742,14 +776,19 @@ function CreateOrderContent() {
             const wordsB = normNameB.split(/\s+/).filter(Boolean);
             const queryWords = cleanQuery.split(/\s+/).filter(Boolean);
 
+            const phoneticA = normNameA.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
+            const phoneticB = normNameB.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
+            const phoneticWordsA = phoneticA.split(/\s+/).filter(Boolean);
+            const phoneticWordsB = phoneticB.split(/\s+/).filter(Boolean);
+
             if (queryWords.length > 0) {
-                const hasAllWordsA = queryWords.every(qw => wordsA.includes(qw));
-                const hasAllWordsB = queryWords.every(qw => wordsB.includes(qw));
+                const hasAllWordsA = queryWords.every(qw => wordsA.includes(qw)) || queryTokens.every(qt => phoneticWordsA.includes(qt));
+                const hasAllWordsB = queryWords.every(qw => wordsB.includes(qw)) || queryTokens.every(qt => phoneticWordsB.includes(qt));
                 if (hasAllWordsA) scoreA += 10000;
                 if (hasAllWordsB) scoreB += 10000;
 
-                if (wordsA[0] === queryWords[0]) scoreA += 5000;
-                if (wordsB[0] === queryWords[0]) scoreB += 5000;
+                if (wordsA[0] === queryWords[0] || (phoneticWordsA[0] && phoneticWordsA[0] === queryTokens[0])) scoreA += 5000;
+                if (wordsB[0] === queryWords[0] || (phoneticWordsB[0] && phoneticWordsB[0] === queryTokens[0])) scoreB += 5000;
             }
 
             if (extractedId) {
