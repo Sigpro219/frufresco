@@ -570,18 +570,9 @@ export default function BillingDashboard() {
         const d = new Date();
         d.setDate(d.getDate() + offsetDays);
         return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(d);
-    const [selectedBillingDate, setSelectedBillingDate] = useState<string>(getBogotaDate(0));
-    const dateInputRef = useRef<HTMLInputElement>(null);
-
-    const handleOpenDatePicker = () => {
-        if (dateInputRef.current) {
-            try {
-                dateInputRef.current.showPicker?.();
-            } catch {
-                dateInputRef.current.focus();
-            }
-        }
     };
+
+    const [selectedBillingDate, setSelectedBillingDate] = useState<string>(getBogotaDate(0));
     const { profile, loading: authLoading } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
     const [permissionsLoaded, setPermissionsLoaded] = useState(false);
@@ -2604,71 +2595,72 @@ export default function BillingDashboard() {
                                         >
                                             Todas
                                         </button>
-                                        {/* COM-32: Selector de fecha extemporáneo con Poka-Yoke & Lucide Icons */}
+                                        {/* COM-32: Selector de fecha extemporáneo con Lucide Icons */}
                                         {(() => {
                                             const isCustomDate = selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
                                             return (
                                                 <div
-                                                    title="Seleccionar fecha específica (festivos, fines de semana, días anteriores)"
-                                                    onClick={handleOpenDatePicker}
+                                                    title="Seleccionar fecha histórica de despacho"
                                                     style={{
-                                                        position: 'relative',
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '4px',
-                                                        padding: '2px 7px',
+                                                        padding: '1px 6px',
                                                         borderRadius: '4px',
-                                                        fontSize: '0.66rem',
-                                                        fontWeight: isCustomDate ? '800' : '600',
-                                                        backgroundColor: isCustomDate ? '#0D7A57' : 'transparent',
-                                                        color: isCustomDate ? 'white' : '#475569',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s',
-                                                        userSelect: 'none'
+                                                        backgroundColor: isCustomDate ? '#0D7A57' : '#FFFFFF',
+                                                        border: isCustomDate ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                        transition: 'all 0.15s'
                                                     }}
                                                 >
-                                                    <Calendar size={11} strokeWidth={2} style={{ flexShrink: 0 }} />
-                                                    <span>{isCustomDate ? selectedBillingDate : 'Otra fecha'}</span>
+                                                    <Calendar size={11} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
+                                                    <input
+                                                        type="date"
+                                                        max={getBogotaDate(0)}
+                                                        value={isCustomDate ? selectedBillingDate : ''}
+                                                        onChange={(e) => {
+                                                            if (e.target.value) {
+                                                                setSelectedBillingDate(e.target.value);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            border: 'none',
+                                                            outline: 'none',
+                                                            backgroundColor: 'transparent',
+                                                            color: isCustomDate ? '#FFFFFF' : '#334155',
+                                                            fontSize: '0.66rem',
+                                                            fontWeight: isCustomDate ? '800' : '600',
+                                                            cursor: 'pointer',
+                                                            padding: 0,
+                                                            fontFamily: 'inherit',
+                                                            width: isCustomDate ? '88px' : '82px'
+                                                        }}
+                                                    />
                                                     {isCustomDate && (
-                                                        <span
-                                                            role="button"
+                                                        <button
+                                                            type="button"
                                                             title="Restablecer tanda a Hoy"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 setSelectedBillingDate(getBogotaDate(0));
                                                             }}
                                                             style={{
-                                                                marginLeft: '2px',
+                                                                border: 'none',
+                                                                background: 'rgba(255, 255, 255, 0.25)',
+                                                                color: 'white',
+                                                                borderRadius: '50%',
+                                                                width: '13px',
+                                                                height: '13px',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
-                                                                width: '13px',
-                                                                height: '13px',
-                                                                borderRadius: '50%',
-                                                                backgroundColor: 'rgba(255,255,255,0.25)',
-                                                                cursor: 'pointer'
+                                                                cursor: 'pointer',
+                                                                padding: 0,
+                                                                marginLeft: '1px'
                                                             }}
                                                         >
                                                             <X size={8} strokeWidth={3} />
-                                                        </span>
+                                                        </button>
                                                     )}
-                                                    <input
-                                                        ref={dateInputRef}
-                                                        type="date"
-                                                        value={isCustomDate ? selectedBillingDate : ''}
-                                                        onChange={(e) => {
-                                                            if (e.target.value) setSelectedBillingDate(e.target.value);
-                                                        }}
-                                                        style={{
-                                                            position: 'absolute',
-                                                            top: 0,
-                                                            left: 0,
-                                                            width: '100%',
-                                                            height: '100%',
-                                                            opacity: 0,
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    />
                                                 </div>
                                             );
                                         })()}
@@ -3703,8 +3695,9 @@ export default function BillingDashboard() {
                                                                         <Zap size={11} className="text-amber-500 animate-pulse" />
                                                                         {formatMoney(order.total || 0)}
                                                                     </div>
-                                                                    <div style={{ fontSize: '0.60rem', color: '#B45309', fontWeight: '700', backgroundColor: '#FEF3C7', padding: '1px 4px', borderRadius: '3px', display: 'inline-block', marginTop: '2px' }}>
-                                                                        ⚠️ Consumo Abierto
+                                                                    <div style={{ fontSize: '0.60rem', color: '#B45309', fontWeight: '700', backgroundColor: '#FEF3C7', padding: '1px 4px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                                                        <AlertTriangle size={9} style={{ color: '#D97706', flexShrink: 0 }} />
+                                                                        <span>Consumo Abierto</span>
                                                                     </div>
                                                                 </div>
                                                             ) : (
