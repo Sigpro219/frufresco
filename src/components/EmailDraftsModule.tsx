@@ -5705,6 +5705,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let finalProfileId = selectedDraft.profile_id;
       let finalAdminNotes = `[PEDIDO CORREO] Asunto: ${selectedDraft.email_subject || ''}\n---\n${selectedDraft.email_body || ''}\n---\n`;
 
+      if (purchaseOrder?.trim()) {
+        finalAdminNotes = `[ORDEN DE COMPRA / OC: ${purchaseOrder.trim()}]\n` + finalAdminNotes;
+      }
+
       if (currentMatchedProfile && !deliveryRestrictionStatus.isValid) {
         finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.message})]\n` + finalAdminNotes;
       }
@@ -5835,28 +5839,46 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         (metadata?.attachments && metadata.attachments[0]?.url) ||
         null;
 
-      const { data: order, error: orderError } = await supabase
+      const orderPayload: any = {
+        profile_id: finalProfileId,
+        total: totalAmount,
+        total_weight_kg: totalWeight,
+        status: 'pending_approval',
+        payment_status: 'Pendiente',
+        payment_method: paymentMethod,
+        origin: 'Email Ingest',
+        origin_source: 'email',
+        delivery_date: deliveryDate,
+        delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+        admin_notes: finalAdminNotes,
+        shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
+        latitude: draftCoordinates?.lat || metadata?.latitude || null,
+        longitude: draftCoordinates?.lng || metadata?.longitude || null,
+        document_url: draftAttachmentUrl
+      };
+
+      if (purchaseOrder?.trim()) {
+        orderPayload.purchase_order_number = purchaseOrder.trim();
+      }
+
+      let { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert({
-          profile_id: finalProfileId,
-          total: totalAmount,
-          total_weight_kg: totalWeight,
-          status: 'pending_approval',
-          payment_status: 'Pendiente',
-          payment_method: paymentMethod,
-          origin: 'Email Ingest',
-          origin_source: 'email',
-          delivery_date: deliveryDate,
-          delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
-          admin_notes: finalAdminNotes,
-          shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
-          latitude: draftCoordinates?.lat || metadata?.latitude || null,
-          longitude: draftCoordinates?.lng || metadata?.longitude || null,
-          document_url: draftAttachmentUrl,
-          purchase_order_number: purchaseOrder?.trim() || null
-        })
+        .insert(orderPayload)
         .select()
         .single();
+
+      // Blindaje resiliente: si la columna purchase_order_number no existe o no ha refrescado el schema cache
+      if (orderError && (orderError.message?.includes('purchase_order_number') || orderError.message?.includes('schema cache'))) {
+        console.warn('Fallback resiliente: Reintentando inserción en orders sin columna purchase_order_number...', orderError);
+        delete orderPayload.purchase_order_number;
+        const retry = await supabase
+          .from('orders')
+          .insert(orderPayload)
+          .select()
+          .single();
+        order = retry.data;
+        orderError = retry.error;
+      }
 
       if (orderError) {
         throw new Error('Error al registrar pedido: ' + orderError.message);
