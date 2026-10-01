@@ -8664,29 +8664,59 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     selectProduct(p, i);
                                     setActiveRowSearchQuery(null);
                                     setActiveDropdownRowIndex(null);
-                                    openCustomizingModal(p, i);
+                                    if (p.options_config && p.options_config.length > 0) {
+                                      openCustomizingModal(p, i);
+                                    } else {
+                                      const qtyInput = document.getElementById(`draft-qty-input-${i}`) as HTMLInputElement | null;
+                                      if (qtyInput) {
+                                        qtyInput.focus();
+                                        qtyInput.select();
+                                      }
+                                    }
                                   }
                                 } else if (e.key === 'Enter') {
                                   e.preventDefault();
                                   const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || matchedProd;
                                   if (selectedProd) {
                                     selectProduct(selectedProd, i);
-                                  }
-                                  setActiveRowSearchQuery(null);
-                                  setActiveDropdownRowIndex(null);
-                                  
-                                  const nextIdx = i + 1;
-                                  const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                  if (nextInput) {
-                                    nextInput.focus({ preventScroll: true });
-                                    nextInput.select();
-                                    scrollToDraftRow(nextIdx);
+                                    setActiveRowSearchQuery(null);
+                                    setActiveDropdownRowIndex(null);
+                                    if (selectedProd.options_config && selectedProd.options_config.length > 0) {
+                                      openCustomizingModal(selectedProd, i);
+                                    } else {
+                                      const qtyInput = document.getElementById(`draft-qty-input-${i}`) as HTMLInputElement | null;
+                                      if (qtyInput) {
+                                        qtyInput.focus();
+                                        qtyInput.select();
+                                      } else {
+                                        const nextIdx = i + 1;
+                                        const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                        if (nextInput) {
+                                          nextInput.focus({ preventScroll: true });
+                                          nextInput.select();
+                                          scrollToDraftRow(nextIdx);
+                                        } else {
+                                          document.getElementById('btn-approve-draft')?.focus();
+                                        }
+                                      }
+                                    }
                                   } else {
-                                    document.getElementById('btn-approve-draft')?.focus();
+                                    setActiveRowSearchQuery(null);
+                                    setActiveDropdownRowIndex(null);
+                                    const nextIdx = i + 1;
+                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                    if (nextInput) {
+                                      nextInput.focus({ preventScroll: true });
+                                      nextInput.select();
+                                      scrollToDraftRow(nextIdx);
+                                    }
                                   }
                                 } else if (e.key === 'ArrowDown') {
                                   e.preventDefault();
-                                  if (activeDropdownRowIndex === i && scoredList.length > 0) {
+                                  if (activeDropdownRowIndex !== i) {
+                                    setActiveDropdownRowIndex(i);
+                                    setFocusedDropdownItemIndex(0);
+                                  } else if (scoredList.length > 0) {
                                     setFocusedDropdownItemIndex(prev => Math.min(prev + 1, scoredList.length - 1));
                                   } else {
                                     const nextIdx = i + 1;
@@ -8793,7 +8823,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             openCustomizingModal(p, i);
                                           }
                                         }}
-                                        onMouseMove={() => {
+                                        onMouseEnter={() => {
                                           if (focusedDropdownItemIndex !== idx) {
                                             setFocusedDropdownItemIndex(idx);
                                           }

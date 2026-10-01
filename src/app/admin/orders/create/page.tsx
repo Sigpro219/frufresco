@@ -7187,7 +7187,10 @@ function CreateOrderContent() {
                                                                                 }
                                                                             } else if (e.key === 'ArrowDown') {
                                                                                 e.preventDefault();
-                                                                                if (activeDropdownRowIndex === idx && scoredList.length > 0) {
+                                                                                if (activeDropdownRowIndex !== idx) {
+                                                                                    setActiveDropdownRowIndex(idx);
+                                                                                    setFocusedDropdownItemIndex(0);
+                                                                                } else if (scoredList.length > 0) {
                                                                                     setFocusedDropdownItemIndex(prev => Math.min(prev + 1, scoredList.length - 1));
                                                                                 } else {
                                                                                     const nextIdx = idx + 1;
