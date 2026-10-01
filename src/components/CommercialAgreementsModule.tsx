@@ -45,6 +45,9 @@ import {
     Send,
     ShieldCheck,
     TrendingUp,
+    TrendingDown,
+    Unlock,
+    Bot,
     ClipboardList,
     Sliders,
     Loader2,
@@ -285,13 +288,13 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
 }
 
 export const SUPPLY_JUSTIFICATION_PRESETS = [
-    { label: '🌧️ Menor ingreso de fruta fresca; oferta limitada en cosecha / clima', value: 'Menor ingreso de fruta fresca; oferta limitada en cosecha.' },
-    { label: '📉 Escasez temporal por clima; baja disponibilidad en plaza', value: 'Escasez temporal por clima; baja disponibilidad.' },
-    { label: '🌾 Pico de cosecha; abundancia de producto nacional (Baja de precio)', value: 'Pico de cosecha; abundancia de producto.' },
-    { label: '❄️ Disminución en cosechas frías; menor oferta en mercado', value: 'Disminución en cosechas frías; menor oferta en mercado.' },
-    { label: '🚜 Reducción de cosecha regional; menor abastecimiento', value: 'Reducción de cosecha regional; menor abastecimiento.' },
-    { label: '🌱 Mayor ingreso nacional; oferta estable y abundante (Baja)', value: 'Mayor ingreso nacional; abundancia de producto.' },
-    { label: '✍️ Otra justificación personalizada...', value: 'CUSTOM' }
+    { label: 'Menor ingreso de fruta fresca; oferta limitada en cosecha / clima', value: 'Menor ingreso de fruta fresca; oferta limitada en cosecha.' },
+    { label: 'Escasez temporal por clima; baja disponibilidad en plaza', value: 'Escasez temporal por clima; baja disponibilidad.' },
+    { label: 'Pico de cosecha; abundancia de producto nacional (Baja de precio)', value: 'Pico de cosecha; abundancia de producto.' },
+    { label: 'Disminución en cosechas frías; menor oferta en mercado', value: 'Disminución en cosechas frías; menor oferta en mercado.' },
+    { label: 'Reducción de cosecha regional; menor abastecimiento', value: 'Reducción de cosecha regional; menor abastecimiento.' },
+    { label: 'Mayor ingreso nacional; oferta estable y abundante (Baja)', value: 'Mayor ingreso nacional; abundancia de producto.' },
+    { label: 'Otra justificación personalizada...', value: 'CUSTOM' }
 ];
 
 export default function CommercialAgreementsModule() {
@@ -986,7 +989,7 @@ export default function CommercialAgreementsModule() {
             totalSubtotal: subtotal
         });
 
-        showToast(`⚡ Precios del Modelo Institucional General (${previewItems.length} SKUs) cargados con éxito`, 'success');
+        showToast(`Precios del Modelo Institucional General (${previewItems.length} SKUs) cargados con éxito`, 'success');
     };
 
     const handleApplyOpenConsumptionToCreateFlow = async () => {
@@ -1042,7 +1045,7 @@ export default function CommercialAgreementsModule() {
             const clientName = isMultiClientMode ? 'Multicliente' : (clientObj?.company_name || 'Cliente');
             setAgreementName(`[CONSUMO ABIERTO] ${clientName} - ${dateTag}`);
 
-            showToast(`🛒 Lista Abierta a Consumo generada (${previewItems.length} SKUs a $0 COP)`, 'success');
+            showToast(`Lista Abierta a Consumo generada (${previewItems.length} SKUs a $0 COP)`, 'success');
         } catch (err: any) {
             console.error('Error generating open consumption template:', err);
             showToast('Error al generar lista abierta a consumo: ' + err.message, 'error');
@@ -1069,7 +1072,7 @@ export default function CommercialAgreementsModule() {
                 throw new Error(json.error || 'Error al aplicar modelo institucional general');
             }
 
-            showToast(`⚡ Precios del Modelo General aplicados a ${agreement.profiles?.company_name || agreement.client_name}`, 'success');
+            showToast(`Precios del Modelo General aplicados a ${agreement.profiles?.company_name || agreement.client_name}`, 'success');
             setConfirmApplyMasterTarget(null);
             
             // Refresh items in drawer and table
@@ -1182,7 +1185,7 @@ export default function CommercialAgreementsModule() {
                 .filter(it => it.matched_product && it.is_inactive);
 
             if (inactiveItems.length > 0) {
-                const confirmMsg = `⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveItems.length} producto(s) inactivo(s) en el catálogo en este Modelo General:\n${inactiveItems.slice(0, 5).map(p => `• ${p.product_name}`).join('\n')}${inactiveItems.length > 5 ? `\n... y ${inactiveItems.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y guardar modelo.\n- [Cancelar]: Volver para revisar la lista.`;
+                const confirmMsg = `ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveItems.length} producto(s) inactivo(s) en el catálogo en este Modelo General:\n${inactiveItems.slice(0, 5).map(p => `• ${p.product_name}`).join('\n')}${inactiveItems.length > 5 ? `\n... y ${inactiveItems.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y guardar modelo.\n- [Cancelar]: Volver para revisar la lista.`;
                 
                 const shouldActivate = window.confirm(confirmMsg);
                 if (!shouldActivate) {
@@ -1231,7 +1234,7 @@ export default function CommercialAgreementsModule() {
                 throw new Error(json.error || 'Error al guardar el Modelo General');
             }
 
-            showToast(`⚡ Modelo Institucional General guardado con éxito (${validItems.length} SKUs)`, 'success');
+            showToast(`Modelo Institucional General guardado con éxito (${validItems.length} SKUs)`, 'success');
             setIsUploadMasterModalOpen(false);
             setMasterExcelPreviewData(null);
             setMasterUploadedItems([]);
@@ -1272,7 +1275,7 @@ export default function CommercialAgreementsModule() {
         const inactiveItems = agreementItems.filter(it => it.products?.is_active === false);
         if (inactiveItems.length === 0) return;
 
-        const confirm = window.confirm(`⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveItems.length} producto(s) inactivo(s) en este acuerdo:\n${inactiveItems.slice(0, 5).map(p => `• ${p.product_name}`).join('\n')}${inactiveItems.length > 5 ? `\n... y ${inactiveItems.length - 5} más` : ''}\n\n¿Deseas REACTIVARLOS en el catálogo maestro para que puedan ser seleccionados en la toma de pedidos?`);
+        const confirm = window.confirm(`ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveItems.length} producto(s) inactivo(s) en este acuerdo:\n${inactiveItems.slice(0, 5).map(p => `• ${p.product_name}`).join('\n')}${inactiveItems.length > 5 ? `\n... y ${inactiveItems.length - 5} más` : ''}\n\n¿Deseas REACTIVARLOS en el catálogo maestro para que puedan ser seleccionados en la toma de pedidos?`);
         if (!confirm) return;
 
         setActivatingDrawerSkus(true);
@@ -1285,7 +1288,7 @@ export default function CommercialAgreementsModule() {
 
             if (error) throw error;
 
-            showToast(`✅ ${productIds.length} producto(s) reactivado(s) en el catálogo correctamente`, 'success');
+            showToast(`${productIds.length} producto(s) reactivado(s) en el catálogo correctamente`, 'success');
 
             setAgreementItems(prev => prev.map(it => {
                 if (productIds.includes(it.product_id)) {
@@ -1515,7 +1518,7 @@ export default function CommercialAgreementsModule() {
                 total_amount: updatedSubtotal + (selectedAgreement.total_tax_amount || 0)
             }).eq('id', selectedAgreement.id);
 
-            showToast(`✓ Adenda parcial aplicada: ${modified.length} productos actualizados`, 'success');
+            showToast(`Adenda parcial aplicada: ${modified.length} productos actualizados`, 'success');
             setIsPartialBatchModalOpen(false);
             
             await handleViewPrices(selectedAgreement);
@@ -1545,7 +1548,7 @@ export default function CommercialAgreementsModule() {
             const isMod = Number(p.newPrice) > 0 && Number(p.newPrice) !== p.oldPrice;
             return isMod ? { ...p, justification: targetJust } : p;
         }));
-        showToast(`✓ Justificación aplicada a ${modifiedCount} productos modificados`, 'success');
+        showToast(`Justificación aplicada a ${modifiedCount} productos modificados`, 'success');
     };
 
     const handleMiniExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1607,7 +1610,7 @@ export default function CommercialAgreementsModule() {
             });
 
             if (updatedCount > 0) {
-                showToast(`✓ ${updatedCount} productos emparejados y actualizados desde el Excel`, 'success');
+                showToast(`${updatedCount} productos emparejados y actualizados desde el Excel`, 'success');
                 setIsMiniImportOpen(false);
             } else {
                 showToast('No se encontraron coincidencias de productos en el archivo de novedades.', 'warning');
@@ -1664,7 +1667,7 @@ export default function CommercialAgreementsModule() {
         });
 
         if (updatedCount > 0) {
-            showToast(`✓ ${updatedCount} productos actualizados desde el portapapeles`, 'success');
+            showToast(`${updatedCount} productos actualizados desde el portapapeles`, 'success');
             setPasteText('');
             setIsMiniImportOpen(false);
         } else {
@@ -1816,7 +1819,7 @@ export default function CommercialAgreementsModule() {
                 fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
             } catch (e) {}
 
-            showToast(`🎉 ¡Notificación formal despachada con éxito a ${selectedEmails.length} destinatario(s)!`, 'success');
+            showToast(`Notificación formal despachada con éxito a ${selectedEmails.length} destinatario(s)!`, 'success');
             setIsEmailModalOpen(false);
         } catch (err: any) {
             console.error('Error dispatching agreement email:', err);
@@ -1943,7 +1946,7 @@ export default function CommercialAgreementsModule() {
                     total_price: totalPrice
                 } : it));
 
-                showToast(`✅ Precio actualizado para "${selectedAddProduct.name}" en el acuerdo`, 'success');
+                showToast(`Precio actualizado para "${selectedAddProduct.name}" en el acuerdo`, 'success');
             } else {
                 const { data: inserted, error: insErr } = await supabase
                     .from('quote_items')
@@ -1968,7 +1971,7 @@ export default function CommercialAgreementsModule() {
                     setAgreementItems(prev => [inserted, ...prev]);
                 }
 
-                showToast(`✅ "${selectedAddProduct.name}" agregado al acuerdo comercial con éxito`, 'success');
+                showToast(`"${selectedAddProduct.name}" agregado al acuerdo comercial con éxito`, 'success');
             }
 
             // Recalculate quote totals
@@ -2136,7 +2139,7 @@ export default function CommercialAgreementsModule() {
             const fileName = `Propuesta_Precios_${cleanRef}_${cleanClient}.xlsx`;
             
             XLSX.writeFile(workbook, fileName);
-            showToast('📊 Lista de precios exportada a Excel (.xlsx) con éxito', 'success');
+            showToast('Lista de precios exportada a Excel (.xlsx) con éxito', 'success');
         } catch (err: any) {
             console.error('Error exportando Excel de propuesta:', err);
             showToast('Error al exportar a Excel: ' + err.message, 'error');
@@ -2150,8 +2153,8 @@ export default function CommercialAgreementsModule() {
         setIsDigestingWithAI(true);
         setDigestingStatusText(
             digestMode === 'ai' || file.name.toLowerCase().endsWith('.pdf')
-                ? '🤖 Gemini 3.8 Flash analizando archivo, interpretando precios y cruzando con catálogo maestro...'
-                : '📊 Procesando archivo de tarifas y pre-validando catálogo...'
+                ? 'Gemini 3.8 Flash analizando archivo, interpretando precios y cruzando con catálogo maestro...'
+                : 'Procesando archivo de tarifas y pre-validando catálogo...'
         );
 
         try {
@@ -2198,7 +2201,7 @@ export default function CommercialAgreementsModule() {
             if (result.stats.unmatchedCount > 0) {
                 showToast(`Archivo procesado (${result.modelUsed || 'IA'}): ${result.stats.matchedCount} reconocidos, ${result.stats.unmatchedCount} pendientes de asignar`, 'warning');
             } else {
-                showToast(`✅ Archivo interpretado con éxito (${result.modelUsed || 'IA'}): ${result.stats.matchedCount} productos cruzados al 100%`, 'success');
+                showToast(`Archivo interpretado con éxito (${result.modelUsed || 'IA'}): ${result.stats.matchedCount} productos cruzados al 100%`, 'success');
             }
         } catch (err: any) {
             console.error('[CommercialAgreementsModule] Error digesting file:', err);
@@ -2376,7 +2379,7 @@ export default function CommercialAgreementsModule() {
             }
 
             setIsQuickProductModalOpen(false);
-            showToast(`✅ Producto "${newProd.name}" creado y vinculado exitosamente`, 'success');
+            showToast(`Producto "${newProd.name}" creado y vinculado exitosamente`, 'success');
         } catch (err: any) {
             console.error('Error creating quick product:', err);
             showToast('Error al crear producto: ' + err.message, 'error');
@@ -2405,7 +2408,7 @@ export default function CommercialAgreementsModule() {
         }
 
         if (excelPreviewData.unmatchedCount > 0) {
-            showToast(`⚠️ Tienes ${excelPreviewData.unmatchedCount} ítem(s) sin coincidencia. Debes asignarlos con el buscador, crearlos o descartarlos con [🗑️] antes de activar.`, 'error');
+            showToast(`Tienes ${excelPreviewData.unmatchedCount} ítem(s) sin coincidencia. Debes asignarlos con el buscador, crearlos o descartarlos antes de activar.`, 'error');
             return;
         }
 
@@ -2467,7 +2470,7 @@ export default function CommercialAgreementsModule() {
 
             // Poka-Yoke: Alerta y Auto-Activación de SKUs inactivos
             if (inactiveProducts.length > 0) {
-                const confirmMsg = `⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo para este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y crear acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
+                const confirmMsg = `ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo para este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y crear acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
                 
                 const shouldActivate = window.confirm(confirmMsg);
                 if (!shouldActivate) {
@@ -2557,7 +2560,7 @@ export default function CommercialAgreementsModule() {
                 }
             }
             
-            showToast(`🎉 ¡Acuerdo comercial activado con éxito para ${targetClients.length} ${targetClients.length === 1 ? 'cliente' : 'clientes'} (${itemsTemplate.length} productos asociados)!`, 'success');
+            showToast(`Acuerdo comercial activado con éxito para ${targetClients.length} ${targetClients.length === 1 ? 'cliente' : 'clientes'} (${itemsTemplate.length} productos asociados)!`, 'success');
             setIsCreateModalOpen(false);
             
             // Reset modal states
@@ -2761,7 +2764,7 @@ export default function CommercialAgreementsModule() {
                 });
 
                 if (inactiveProducts.length > 0) {
-                    const confirmMsg = `⚠️ ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo dentro de este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y actualizar acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
+                    const confirmMsg = `ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo dentro de este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y actualizar acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
                     
                     const shouldActivate = window.confirm(confirmMsg);
                     if (!shouldActivate) {
@@ -3587,7 +3590,7 @@ export default function CommercialAgreementsModule() {
                                                                 borderRadius: '4px', 
                                                                 fontWeight: '800' 
                                                             }}>
-                                                                🔓 Consumo Abierto ($0)
+                                                                Consumo Abierto ($0)
                                                             </span>
                                                         )}
                                                         {agreement.profiles?.parent_id ? (
@@ -3880,7 +3883,7 @@ export default function CommercialAgreementsModule() {
                                             borderRadius: '6px', 
                                             fontWeight: '800' 
                                         }}>
-                                            🔓 Consumo Abierto ($0)
+                                            Consumo Abierto ($0)
                                         </span>
                                     )}
                                 </div>
@@ -5150,7 +5153,15 @@ export default function CommercialAgreementsModule() {
                                                                             alignItems: 'center',
                                                                             gap: '3px'
                                                                         }}>
-                                                                            {diff > 0 ? `🔴 Sube +$${formatNumber(diff)}` : (diff < 0 ? `🟢 Baja -$${formatNumber(Math.abs(diff))}` : 'Sin cambio')}
+                                                                            {diff > 0 ? (
+                                                                                <>
+                                                                                    <TrendingUp size={11} strokeWidth={2.5} /> Sube +${formatNumber(diff)}
+                                                                                </>
+                                                                            ) : (diff < 0 ? (
+                                                                                <>
+                                                                                    <TrendingDown size={11} strokeWidth={2.5} /> Baja -${formatNumber(Math.abs(diff))}
+                                                                                </>
+                                                                            ) : 'Sin cambio')}
                                                                         </span>
                                                                     </td>
                                                                     <td style={{ padding: '6px 10px' }}>
@@ -6605,7 +6616,7 @@ export default function CommercialAgreementsModule() {
                                         </div>
                                     </div>
 
-                                    {/* ⚡ Cargar Precios del Modelo Institucional General */}
+                                    {/* Cargar Precios del Modelo Institucional General */}
                                     {masterTemplate && masterTemplate.items && masterTemplate.items.length > 0 && (
                                         <div style={{
                                             background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
@@ -6652,7 +6663,7 @@ export default function CommercialAgreementsModule() {
                                         </div>
                                     )}
 
-                                    {/* 🛒 Cargar Lista Genérica Abierta a Consumo ($0 COP) */}
+                                    {/* Cargar Lista Genérica Abierta a Consumo ($0 COP) */}
                                     <div style={{
                                         background: 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)',
                                         border: '1.5px solid #C4B5FD',
@@ -6809,7 +6820,7 @@ export default function CommercialAgreementsModule() {
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         <AlertCircle size={20} color="#DC2626" style={{ flexShrink: 0 }} />
                                                         <div>
-                                                            <strong>Poka-Yoke Activo ({excelPreviewData.unmatchedCount} productos sin coincidencia):</strong> Para activar este acuerdo comercial es obligatorio asignar cada ítem con el buscador, crearlo con <em>[+ Crear]</em> o descartar la fila con <em>[🗑️]</em> si no corresponde a un producto.
+                                                            <strong>Poka-Yoke Activo ({excelPreviewData.unmatchedCount} productos sin coincidencia):</strong> Para activar este acuerdo comercial es obligatorio asignar cada ítem con el buscador, crearlo con <em>[+ Crear]</em> o descartar la fila si no corresponde a un producto.
                                                         </div>
                                                     </div>
                                                     <button
@@ -6920,7 +6931,7 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             )}
 
-                                            {/* Preview Search & Filter toolbar - Sticky Docked */}
+                                            {/* Preview Search & Filter toolbar - Sticky Docked Line 1 */}
                                             <div style={{ 
                                                 display: 'flex', 
                                                 justifyContent: 'space-between', 
@@ -6928,12 +6939,15 @@ export default function CommercialAgreementsModule() {
                                                 gap: '12px', 
                                                 backgroundColor: '#FFFFFF', 
                                                 padding: '8px 12px', 
-                                                borderRadius: '8px', 
-                                                border: '1px solid #E2E8F0',
+                                                borderRadius: '8px 8px 0 0', 
+                                                border: '1px solid #CBD5E1',
+                                                borderBottom: 'none',
                                                 position: 'sticky',
                                                 top: 0,
-                                                zIndex: 20,
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                                zIndex: 40,
+                                                minHeight: '48px',
+                                                boxSizing: 'border-box',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                                             }}>
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     {(['all', 'matched', 'unmatched', 'inactive'] as const).map(flt => {
@@ -6993,24 +7007,23 @@ export default function CommercialAgreementsModule() {
 
                                             {/* Preview Table with Expanded Height and In-Cell Predictive Reconciliation (Orders Module UX Parity) */}
                                             <div style={{ 
-                                                maxHeight: isKpiCollapsed ? '560px' : '440px', 
-                                                overflowY: 'auto', 
-                                                border: '1.5px solid #E2E8F0', 
-                                                borderRadius: '8px',
+                                                border: '1px solid #CBD5E1', 
+                                                borderRadius: '0 0 8px 8px',
                                                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                                                 position: 'relative',
-                                                backgroundColor: '#FFFFFF'
+                                                backgroundColor: '#FFFFFF',
+                                                overflow: 'visible'
                                             }}>
                                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
-                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
+                                                    <thead style={{ position: 'sticky', top: '48px', zIndex: 30 }}>
                                                         <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '50px' }}>#</th>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '28%' }}>Producto en Documento</th>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '36%' }}>Match Catálogo Maestro (Buscador Predictivo)</th>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Costo Base</th>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Precio Acordado</th>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '10%' }}>Margen %</th>
-                                                            <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '60px' }}>Acción</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '50px' }}>#</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '28%' }}>Producto en Documento</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '36%' }}>Match Catálogo Maestro (Buscador Predictivo)</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Costo Base</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '12%' }}>Precio Acordado</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '10%' }}>Margen %</th>
+                                                            <th style={{ position: 'sticky', top: '48px', zIndex: 30, padding: '10px 12px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: '2px solid #CBD5E1', width: '60px' }}>Acción</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -8069,7 +8082,7 @@ export default function CommercialAgreementsModule() {
                                                                 {flt === 'all' && `Todos (${editExcelPreviewData.items.length})`}
                                                                 {flt === 'matched' && `Reconocidos (${editExcelPreviewData.matchedCount})`}
                                                                 {flt === 'unmatched' && `No Reconocidos (${editExcelPreviewData.unmatchedCount})`}
-                                                                {flt === 'inactive' && `⚠️ Inactivos (${editExcelPreviewData.inactiveCount})`}
+                                                                {flt === 'inactive' && `Inactivos (${editExcelPreviewData.inactiveCount})`}
                                                             </button>
                                                         );
                                                     })}
@@ -8853,7 +8866,7 @@ export default function CommercialAgreementsModule() {
                                             color: '#166534',
                                             border: '1px solid currentColor'
                                         }}>
-                                            📋 Adenda Parcial
+                                            Adenda Parcial
                                         </span>
                                     </div>
                                     <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: '#94A3B8' }}>
@@ -8920,7 +8933,7 @@ export default function CommercialAgreementsModule() {
                                     title="Importar archivo Excel pequeño o pegar filas con variaciones de precios"
                                 >
                                     <UploadCloud size={14} />
-                                    {isMiniImportOpen ? 'Cerrar Importador' : '📥 Importar Mini-Excel / Pegar'}
+                                    {isMiniImportOpen ? 'Cerrar Importador' : 'Importar Mini-Excel / Pegar'}
                                 </button>
 
                                 {(() => {
@@ -8940,13 +8953,13 @@ export default function CommercialAgreementsModule() {
                                                 {modified.length} de {partialBatchItems.length} modificados
                                             </span>
                                             {upCount > 0 && (
-                                                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#FEE2E2', color: '#991B1B' }}>
-                                                    🔴 {upCount} Sube
+                                                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#FEE2E2', color: '#991B1B', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <TrendingUp size={12} strokeWidth={2.5} /> {upCount} Sube
                                                 </span>
                                             )}
                                             {downCount > 0 && (
-                                                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534' }}>
-                                                    🟢 {downCount} Baja
+                                                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <TrendingDown size={12} strokeWidth={2.5} /> {downCount} Baja
                                                 </span>
                                             )}
                                         </div>
@@ -9020,7 +9033,7 @@ export default function CommercialAgreementsModule() {
                                                 cursor: pasteText.trim() ? 'pointer' : 'not-allowed'
                                             }}
                                         >
-                                            ✓ Procesar Texto Pegado
+                                            Procesar Texto Pegado
                                         </button>
                                     </div>
                                 </div>
@@ -9098,7 +9111,7 @@ export default function CommercialAgreementsModule() {
                                 title="Aplica esta justificación a todas las filas con precio modificado"
                             >
                                 <Sparkles size={13} />
-                                ⚡ Aplicar a todos los modificados
+                                Aplicar a todos los modificados
                             </button>
                         </div>
 
@@ -9216,7 +9229,15 @@ export default function CommercialAgreementsModule() {
                                                                 color: diff > 0 ? '#991B1B' : '#166534',
                                                                 border: diff > 0 ? '1px solid #FCA5A5' : '1px solid #86EFAC'
                                                             }}>
-                                                                {diff > 0 ? `🔴 Sube +$${formatNumber(diff)}` : `🟢 Baja -$${formatNumber(Math.abs(diff))}`}
+                                                                {diff > 0 ? (
+                                                                <>
+                                                                    <TrendingUp size={12} strokeWidth={2.5} /> Sube +${formatNumber(diff)}
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <TrendingDown size={12} strokeWidth={2.5} /> Baja -${formatNumber(Math.abs(diff))}
+                                                                </>
+                                                            )}
                                                             </span>
                                                         ) : (
                                                             <span style={{ color: '#94A3B8', fontSize: '0.72rem' }}>Sin cambio</span>
