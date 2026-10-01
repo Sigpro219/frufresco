@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.76 (Selector Extemporáneo de Tandas en Facturación con Disparador showPicker Poka-Yoke, Erradicación de Glifos Unicode y Rigor Iconográfico Lucide en UI Industrial, Escenario BDD 109)
+> **Versión:** 1.9.77 (Drawer de Acuerdos Comerciales con Barras de Aviso Micro-Slim 26px, Superbuscador Omnibox Acoplado y Thead Congelado Sticky Top 0 según Estandar-Galerias-FruFresco, Escenario BDD 110)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4826,4 +4826,21 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   4. Si el camión entra en zona sin cobertura celular, la app almacena los pings en cola local y los sincroniza en ráfaga (*burst sync*) al recuperar señal.
   5. Si el vehículo permanece más de 15 minutos sin reportar telemetría mientras está en tránsito, la Torre de Control (`/admin/transport`) activa una alerta visual roja en el HUD y el botón de contacto de emergencia 1-clic con el conductor.
   6. A las 02:00 AM, el cron de mantenimiento ejecuta la purga de registros de `vehicle_gps_logs` con antigüedad superior a 48 horas, preservando el estado vivo en `fleet_vehicles` sin degradación de rendimiento en base de datos.
+
+---
+
+#### Escenario 110: Estandarización de Drawer de Acuerdos Comerciales con Barras de Aviso Micro-Slim 26px y Thead Congelado Sticky Top 0
+- **Given** un operador o gerente comercial inspeccionando la lista de precios congelados de un acuerdo en `CommercialAgreementsModule.tsx`.
+- **When** se despliega el Drawer lateral con cientos de productos cargados, SKUs inactivos en catálogo maestro o adendas de precios registradas:
+- **Then**:
+  1. El bloque superior de control (`flexShrink: 0`, `zIndex: 40`, `#FFFFFF`) consolida de forma fija y compacta:
+     - Cabecera con título de acuerdo, cotización asociada, badges de matriz/sucursal y autor de última edición.
+     - Franja ultra-compacta de KPIs (Vigencia, Estado, Conteo de SKUs, Margen promedio).
+     - Micro-barra ámbar (26px) de alerta de SKUs inactivos con disparador reactivo de reactivación 1-clic en catálogo maestro.
+     - Micro-barra esmeralda (26px) de aviso de adendas/novedades con acceso directo al modal de ajuste masivo.
+     - Toolbar de herramientas acoplada con el Superbuscador Omnibox Universal y botonera de acciones.
+  2. El contenedor inferior de la tabla (`flex: 1, overflowY: 'auto'`) aísla el scroll vertical:
+     - Las celdas `<th>` del `<thead>` permanecen ancladas de forma magnética en `position: 'sticky', top: 0, zIndex: 30` con fondo sólido `#F8FAFC`, borde `2px solid #E2E8F0` y `boxShadow: '0 1px 2px rgba(0,0,0,0.05)'`.
+     - La tabla utiliza `borderCollapse: 'separate', borderSpacing: 0` previniendo desincronizaciones de composición de capas de GPU en Chromium.
+     - Las filas del `<tbody>` se deslizan fluidamente por debajo del encabezado congelado sin traslapes ni holguras transparentes.
 

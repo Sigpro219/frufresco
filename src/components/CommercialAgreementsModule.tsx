@@ -3816,13 +3816,13 @@ export default function CommercialAgreementsModule() {
                         animation: 'slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
                         {/* Drawer Header (Fixed top of drawer) */}
-                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, backgroundColor: '#FFFFFF' }}>
+                        <div style={{ padding: '0.85rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, backgroundColor: '#FFFFFF' }}>
                             <div>
-                                <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                     Lista de Precios Congelados ({formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at)})
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                    <h2 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain, fontSize: '1.2rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
+                                    <h2 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain, fontSize: '1.15rem' }}>
                                         {selectedAgreement.profiles?.company_name || selectedAgreement.client_name}
                                     </h2>
                                     {(() => {
@@ -3885,36 +3885,22 @@ export default function CommercialAgreementsModule() {
                                             Consumo Abierto ($0)
                                         </span>
                                     )}
-                                </div>
-                                {/* Subtítulo de trazabilidad sobrio y no invasivo */}
-                                {(() => {
-                                    const lastUpdate = getLastUpdateInfo();
-                                    return (
-                                        <div style={{ 
-                                            marginTop: '6px', 
-                                            fontSize: '0.78rem', 
-                                            color: '#64748B',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            flexWrap: 'wrap'
-                                        }}>
-                                            <span>Actualizada por</span>
-                                            <span style={{ fontWeight: '700', color: '#0F172A' }}>{lastUpdate.author}</span>
+                                    {(() => {
+                                        const lastUpdate = getLastUpdateInfo();
+                                        return (
                                             <span style={{ 
-                                                backgroundColor: '#F8FAFC', 
-                                                color: '#64748B', 
-                                                padding: '1px 6px', 
-                                                borderRadius: '4px', 
-                                                fontWeight: '600', 
                                                 fontSize: '0.72rem', 
-                                                border: '1px solid #E2E8F0' 
+                                                color: '#64748B',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                marginLeft: '4px'
                                             }}>
-                                                {lastUpdate.formatted}
+                                                • Editado por <strong style={{ color: '#0F172A' }}>{lastUpdate.author}</strong> ({lastUpdate.formatted})
                                             </span>
-                                        </div>
-                                    );
-                                })()}
+                                        );
+                                    })()}
+                                </div>
                             </div>
                             <button 
                                 onClick={() => setIsDrawerOpen(false)}
@@ -3924,118 +3910,152 @@ export default function CommercialAgreementsModule() {
                             </button>
                         </div>
 
-                        {/* 2. Cuerpo desplazable que aloja KPIs, Toolbar Sticky y Tabla */}
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                            {/* Drawer Info Banner (KPIs) */}
+                        {/* Top Fixed Control Area: KPIs + Slim Alert Lines + Toolbar */}
+                        <div style={{ flexShrink: 0, backgroundColor: '#FFFFFF', borderBottom: `1px solid ${THEME.colors.border}`, zIndex: 40 }}>
+                            {/* Compact KPI Strip */}
                             <div style={{ 
-                                padding: '0.75rem 1.5rem', 
+                                padding: '0.45rem 1.5rem', 
                                 backgroundColor: '#F8FAFC', 
-                                borderBottom: `1px solid ${THEME.colors.border}`, 
+                                borderBottom: `1px solid #E2E8F0`, 
                                 display: 'flex', 
-                                gap: '2rem', 
+                                gap: '1.75rem', 
                                 alignItems: 'center', 
-                                flexWrap: 'wrap', 
-                                flexShrink: 0 
+                                flexWrap: 'wrap'
                             }}>
-                                <div>
-                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, display: 'block', fontWeight: '600' }}>VIGENCIA DEL ACUERDO:</span>
-                                    <strong style={{ fontSize: '0.82rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VIGENCIA:</span>
+                                    <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1E293B' }}>
                                         {selectedAgreement.start_date ? new Date(selectedAgreement.start_date).toLocaleDateString() : 'N/A'} al {selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until).toLocaleDateString() : 'Indefinida'}
-                                    </strong>
+                                    </span>
                                 </div>
-                                <div>
-                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, display: 'block', fontWeight: '600' }}>ESTADO:</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>ESTADO:</span>
                                     <span style={{ 
                                         backgroundColor: getAgreementStatus(selectedAgreement.valid_until).bgColor, 
                                         color: getAgreementStatus(selectedAgreement.valid_until).color, 
-                                        padding: '2px 6px', 
+                                        padding: '1px 6px', 
                                         borderRadius: '4px', 
-                                        fontSize: '0.72rem', 
-                                        fontWeight: 'bold' 
+                                        fontSize: '0.7rem', 
+                                        fontWeight: '800' 
                                     }}>
                                         {getAgreementStatus(selectedAgreement.valid_until).label}
                                     </span>
                                 </div>
-                                <div>
-                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, display: 'block', fontWeight: '600' }}>PRODUCTOS CARGADOS:</span>
-                                    <strong style={{ fontSize: '0.82rem', color: THEME.colors.primary }}>
-                                        {loadingItems ? 'Cargando...' : `${agreementItems.length} ítems`}
-                                    </strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>PRODUCTOS:</span>
+                                    <span style={{ fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary }}>
+                                        {loadingItems ? '...' : `${agreementItems.length} SKUs`}
+                                    </span>
                                 </div>
-                                <div>
-                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, display: 'block', fontWeight: '600' }}>MARGEN PROMEDIO:</span>
-                                    <strong style={{ 
-                                        fontSize: '0.82rem', 
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>MARGEN PROM:</span>
+                                    <span style={{ 
+                                        fontSize: '0.78rem', 
+                                        fontWeight: '800',
                                         color: averageMargin >= 50 ? '#059669' : averageMargin >= 20 ? '#D97706' : '#DC2626' 
                                     }}>
-                                        {loadingItems ? 'Cargando...' : `${(Math.round(averageMargin * 10) / 10).toFixed(1)}%`}
-                                    </strong>
+                                        {loadingItems ? '...' : `${(Math.round(averageMargin * 10) / 10).toFixed(1)}%`}
+                                    </span>
                                 </div>
-
-                                {/* Alerta compacta Poka-Yoke de SKUs inactivos (Integrada en la barra sin invadir espacio) */}
-                                {(() => {
-                                    const inactiveList = agreementItems.filter(it => it.products?.is_active === false);
-                                    if (inactiveList.length === 0) return null;
-                                    return (
-                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ 
-                                                display: 'inline-flex', 
-                                                alignItems: 'center', 
-                                                gap: '4px', 
-                                                backgroundColor: '#FEF2F2', 
-                                                color: '#DC2626', 
-                                                border: '1px solid #FECACA', 
-                                                padding: '2px 7px', 
-                                                borderRadius: '5px', 
-                                                fontSize: '0.72rem', 
-                                                fontWeight: '700' 
-                                            }}>
-                                                <AlertTriangle size={12} color="#DC2626" />
-                                                {inactiveList.length} SKUs inactivos
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={handleAutoActivateDrawerInactive}
-                                                disabled={activatingDrawerSkus}
-                                                style={{
-                                                    backgroundColor: '#DC2626',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    padding: '3px 8px',
-                                                    borderRadius: '5px',
-                                                    fontSize: '0.72rem',
-                                                    fontWeight: '700',
-                                                    cursor: activatingDrawerSkus ? 'not-allowed' : 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)'
-                                                }}
-                                                title="Reactivar automáticamente todos los productos inactivos de este acuerdo en el catálogo maestro"
-                                            >
-                                                <CheckCircle2 size={11} /> {activatingDrawerSkus ? 'Reactivando...' : 'Reactivar'}
-                                            </button>
-                                        </div>
-                                    );
-                                })()}
                             </div>
 
-                            {/* Línea 1 Sticky: Toolbar con Superbuscador Omnibox Universal y Botonera */}
+                            {/* Ultra-Slim Amber Warning Line: Inactive SKUs */}
+                            {(() => {
+                                const inactiveList = agreementItems.filter(it => it.products?.is_active === false);
+                                if (inactiveList.length === 0) return null;
+                                return (
+                                    <div style={{
+                                        minHeight: '26px',
+                                        padding: '2px 1.5rem',
+                                        backgroundColor: '#FFFBEB',
+                                        borderBottom: '1px solid #FDE68A',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        fontSize: '0.72rem',
+                                        color: '#92400E'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <AlertTriangle size={12} color="#D97706" />
+                                            <span><strong>{inactiveList.length} SKUs inactivos</strong> en catálogo maestro (no podrán pedirse)</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleAutoActivateDrawerInactive}
+                                            disabled={activatingDrawerSkus}
+                                            style={{
+                                                backgroundColor: '#D97706',
+                                                color: 'white',
+                                                border: 'none',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: '700',
+                                                cursor: activatingDrawerSkus ? 'not-allowed' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                            title="Reactivar automáticamente todos los productos inactivos de este acuerdo en el catálogo maestro"
+                                        >
+                                            <CheckCircle2 size={11} /> {activatingDrawerSkus ? 'Reactivando...' : 'Reactivar en Catálogo'}
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Ultra-Slim Green Notice Line: Modified/Adenda Items */}
+                            {(() => {
+                                const modifiedLogsCount = Object.keys(agreementAuditLogs).length;
+                                if (modifiedLogsCount === 0) return null;
+                                return (
+                                    <div style={{
+                                        minHeight: '26px',
+                                        padding: '2px 1.5rem',
+                                        backgroundColor: '#F0FDF4',
+                                        borderBottom: '1px solid #BBF7D0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        fontSize: '0.72rem',
+                                        color: '#166534'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Sparkles size={12} color="#16A34A" />
+                                            <span><strong>{modifiedLogsCount} productos</strong> con novedades/adendas registradas en este acuerdo</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleOpenPartialBatchModal}
+                                            style={{
+                                                backgroundColor: '#16A34A',
+                                                color: 'white',
+                                                border: 'none',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                            title="Abrir asistente de modificación parcial de precios"
+                                        >
+                                            <ClipboardList size={11} /> Ajuste Masivo
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Docked Gallery Toolbar with Omnibox + Buttons */}
                             <div style={{
-                                position: 'sticky',
-                                top: 0,
-                                zIndex: 40,
-                                minHeight: '50px',
-                                padding: '0.55rem 1.5rem',
-                                backgroundColor: '#FFFFFF',
-                                borderBottom: `1px solid ${THEME.colors.border}`,
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                padding: '0.5rem 1.5rem',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                gap: '12px',
-                                flexWrap: 'wrap',
-                                flexShrink: 0
+                                gap: '10px',
+                                flexWrap: 'wrap'
                             }}>
                                 {/* Superbuscador Omnibox */}
                                 <GalleryOmnibox
@@ -4044,7 +4064,7 @@ export default function CommercialAgreementsModule() {
                                     placeholder="Buscar producto, código contable (#ID), categoría o U.M...."
                                     filteredCount={filteredAgreementItems.length}
                                     totalCount={agreementItems.length}
-                                    style={{ flex: '1 1 260px', maxWidth: '380px' }}
+                                    style={{ flex: '1 1 240px', maxWidth: '360px' }}
                                 />
 
                                 {/* Botonera de Acciones de Cabecera */}
@@ -4055,12 +4075,12 @@ export default function CommercialAgreementsModule() {
                                             onClick={() => setConfirmApplyMasterTarget(selectedAgreement)}
                                             disabled={isApplyingMasterToAgreement === selectedAgreement.id}
                                             style={{
-                                                padding: '0.45rem 0.75rem',
-                                                borderRadius: '8px',
+                                                padding: '0.4rem 0.7rem',
+                                                borderRadius: '6px',
                                                 backgroundColor: '#F0FDF4',
                                                 color: '#166534',
-                                                border: '1.5px solid #86EFAC',
-                                                fontSize: '0.75rem',
+                                                border: '1px solid #86EFAC',
+                                                fontSize: '0.74rem',
                                                 fontWeight: '700',
                                                 cursor: 'pointer',
                                                 display: 'inline-flex',
@@ -4078,12 +4098,12 @@ export default function CommercialAgreementsModule() {
                                         type="button"
                                         onClick={() => setIsPrintModalOpen(true)}
                                         style={{
-                                            padding: '0.45rem 0.75rem',
-                                            borderRadius: '8px',
+                                            padding: '0.4rem 0.7rem',
+                                            borderRadius: '6px',
                                             backgroundColor: '#F8FAFC',
                                             color: '#334155',
-                                            border: '1.5px solid #CBD5E1',
-                                            fontSize: '0.75rem',
+                                            border: '1px solid #CBD5E1',
+                                            fontSize: '0.74rem',
                                             fontWeight: '700',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
@@ -4103,12 +4123,12 @@ export default function CommercialAgreementsModule() {
                                                 type="button"
                                                 onClick={() => handleOpenNotificationModal(modifiedLogsCount > 0 ? 'PRICE_UPDATE_DIFF' : 'NEW_AGREEMENT')}
                                                 style={{
-                                                    padding: '0.45rem 0.75rem',
-                                                    borderRadius: '8px',
+                                                    padding: '0.4rem 0.7rem',
+                                                    borderRadius: '6px',
                                                     backgroundColor: modifiedLogsCount > 0 ? '#FEF3C7' : '#EFF6FF',
                                                     color: modifiedLogsCount > 0 ? '#92400E' : '#1D4ED8',
-                                                    border: modifiedLogsCount > 0 ? '1.5px solid #FCD34D' : '1.5px solid #93C5FD',
-                                                    fontSize: '0.75rem',
+                                                    border: modifiedLogsCount > 0 ? '1px solid #FCD34D' : '1px solid #93C5FD',
+                                                    fontSize: '0.74rem',
                                                     fontWeight: '700',
                                                     cursor: 'pointer',
                                                     display: 'inline-flex',
@@ -4127,12 +4147,12 @@ export default function CommercialAgreementsModule() {
                                         type="button"
                                         onClick={handleOpenPartialBatchModal}
                                         style={{
-                                            padding: '0.45rem 0.75rem',
-                                            borderRadius: '8px',
+                                            padding: '0.4rem 0.7rem',
+                                            borderRadius: '6px',
                                             backgroundColor: '#F0FDF4',
                                             color: '#166534',
-                                            border: '1.5px solid #86EFAC',
-                                            fontSize: '0.75rem',
+                                            border: '1px solid #86EFAC',
+                                            fontSize: '0.74rem',
                                             fontWeight: '700',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
@@ -4149,12 +4169,12 @@ export default function CommercialAgreementsModule() {
                                         type="button"
                                         onClick={handleOpenAddProductModal}
                                         style={{
-                                            padding: '0.45rem 0.85rem',
-                                            borderRadius: '8px',
+                                            padding: '0.4rem 0.8rem',
+                                            borderRadius: '6px',
                                             backgroundColor: THEME.colors.primary,
                                             color: 'white',
                                             border: 'none',
-                                            fontSize: '0.75rem',
+                                            fontSize: '0.74rem',
                                             fontWeight: '800',
                                             cursor: 'pointer',
                                             display: 'inline-flex',
@@ -4170,9 +4190,10 @@ export default function CommercialAgreementsModule() {
                                     </button>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Drawer List Content */}
-                            <div style={{ flex: 1, padding: '0 1.5rem 1.5rem 1.5rem' }}>
+                        {/* Dedicated Scrollable Table Container */}
+                        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 1.5rem 1.5rem 1.5rem' }}>
                             {loadingItems ? (
                                 <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 'bold' }}>Cargando lista de precios...</div>
                             ) : agreementItems.length === 0 ? (
@@ -4193,18 +4214,18 @@ export default function CommercialAgreementsModule() {
 
                                     return (
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                                            <thead>
+                                            <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Cod. Contable</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Producto</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>U.M.</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Costo Base</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Precio Acordado</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>IVA</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Margen</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Fecha / Hora</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Usuario</th>
-                                                    <th style={{ position: 'sticky', top: '50px', zIndex: 30, padding: '0.75rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Acciones</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Cod. Contable</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Producto</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>U.M.</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Costo Base</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Precio Acordado</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>IVA</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Margen</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Fecha / Hora</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Usuario</th>
+                                                    <th style={{ position: 'sticky', top: 0, zIndex: 30, padding: '0.65rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center', width: '90px', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -4510,7 +4531,6 @@ export default function CommercialAgreementsModule() {
                                     );
                                 })()
                             )}
-                            </div>
                         </div>
 
                         {/* Drawer Footer */}
