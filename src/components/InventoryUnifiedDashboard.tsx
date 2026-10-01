@@ -777,8 +777,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 <div style={{ marginTop: '3px' }}>
                                     <span style={{
                                         fontWeight: '800',
-                                        color: daysOnHand > 4 ? '#B91C1C' : THEME.colors.primary,
-                                        backgroundColor: daysOnHand > 4 ? '#FEE2E2' : THEME.colors.primaryLight,
+                                        color: daysOnHand > 4 ? '#92400E' : THEME.colors.primary,
+                                        backgroundColor: daysOnHand > 4 ? '#FEF3C7' : THEME.colors.primaryLight,
                                         padding: '1px 5px',
                                         borderRadius: THEME.radius.sm,
                                         fontSize: '0.62rem',
@@ -788,17 +788,17 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                         whiteSpace: 'nowrap',
                                         fontFamily: THEME.typography.fontFamilySecondary
                                     }}>
-                                        {daysOnHand > 4 ? 'Alerta Sobrestock' : 'Saludable'}
+                                        {daysOnHand > 4 ? 'Seguimiento' : 'Saludable'}
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: daysOnHand > 4 ? '#FEF2F2' : THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Clock size={16} color={daysOnHand > 4 ? '#DC2626' : THEME.colors.primary} />
+                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: daysOnHand > 4 ? '#FEF3C7' : THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Clock size={16} color={daysOnHand > 4 ? '#D97706' : THEME.colors.primary} />
                             </div>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.3rem 0 0 0', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: daysOnHand > 4 ? '#DC2626' : THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : formatNumber(daysOnHand, 1)}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -810,8 +810,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 Velocidad
                             </span>
-                            <strong style={{ color: daysOnHand > 4 ? '#B91C1C' : THEME.colors.primary, fontWeight: '800', fontFamily: THEME.typography.fontFamilyMain, flexShrink: 0, marginLeft: '4px' }}>
-                                {daysOnHand > 4 ? 'Riesgo' : 'Óptima'}
+                            <strong style={{ color: daysOnHand > 4 ? '#92400E' : THEME.colors.primary, fontWeight: '800', fontFamily: THEME.typography.fontFamilyMain, flexShrink: 0, marginLeft: '4px' }}>
+                                {daysOnHand > 4 ? 'Seguimiento' : 'Óptima'}
                             </strong>
                         </div>
                     </div>
@@ -875,8 +875,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 <div style={{ marginTop: '3px' }}>
                                     <span style={{
                                         fontWeight: '800',
-                                        color: massBalance.shrinkageRate > 4 ? '#B91C1C' : THEME.colors.primary,
-                                        backgroundColor: massBalance.shrinkageRate > 4 ? '#FEE2E2' : THEME.colors.primaryLight,
+                                        color: massBalance.shrinkageRate > 4 ? '#92400E' : THEME.colors.primary,
+                                        backgroundColor: massBalance.shrinkageRate > 4 ? '#FEF3C7' : THEME.colors.primaryLight,
                                         padding: '1px 5px',
                                         borderRadius: THEME.radius.sm,
                                         fontSize: '0.62rem',
@@ -886,8 +886,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                         whiteSpace: 'nowrap',
                                         fontFamily: THEME.typography.fontFamilySecondary
                                     }}>
-                                        {massBalance.shrinkageRate > 4 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                                        {massBalance.shrinkageRate > 4 ? 'Exceso' : 'Bajo Control'}
+                                        {massBalance.shrinkageRate > 4 ? <TrendingDown size={10} /> : <CheckCircle2 size={10} />}
+                                        {massBalance.shrinkageRate > 4 ? 'En Seguimiento' : 'Bajo Control'}
                                     </span>
                                 </div>
                             </div>
@@ -895,18 +895,18 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 width: '30px',
                                 height: '30px',
                                 borderRadius: THEME.radius.md,
-                                backgroundColor: massBalance.shrinkageRate > 4 ? '#FEF2F2' : THEME.colors.primaryLight,
+                                backgroundColor: massBalance.shrinkageRate > 4 ? '#FEF3C7' : THEME.colors.primaryLight,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 flexShrink: 0
                             }}>
-                                <TrendingDown size={16} color={massBalance.shrinkageRate > 4 ? '#DC2626' : THEME.colors.primary} />
+                                <TrendingDown size={16} color={massBalance.shrinkageRate > 4 ? '#D97706' : THEME.colors.primary} />
                             </div>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.3rem 0 0 0', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: massBalance.shrinkageRate > 4 ? '#DC2626' : THEME.colors.primary, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : `${formatNumber(massBalance.shrinkageRate, 2)}%`}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -918,27 +918,27 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {formatNumber(massBalance.wasteKg, 1)} Kg
                             </span>
-                            <span style={{ backgroundColor: massBalance.shrinkageRate > 4 ? '#FEE2E2' : THEME.colors.primaryLight, color: massBalance.shrinkageRate > 4 ? '#B91C1C' : THEME.colors.primary, fontWeight: '800', padding: '1px 6px', borderRadius: THEME.radius.sm, fontSize: '0.65rem', fontFamily: THEME.typography.fontFamilySecondary, flexShrink: 0, marginLeft: '4px' }}>
+                            <span style={{ backgroundColor: '#F1F5F9', color: '#475569', fontWeight: '800', padding: '1px 6px', borderRadius: THEME.radius.sm, fontSize: '0.65rem', fontFamily: THEME.typography.fontFamilySecondary, flexShrink: 0, marginLeft: '4px' }}>
                                 Meta: &lt; 4%
                             </span>
                         </div>
                     </div>
 
-                    {/* CARD 6: FUGA FINANCIERA MERMA ($ D+P+F) */}
+                    {/* CARD 6: IMPACTO EN MERMA ($ D+P+F) */}
                     <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    Fuga Financiera
+                                    Impacto Merma
                                 </span>
                                 <div style={{ marginTop: '3px' }}>
-                                    <span style={{ fontWeight: '800', color: '#B91C1C', backgroundColor: '#FEE2E2', padding: '1px 5px', borderRadius: THEME.radius.sm, fontSize: '0.62rem', display: 'inline-flex', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                        Fuga P&L
+                                    <span style={{ fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: THEME.radius.sm, fontSize: '0.62rem', display: 'inline-flex', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        D + P + F
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <AlertTriangle size={16} color="#DC2626" />
+                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <DollarSign size={16} color="#475569" />
                             </div>
                         </div>
 
@@ -953,19 +953,19 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 lineHeight: 1.15
                             }}
                         >
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: '#DC2626', letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : formatHeroSales(massBalance.wasteCost).val}
                             </span>
-                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#DC2626', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
                                 {formatHeroSales(massBalance.wasteCost).unit}
                             </span>
                         </div>
                         
                         <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
-                            <span style={{ color: '#991B1B', fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                D + P + F
+                            <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                Consolidado
                             </span>
-                            <strong style={{ color: '#DC2626', fontWeight: '800', fontFamily: THEME.typography.fontFamilyMain, flexShrink: 0, marginLeft: '4px' }}>
+                            <strong style={{ color: THEME.colors.textMain, fontWeight: '800', fontFamily: THEME.typography.fontFamilyMain, flexShrink: 0, marginLeft: '4px' }}>
                                 {formatCompactMoney(massBalance.wasteCost)}
                             </strong>
                         </div>
@@ -1029,16 +1029,16 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             {/* Mermas & Faltantes */}
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: '700', marginBottom: '0.35rem' }}>
-                                    <span style={{ color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                        <AlertTriangle size={14} /> Merma + Desperdicio + Pesada
+                                    <span style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        <TrendingDown size={14} color="#64748B" /> Merma + Desperdicio + Pesada
                                     </span>
-                                    <span style={{ color: '#DC2626', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain, fontWeight: '800' }}>{formatNumber(massBalance.wasteKg, 1)} KG</span>
+                                    <span style={{ color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain, fontWeight: '800' }}>{formatNumber(massBalance.wasteKg, 1)} KG</span>
                                 </div>
                                 <div style={{ height: '8px', backgroundColor: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
                                     <div style={{
                                         height: '100%',
                                         width: `${Math.min(100, massBalance.entryKg > 0 ? (massBalance.wasteKg / massBalance.entryKg) * 100 : 0)}%`,
-                                        backgroundColor: '#DC2626',
+                                        backgroundColor: '#94A3B8',
                                         borderRadius: '4px'
                                     }}></div>
                                 </div>
@@ -1058,7 +1058,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                         marginTop: '1.25rem'
                     }}>
                         <span style={{ fontWeight: '700', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Diferencial Neto de Flujo en Piso:</span>
-                        <span style={{ fontWeight: '900', color: (massBalance.entryKg - massBalance.exitKg - massBalance.wasteKg) >= 0 ? THEME.colors.primary : '#DC2626', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain, fontSize: '0.95rem' }}>
+                        <span style={{ fontWeight: '900', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain, fontSize: '0.95rem' }}>
                             {formatNumber(massBalance.entryKg - massBalance.exitKg - massBalance.wasteKg, 1)} KG
                         </span>
                     </div>
@@ -1070,14 +1070,14 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.15rem' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: THEME.typography.fontFamilyMain }}>
-                                    <BarChart3 size={20} color="#DC2626" /> Pareto Top 5: Fuga Financiera ($)
+                                    <BarChart3 size={20} color={THEME.colors.primary} /> Pareto Top 5: Fuga Financiera ($)
                                 </h2>
                                 <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
                                     Los 5 SKUs con mayor impacto acumulado de merma, pesada y faltante.
                                 </p>
                             </div>
-                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#991B1B', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: THEME.radius.sm, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                80/20 Pérdida
+                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#334155', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '3px 8px', borderRadius: THEME.radius.sm, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                80/20 Concentración
                             </span>
                         </div>
 
@@ -1104,12 +1104,14 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 {massBalance.topLosses.map((item, idx) => {
                                     const maxLoss = massBalance.topLosses[0].cost || 1;
                                     const pct = (item.cost / maxLoss) * 100;
+                                    const slateTones = ['#1E293B', '#334155', '#475569', '#64748B', '#94A3B8'];
+                                    const barColor = slateTones[idx] || '#CBD5E1';
 
                                     return (
                                         <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{ fontWeight: '900', color: idx === 0 ? '#DC2626' : THEME.colors.textSecondary, width: '16px', fontFamily: THEME.typography.fontFamilyMain }}>
+                                                    <span style={{ fontWeight: '800', color: THEME.colors.textSecondary, width: '16px', fontFamily: THEME.typography.fontFamilyMain }}>
                                                         #{idx + 1}
                                                     </span>
                                                     <span style={{ fontWeight: '700', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>
@@ -1120,7 +1122,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                                     </span>
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
-                                                    <span style={{ fontWeight: '900', color: '#DC2626', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
+                                                    <span style={{ fontWeight: '900', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
                                                         {formatMoney(item.cost)}
                                                     </span>
                                                     <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginLeft: '6px', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilySecondary }}>
@@ -1129,7 +1131,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                                 </div>
                                             </div>
                                             <div style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
-                                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: idx === 0 ? '#DC2626' : '#F87171', borderRadius: '3px' }}></div>
+                                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: barColor, borderRadius: '3px' }}></div>
                                             </div>
                                         </div>
                                     );
@@ -1263,15 +1265,15 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: THEME.colors.primary, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
                                             {formatMoney(c.stockValue)}
                                         </td>
-                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: c.wasteCost > 0 ? '#DC2626' : THEME.colors.textSecondary, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
                                             {formatMoney(c.wasteCost)}
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <span style={{
                                                 fontSize: '0.72rem',
                                                 fontWeight: '800',
-                                                color: c.shrinkageRate > 4 ? '#B91C1C' : THEME.colors.primary,
-                                                backgroundColor: c.shrinkageRate > 4 ? '#FEE2E2' : THEME.colors.primaryLight,
+                                                color: c.shrinkageRate > 4 ? '#92400E' : THEME.colors.primary,
+                                                backgroundColor: c.shrinkageRate > 4 ? '#FEF3C7' : THEME.colors.primaryLight,
                                                 padding: '2px 7px',
                                                 borderRadius: THEME.radius.sm,
                                                 fontFamily: THEME.typography.fontFamilyMain

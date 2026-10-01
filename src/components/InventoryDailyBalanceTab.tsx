@@ -2502,17 +2502,17 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                     onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.02)'; }}
                 >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.64rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#DC2626' }}>
+                        <span style={{ fontSize: '0.64rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748B' }}>
                             Faltantes (Col V)
                         </span>
-                        <div style={{ width: '22px', height: '22px', borderRadius: '6px', backgroundColor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <TrendingDown size={12} color="#DC2626" />
+                        <div style={{ width: '22px', height: '22px', borderRadius: '6px', backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <TrendingDown size={12} color="#475569" />
                         </div>
                     </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#DC2626', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                        -{formatNumber(kpis.totalMissingKg, 1)} <span style={{ fontSize: '0.68rem', fontWeight: '700' }}>kg</span>
+                    <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A', marginTop: '2px', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                        -{formatNumber(kpis.totalMissingKg, 1)} <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B' }}>kg</span>
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#DC2626', marginTop: '1px', fontWeight: '800' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#475569', marginTop: '1px', fontWeight: '800' }}>
                         ${formatNumber(Math.round(kpis.totalMissingVal), 0)}
                     </div>
                 </div>
