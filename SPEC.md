@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.54 (Estándar de Hoja Membreteada Universal para Comunicaciones Imprimibles a Terceros, Propuestas Comerciales Ordenadas por Categoría A-Z, Exportación Excel .xlsx y Diseño Swiss Precision, Escenario BDD 92)
+> **Versión:** 1.9.55 (Estándar de Hoja Membreteada Universal A-Z, Exportación Excel .xlsx y Registro de Deuda Técnica 17: Modernización de Marcadores Google Maps AdvancedMarkerElement)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -230,6 +230,17 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
   - `src/app/api/orders/update/route.ts`: Detección diferencial de ítems (`idsToDelete`, `itemsToUpsert`, comparación de cantidades) y encolamiento de remisión rectificativa.
   - Tabla `mail`: Soporte de `scheduled_at` para respeto del buffer de gracia de 2 minutos.
 - **Criterio de Aceptación:** Cumplido. Cero bucles en recepción; cliente recibe remisión formal con buffer de 2 minutos y diff cromático en correcciones.
+
+### ⏳ DEUDA TÉCNICA 17: Modernización de Marcadores de Georreferenciación Google Maps (`google.maps.Marker` ➔ `AdvancedMarkerElement` / `<AdvancedMarker>`)
+- **Diagnóstico Operativo:**
+  1. En febrero de 2024, Google Maps Platform marcó la clase tradicional `google.maps.Marker` como obsoleta (*deprecated*), recomendando la migración progresiva hacia `google.maps.marker.AdvancedMarkerElement` y el componente `<AdvancedMarker>` de `@vis.gl/react-google-maps`.
+  2. Al inicializar mapas en los módulos de Clientes (`ClientsModule.tsx`), Torre de Control Logística (`CommercialUnifiedDashboard.tsx`), Ingesta de Pedidos (`EmailDraftsModule.tsx`) y Captura de Leads B2B (`LeadGenBot.tsx`), el motor de Google emite un aviso informativo (*Deprecation Warning*) en la consola del navegador.
+  3. **Impacto:** Ninguno a nivel funcional en la operación diaria; los pines, geocodificación y coordenadas operan al 100%. Google garantiza un preaviso mínimo de 12 meses antes del retiro definitivo del soporte.
+- **Plan de Acción & Criterios de Aceptación para la Migración:**
+  1. Configurar un `mapId` corporativo válido en la consola de Google Cloud Platform y enlazarlo a la propiedad `mapId` de `<Map>` / `new google.maps.Map(...)`.
+  2. Migrar las instancias imperativas `new window.google.maps.Marker({...})` en `ClientsModule.tsx` hacia `new window.google.maps.marker.AdvancedMarkerElement({...})`.
+  3. Reemplazar las importaciones de `<Marker />` por `<AdvancedMarker />` desde `@vis.gl/react-google-maps` (versión `^1.7.1` ya instalada y con la librería `marker` cargada en `providers.tsx`).
+  4. Verificar la supresión total del mensaje amarillo de obsolescencia en la consola de desarrollo de Chrome/Edge.
 
 ---
 
@@ -987,6 +998,26 @@ El submódulo de Acuerdos Comerciales gobierna la formalización jurídica y fin
    - Checkbox obligatorio: `[x] Autorizo el despacho formal de esta notificación por correo electrónico`.
    - Botón primario: `[Aprobar y Despachar Notificación]` (encolado asíncrono en `mail` + worker `/api/mail/process`).
    - Botón secundario: `[Guardar Sin Notificar]` (permite conservar los cambios en base de datos sin emitir correos).
+
+---
+
+#### H. Gobernanza de Acuerdos Abiertos a Consumo ($0 COP), Remisión Física y Liquidación a Costo Vigente
+1. **Misión de Negocio & Operación sin Acuerdo Previo de Precios:**
+   - Permite formalizar acuerdos comerciales con clientes corporativos o cuentas especiales que requieren abastecimiento diario continuo sin precios cerrados fijos.
+   - Todo el portafolio activo se carga con tarifa nominal `$0 COP`, costo base del catálogo maestro y margen inicial `0%`.
+2. **Ergonomía de Ingesta Discreta en Barra de Herramientas (Paso 3):**
+   - Para no sobrecargar la interfaz ni desplazar el visor principal de carga (*drag & drop*), la opción de lista abierta se aloja como un botón compacto y sutil en la barra superior de acciones: **`[🛒 Lista Abierta ($0)]`** (`handleApplyOpenConsumptionToCreateFlow`).
+   - Al pulsarse, puebla instantáneamente todos los SKUs activos a `$0 COP`, fija la fuente de archivo sintética `Lista_Generica_Consumo_Abierto_0COP.xlsx`, y transiciona a la mesa de reconciliación con la insignia semántica púrpura **`[🔓 Consumo Abierto ($0)]`**.
+3. **Exención Poka-Yoke de Bloqueo en Ingesta de Pedidos (`orders/create` y `EmailDraftsModule`):**
+   - El motor de validación de tarifas exime del bloqueo de precio cero a los ítems amparados bajo un acuerdo de lista abierta a consumo.
+   - El pedido se registra con total `$0` y estampa en auditoría el tag `[CONSUMO ABIERTO / PENDIENTE LIQUIDACIÓN A COSTO VIGENTE]`.
+4. **Despacho y Remisión de Entrega Física (`/admin/orders/contingency-print?mode=remissions`):**
+   - Permite la impresión de la remisión oficial de entrega para almacén y transporte con detalle de unidades, cantidades y control de canastillas sin bloqueos de valorización.
+5. **Mesa de Facturación & Liquidación Contable (`/admin/commercial/billing` y `/api/commercial/billing/liquidate-open-order`):**
+   - Los pedidos abiertos se identifican en la tabla con la píldora ámbar `⚠️ Consumo Abierto` y el icono `Zap`.
+   - **Acción Individual:** Botón **`[⚡ Liquidar]`** en la columna de acciones por fila.
+   - **Acción Masiva:** Botón **`[⚡ Liquidar Costo Vigente (N)]`** en la barra superior de pedidos pendientes.
+   - **Mecanismo de Liquidación:** Consulta la matriz de costos vigentes (`commercial_cost_matrix` o `pricing_model_prices` / `products.base_price`) a la fecha del corte de facturación, actualizando `unit_price`, `subtotal`, `tax_amount`, `total` y las notas de auditoría antes de cortar la Factura Electrónica y exportar a World Office.
 
 ---
 
