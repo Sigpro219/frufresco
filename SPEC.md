@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.60 (Gobernanza de Ajustes del Sistema /admin/settings, Límite Máximo Hogar Contra Entrega max_order_hogar_cod a $400.000 COP, Poka-Yoke Checkout y Creación Manual, Escenarios BDD 98 y 99)
+> **Versión:** 1.9.70 (Compuerta Shift-Left de Rectificación de Cargue en Muelle /ops/rectificacion, Gestión Preventiva de Escasez y Agotados en Plaza, Radicación Automática en Gestión de Calidad, Reimpresión de Remisión Neta y Cierre de Ciclo en Facturación, Escenario BDD 103)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4269,4 +4269,166 @@ El módulo `/admin/settings` centraliza los parámetros maestros operativos, com
   1. El sistema muestra una alerta de riesgo financiero en el resumen del pedido.
   2. Al pulsar "Crear Pedido", se detiene el flujo y se notifica con un Toast de error: *"Los pedidos de Hogar contra entrega no pueden superar $400.000 COP. Por favor seleccione Transferencia Anticipada o Wompi / Link."*.
   3. No se inserta ningún pedido en base de datos hasta que el método sea conmutado a pago anticipado.
+
+---
+
+## 20.9 Protocolo Omnicanal de Radicación de PQRS para Clientes Externos (QR en Remisión Física, Autogestión B2B y Radicación Móvil) (SDD v1.9.61)
+
+### Principio Rector: Poka-Yoke de Radicación Condicionada a la Entrega Real
+> **«En la distribución agroalimentaria de perecederos, radicar una PQR sobre un pedido no despachado o inexistente genera colapso contable y falsos positivos en calidad. Por diseño estricto, TODA reclamación de calidad externa debe originarse indefectiblemente vinculada a un pedido real (`orders.id`) que se encuentre en estado `delivered` o `shipped` dentro de una ventana máxima de 5 días hábiles post-entrega. Se prohíbe la existencia de formularios abiertos sin validación de pedido.»**
+
+### 1. Canal 1: Código QR Dinámico en Remisión Física Duplex (`contingency-print?mode=remissions`)
+- **Génesis:** Al generarse la Remisión de Despacho física en papel carta duplex, el motor de impresión renderiza en el bloque legal inferior un código QR vectorial de alta legibilidad (mínimo 28x28 mm):
+  $$\text{QR URL} = \text{https://frufresco.com/pqrs?order\_id=} \langle \text{order.id} \rangle \& \text{sig=} \langle \text{token} \rangle$$
+- **Experiencia Gemba en Muelle (Mobile-First):**
+  1. El ecónomo o chef detecta mermas o rechazos al momento del descargue (05:30 AM).
+  2. Escanea el QR con la cámara de su teléfono móvil (iOS / Android).
+  3. El navegador abre inmediatamente la interfaz móvil pública `/pqrs` **sin requerir inicio de sesión ni contraseñas**.
+  4. **Precarga Atómica:** El sistema carga la razón social del cliente, sede de entrega, fecha, número de remisión y el **listado exacto de productos que viajaron en ese vehículo** (`order_items`).
+  5. **Captura en Menos de 45 Segundos:**
+     - Selección del ítem afectado de la lista desplegable.
+     - Selección de la anomalía según taxonomía RCA simplificada (*Avería por golpe*, *Sobremaduro*, *Pudrición*, *Faltante en pesaje*, *Calibre fuera de rango*).
+     - Entrada de cantidad afectada en kilos o unidades (restringida matemáticamente: $0 < \text{cant} \le \text{cant\_despachada}$).
+     - Subida de evidencia fotográfica obligatoria (acceso directo a la cámara del teléfono).
+  6. **Efecto Transaccional Inmediato:**
+     - Inserta el registro en `customer_service_pqrs` y `billing_returns` (`status = 'pending'`).
+     - **Congelamiento Poka-Yoke Instantáneo:** Congela la ventana de gracia de facturación de 120 minutos en `/admin/commercial/billing`, impidiendo que el pedido sea facturado con valores erróneos.
+     - Genera un consecutivo oficial amigable: `PQR-2026-XXXX`.
+
+### 2. Canal 2: Botón de Garantía en Autogestión B2B (`/b2b/dashboard`)
+- Para el personal administrativo o ecónomos que gestionan sus pedidos desde la plataforma de compras B2B:
+- En la cabecera y en la tabla de pedidos recientes se integra el botón primario: `[🛡️ Garantía de Calidad / Reportar Novedad]`.
+- Permite seleccionar el pedido entregado y activa el modal `B2BReportNoveltyModal`, enviando la novedad a la mesa central de calidad.
+
+### 3. Canal 3: Canal Asistido WhatsApp SAC con Deep-Link Estructurado
+- En el footer de la página web y en las notificaciones transaccionales por correo se expone el canal asistido hacia el equipo de Calidad:
+  ```text
+  https://wa.me/57300XXXXXXX?text=Hola%20FruFresco%20Calidad,%20requiero%20asistencia%20sobre%20mi%20pedido%20entregado.%20Mi%20n%C3%BAmero%20de%20remisi%C3%B3n/pedido%20es:%20
+  ```
+- Este enlace pre-configura el mensaje para que el cliente adjunte su número de remisión antes de enviar, evitando la dispersión de mensajes hacia números personales de vendedores.
+
+---
+
+## 25. ARQUITECTURA DE LA LANDING PAGE, IDENTIDAD PERSISTENTE B2C & RADICACIÓN DE NOVEDADES HOGAR (SDD v1.9.61)
+
+### 25.1 Misión del Front-End B2C & Experiencia de Usuario Mobile-First
+La tienda virtual web (`src/app/page.tsx`, `/checkout`) ofrece un catálogo de alta fidelidad, con productos selectos de la madrugada, recetas típicas, bento box corporativo y motor de búsqueda predictivo. Opera bajo Streaming SSR de Next.js para tiempos de renderizado menores a 1.2 segundos.
+
+### 25.2 Modelo de Identidad Persistente Cookie-less B2C (`localStorage`)
+1. **Captura en Checkout:** Al completar una orden en `/checkout`, el navegador retiene de forma inmutable:
+   - `checkout_name`: Nombre completo del comprador.
+   - `checkout_phone`: Celular en formato E.164.
+   - `checkout_email`: Correo electrónico de facturación.
+   - `checkout_identification`: Cédula de ciudadanía o NIT.
+   - `checkout_address`: Dirección y coordenadas de entrega.
+2. **Reconocimiento Orgánico en Landing Page (`ReorderHeroBanner.tsx`):**
+   - Cuando el usuario vuelve a ingresar a `frufresco.com`, el componente `ReorderHeroBanner` detecta la presencia de estos tokens en `localStorage`.
+   - Saluda al cliente por su primer nombre (*"¡Hola Camila! Repite tu mercado anterior en 1 clic"*).
+   - Consulta el endpoint seguro `/api/orders/last-purchase` para traer el histórico de órdenes y rellenar el carrito con los precios del día.
+
+### 25.3 Garantía de Calidad para Clientes B2C Reconocidos
+- En la barra de re-orden o en el menú de usuario de la tienda web, si el cliente se encuentra reconocido por sus credenciales de checkout, se expone el acceso:
+  `"¿Tuviste algún problema con tu mercado? Reportar garantía de calidad"`.
+- Al pulsar el enlace:
+  1. Despliega los pedidos entregados del cliente en las últimas 72 horas.
+  2. Permite seleccionar el pedido y marcar el producto afectado con fotografía.
+  3. Inserta la PQR en `customer_service_pqrs` vinculada al perfil B2C para compensación inmediata (reembolso Wompi o saldo a favor en su próximo mercado).
+
+---
+
+#### Escenario 100: Radicación de PQRS en Muelle mediante Escaneo de Código QR en Remisión Física de Despacho
+- **Given** un pedido institucional despachado para "Hotel Tequendama" con Remisión #REM-2045.
+- **And** la remisión impresa en papel carta duplex cuenta con un código QR dinámico en el pie de página legal.
+- **When** el jefe de cocina recibe el furgón a las 05:45 AM y detecta 5 kg de fresa con daño mecánico por sobreestiba.
+- **And** escanea el código QR de la remisión con su celular.
+- **Then**:
+  1. El navegador de su teléfono abre directamente `/pqrs?order=UUID&token=HASH` sin exigir contraseña.
+  2. La pantalla móvil precarga automáticamente: "Hotel Tequendama", Remisión #REM-2045, Fecha de entrega y los 12 ítems del pedido.
+  3. El chef selecciona "Fresa Selección", marca la cantidad afectada "5.00 Kg", selecciona la causa "Daño Mecánico / Aplastamiento" y toma la foto con la cámara del celular.
+  4. Al pulsar "Radicar Garantía de Calidad", el sistema genera el radicado `PQR-2026-0842`.
+  5. En planta, el cronómetro de gracia de facturación de 120 minutos se congela inmediatamente en `/admin/commercial/billing`, impidiendo que el pedido sea facturado hasta que Control de Calidad audite la novedad.
+
+#### Escenario 101: Acceso Directo de Garantía de Calidad en Autogestión B2B y Congelamiento Poka-Yoke de Facturación
+- **Given** el comprador corporativo de "Restaurante Wok Express" con sesión activa en `/b2b/dashboard`.
+- **When** consulta sus pedidos recientes y pulsa el botón `[🛡️ Garantía de Calidad / Reportar Novedad]` sobre su pedido entregado ayer.
+- **Then**:
+  1. Se despliega el modal interactivo `B2BReportNoveltyModal`.
+  2. El sistema lista los productos facturados en esa orden específica y bloquea cantidades que superen las despachadas.
+  3. Al enviar el reporte con la foto de evidencia, el sistema crea el registro en `customer_service_pqrs` con la taxonomía RCA correspondiente y lo asigna a la mesa de `/admin/customer-service`.
+
+#### Escenario 102: Radicación de Novedad B2C desde Landing Page mediante Identidad Persistente de Checkout
+- **Given** una cliente de hogar "Mariana Gómez" que realizó su compra semanal de mercado el sábado en `/checkout`.
+- **And** su navegador retiene en `localStorage` las claves `checkout_phone` y `checkout_email`.
+- **When** Mariana ingresa el lunes a `frufresco.com` y detecta una novedad en los aguacates recibidos.
+- **Then**:
+  1. El banner de la landing page la reconoce y le muestra la opción `"Garantía de Entrega"`.
+  2. El sistema consulta sus compras recientes a través de `/api/orders/last-purchase`.
+  3. Mariana selecciona la orden del sábado, marca "Aguacate Hass", escribe la novedad, adjunta la foto y radica su PQR sin necesidad de crear contraseñas.
+  4. El equipo de Calidad recibe la novedad en `/admin/customer-service` y programa la reposición a $0 COP o el saldo a favor en Wompi.
+
+---
+
+## 26. COMPUERTA SHIFT-LEFT DE RECTIFICACIÓN DE CARGUE EN MUELLE (/ops/rectificacion) & GESTIÓN PREVENTIVA DE ESCASEZ Y AGOTADOS (SDD v1.9.70)
+
+### 26.1 Principio Lean Jidoka: Contención de Discrepancias en Muelle de Cargue
+En la distribución HORECA de frutas y hortalizas frescas, despachar un vehículo con un documento impreso de remisión o prefactura con cantidades superiores a las efectivamente cargadas en el furgón constituye una violación del principio Lean de calidad en la fuente (*Shift-Left*).
+1. **Eliminación de la «Ruta de la Tachadura»:**
+   - Históricamente, si un producto no se conseguía en Corabastos a las 02:00 AM (desabastecimiento/escasez), el camión partía con la remisión original inflada. Al llegar a la sede del cliente, el ecónomo o chef detectaba el faltante, tachaba con esfero la hoja física y obligaba al chofer a fotografiar el documento.
+   - Dicha fricción provocaba retrasos en la ruta matutina, desconfianza del cliente respecto al cobro y un costo administrativo desproporcionado (emisión forzada de Notas Crédito, recálculo contable de IVA y conciliación de cartera).
+2. **Mandato Operativo:**
+   - La estación de **Rectificación de Cargue LIFO (`/ops/rectificacion/[routeId]`)** actúa como **Compuerta Poka-Yoke Definitiva**. Si un ítem no fue alistado por escasez en plaza o merma de selección, el auditor/rectificador declara la novedad directamente en muelle antes de liberar el camión.
+
+### 26.2 Estados del Ítem en la Lista de Chequeo de Rectificación
+Cada línea de mercancía en la lista de chequeo de la parada dispone de dos estados canónicos:
+1. **`Cargado Conforme` (`checked: true`, `is_shortage: false`):**
+   - El producto fue físicamente verificado en canastilla conforme a la cantidad pedida.
+2. **`Faltante por Agotado / Escasez` (`is_shortage: true`, `actual_quantity: 0` o cantidad parcial):**
+   - El producto no se alistó o se alistó parcialmente debido a escasez en el mercado mayorista o rechazo en mesa de selección.
+   - La parada **se valida operativamente como conforme con novedad**, permitiendo avanzar en la certificación de la ruta sin bloquear al operario con falsos positivos.
+
+### 26.3 Circuito Automático e Ineludible en Gestión de Calidad
+Al certificar una ruta con novedades de cargue por escasez:
+1. **Radicación Inmediata en `billing_returns` & `customer_service_pqrs`:**
+   - Se crea de manera autónoma una novedad con la taxonomía oficial de Causa Raíz (RCA):
+     * **Macrocausa L1:** `7. Desviación Comercial / Abastecimiento` (`comercial_cliente`).
+     * **Subtipo L2:** `producto_agotado_plaza` (*Desabastecimiento en Plaza / Agotado Corabastos*).
+     * **Imputabilidad Contractual:** `Compras & Abastecimiento` (`proveedor`).
+     * **Estado:** `pending_review` en la mesa de control de Calidad (`/admin/customer-service`).
+2. **Acción Proactiva Comercial (SAC Alert):**
+   - Al generarse la novedad en muelle a las 04:30 AM, el equipo de Atención al Cliente y el Asesor Comercial pueden notificar preventivamente al restaurante antes del arribo del furgón, transformando un faltante en un acto de transparencia corporativa.
+
+### 26.4 Regeneración y Reimpresión en Caliente de la Remisión Física
+1. **Recálculo de Orden en Base de Datos:**
+   - Las cantidades despachadas se asientan en `order_items` (`picked_quantity = actual_loaded`).
+   - Se actualizan los totales de la cabecera en `orders` (`subtotal`, `tax`, `total`, `total_weight_kg`).
+2. **Disparador 1-Clic de Reimpresión de Remisión:**
+   - En la tarjeta de la parada y en el modal de certificación, el sistema expone el botón:
+     `[🖨️ Reimprimir Remisión Corregida]`.
+   - Invoca directamente `/admin/orders/contingency-print?mode=remissions&orderIds=${order_id}` con la liquidación neta actualizada en formato Carta Duplicado (Original Cliente + Copia Archivo).
+   - El furgón sale a reparto con la remisión física exactamente idéntica a la carga física.
+
+### 26.5 Contrato de Facturación Neta Cero-Discrepancias
+1. **Para pedidos con Remisión de Despacho (Flujo Estándar):**
+   - En el Corte AM de Facturación (`/admin/commercial/billing`), la factura electrónica definitiva se emite sobre la remisión rectificada.
+   - **Tasa de Notas Crédito por Faltantes de Cargue = 0.0%.**
+2. **Para pedidos prefacturados con DIAN previa:**
+   - El sistema encola en `billing_returns` la liquidación para la emisión inmediata de la Nota Crédito electrónica en el Corte ADJ, sin requerir el regreso físico del furgón a la tarde.
+
+---
+
+#### Escenario 103: Detección de Faltante por Escasez en Rectificación de Cargue, Radicación Automática en Calidad y Reimpresión Inmediata de Remisión Neta
+- **Given** una ruta `PMW071` con el pedido #1045 de "ADR WORK SAS - HOTEL SPOT CENTRO".
+- **And** el pedido incluye 24 Kg de "Ciruela Nacional" ($12,000 COP/kg) y 30 Kg de "Ruibarbo" ($8,000 COP/kg).
+- **When** el rectificador en muelle de cargue (`/ops/rectificacion/pmw071`) detecta que el Ruibarbo no llegó de Corabastos por desabastecimiento.
+- **And** marca la línea de Ruibarbo como `[⚠️ Faltante / Agotado]` con cantidad cargada `0 Kg`.
+- **Then**:
+  1. La tarjeta del pedido muestra la alerta: `⚠️ Novedad detectada: 1 producto no alistado por escasez (Ruibarbo: 0 / 30 Kg)`.
+  2. El pedido se marca como rectificado con novedad y habilita la liberación de la ruta.
+  3. Al pulsar `[🖨️ Reimprimir Remisión Corregida]`, el sistema abre la remisión en Carta Duplicada recalculada, excluyendo el Ruibarbo y descontando $240,000 COP del total.
+  4. Al finalizar la certificación de la ruta, el sistema inserta automáticamente:
+     - Un registro en `billing_returns` con `quantity_returned: 30`, `defect_category_l1: 'comercial_cliente'`, `defect_subtype_l2: 'producto_agotado_plaza'`, `imputed_responsible: 'proveedor'`.
+     - Un ticket de PQR en `customer_service_pqrs` asignado a la mesa de Calidad.
+  5. En facturación matutina, el pedido se factura por el neto efectivamente despachado sin generar notas crédito ni fricciones con el chef.
+
+
 

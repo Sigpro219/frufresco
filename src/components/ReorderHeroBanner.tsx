@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useCart } from '../lib/cartContext';
-import { ShoppingCart, RotateCcw, Sparkles, X, Loader2, Calendar, CheckCircle2, ChevronRight, History, Star } from 'lucide-react';
+import { ShoppingCart, RotateCcw, Sparkles, X, Loader2, Calendar, CheckCircle2, ChevronRight, History, Star, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function ReorderHeroBanner() {
     const { addItem } = useCart();
@@ -243,6 +244,26 @@ export default function ReorderHeroBanner() {
                         >
                             <History size={15} /> Ver últimos pedidos
                         </button>
+
+                        <Link
+                            href="/pqrs"
+                            style={{
+                                backgroundColor: '#FFFFFF',
+                                color: '#065F46',
+                                padding: '0.65rem 0.85rem',
+                                borderRadius: '12px',
+                                border: '1px solid #CBD5E1',
+                                fontWeight: '700',
+                                fontSize: '0.82rem',
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                            }}
+                            title="Reportar avería o solicitar garantía de calidad"
+                        >
+                            <ShieldCheck size={15} color="#0D7A57" /> Garantía / PQRS
+                        </Link>
                     </div>
                 </div>
             ) : (
@@ -375,26 +396,49 @@ export default function ReorderHeroBanner() {
                                                 </div>
                                             </div>
 
-                                            <button
-                                                onClick={() => handleQuickReorder(ord.id)}
-                                                disabled={loading}
-                                                style={{
-                                                    backgroundColor: '#059669',
-                                                    color: 'white',
-                                                    padding: '0.55rem 1rem',
-                                                    borderRadius: '10px',
-                                                    border: 'none',
-                                                    fontWeight: '800',
-                                                    fontSize: '0.8rem',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    boxShadow: '0 2px 8px rgba(5, 150, 105, 0.2)'
-                                                }}
-                                            >
-                                                <ShoppingCart size={14} /> Repetir
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                <Link
+                                                    href={`/pqrs?order_id=${ord.id}`}
+                                                    onClick={() => setShowRecentModal(false)}
+                                                    style={{
+                                                        backgroundColor: '#FEF2F2',
+                                                        color: '#991B1B',
+                                                        border: '1px solid #FCA5A5',
+                                                        padding: '0.55rem 0.75rem',
+                                                        borderRadius: '10px',
+                                                        fontWeight: '700',
+                                                        fontSize: '0.78rem',
+                                                        textDecoration: 'none',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                    title="Reportar garantía sobre este pedido"
+                                                >
+                                                    <ShieldCheck size={13} color="#DC2626" /> Garantía
+                                                </Link>
+
+                                                <button
+                                                    onClick={() => handleQuickReorder(ord.id)}
+                                                    disabled={loading}
+                                                    style={{
+                                                        backgroundColor: '#059669',
+                                                        color: 'white',
+                                                        padding: '0.55rem 1rem',
+                                                        borderRadius: '10px',
+                                                        border: 'none',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        boxShadow: '0 2px 8px rgba(5, 150, 105, 0.2)'
+                                                    }}
+                                                >
+                                                    <ShoppingCart size={14} /> Repetir
+                                                </button>
+                                            </div>
                                         </div>
                                     );
                                 })}

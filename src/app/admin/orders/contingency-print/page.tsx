@@ -10,6 +10,7 @@ import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate } from '@/components/print';
 import { formatTimeWindow } from '@/lib/logistics-parser';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface OrderItem {
     id: string;
@@ -1258,8 +1259,8 @@ export default function ContingencyPrintPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* Signatures Block Compact at Bottom */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '8px', border: '1px solid #CBD5E1', padding: isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isDense ? '6.2pt' : '6.6pt', marginTop: 'auto' }}>
+                                                {/* Signatures Block Compact at Bottom con QR Vectorial de Radicación */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.95fr auto', gap: '8px', border: '1px solid #CBD5E1', padding: isDense ? '3px 6px' : '4px 8px', borderRadius: '4px', fontSize: isDense ? '6.2pt' : '6.6pt', marginTop: 'auto', alignItems: 'center' }}>
                                                     <div>
                                                         <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>FIRMA Y CÉDULA DE QUIEN RECIBE A CONFORMIDAD:</div>
                                                         <div style={{ marginTop: isDense ? '8px' : '12px', borderBottom: '1px solid #0F172A', width: '85%' }}></div>
@@ -1270,6 +1271,21 @@ export default function ContingencyPrintPage() {
                                                         <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1px', fontSize: isDense ? '6.4pt' : '6.8pt' }}>SELLO / NOVEDADES EN SITIO:</div>
                                                         <div style={{ height: isDense ? '26px' : '32px', border: '1px dashed #CBD5E1', borderRadius: '3px', padding: '2px', color: '#94A3B8', fontSize: isDense ? '5.4pt' : '5.8pt', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                                                             Sello húmedo del establecimiento o relación de devoluciones/faltantes firmados.
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderLeft: '1px dashed #CBD5E1', paddingLeft: '8px', textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: '800', color: '#0D7A57', fontSize: isDense ? '5.6pt' : '6pt', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                                            Garantía & PQRS
+                                                        </div>
+                                                        <div style={{ backgroundColor: '#FFFFFF', padding: '2px', borderRadius: '3px', border: '1px solid #E2E8F0', display: 'inline-flex' }}>
+                                                            <QRCodeSVG 
+                                                                value={typeof window !== 'undefined' ? `${window.location.origin}/pqrs?order_id=${order.id}` : `https://frufresco.com/pqrs?order_id=${order.id}`} 
+                                                                size={isDense ? 48 : 54} 
+                                                                level="M" 
+                                                            />
+                                                        </div>
+                                                        <div style={{ fontSize: '4.6pt', color: '#64748B', marginTop: '2px', maxWidth: '64px', lineHeight: 1.1, fontWeight: '500' }}>
+                                                            Escanea para radicar novedades
                                                         </div>
                                                     </div>
                                                 </div>

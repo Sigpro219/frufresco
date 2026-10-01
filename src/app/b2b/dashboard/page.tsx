@@ -2375,6 +2375,32 @@ export default function B2BDashboard() {
                             </div>
                         </div>
 
+                        {/* Quality Assurance Banner */}
+                        <div style={{
+                            backgroundColor: '#F0FDF4',
+                            border: '1.5px solid #A7F3D0',
+                            borderRadius: '12px',
+                            padding: '0.85rem 1.25rem',
+                            marginBottom: '1.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '1rem',
+                            flexWrap: 'wrap'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <ShieldCheck size={22} color="#059669" />
+                                <div>
+                                    <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#064E3B' }}>
+                                        Protocolo de Garantía de Calidad & PQRS B2B
+                                    </div>
+                                    <div style={{ fontSize: '0.78rem', color: '#047857' }}>
+                                        Si recibiste productos averiados, con merma o faltantes de pesaje, puedes radicar la novedad directamente pulsando el botón <strong>&quot;Garantía / Novedad&quot;</strong> en la fila del pedido correspondiente.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         {isLoadingInvoices ? (
                             <div style={{ padding: '3rem', textAlign: 'center' }}>
                                 <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
@@ -2473,7 +2499,7 @@ export default function B2BDashboard() {
                                                         }}
                                                         title="Reportar avería, producto en mal estado o faltante de entrega"
                                                     >
-                                                        <AlertTriangle size={14} strokeWidth={2.2} /> Reportar Novedad
+                                                        <ShieldCheck size={14} strokeWidth={2.2} /> Garantía / Novedad
                                                     </button>
 
                                                     <button 

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import OrderTracking from './OrderTracking';
-import { MapPin, Phone, Mail } from 'lucide-react';
+import { MapPin, Phone, Mail, MessageCircle, ShieldCheck } from 'lucide-react';
 import { config } from '@/lib/config';
 import { useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
@@ -132,6 +132,11 @@ export default function Footer() {
               <li><Link href="/" className="footer-link">{t.navHome}</Link></li>
               <li><Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} className="footer-link">{t.navCatalog}</Link></li>
               <li><Link href="/b2b/register" className="footer-link">{t.navInstitutional}</Link></li>
+              <li>
+                <Link href="/pqrs" className="footer-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#34D399', fontWeight: '700' }}>
+                  <ShieldCheck size={15} strokeWidth={2.2} /> Garantía & PQRS
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -146,7 +151,7 @@ export default function Footer() {
               letterSpacing: '0.15em',
               textTransform: 'uppercase'
             }}>{t.contact}</h4>
-            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
                 <MapPin size={18} strokeWidth={1.5} color="var(--primary)" /> {address}
               </li>
@@ -155,6 +160,29 @@ export default function Footer() {
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
                 <Mail size={18} strokeWidth={1.5} color="var(--primary)" /> {email}
+              </li>
+              <li style={{ marginTop: '0.25rem' }}>
+                <a 
+                  href="https://wa.me/573167022898?text=Hola%20FruFresco%20Calidad,%20necesito%20asistencia%20sobre%20mi%20pedido%20entregado.%20Mi%20n%C3%BAmero%20de%20remisi%C3%B3n/pedido%20es:%20"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: '#34D399',
+                    fontWeight: '700',
+                    textDecoration: 'none',
+                    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                    border: '1px solid rgba(52, 211, 153, 0.25)',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <MessageCircle size={16} strokeWidth={2.2} /> SAC & Calidad (WhatsApp)
+                </a>
               </li>
             </ul>
           </div>
