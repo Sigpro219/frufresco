@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.77 (Drawer de Acuerdos Comerciales con Barras de Aviso Micro-Slim 26px, Superbuscador Omnibox Acoplado y Thead Congelado Sticky Top 0 según Estandar-Galerias-FruFresco, Escenario BDD 110)
+> **Versión:** 1.9.78 (Modal Previsualización de Factura/Pedido: Erradicación de Glifos no Lucide, Captura Dinámica de Orden de Compra OC y Thead Sticky Congelado en Productos del Pedido, Escenario BDD 111)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4843,4 +4843,20 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
      - Las celdas `<th>` del `<thead>` permanecen ancladas de forma magnética en `position: 'sticky', top: 0, zIndex: 30` con fondo sólido `#F8FAFC`, borde `2px solid #E2E8F0` y `boxShadow: '0 1px 2px rgba(0,0,0,0.05)'`.
      - La tabla utiliza `borderCollapse: 'separate', borderSpacing: 0` previniendo desincronizaciones de composición de capas de GPU en Chromium.
      - Las filas del `<tbody>` se deslizan fluidamente por debajo del encabezado congelado sin traslapes ni holguras transparentes.
+
+---
+
+#### Escenario 111: Modal de Previsualización de Factura/Pedido con Iconografía Lucide Pura, Entrada Activa de Orden de Compra (OC) y Thead Sticky Congelado
+- **Given** un operador en el módulo de borradores de pedidos (`EmailDraftsModule.tsx`) al abrir el modal de aprobación de pedido (`Previsualización de Factura / Pedido`).
+- **When** se inspecciona la información comercial, el encabezado del cliente detectado y la tabla de productos extraídos:
+- **Then**:
+  1. **Iconografía Lucide Pura:** Queda estrictamente prohibido el uso de glifos unicode no estandarizados o emojis (e.g., `🔒`, `🔓`). Se renderizan componentes vectoriales oficiales `<Lock />`, `<Unlock />`, `<FileText />`, `<Tag />`, `<Hash />` y `<AlertTriangle />` de `lucide-react` con strokeWidth y tamaños estandarizados (11px-16px).
+  2. **Captura y Visualización Dinámica de Orden de Compra (OC):**
+     - En la tarjeta `CLIENTE DETECTADO`, se presenta la fila dedicada de Orden de Compra vinculada a `purchaseOrder`.
+     - Si la IA o el documento trajo un número de OC (`detectedPo`), se muestra con badge azul (`#EFF6FF`, `#1E40AF`) y un campo de edición reactivo para corrección rápida.
+     - Si no se detectó número de OC, se despliega una alerta ámbar destacada (`Sin OC detectada`) junto con un input interactivo enfocado (`#FFFBEB`, borde `#F59E0B`) solicitando al operador que inserte el número de OC antes de confirmar.
+     - El valor editado se persiste directamente en `client_po_number` de la tabla `orders` al confirmar la creación del pedido.
+  3. **Comportamiento Thead Sticky Congelado en Productos del Pedido:**
+     - El contenedor de la tabla de productos (`PRODUCTOS DEL PEDIDO`) aísla el scroll con `maxHeight: '380px'`, `overflowY: 'auto'`, `borderCollapse: 'separate'` y `borderSpacing: 0`.
+     - Las cabeceras `<th>` (`Producto (Mapeado)`, `Presentación & Atributos`, `Cant. Facturada`, `Precio Unitario`, `Subtotal`) permanecen fijas en `position: 'sticky', top: 0, zIndex: 30` con fondo sólido `#F8FAF9`, borde inferior `2px solid #E2E8F0` y elevación visual `boxShadow: '0 1px 2px rgba(0,0,0,0.05)'`, garantizando visibilidad perpetua de las columnas al desplazarse por pedidos de gran volumen de ítems.
 

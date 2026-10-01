@@ -4508,7 +4508,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           setPriceList('');
         }
         setOrderDocument(meta.orderDocument || 'Remisión');
-        setPurchaseOrder(meta.purchaseOrder || '');
+        const detectedPo = (meta as any).purchaseOrder || (meta as any).purchase_order || (meta as any).po_number || (selectedDraft as any).client_po_number || (selectedDraft as any).po_number || (selectedDraft as any).purchase_order || (Array.isArray(selectedDraft.extracted_items) ? selectedDraft.extracted_items.find((i: any) => i.purchase_order)?.purchase_order : '') || '';
+        setPurchaseOrder(detectedPo);
       } else {
         if (currentAtt && currentAtt.deliverySlot) {
           setEditableDeliverySlot(currentAtt.deliverySlot);
@@ -4519,8 +4520,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if (!priceList && meta.priceList) {
           setPriceList(meta.priceList);
         }
-        if (!purchaseOrder && meta.purchaseOrder) {
-          setPurchaseOrder(meta.purchaseOrder);
+        const detectedPo = (meta as any).purchaseOrder || (meta as any).purchase_order || (meta as any).po_number || (selectedDraft as any).client_po_number || (selectedDraft as any).po_number || (selectedDraft as any).purchase_order || (Array.isArray(selectedDraft.extracted_items) ? selectedDraft.extracted_items.find((i: any) => i.purchase_order)?.purchase_order : '') || '';
+        if (!purchaseOrder && detectedPo) {
+          setPurchaseOrder(detectedPo);
         }
       }
       let initialDateStr = currentAtt?.deliveryDate || meta.deliveryDate || minDeliveryDate;
@@ -5811,7 +5813,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
           latitude: draftCoordinates?.lat || metadata?.latitude || null,
           longitude: draftCoordinates?.lng || metadata?.longitude || null,
-          document_url: draftAttachmentUrl
+          document_url: draftAttachmentUrl,
+          client_po_number: purchaseOrder?.trim() || null
         })
         .select()
         .single();
@@ -10470,7 +10473,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1.2rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
               <div style={{ fontWeight: 800, fontSize: '0.9rem', color: THEME.colors.textMain, marginBottom: '0.6rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontFamily: 'var(--font-outfit), sans-serif' }}>
                 <span>CLIENTE DETECTADO</span>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
                     {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
                   </span>
@@ -10490,34 +10493,196 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       fontWeight: '800',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '3px'
+                      gap: '4px'
                     }} title={!allowOffAgreementPurchases ? 'Compras restringidas estrictamente a productos pactados en el acuerdo vigente' : 'Compras permitidas para productos fuera de convenio con tarifa general'}>
-                      {!allowOffAgreementPurchases ? '🔒 Solo Convenio' : '🔓 Permite Fuera de Convenio'}
+                      {!allowOffAgreementPurchases ? (
+                        <>
+                          <Lock size={11} strokeWidth={2.5} /> Solo Convenio
+                        </>
+                      ) : (
+                        <>
+                          <Unlock size={11} strokeWidth={2.5} /> Permite Fuera de Convenio
+                        </>
+                      )}
                     </span>
                   )}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem 1.5rem', alignItems: 'center' }}>
                 <div><strong>Nombre:</strong> {selectedDraft.client_detected_name || 'Desconocido'}</div>
                 <div><strong>Celular:</strong> {getDraftMetadata(selectedDraft).phone || 'No especificado'}</div>
                 <div><strong>NIT/Cédula:</strong> {getDraftMetadata(selectedDraft).nit || 'No especificado'}</div>
                 <div><strong>Email:</strong> {matchedProfile?.email || matchedProfile?.contact_email || matchedProfile?.additional_billing_emails || matchedProfile?.email_2 || editableClientEmail || (selectedDraft.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : 'No especificado')}</div>
-                <div style={{ gridColumn: 'span 2' }}><strong>Dirección:</strong> {getDraftMetadata(selectedDraft).address || 'No especificada'}</div>
+                <div><strong>Dirección:</strong> {getDraftMetadata(selectedDraft).address || 'No especificada'}</div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <strong>Orden de Compra (OC):</strong>
+                    {purchaseOrder && purchaseOrder.trim() !== '' ? (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                          backgroundColor: '#EFF6FF',
+                          color: '#1D4ED8',
+                          border: '1px solid #93C5FD',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontWeight: '800',
+                          fontSize: '0.80rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <Hash size={11} strokeWidth={2.5} />
+                          {purchaseOrder}
+                        </span>
+                        <input
+                          type="text"
+                          value={purchaseOrder}
+                          onChange={(e) => setPurchaseOrder(e.target.value)}
+                          placeholder="Editar N° OC..."
+                          style={{
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            padding: '2px 7px',
+                            fontSize: '0.78rem',
+                            fontWeight: '600',
+                            width: '130px',
+                            color: '#1E293B',
+                            outline: 'none',
+                            backgroundColor: '#FFFFFF'
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          backgroundColor: '#FEF3C7',
+                          color: '#92400E',
+                          border: '1px solid #FCD34D',
+                          padding: '2px 6px',
+                          borderRadius: '5px',
+                          fontWeight: '800',
+                          fontSize: '0.72rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          <AlertTriangle size={11} color="#D97706" /> Sin OC detectada
+                        </span>
+                        <input
+                          type="text"
+                          value={purchaseOrder}
+                          onChange={(e) => setPurchaseOrder(e.target.value)}
+                          placeholder="Ingresar N° OC..."
+                          style={{
+                            border: '1.5px solid #F59E0B',
+                            borderRadius: '6px',
+                            padding: '2px 8px',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            width: '150px',
+                            color: '#92400E',
+                            backgroundColor: '#FFFBEB',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Items details list */}
             <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.05em', marginBottom: '0.5rem', textTransform: 'uppercase', fontFamily: 'var(--font-outfit), sans-serif' }}>PRODUCTOS DEL PEDIDO</div>
-              <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#F8FAF9', borderBottom: '1px solid #E2E8F0', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Producto (Mapeado)</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Presentación & Atributos</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Cant. Facturada</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Unitario</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Subtotal</th>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.05em', marginBottom: '0.5rem', textTransform: 'uppercase', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                PRODUCTOS DEL PEDIDO
+              </div>
+              <div style={{ 
+                maxHeight: '380px', 
+                overflowY: 'auto', 
+                overflowX: 'hidden', 
+                border: '1px solid #E2E8F0', 
+                borderRadius: '12px',
+                backgroundColor: '#FFFFFF'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.85rem', textAlign: 'left' }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
+                    <tr style={{ backgroundColor: '#F8FAF9' }}>
+                      <th style={{ 
+                        position: 'sticky', 
+                        top: 0, 
+                        zIndex: 30, 
+                        padding: '0.75rem 1rem', 
+                        backgroundColor: '#F8FAF9', 
+                        borderBottom: '2px solid #E2E8F0', 
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        textAlign: 'left', 
+                        fontWeight: 800, 
+                        color: '#4B5563', 
+                        fontFamily: 'var(--font-outfit), sans-serif' 
+                      }}>
+                        Producto (Mapeado)
+                      </th>
+                      <th style={{ 
+                        position: 'sticky', 
+                        top: 0, 
+                        zIndex: 30, 
+                        padding: '0.75rem 1rem', 
+                        backgroundColor: '#F8FAF9', 
+                        borderBottom: '2px solid #E2E8F0', 
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        textAlign: 'left', 
+                        fontWeight: 800, 
+                        color: '#4B5563', 
+                        fontFamily: 'var(--font-outfit), sans-serif' 
+                      }}>
+                        Presentación & Atributos
+                      </th>
+                      <th style={{ 
+                        position: 'sticky', 
+                        top: 0, 
+                        zIndex: 30, 
+                        padding: '0.75rem 1rem', 
+                        backgroundColor: '#F8FAF9', 
+                        borderBottom: '2px solid #E2E8F0', 
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        textAlign: 'center', 
+                        fontWeight: 800, 
+                        color: '#4B5563', 
+                        fontFamily: 'var(--font-outfit), sans-serif' 
+                      }}>
+                        Cant. Facturada
+                      </th>
+                      <th style={{ 
+                        position: 'sticky', 
+                        top: 0, 
+                        zIndex: 30, 
+                        padding: '0.75rem 1rem', 
+                        backgroundColor: '#F8FAF9', 
+                        borderBottom: '2px solid #E2E8F0', 
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        textAlign: 'right', 
+                        fontWeight: 800, 
+                        color: '#4B5563', 
+                        fontFamily: 'var(--font-outfit), sans-serif' 
+                      }}>
+                        Precio Unitario
+                      </th>
+                      <th style={{ 
+                        position: 'sticky', 
+                        top: 0, 
+                        zIndex: 30, 
+                        padding: '0.75rem 1rem', 
+                        backgroundColor: '#F8FAF9', 
+                        borderBottom: '2px solid #E2E8F0', 
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        textAlign: 'right', 
+                        fontWeight: 800, 
+                        color: '#4B5563', 
+                        fontFamily: 'var(--font-outfit), sans-serif' 
+                      }}>
+                        Subtotal
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
