@@ -186,27 +186,39 @@ export const GalleryOmnibox: React.FC<GalleryOmniboxProps> = ({
  * - Búsqueda multi-palabra con AND (todas las palabras deben estar)
  * - Soporte de comas como OR (palabra1, palabra2)
  */
-export function matchesUniversalSearch<T>(
-  item: T,
+export function matchesUniversalSearch<T = any>(
+  itemOrFields: T | (string | number | null | undefined)[],
   query: string,
-  fieldExtractor: (item: T) => (string | number | null | undefined)[],
+  fieldExtractor?: (item: T) => (string | number | null | undefined)[],
   idExtractor?: (item: T) => string | number | null | undefined
 ): boolean {
-  const trimmed = query.trim();
+  const trimmed = (query || '').trim();
   if (!trimmed) return true;
 
-  // 1. Coincidencia exacta por #ID (ej: #1002, #15)
-  if (trimmed.startsWith('#') && idExtractor) {
-    const targetId = trimmed.slice(1).trim().toLowerCase();
-    const itemId = String(idExtractor(item) ?? '').toLowerCase();
-    return itemId === targetId || itemId.endsWith(targetId);
-  }
-
-  // Función para remover acentos
+  // Función para remover acentos y pasar a minúsculas
   const normalize = (str: string) =>
     str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-  const normalizedFields = fieldExtractor(item)
+  // 1. Coincidencia exacta por #ID (ej: #1002, #15)
+  if (trimmed.startsWith('#')) {
+    const targetId = trimmed.slice(1).trim().toLowerCase();
+    if (idExtractor && typeof itemOrFields === 'object' && !Array.isArray(itemOrFields)) {
+      const itemId = String(idExtractor(itemOrFields as T) ?? '').toLowerCase();
+      if (itemId === targetId || itemId.endsWith(targetId)) return true;
+    }
+  }
+
+  // Extraer campos normalizados
+  let rawFields: (string | number | null | undefined)[] = [];
+  if (Array.isArray(itemOrFields)) {
+    rawFields = itemOrFields;
+  } else if (typeof fieldExtractor === 'function') {
+    rawFields = fieldExtractor(itemOrFields as T);
+  } else if (typeof itemOrFields === 'object' && itemOrFields !== null) {
+    rawFields = Object.values(itemOrFields as any);
+  }
+
+  const normalizedFields = rawFields
     .filter((f) => f !== null && f !== undefined)
     .map((f) => normalize(String(f)));
 
