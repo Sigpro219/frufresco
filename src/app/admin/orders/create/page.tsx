@@ -646,6 +646,8 @@ function CreateOrderContent() {
         }
     `;
     const [adminNotes, setAdminNotes] = useState('');
+    const [purchaseOrderNumber, setPurchaseOrderNumber] = useState('');
+    const [solpedNumber, setSolpedNumber] = useState('');
 
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
@@ -1457,11 +1459,17 @@ function CreateOrderContent() {
                         setAdminNotes(`[PEDIDO CORREO] Asunto: ${draft.email_subject || ''}\n---\n${draft.email_body || ''}\n---\n`);
                     }
                     
-                    // Cargar fecha de entrega si viene en la metadata del borrador
+                    // Cargar fecha de entrega y OC si viene en la metadata del borrador
                     const items = draft.extracted_items || [];
                     const metadataItem = items.find((i: any) => i.isMetadata);
                     if (metadataItem?.deliveryDate) {
                         setDeliveryDate(metadataItem.deliveryDate);
+                    }
+                    if (draft.purchase_order || metadataItem?.poNumber) {
+                        setPurchaseOrderNumber(draft.purchase_order || metadataItem?.poNumber);
+                    }
+                    if (metadataItem?.solpedNumber) {
+                        setSolpedNumber(metadataItem.solpedNumber);
                     }
                     
                     // Asociar cliente si existe
@@ -3330,6 +3338,8 @@ function CreateOrderContent() {
 
             const detectedPo = data.poNumber || null;
             const detectedSolped = data.solpedNumber || null;
+            if (detectedPo) setPurchaseOrderNumber(detectedPo);
+            if (detectedSolped) setSolpedNumber(detectedSolped);
             const detectedOrderType = data.orderTypeLabel || null;
             const detectedCodes = Array.isArray(data.referencedCodes) ? data.referencedCodes : [];
             const detectedDate = data.deliveryDateInDocument || null;
@@ -3722,8 +3732,10 @@ function CreateOrderContent() {
 
             // 4. Armar notas de orden y entrega logística
             const poTokens: string[] = [];
-            if (importValidation?.poNumber) poTokens.push(`OC: ${importValidation.poNumber}`);
-            if (importValidation?.solpedNumber) poTokens.push(`SOLPED: ${importValidation.solpedNumber}`);
+            const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
+            const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
+            if (effectivePo && !adminNotes.includes(`OC: ${effectivePo}`)) poTokens.push(`OC: ${effectivePo}`);
+            if (effectiveSolped && !adminNotes.includes(`SOLPED: ${effectiveSolped}`)) poTokens.push(`SOLPED: ${effectiveSolped}`);
             if (clientType === 'B2C' && b2cMode === 'new') {
                 poTokens.push(`[CLIENTE HOGAR CREADO] ID: ${finalProfileId} | Nombre: ${guestInfo.name} | Tel: ${guestInfo.phone}`);
             }
@@ -4084,8 +4096,10 @@ function CreateOrderContent() {
             const targetClient = getSelectedClientDetails();
             const clientName = targetClient?.company_name || targetClient?.contact_name || 'Cliente';
             const poTokens: string[] = [];
-            if (importValidation?.poNumber) poTokens.push(`OC: ${importValidation.poNumber}`);
-            if (importValidation?.solpedNumber) poTokens.push(`SOLPED: ${importValidation.solpedNumber}`);
+            const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
+            const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
+            if (effectivePo) poTokens.push(`OC: ${effectivePo}`);
+            if (effectiveSolped) poTokens.push(`SOLPED: ${effectiveSolped}`);
             const poNum = poTokens.length > 0 ? poTokens.join(' | ') : 'OC S/N';
             const secondarySchedule = group2Items[0]?.deliverySchedule || 'Entrega Diferida';
 
@@ -4404,7 +4418,17 @@ function CreateOrderContent() {
             }
 
             let finalProfileId = clientType === 'B2B' ? selectedClient : (b2cMode === 'search' ? selectedClientB2C : null);
-            let finalAdminNotes = adminNotes;
+            
+            // Consolidar OC y SOLPED en admin_notes
+            const poTokens: string[] = [];
+            const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
+            const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
+            if (effectivePo && !adminNotes.includes(`OC: ${effectivePo}`)) poTokens.push(`OC: ${effectivePo}`);
+            if (effectiveSolped && !adminNotes.includes(`SOLPED: ${effectiveSolped}`)) poTokens.push(`SOLPED: ${effectiveSolped}`);
+            
+            let finalAdminNotes = poTokens.length > 0 
+                ? (adminNotes ? `${poTokens.join(' | ')} | ${adminNotes}` : poTokens.join(' | '))
+                : adminNotes;
             
             if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
                 finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.targetDayName})]\n${finalAdminNotes}`.trim();
@@ -8452,6 +8476,85 @@ function CreateOrderContent() {
                                             </div>
                                         </div>
                                     )}
+                                </div>
+                            </div>
+
+                            {/* REFERENCIAS DE COMPRA DEL CLIENTE: OC / SOLPED */}
+                            <div style={{
+                                backgroundColor: THEME.colors.surface,
+                                padding: '1rem 1.25rem',
+                                borderRadius: THEME.radius.lg,
+                                border: `1px solid ${THEME.colors.border}`,
+                                boxShadow: THEME.shadow.sm,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.65rem'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <FileText size={13} style={{ color: '#0D7A57' }} /> Referencias de Compra (OC)
+                                    </label>
+                                    {(purchaseOrderNumber || solpedNumber) && (
+                                        <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#065F46', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
+                                            Indexado en Remisión
+                                        </span>
+                                    )}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#334155', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                                            # Orden de Compra (OC)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={purchaseOrderNumber}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setPurchaseOrderNumber(val);
+                                                setImportValidation(prev => ({ ...prev, poNumber: val || null }));
+                                            }}
+                                            placeholder="Ej. OC-12455"
+                                            style={{
+                                                width: '100%',
+                                                height: '34px',
+                                                padding: '0 0.55rem',
+                                                borderRadius: '6px',
+                                                border: purchaseOrderNumber ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                backgroundColor: purchaseOrderNumber ? '#F0FDF4' : 'white',
+                                                fontSize: '0.80rem',
+                                                fontWeight: purchaseOrderNumber ? '800' : '600',
+                                                color: '#0F172A',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                                            # SOLPED <span style={{ fontSize: '0.58rem', fontWeight: '500', color: '#94A3B8' }}>(Opcional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={solpedNumber}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setSolpedNumber(val);
+                                                setImportValidation(prev => ({ ...prev, solpedNumber: val || null }));
+                                            }}
+                                            placeholder="Ej. 89012"
+                                            style={{
+                                                width: '100%',
+                                                height: '34px',
+                                                padding: '0 0.55rem',
+                                                borderRadius: '6px',
+                                                border: solpedNumber ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
+                                                backgroundColor: solpedNumber ? '#F0F9FF' : 'white',
+                                                fontSize: '0.80rem',
+                                                fontWeight: solpedNumber ? '800' : '600',
+                                                color: '#0F172A',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -570,11 +570,18 @@ export default function BillingDashboard() {
         const d = new Date();
         d.setDate(d.getDate() + offsetDays);
         return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(d);
-    };
-
     const [selectedBillingDate, setSelectedBillingDate] = useState<string>(getBogotaDate(0));
+    const dateInputRef = useRef<HTMLInputElement>(null);
 
-    // Role-based access control
+    const handleOpenDatePicker = () => {
+        if (dateInputRef.current) {
+            try {
+                dateInputRef.current.showPicker?.();
+            } catch {
+                dateInputRef.current.focus();
+            }
+        }
+    };
     const { profile, loading: authLoading } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
     const [permissionsLoaded, setPermissionsLoaded] = useState(false);
@@ -2597,48 +2604,74 @@ export default function BillingDashboard() {
                                         >
                                             Todas
                                         </button>
-                                        {/* COM-32: Selector de fecha extemporáneo con Poka-Yoke */}
-                                        <label
-                                            title="Seleccionar fecha específica (festivos, fines de semana, días anteriores)"
-                                            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
-                                        >
-                                            <span style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '3px',
-                                                padding: '2px 6px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.66rem',
-                                                fontWeight: (selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all') ? '800' : '600',
-                                                backgroundColor: (selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all') ? '#0D7A57' : 'transparent',
-                                                color: (selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all') ? 'white' : '#475569',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.15s'
-                                            }}>
-                                                <Calendar size={10} />
-                                                {(selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all')
-                                                    ? selectedBillingDate
-                                                    : '📅'}
-                                            </span>
-                                            <input
-                                                type="date"
-                                                max={getBogotaDate(0)}
-                                                value={(selectedBillingDate !== 'all' && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1)) ? selectedBillingDate : ''}
-                                                onChange={(e) => {
-                                                    if (e.target.value) setSelectedBillingDate(e.target.value);
-                                                }}
-                                                style={{
-                                                    position: 'absolute',
-                                                    opacity: 0,
-                                                    width: '100%',
-                                                    height: '100%',
-                                                    top: 0,
-                                                    left: 0,
-                                                    cursor: 'pointer',
-                                                    fontSize: '0px'
-                                                }}
-                                            />
-                                        </label>
+                                        {/* COM-32: Selector de fecha extemporáneo con Poka-Yoke & Lucide Icons */}
+                                        {(() => {
+                                            const isCustomDate = selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
+                                            return (
+                                                <div
+                                                    title="Seleccionar fecha específica (festivos, fines de semana, días anteriores)"
+                                                    onClick={handleOpenDatePicker}
+                                                    style={{
+                                                        position: 'relative',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        padding: '2px 7px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.66rem',
+                                                        fontWeight: isCustomDate ? '800' : '600',
+                                                        backgroundColor: isCustomDate ? '#0D7A57' : 'transparent',
+                                                        color: isCustomDate ? 'white' : '#475569',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s',
+                                                        userSelect: 'none'
+                                                    }}
+                                                >
+                                                    <Calendar size={11} strokeWidth={2} style={{ flexShrink: 0 }} />
+                                                    <span>{isCustomDate ? selectedBillingDate : 'Otra fecha'}</span>
+                                                    {isCustomDate && (
+                                                        <span
+                                                            role="button"
+                                                            title="Restablecer tanda a Hoy"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedBillingDate(getBogotaDate(0));
+                                                            }}
+                                                            style={{
+                                                                marginLeft: '2px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                width: '13px',
+                                                                height: '13px',
+                                                                borderRadius: '50%',
+                                                                backgroundColor: 'rgba(255,255,255,0.25)',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <X size={8} strokeWidth={3} />
+                                                        </span>
+                                                    )}
+                                                    <input
+                                                        ref={dateInputRef}
+                                                        type="date"
+                                                        value={isCustomDate ? selectedBillingDate : ''}
+                                                        onChange={(e) => {
+                                                            if (e.target.value) setSelectedBillingDate(e.target.value);
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: 0,
+                                                            left: 0,
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            opacity: 0,
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    />
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* COM-32: Poka-Yoke — Indicador de estado de la fecha seleccionada */}
