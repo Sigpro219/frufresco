@@ -8,7 +8,24 @@
 
 ---
 
-## 1. Misión del Sistema & Principio de Equivalencia Operativa
+## 1. Misión del Sistema, Taxonomía SCOS & Principio de Equivalencia Operativa
+
+### Denominación Formal y Clasificación Arquitectónica
+FruFresco está formalmente clasificado como un **Supply Chain Operating System (SCOS) / ERP Vertical Cloud-Native de Ejecución Agro-Logística y Comercio B2B**. No constituye una tienda virtual o catálogo web convencional, sino una plataforma transaccional de misión crítica que orquesta de forma integrada seis (6) subsistemas empresariales gobernados por este contrato de arquitectura:
+
+1. **WMS (Warehouse Management System):** Balance de masa físico en kilogramos (Entradas en Acopio vs Salidas Despachadas vs Mermas Operativas `D + P + F`), gestión de 6 células de alistamiento con pesaje neto y tara de canastilla, auditoría cíclica de inventarios IRA% y rotación DOH.
+2. **TMS (Transportation Management System):** Cubicaje algorítmico de flota por peso (kg) y volumen (canastillas), enrutamiento dinámico, manifiestos de despacho y prueba de entrega digital móvil (POD) con captura de firma y coordenadas GPS.
+3. **IDP-AI Engine (Intelligent Document Processing):** Pipeline multimodal basado en Gemini 3.8 Flash para ingesta, desestructuración y extracción de órdenes de compra desde correos corporativos, archivos PDF vectoriales/escaneados y hojas de cálculo Excel, asistido por memoria de aprendizaje persistente (`document_learning_memory`).
+4. **B2B Commerce Engine:** Jerarquía corporativa multi-sede, acuerdos comerciales con listas de precios dinámicas por cliente/sucursal y generación de cotizaciones formales con membrete y validez contractual.
+5. **Pre-Accounting & Billing Engine:** Determinación fiscal por SKU según tarifas de IVA DIAN (`iva_rate`), causación automática de facturas y remisiones netas, emisión de recibos de caja, notas crédito y conciliación de pasarelas de pago (Wompi).
+6. **Quality & Compliance (PQRS & RNC):** Tramitación de no conformidades en tiempo real, actas legales RNC con soporte fotográfico en PDF, trazabilidad de cadena de custodia y cálculo del Cost Recovery Index (CRI%) para resarcimiento de mermas con proveedores y transportadores.
+
+### Línea Base de Complejidad y Telemetría del Sistema (Auditoría Septiembre 2026)
+- **Volumen de Código Fuente:** 472.805 líneas de código (LOC) netas.
+- **Módulos de Interfaz de Usuario:** 157 componentes React/Next.js (`.tsx`) bajo estándares *Swiss Precision Industrial UI*.
+- **Módulos de Negocio y Lógica de Servidor:** 136 módulos TypeScript (`.ts`) para motores de precios, validación Zod y pipelines serverless.
+- **Capa de Persistencia e Integridad ACID:** 230 scripts PostgreSQL (`.sql`) que comprenden triggers de inventario, procedimientos RPC y políticas RLS multi-tenant.
+- **Rutas de Servidor Activas:** 109 rutas Next.js App Router (Páginas operativas, endpoints API y webhooks transaccionales).
 
 ### Propósito del Dominio
 El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, valorización y programación logística de pedidos institucionales (B2B) y de hogares (B2C), independientemente de su canal de entrada.
