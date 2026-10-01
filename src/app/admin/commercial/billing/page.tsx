@@ -2604,12 +2604,13 @@ export default function BillingDashboard() {
                                                     style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '4px',
+                                                        gap: '3px',
                                                         padding: '1px 6px',
                                                         borderRadius: '4px',
                                                         backgroundColor: isCustomDate ? '#0D7A57' : '#FFFFFF',
                                                         border: isCustomDate ? '1px solid #0D7A57' : '1px solid #CBD5E1',
-                                                        transition: 'all 0.15s'
+                                                        transition: 'all 0.15s',
+                                                        position: 'relative'
                                                     }}
                                                 >
                                                     <Calendar size={11} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
@@ -2622,7 +2623,9 @@ export default function BillingDashboard() {
                                                                 setSelectedBillingDate(e.target.value);
                                                             }
                                                         }}
+                                                        className="clean-date-input"
                                                         style={{
+                                                            position: 'relative',
                                                             border: 'none',
                                                             outline: 'none',
                                                             backgroundColor: 'transparent',
@@ -2632,7 +2635,7 @@ export default function BillingDashboard() {
                                                             cursor: 'pointer',
                                                             padding: 0,
                                                             fontFamily: 'inherit',
-                                                            width: isCustomDate ? '88px' : '82px'
+                                                            width: isCustomDate ? '78px' : '72px'
                                                         }}
                                                     />
                                                     {isCustomDate && (
@@ -2644,6 +2647,8 @@ export default function BillingDashboard() {
                                                                 setSelectedBillingDate(getBogotaDate(0));
                                                             }}
                                                             style={{
+                                                                position: 'relative',
+                                                                zIndex: 2,
                                                                 border: 'none',
                                                                 background: 'rgba(255, 255, 255, 0.25)',
                                                                 color: 'white',
