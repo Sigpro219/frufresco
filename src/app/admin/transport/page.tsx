@@ -232,6 +232,28 @@ export default function TransportControlTower() {
     const [driversData, setDriversData] = useState<any[]>([]);
     const [hoveredVehicleId, setHoveredVehicleId] = useState<string | null>(null);
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+    const [isSyncingGps, setIsSyncingGps] = useState(false);
+    const [gpsSyncMessage, setGpsSyncMessage] = useState<string | null>(null);
+
+    const handleSyncGps = async () => {
+        try {
+            setIsSyncingGps(true);
+            setGpsSyncMessage('Sincronizando...');
+            const res = await fetch('/api/transport/sync-gps');
+            const data = await res.json();
+            if (data.success) {
+                setGpsSyncMessage(`✓ ${data.synced_count || 0} vehículos OK`);
+                await fetchTransportData();
+            } else {
+                setGpsSyncMessage('⚠ ' + (data.message || 'Error GPS'));
+            }
+        } catch {
+            setGpsSyncMessage('⚠ Error de red');
+        } finally {
+            setIsSyncingGps(false);
+            setTimeout(() => setGpsSyncMessage(null), 4000);
+        }
+    };
 
     const fetchTransportData = useCallback(async (signal?: AbortSignal) => {
         try {
@@ -551,25 +573,50 @@ export default function TransportControlTower() {
                         })}
                     </div>
 
-                    <button 
-                        onClick={() => fetchTransportData()}
-                        disabled={loading}
-                        style={{ 
-                            padding: '0.45rem 0.9rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
-                            color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                            transition: 'all 0.15s', flexShrink: 0
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = THEME.colors.primary;
-                            e.currentTarget.style.color = THEME.colors.primary;
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = THEME.colors.border;
-                            e.currentTarget.style.color = THEME.colors.textMain;
-                        }}
-                    >
-                        {loading ? 'Sincronizando...' : <><RefreshCw size={12} strokeWidth={2} /> Actualizar</>}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        {gpsSyncMessage && (
+                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.25rem 0.6rem', borderRadius: '6px' }}>
+                                {gpsSyncMessage}
+                            </span>
+                        )}
+
+                        <button 
+                            onClick={handleSyncGps}
+                            disabled={isSyncingGps || loading}
+                            title="Sincronizar telemetría con apps-360.online"
+                            style={{ 
+                                padding: '0.45rem 0.85rem', borderRadius: '8px', border: `1px solid ${THEME.colors.primary}`, backgroundColor: isSyncingGps ? THEME.colors.primaryLight : '#0D7A57',
+                                color: isSyncingGps ? THEME.colors.primary : 'white', fontWeight: '800', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                transition: 'all 0.15s', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                            }}
+                        >
+                            {isSyncingGps ? (
+                                <><Loader2 size={12} className="animate-spin" /> Sincronizando GPS...</>
+                            ) : (
+                                <><Navigation size={12} strokeWidth={2.5} /> Sincronizar GPS</>
+                            )}
+                        </button>
+
+                        <button 
+                            onClick={() => fetchTransportData()}
+                            disabled={loading}
+                            style={{ 
+                                padding: '0.45rem 0.9rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
+                                color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                e.currentTarget.style.color = THEME.colors.primary;
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = THEME.colors.border;
+                                e.currentTarget.style.color = THEME.colors.textMain;
+                            }}
+                        >
+                            {loading ? 'Actualizando...' : <><RefreshCw size={12} strokeWidth={2} /> Actualizar</>}
+                        </button>
+                    </div>
                 </div>
 
                 {/* ── MAIN CONTENT AREA ── */}
@@ -792,7 +839,11 @@ export default function TransportControlTower() {
                                                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                                                 transform: isPopoverOpen ? 'scale(1.1)' : 'scale(1)'
                                                             }}>
-                                                                {initials || <Truck size={14} />}
+                                                                {v.speed > 0 && v.heading !== undefined ? (
+                                                                    <Navigation size={14} style={{ transform: `rotate(${v.heading}deg)`, transition: 'transform 0.3s ease' }} />
+                                                                ) : (
+                                                                    initials || <Truck size={14} />
+                                                                )}
                                                             </div>
 
                                                             {/* VEHICLE PLATE BADGE */}
@@ -931,6 +982,28 @@ export default function TransportControlTower() {
                                                                             </div>
                                                                         </div>
                                                                     )}
+
+                                                                    {/* Telemetry & GPS Hardware Status Block */}
+                                                                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0.45rem 0.6rem', marginBottom: '0.6rem', border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem' }}>
+                                                                            <span style={{ fontWeight: '800', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                {v.tracking_source === 'mobile_app' ? '📱 Tracker Móvil (60s)' : '🛰️ GPS Satelital (Apps-360)'}
+                                                                            </span>
+                                                                            <span style={{ fontWeight: '900', color: (v.speed || 0) > 0 ? '#0D7A57' : (v.ignition_status ? '#D97706' : '#64748B') }}>
+                                                                                {(v.speed || 0) > 0 ? `🟢 ${v.speed} km/h` : (v.ignition_status ? '🟡 Ralentí' : '⚪ Motor OFF')}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', color: THEME.colors.textSecondary }}>
+                                                                            <span>{v.heading !== undefined ? `Rumbo: ${v.heading}°` : 'Rumbo: --'}</span>
+                                                                            <span>{v.last_gps_sync ? `Sync: ${new Date(v.last_gps_sync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Sin datos'}</span>
+                                                                        </div>
+                                                                        {/* Watchdog Signal Loss Warning (> 15 mins) */}
+                                                                        {isInRoute && v.last_gps_sync && (Date.now() - new Date(v.last_gps_sync).getTime() > 15 * 60 * 1000) && (
+                                                                            <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '4px', padding: '2px 5px', fontSize: '0.6rem', fontWeight: '800', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                <AlertTriangle size={10} /> ⚠️ Sin reporte hace &gt; 15 min
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
 
                                                                     {/* Quick Operational Actions Bar */}
                                                                     <div style={{ display: 'flex', gap: '6px', marginTop: '0.2rem' }}>
