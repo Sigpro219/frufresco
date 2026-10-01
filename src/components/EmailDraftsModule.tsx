@@ -16,7 +16,7 @@ import Link from 'next/link';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
-import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction } from '@/lib/orderUtils';
+import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges } from '@/lib/orderUtils';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -245,6 +245,44 @@ const getParsedWeight = (str: string): number | null => {
     }
 
     return null;
+};
+
+const evaluateMathExpression = (val: string | number | null | undefined): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    
+    let str = String(val).trim();
+    if (!str) return 0;
+
+    if (str.startsWith('=') || str.startsWith('+')) {
+        str = str.substring(1).trim();
+    }
+
+    str = str.replace(/,/g, '.').replace(/x/gi, '*');
+
+    if (!/^[\d\s.+\-*/()]+$/.test(str)) {
+        const fallback = parseFloat(str.replace(/[^0-9.]/g, ''));
+        return isNaN(fallback) ? 0 : fallback;
+    }
+
+    try {
+        const result = new Function(`'use strict'; return (${str});`)();
+        if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+            return parseFloat(result.toFixed(4));
+        }
+    } catch {
+        const sanitized = str.replace(/[+\-*/]+$/, '');
+        try {
+            const fallbackRes = new Function(`'use strict'; return (${sanitized});`)();
+            if (typeof fallbackRes === 'number' && !isNaN(fallbackRes) && isFinite(fallbackRes)) {
+                return parseFloat(fallbackRes.toFixed(4));
+            }
+        } catch {
+            // ignore
+        }
+    }
+    const fallback = parseFloat(str.replace(/[^0-9.]/g, ''));
+    return isNaN(fallback) ? 0 : fallback;
 };
 
 const formatWeightKg = (val: number | null | undefined): string => {
@@ -3119,7 +3157,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const saveCustomizingModal = () => {
     if (!customizingModalItem) return;
     const { rowIndex, product, options, quantity, unit, factor } = customizingModalItem;
-    const parsedQty = parseFloat(quantity.replace(',', '.')) || 1;
+    const evaluatedQty = evaluateMathExpression(quantity);
+    const parsedQty = evaluatedQty > 0 ? evaluatedQty : (parseFloat(String(quantity).replace(',', '.')) || 1);
     const cleanQty = parseFloat(parsedQty.toFixed(2));
     
     // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
@@ -5711,11 +5750,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             totalWeight += qtyNum * w;
 
             const enrichedOptions = { ...(item.selected_options || {}) };
+            const effectiveVariantLabel = item.variant_label || item.observations || null;
             if (!enrichedOptions._physical_instruction) {
               const resolvedInst = resolvePhysicalInstruction({
                 quantity: qtyNum,
                 unit: item.unit || prod.unit_of_measure || 'Kg',
-                variant_label: item.observations || null,
+                variant_label: effectiveVariantLabel,
                 nickname: item.originalName || null,
                 selected_options: enrichedOptions
               });
@@ -5729,7 +5769,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               quantity: qtyNum,
               unit_price: resolvedPrice,
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
-              variant_label: item.observations || null,
+              variant_label: effectiveVariantLabel,
               unit: item.unit || prod.unit_of_measure || 'Kg',
               selected_options: enrichedOptions
             });
@@ -10443,9 +10483,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#F8FAF9', borderBottom: '1px solid #E2E8F0', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                      <th style={{ padding: '0.75rem 1.2rem' }}>Producto (Mapeado)</th>
-                      <th style={{ padding: '0.75rem 1.2rem', textAlign: 'center' }}>Cant.</th>
-                      <th style={{ padding: '0.75rem 1.2rem', textAlign: 'right' }}>Total</th>
+                      <th style={{ padding: '0.75rem 1rem' }}>Producto (Mapeado)</th>
+                      <th style={{ padding: '0.75rem 1rem' }}>Presentación & Atributos</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Cant. Facturada</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Unitario</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Subtotal</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -10453,18 +10495,41 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (!item.matched_product_id) return null;
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
+                      const baseUnit = item.unit || prod?.unit_of_measure || 'Kg';
                       const unitPrice = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0)) : 0;
                       const lineTotal = unitPrice * qty;
+                      const opts = item.selected_options || {};
+
+                      const badges = resolveProductCharacteristicsBadges({
+                        variant_label: item.variant_label || opts._physical_instruction,
+                        nickname: item.nickname,
+                        selected_options: opts,
+                        unit: baseUnit,
+                        products: prod ? { name: prod.name, unit_of_measure: prod.unit_of_measure } : null,
+                        product_name: prod?.name || item.name
+                      });
+
+                      const origQty = opts._original_qty !== undefined && opts._original_qty !== null ? opts._original_qty : item.originalQuantity;
+                      const origUnit = opts._original_unit || item.originalUnit;
+                      const hasDualEquivalence = Boolean(
+                        opts._physical_instruction ||
+                        (origUnit && origUnit.toLowerCase() !== baseUnit.toLowerCase()) ||
+                        (item.conversion_factor && item.conversion_factor !== 1) ||
+                        (origQty && Math.abs(origQty - qty) > 0.001)
+                      );
+
+                      const explicitOpts = Object.entries(opts).filter(([k, v]) => !k.startsWith('_') && v && typeof v === 'string');
+
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
-                          <td style={{ padding: '0.75rem 1.2rem' }}>
+                          <td style={{ padding: '0.75rem 1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                               <span style={{ fontWeight: '800', color: '#0D7A57', fontSize: '0.90rem' }}>
                                 {prod?.name}
                               </span>
                               {prod && (
                                 <span style={{ 
-                                  fontSize: '0.74rem', 
+                                  fontSize: '0.72rem', 
                                   fontWeight: '800', 
                                   color: '#2563EB', 
                                   backgroundColor: '#EFF6FF', 
@@ -10477,29 +10542,133 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               )}
                             </div>
                             {item.originalName && (
-                              <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <span style={{ color: '#94A3B8', fontWeight: '600' }}>Doc:</span>
                                 <span>{item.originalName}</span>
                               </div>
                             )}
                           </td>
-                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatQuantity(qty)}</td>
-                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                              {hasDualEquivalence && (
+                                <span style={{
+                                  fontSize: '0.74rem',
+                                  fontWeight: '800',
+                                  color: '#1E40AF',
+                                  backgroundColor: '#DBEAFE',
+                                  border: '1px solid #93C5FD',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  <Package size={12} />
+                                  <span>
+                                    {opts._physical_instruction || `${formatQuantity(origQty || 1)} ${origUnit || 'Und'} (x ${item.conversion_factor || 1} ${baseUnit})`}
+                                  </span>
+                                </span>
+                              )}
+
+                              {badges.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                  {badges.map((b, bIdx) => (
+                                    <span 
+                                      key={bIdx}
+                                      style={{
+                                        fontSize: '0.70rem',
+                                        fontWeight: '800',
+                                        color: b.color,
+                                        backgroundColor: b.backgroundColor,
+                                        border: b.borderColor ? `1px solid ${b.borderColor}` : undefined,
+                                        padding: '1px 6px',
+                                        borderRadius: '4px'
+                                      }}
+                                    >
+                                      {b.text}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {explicitOpts.length > 0 && badges.length === 0 && !hasDualEquivalence && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                  {explicitOpts.map(([optKey, optVal], oIdx) => (
+                                    <span
+                                      key={oIdx}
+                                      style={{
+                                        fontSize: '0.70rem',
+                                        fontWeight: '700',
+                                        color: '#475569',
+                                        backgroundColor: '#F1F5F9',
+                                        border: '1px solid #E2E8F0',
+                                        padding: '1px 6px',
+                                        borderRadius: '4px'
+                                      }}
+                                    >
+                                      {optKey}: {String(optVal)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {!hasDualEquivalence && badges.length === 0 && explicitOpts.length === 0 && (
+                                <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontStyle: 'italic' }}>
+                                  Estándar
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '3px', backgroundColor: '#F8FAFC', padding: '3px 8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                              <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.92rem', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatQuantity(qty)}
+                              </span>
+                              <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B' }}>
+                                {baseUnit}
+                              </span>
+                            </div>
+                            {hasDualEquivalence && (
+                              <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '700', marginTop: '2px' }}>
+                                ({formatQuantity(origQty || (qty / (item.conversion_factor || 1)))} {origUnit || 'Und'})
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                            {unitPrice > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                <span style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.88rem' }}>
+                                  {formatMoney(unitPrice)}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>
+                                  / {baseUnit}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.70rem', fontWeight: '800' }}>
+                                SIN PRECIO
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#0D7A57', fontSize: '0.92rem', fontVariantNumeric: 'tabular-nums' }}>
                             {lineTotal > 0 ? (
                               formatMoney(lineTotal)
                             ) : (
-                              <span style={{ color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.74rem', fontWeight: '800' }}>
-                                SIN PRECIO
+                              <span style={{ color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.70rem', fontWeight: '800' }}>
+                                $0
                               </span>
                             )}
                           </td>
                         </tr>
                       );
                     })}
-                    <tr style={{ backgroundColor: '#F8FAF9', borderTop: '2px solid #E2E8F0', fontWeight: 'bold', fontSize: '0.95rem', color: THEME.colors.textMain }}>
-                      <td style={{ padding: '0.85rem 1.2rem', fontFamily: 'var(--font-outfit), sans-serif' }}>TOTAL</td>
-                      <td style={{ padding: '0.85rem 1.2rem', textAlign: 'center' }}>-</td>
-                      <td style={{ padding: '0.85rem 1.2rem', textAlign: 'right', color: THEME.colors.primary, fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalValue)}</td>
+                    <tr style={{ backgroundColor: '#F8FAF9', borderTop: '2px solid #CBD5E1', fontWeight: 'bold', fontSize: '0.95rem', color: THEME.colors.textMain }}>
+                      <td colSpan={4} style={{ padding: '0.85rem 1.2rem', textAlign: 'right', fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 800, color: '#475569', fontSize: '0.88rem' }}>
+                        VALOR TOTAL DEL PEDIDO
+                      </td>
+                      <td style={{ padding: '0.85rem 1.2rem', textAlign: 'right', color: THEME.colors.primary, fontSize: '1.25rem', fontWeight: 900, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatMoney(totalValue)}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -11614,15 +11783,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const exc = clientExceptions.find(e => e.product_id === product.id);
         const itemConversions = conversions.filter(c => c.product_id === product.id);
 
-        // Normalizar y ordenar alfabéticamente los atributos por su nombre (A-Z)
-        const normalizedOptionsConfig = (product.options_config || [])
+        // Normalizar y ordenar alfabéticamente los atributos por su nombre (A-Z), priorizando Presentación y Gramaje
+        const rawModalOpts: any[] = (product.options_config || [])
+          .filter((opt: any) => {
+            const optName = (opt.name || '').toLowerCase();
+            if (optName.includes('tamaño') || optName.includes('tamano')) return false;
+            return true;
+          })
+          .map((opt: any) => {
+            if (opt.name && opt.name.toLowerCase().trim() === 'gramaje frutas') {
+              return { ...opt, name: 'Gramaje' };
+            }
+            return opt;
+          });
+
+        const normalizedOptionsConfig = rawModalOpts
           .slice()
-          .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+          .sort((a: any, b: any) => {
+            const nameA = (a.name || '').toLowerCase();
+            const nameB = (b.name || '').toLowerCase();
+            const isPresA = nameA.includes('presentaci') || nameA.includes('unidad');
+            const isPresB = nameB.includes('presentaci') || nameB.includes('unidad');
+            if (isPresA && !isPresB) return -1;
+            if (!isPresA && isPresB) return 1;
+
+            const isGramA = nameA.includes('gramaje');
+            const isGramB = nameB.includes('gramaje');
+            if (isGramA && !isGramB) return -1;
+            if (!isGramA && isGramB) return 1;
+
+            return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+          })
           .map((opt: any) => {
             let values: string[] = opt.values || [];
             const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+            const isGram = opt.name.toLowerCase().includes('gramaje');
             const baseUnitLower = (product.unit_of_measure || 'Kg').toLowerCase();
             const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+
+            if (isGram) {
+              const hasStd = values.some((v: string) => v.toLowerCase().includes('estandar') || v.toLowerCase().includes('estándar'));
+              if (!hasStd) {
+                values = ['Estándar', ...values];
+              }
+            }
 
             if (isPresentation) {
               values = values.filter((v: string) => {
@@ -11716,7 +11920,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }
         });
 
-        const parsedQty = parseFloat(String(quantity).replace(',', '.')) || 0;
+        const evaluatedQty = evaluateMathExpression(quantity);
+        const parsedQty = evaluatedQty > 0 ? evaluatedQty : (parseFloat(String(quantity).replace(',', '.')) || 0);
         const calculatedTotalKg = parsedQty * factor;
         const minSaleKg = getProductMinSaleKg(product);
         const hasSpecialMinSale = minSaleKg !== null && minSaleKg > 0.1;
@@ -12065,10 +12270,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               {/* RENDER OPTIONS DYNAMICALLY */}
               {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => {
                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                const isGram = opt.name.toLowerCase().includes('gramaje');
                 const baseUnitLower = (product.unit_of_measure || 'Kg').toLowerCase();
                 const isKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
                 const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
-                const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : '');
+
+                // Evaluar presentación actual para regla condicional de Gramaje (Escenario 51 SDD)
+                const presOpt = normalizedOptionsConfig.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
+                const currentPresVal = presOpt ? (options[presOpt.name] !== undefined && options[presOpt.name] !== '' ? options[presOpt.name] : (isKg ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
+                const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+
+                // POKA-YOKE CONDICIONAL: Si es Gramaje y la presentación NO es Kg (es por unidad/empaque discreto), ocultar Gramaje!
+                if (isGram && !isPresKg) {
+                  return null;
+                }
+
+                const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : (isGram ? 'Estándar' : ''));
                 const selectVal = options[opt.name] !== undefined && options[opt.name] !== '' ? options[opt.name] : defaultVal;
 
                 return (
@@ -12084,13 +12302,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         const val = e.target.value;
                         let newFactor = factor;
                         let newUnit = unit;
+                        const nextOptions = { ...options, [opt.name]: val };
 
-                        if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+                        if (isPresentation) {
                           const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                           const defaultUnit = product.unit_of_measure || 'Kg';
                           const isMasterKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
                           const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo';
                           const isDefaultUnit = cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+
+                          if (!isKgSel && !isDefaultUnit) {
+                            // Si se cambia la Presentación a una unidad discreta (no Kg), limpiar Gramaje
+                            Object.keys(nextOptions).forEach(k => {
+                              if (k.toLowerCase().includes('gramaje')) delete nextOptions[k];
+                            });
+                          }
 
                           if (isKgSel) {
                             newUnit = defaultUnit;
@@ -12118,7 +12344,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                         setCustomizingModalItem(prev => prev ? {
                           ...prev,
-                          options: { ...prev.options, [opt.name]: val },
+                          options: nextOptions,
                           unit: newUnit,
                           factor: newFactor
                         } : null);
@@ -12207,18 +12433,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     id="modal-qty-input"
                     autoComplete="off"
                     type="text"
-                    inputMode="decimal"
                     value={quantity}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.,]/g, '');
+                      const val = e.target.value.replace(/[^0-9.,+\-*/()=xX ]/g, '');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: val } : null);
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        saveCustomizingModal();
+                        const evaluated = evaluateMathExpression(quantity);
+                        const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : '1';
+                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
+                        const unitSel = document.getElementById('modal-unit-select');
+                        if (unitSel) {
+                          unitSel.focus();
+                        } else {
+                          saveCustomizingModal();
+                        }
                       } else if (e.key === 'Tab' && !e.shiftKey) {
                         e.preventDefault();
+                        const evaluated = evaluateMathExpression(quantity);
+                        const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : '1';
+                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
                         const unitSel = document.getElementById('modal-unit-select');
                         if (unitSel) {
                           unitSel.focus();
@@ -12247,11 +12483,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     onBlur={(e) => {
                       e.target.style.borderColor = '#E2E8F0';
                       e.target.style.boxShadow = 'none';
-                      const rawNum = parseFloat(quantity.replace(',', '.'));
-                      if (!isNaN(rawNum) && rawNum > 0) {
-                        const formatted = Number(rawNum.toFixed(2)).toString().replace('.', ',');
-                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: formatted } : null);
-                      }
+                      const evaluated = evaluateMathExpression(quantity);
+                      const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : '1';
+                      setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
                     }}
                   />
                 </div>
@@ -12261,24 +12495,44 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                       Unidad de Medida
                     </label>
-                    {parsedQty > 0 && factor > 0 && (
-                      <span style={{
-                        backgroundColor: '#ECFDF5',
-                        color: '#065F46',
-                        border: '1px solid #A7F3D0',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '0.75rem',
-                        fontWeight: '800',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}>
-                        <Scale size={13} style={{ color: '#059669' }} />
-                        <span>Total: {formatWeightKg(calculatedTotalKg)} kg</span>
-                      </span>
-                    )}
+                    {parsedQty > 0 && factor > 0 && (() => {
+                      const selectedGramajeVal = options['Gramaje'] || '';
+                      let pieceWeightGr = 0;
+                      if (selectedGramajeVal && selectedGramajeVal.toLowerCase() !== 'estándar' && selectedGramajeVal.toLowerCase() !== 'estandar') {
+                        const mg = String(selectedGramajeVal).match(/(\d+)\s*(?:gr|g)?/i);
+                        if (mg) pieceWeightGr = parseInt(mg[1], 10);
+                      }
+
+                      const presOpt = normalizedOptionsConfig.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
+                      const currentPresVal = presOpt ? (options[presOpt.name] !== undefined && options[presOpt.name] !== '' ? options[presOpt.name] : (isKgProd ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                      const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
+                      const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnit.toLowerCase();
+
+                      const approxUnits = pieceWeightGr > 0 ? Math.round(calculatedTotalKg / (pieceWeightGr / 1000)) : 0;
+
+                      return (
+                        <span style={{
+                          backgroundColor: '#ECFDF5',
+                          color: '#065F46',
+                          border: '1px solid #A7F3D0',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: '800',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}>
+                          <Scale size={13} style={{ color: '#059669' }} />
+                          <span>
+                            {pieceWeightGr > 0 && isPresKg
+                              ? `Total: ${formatWeightKg(calculatedTotalKg)} kg (~${approxUnits} und de ${pieceWeightGr} gr)`
+                              : `Total: ${formatWeightKg(calculatedTotalKg)} kg`}
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </div>
                   {modalOptionsList.length > 1 ? (
                     <select
