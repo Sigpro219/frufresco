@@ -4106,7 +4106,7 @@ export default function CommercialAgreementsModule() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '0.76rem', color: '#92400E' }}>
                                         <AlertTriangle size={13} color="#D97706" style={{ flexShrink: 0 }} />
                                         <span>
-                                            <strong>{inactiveList.length} SKUs inactivos en catálogo:</strong> Pactados pero desactivados en la tabla maestra de productos.
+                                            <strong>Atención Comercial ({inactiveList.length} SKUs inactivos en catálogo):</strong> Estos productos están pactados en este acuerdo pero están desactivados en la tabla maestra de productos, por lo que <em>no se pueden seleccionar</em> al montar pedidos.
                                         </span>
                                     </div>
                                     <button
@@ -4117,8 +4117,8 @@ export default function CommercialAgreementsModule() {
                                             backgroundColor: '#D97706',
                                             color: 'white',
                                             border: 'none',
-                                            padding: '3px 10px',
-                                            borderRadius: '5px',
+                                            padding: '4px 10px',
+                                            borderRadius: '6px',
                                             fontSize: '0.72rem',
                                             fontWeight: '800',
                                             cursor: activatingDrawerSkus ? 'not-allowed' : 'pointer',
@@ -4133,6 +4133,46 @@ export default function CommercialAgreementsModule() {
                                 </div>
                             );
                         })()}
+
+                        {/* BANNER COMPACTO DE MODIFICACIONES PARCIALES & ASISTENTE DE PRECIOS */}
+                        <div style={{
+                            margin: '0.4rem 1.5rem 0 1.5rem',
+                            padding: '0.35rem 0.85rem',
+                            backgroundColor: '#F0FDF4',
+                            border: '1px solid #BBF7D0',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '10px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '0.76rem', color: '#166534' }}>
+                                <Sliders size={13} color="#16A34A" style={{ flexShrink: 0 }} />
+                                <span>
+                                    <strong>Modificaciones Parciales:</strong> Puedes ajustar precios individuales directamente con el lápiz o usar el botón <strong>[Adenda / Ajuste Parcial]</strong> para variaciones masivas por cosecha/clima con justificación y despacho unificado.
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleOpenPartialBatchModal}
+                                style={{
+                                    backgroundColor: '#16A34A',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                <ClipboardList size={11} /> Ajuste Masivo
+                            </button>
+                        </div>
 
                         {/* Drawer List Content */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.5rem 1.5rem 1.5rem' }}>
