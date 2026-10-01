@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.83 (Protocolo Canónico de Tolerancia Fonética Z-S, Búsqueda Multi-Token no Contigua y Resiliencia en Memoria de Pedidos, Escenario BDD 118)
+> **Versión:** 1.9.84 (Protocolo Canónico de Tolerancia Fonética Z-S, Ingesta Resiliente de Imágenes Inline CID y Búsqueda Multi-Token, Escenarios BDD 118-119)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
