@@ -1772,31 +1772,35 @@ export default function BillingDashboard() {
         }
     };
 
-    // Export to World Office (.xlsx)
+    // Export an official cut to World Office (.xlsx)
     const exportToWorldOffice = async (cutId: string) => {
         try {
             const targetCut = cuts.find(c => c.id === cutId);
 
-            const { data: items, error } = await supabase
-                .from('order_items')
+            // 1. Fetch cut orders with profiles and items
+            const { data: cutOrders, error: cutOrdersErr } = await supabase
+                .from('orders')
                 .select(`
-                    id, quantity, unit_price, nickname, unit,
-                    orders!inner(
-                        id, billing_cut_id, sequence_id, created_at, delivery_date, type,
-                        profiles(
-                            id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
-                        )
+                    id, sequence_id, created_at, delivery_date, type, total,
+                    profiles (
+                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
                     ),
-                    products(sku, name, unit_of_measure, iva_rate)
+                    order_items (
+                        id, quantity, unit_price, nickname, unit,
+                        products (
+                            sku, name, unit_of_measure, iva_rate
+                        )
+                    )
                 `)
-                .eq('orders.billing_cut_id', cutId);
+                .eq('billing_cut_id', cutId);
 
-            if (error) throw error;
-            if (!items || items.length === 0) {
-                alert('No hay ítems registrados en este corte.');
+            if (cutOrdersErr) throw cutOrdersErr;
+            if (!cutOrders || cutOrders.length === 0) {
+                alert('No se encontraron pedidos asociados a este corte.');
                 return;
             }
 
+            // 2. Fetch assigned invoices for consecutive numbers
             const { data: assignedInvoices } = await supabase
                 .from('billing_invoices')
                 .select('order_id, invoice_number')
@@ -1807,47 +1811,59 @@ export default function BillingDashboard() {
                 if (inv.order_id && inv.invoice_number) invoiceMap.set(inv.order_id, inv.invoice_number);
             });
 
-            const exportRows = items.map((item: any) => {
-                const clientName = item.orders?.profiles?.razon_social || item.orders?.profiles?.company_name || 'Cliente General';
-                const nit = item.orders?.profiles?.nit || '222222222222';
-                const isIva = item.orders?.profiles?.iva_responsible || false;
-                const isB2B = item.orders?.profiles?.role === 'b2b_client' || item.orders?.type === 'b2b' || !!item.orders?.profiles?.parent_id;
-                const paymentDays = item.orders?.profiles?.payment_days ?? (isB2B ? 30 : 0);
-                const invNum = invoiceMap.get(item.orders?.id) || `SETT-${item.orders?.sequence_id}`;
+            // 3. Build flattened 57-column export rows
+            const exportRows: any[] = [];
+            cutOrders.forEach((order: any) => {
+                const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
+                const nit = order.profiles?.nit || '222222222222';
+                const isIva = !!order.profiles?.iva_responsible;
+                const isB2B = order.profiles?.role === 'b2b_client' || order.type === 'b2b' || !!order.profiles?.parent_id;
+                const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
+                const invNum = invoiceMap.get(order.id) || `REM-${order.sequence_id}`;
 
-                const qty = Number(item.quantity) || 0;
-                const unitPrice = Number(item.unit_price) || 0;
-                const lineTotal = qty * unitPrice;
-                const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
-                const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                const prodCode = item.products?.sku || `FRU-${item.id.slice(0, 4)}`;
-                const uom = item.unit || item.products?.unit_of_measure || 'KG';
+                (order.order_items || []).forEach((item: any) => {
+                    const qty = Number(item.quantity) || 0;
+                    const unitPrice = Number(item.unit_price) || 0;
+                    const lineTotal = qty * unitPrice;
+                    const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
+                    const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
+                    const prodCode = item.products?.sku || `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
+                    const uom = item.unit || item.products?.unit_of_measure || 'KG';
 
-                return {
-                    consecutivo: invNum,
-                    fecha: targetCut?.scheduled_date || new Date().toISOString().split('T')[0],
-                    nitCliente: nit,
-                    razonSocial: clientName,
-                    sucursal: clientName,
-                    formaPago: isB2B ? 'Credito' : 'Contado',
-                    fechaEntrega: item.orders?.delivery_date || targetCut?.scheduled_date,
-                    diasCredito: paymentDays,
-                    codigoProducto: prodCode,
-                    descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
-                    bodega: 'Principal',
-                    unidadMedida: uom,
-                    cantidad: qty,
-                    valorUnitario: unitPrice,
-                    valorBase: lineBase,
-                    ivaRateDecimal: isIva ? 0.19 : 0,
-                    tarifaIva: isIva ? 19 : 0,
-                    valorIva: lineIva,
-                    totalLinea: lineTotal,
-                    descuento: 0,
-                    notaEncabezado: clientName,
-                    observaciones: `Pedido #${item.orders?.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
-                };
+                    exportRows.push({
+                        tipoDocumento: 'FV',
+                        numero: invNum,
+                        consecutivo: invNum,
+                        fecha: targetCut?.scheduled_date || order.delivery_date || getBogotaDate(0),
+                        identificacionTercero: nit,
+                        nitCliente: nit,
+                        razonSocial: clientName,
+                        sucursal: clientName,
+                        formaPago: isB2B ? 'Credito' : 'Contado',
+                        fechaEntrega: order.delivery_date || targetCut?.scheduled_date || getBogotaDate(0),
+                        diasCredito: paymentDays,
+                        codigoProducto: prodCode,
+                        descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
+                        bodega: 'Principal',
+                        unidadMedida: uom,
+                        cantidad: qty,
+                        valorUnitario: unitPrice,
+                        valorBase: lineBase,
+                        ivaRateDecimal: isIva ? 0.19 : 0,
+                        tarifaIva: isIva ? 19 : 0,
+                        valorIva: lineIva,
+                        totalLinea: lineTotal,
+                        descuento: 0,
+                        notaEncabezado: clientName,
+                        observaciones: `Pedido #${order.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
+                    });
+                });
             });
+
+            if (exportRows.length === 0) {
+                alert('Los pedidos de este corte no contienen ítems para exportar.');
+                return;
+            }
 
             await downloadWorldOfficeExcel(
                 exportRows, 
@@ -1862,11 +1878,214 @@ export default function BillingDashboard() {
                 })
                 .eq('id', cutId);
 
-            alert(`¡Plano World Office exportado con éxito! ${exportRows.length} líneas generadas.`);
+            alert(`¡Plano World Office exportado con éxito! Se generaron ${exportRows.length} líneas de detalle.`);
             fetchData();
         } catch (err: any) {
             console.error('Export error:', err);
             alert('Error al exportar plano para World Office: ' + err.message);
+        }
+    };
+
+    // Direct Export of Pending Orders to World Office (.xlsx)
+    const handleExportPendingToWorldOffice = async () => {
+        const targetOrders = selectedOrderIds.length > 0
+            ? filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id))
+            : filteredPendingOrders;
+
+        if (targetOrders.length === 0) {
+            alert('No hay pedidos seleccionados o disponibles para exportar.');
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            const orderIds = targetOrders.map(o => o.id);
+            const { data: fullOrders, error: ordersErr } = await supabase
+                .from('orders')
+                .select(`
+                    id, sequence_id, created_at, delivery_date, type, total,
+                    profiles (
+                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
+                    ),
+                    order_items (
+                        id, quantity, unit_price, nickname, unit,
+                        products (
+                            sku, name, unit_of_measure, iva_rate
+                        )
+                    )
+                `)
+                .in('id', orderIds);
+
+            if (ordersErr) throw ordersErr;
+            if (!fullOrders || fullOrders.length === 0) {
+                alert('No se encontraron detalles de productos para los pedidos seleccionados.');
+                return;
+            }
+
+            const exportRows: any[] = [];
+            fullOrders.forEach((order: any) => {
+                const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
+                const nit = order.profiles?.nit || '222222222222';
+                const isIva = !!order.profiles?.iva_responsible;
+                const isB2B = order.profiles?.role === 'b2b_client' || order.type === 'b2b' || !!order.profiles?.parent_id;
+                const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
+                const invNum = `REM-${order.sequence_id}`;
+
+                (order.order_items || []).forEach((item: any) => {
+                    const qty = Number(item.quantity) || 0;
+                    const unitPrice = Number(item.unit_price) || 0;
+                    const lineTotal = qty * unitPrice;
+                    const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
+                    const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
+                    const prodCode = item.products?.sku || `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
+                    const uom = item.unit || item.products?.unit_of_measure || 'KG';
+
+                    exportRows.push({
+                        tipoDocumento: 'FV',
+                        numero: invNum,
+                        consecutivo: invNum,
+                        fecha: order.delivery_date || getBogotaDate(0),
+                        identificacionTercero: nit,
+                        nitCliente: nit,
+                        razonSocial: clientName,
+                        sucursal: clientName,
+                        formaPago: isB2B ? 'Credito' : 'Contado',
+                        fechaEntrega: order.delivery_date || getBogotaDate(0),
+                        diasCredito: paymentDays,
+                        codigoProducto: prodCode,
+                        descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
+                        bodega: 'Principal',
+                        unidadMedida: uom,
+                        cantidad: qty,
+                        valorUnitario: unitPrice,
+                        valorBase: lineBase,
+                        ivaRateDecimal: isIva ? 0.19 : 0,
+                        tarifaIva: isIva ? 19 : 0,
+                        valorIva: lineIva,
+                        totalLinea: lineTotal,
+                        descuento: 0,
+                        notaEncabezado: clientName,
+                        observaciones: `Pedido #${order.sequence_id} (Pre-Corte)`
+                    });
+                });
+            });
+
+            if (exportRows.length === 0) {
+                alert('Los pedidos seleccionados no tienen ítems registrados para exportar.');
+                return;
+            }
+
+            const dateLabel = selectedBillingDate === 'all' ? 'Todas' : selectedBillingDate;
+            await downloadWorldOfficeExcel(
+                exportRows,
+                `WorldOffice_Pedidos_${dateLabel}_${targetOrders.length}_pedidos`
+            );
+
+            alert(`¡Plano World Office descargado con éxito! Se exportaron ${targetOrders.length} pedidos (${exportRows.length} líneas de producto).`);
+        } catch (err: any) {
+            console.error('Error exporting pending orders to Excel:', err);
+            alert('Error al descargar plano para World Office: ' + err.message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Export orders in preview modal to World Office Excel
+    const handleExportPreviewToWorldOffice = async () => {
+        if (previewOrders.length === 0) return;
+        setIsProcessing(true);
+        try {
+            const orderIds = previewOrders.map(o => o.id);
+            const { data: fullOrders, error: ordersErr } = await supabase
+                .from('orders')
+                .select(`
+                    id, sequence_id, created_at, delivery_date, type, total,
+                    profiles (
+                        id, nit, company_name, razon_social, address, city, phone, payment_days, iva_responsible, parent_id, role
+                    ),
+                    order_items (
+                        id, quantity, unit_price, nickname, unit,
+                        products (
+                            sku, name, unit_of_measure, iva_rate
+                        )
+                    )
+                `)
+                .in('id', orderIds);
+
+            if (ordersErr) throw ordersErr;
+            if (!fullOrders || fullOrders.length === 0) {
+                alert('No se encontraron detalles de productos para la previsualización.');
+                return;
+            }
+
+            const isNcSlot = previewSlot === 'ADJ';
+            const activePrefix = isNcSlot ? ncPrefix : invoicePrefix;
+            const startNumber = isNcSlot ? ncNextNumber : invoiceNextNumber;
+
+            const previewMap = new Map<string, string>();
+            previewOrders.forEach((po, idx) => {
+                previewMap.set(po.id, po.projectedInvoiceNumber || `${activePrefix}-${startNumber + idx}`);
+            });
+
+            const exportRows: any[] = [];
+            fullOrders.forEach((order: any) => {
+                const clientName = order.profiles?.razon_social || order.profiles?.company_name || 'Cliente General';
+                const nit = order.profiles?.nit || '222222222222';
+                const isIva = !!order.profiles?.iva_responsible;
+                const isB2B = order.profiles?.role === 'b2b_client' || order.type === 'b2b' || !!order.profiles?.parent_id;
+                const paymentDays = order.profiles?.payment_days ?? (isB2B ? 30 : 0);
+                const invNum = previewMap.get(order.id) || `REM-${order.sequence_id}`;
+
+                (order.order_items || []).forEach((item: any) => {
+                    const qty = Number(item.quantity) || 0;
+                    const unitPrice = Number(item.unit_price) || 0;
+                    const lineTotal = qty * unitPrice;
+                    const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
+                    const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
+                    const prodCode = item.products?.sku || `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
+                    const uom = item.unit || item.products?.unit_of_measure || 'KG';
+
+                    exportRows.push({
+                        tipoDocumento: isNcSlot ? 'NC' : 'FV',
+                        numero: invNum,
+                        consecutivo: invNum,
+                        fecha: selectedBillingDate === 'all' ? getBogotaDate(0) : selectedBillingDate,
+                        identificacionTercero: nit,
+                        nitCliente: nit,
+                        razonSocial: clientName,
+                        sucursal: clientName,
+                        formaPago: isB2B ? 'Credito' : 'Contado',
+                        fechaEntrega: order.delivery_date || getBogotaDate(0),
+                        diasCredito: paymentDays,
+                        codigoProducto: prodCode,
+                        descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
+                        bodega: 'Principal',
+                        unidadMedida: uom,
+                        cantidad: qty,
+                        valorUnitario: unitPrice,
+                        valorBase: lineBase,
+                        ivaRateDecimal: isIva ? 0.19 : 0,
+                        tarifaIva: isIva ? 19 : 0,
+                        valorIva: lineIva,
+                        totalLinea: lineTotal,
+                        descuento: 0,
+                        notaEncabezado: clientName,
+                        observaciones: `Pedido #${order.sequence_id} | Pre-Corte ${previewSlot}`
+                    });
+                });
+            });
+
+            await downloadWorldOfficeExcel(
+                exportRows,
+                `WorldOffice_PreCorte_${previewSlot}_${selectedBillingDate}_${previewOrders.length}_pedidos`
+            );
+
+            alert(`¡Plano World Office descargado con éxito! Se exportaron ${previewOrders.length} pedidos.`);
+        } catch (err: any) {
+            console.error('Error exporting preview to Excel:', err);
+            alert('Error al descargar plano para World Office: ' + err.message);
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -2826,6 +3045,32 @@ export default function BillingDashboard() {
                                                 <Zap size={13} className={isProcessing ? "animate-spin" : ""} /> {isProcessing ? 'Liquidando...' : `Liquidar Costo Vigente (${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`})`}
                                             </button>
                                         )}
+
+                                        <button
+                                            type="button"
+                                            onClick={handleExportPendingToWorldOffice}
+                                            disabled={pendingOrders.length === 0 || isProcessing}
+                                            style={{
+                                                backgroundColor: '#FFFFFF',
+                                                color: '#0F172A',
+                                                border: '1px solid #CBD5E1',
+                                                padding: '0.4rem 0.8rem',
+                                                borderRadius: '8px',
+                                                fontWeight: '700',
+                                                fontSize: '0.74rem',
+                                                cursor: pendingOrders.length === 0 ? 'not-allowed' : 'pointer',
+                                                opacity: pendingOrders.length === 0 ? 0.6 : 1,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            title="Descargar archivo Excel (.xlsx) con la plantilla oficial de World Office para los pedidos seleccionados o visibles"
+                                        >
+                                            <FileSpreadsheet size={13} style={{ color: '#0D7A57' }} />
+                                            <span>Descargar Excel World Office {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length} sel)` : `(${filteredPendingOrders.length})`}</span>
+                                        </button>
 
                                         <button
                                             type="button"
@@ -4332,6 +4577,14 @@ export default function BillingDashboard() {
                                         style={{ backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.78rem', cursor: 'pointer' }}
                                     >
                                         Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleExportPreviewToWorldOffice}
+                                        disabled={isProcessing || previewOrders.length === 0}
+                                        style={{ backgroundColor: '#FFFFFF', color: '#0F172A', border: '1px solid #CBD5E1', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.78rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <FileSpreadsheet size={14} style={{ color: '#0D7A57' }} /> Descargar Excel (.xlsx)
                                     </button>
                                     <button
                                         type="button"

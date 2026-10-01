@@ -212,7 +212,8 @@ export async function downloadWorldOfficeExcel(
 
     // Build the 57 exact columns matching World Office Desktop import template
     const formattedRows = items.map(item => {
-        const cleanNit = item.identificacionTercero.replace(/\D/g, '');
+        const rawNit = item.identificacionTercero || (item as any).nitCliente || (item as any).nit || '222222222222';
+        const cleanNit = String(rawNit).replace(/\D/g, '') || '222222222222';
         const docDateStr = formatDateDDMMYYYY(item.fecha);
         const deliveryDateStr = formatDateDDMMYYYY(item.fechaEntrega || item.fecha);
         const dueDateStr = item.fechaVencimiento 
@@ -231,11 +232,13 @@ export async function downloadWorldOfficeExcel(
             ivaDecimal = item.tarifaIva > 1 ? item.tarifaIva / 100 : item.tarifaIva;
         }
 
+        const docNum = item.numero ?? (item as any).consecutivo ?? 1;
+
         const row: Record<WorldOfficeColumnKey, any> = {
             'EMPRESA': item.empresa || 'INVESTMENTS CORTES SAS',
             'Encab: Tipo Documento': item.tipoDocumento || 'FV',
             'Encab: Prefijo': item.prefijo || '',
-            'Encab: Documento Número': item.numero,
+            'Encab: Documento Número': docNum,
             'Encab: Fecha': docDateStr,
             'Encab: Tercero Interno': item.terceroInterno || '456282',
             'Encab: Tercero Externo': cleanNit,

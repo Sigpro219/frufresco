@@ -261,7 +261,7 @@ export default function Navbar() {
                 } as any : {})
             }}
         >
-            <div className="container" style={{
+            <div className="container navbar-container" style={{
                 height: '85px',
                 display: 'flex',
                 alignItems: 'center',
@@ -273,19 +273,20 @@ export default function Navbar() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <div style={{ 
-                        height: '80px', 
+                    <div className="navbar-logo-wrap" style={{ 
+                        height: '76px', 
                         width: 'auto', 
-                        minWidth: '120px', 
+                        minWidth: '110px', 
                         display: 'flex', 
-                        alignItems: 'center',
-                        position: 'relative'
+                        alignItems: 'center', 
+                        position: 'relative' 
                     }}>
                         <img 
+                            className="navbar-logo-img"
                             src={dynamicLogo || "/logo.png"} 
                             alt={appName} 
                             style={{ 
-                                height: '80px', 
+                                height: '76px', 
                                 width: 'auto', 
                                 filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))',
                                 opacity: settingsLoaded ? 1 : 0,
@@ -618,25 +619,47 @@ export default function Navbar() {
                     )}
                 </nav>
 
-                {/* HAMBURGER BUTTON — mobile only */}
-                <button
-                    className="nav-hamburger"
-                    onClick={() => setMobileOpen(o => !o)}
-                    aria-label="Menú"
-                    style={{
-                        display: 'none',
-                        background: 'none',
-                        border: `1px solid ${THEME.colors.border}`,
-                        borderRadius: THEME.radius.md,
-                        padding: '8px',
-                        cursor: 'pointer',
-                        color: THEME.colors.textMain,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    {mobileOpen ? <XIcon size={22} strokeWidth={1.5} /> : <Menu size={22} strokeWidth={1.5} />}
-                </button>
+                {/* MOBILE ACTIONS WRAPPER (CART PILL + HAMBURGER) */}
+                <div className="nav-mobile-actions" style={{ display: 'none', alignItems: 'center', gap: '8px' }}>
+                    {isShoppingContext && (
+                        <Link href="/checkout" style={{ textDecoration: 'none' }}>
+                            <button style={{
+                                border: '1px solid rgba(0,0,0,0.08)',
+                                backgroundColor: 'white',
+                                borderRadius: '9999px',
+                                padding: '6px 11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                            }}>
+                                <ShoppingCart size={17} color="var(--primary)" strokeWidth={2} />
+                                <span style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.82rem' }}>
+                                    {mounted ? `$${totalPrice.toLocaleString('es-CO')}` : '$0'}
+                                </span>
+                            </button>
+                        </Link>
+                    )}
+                    <button
+                        className="nav-hamburger"
+                        onClick={() => setMobileOpen(o => !o)}
+                        aria-label="Menú"
+                        style={{
+                            background: 'none',
+                            border: `1px solid ${THEME.colors.border}`,
+                            borderRadius: THEME.radius.md,
+                            padding: '8px',
+                            cursor: 'pointer',
+                            color: THEME.colors.textMain,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            display: 'flex'
+                        }}
+                    >
+                        {mobileOpen ? <XIcon size={22} strokeWidth={1.5} /> : <Menu size={22} strokeWidth={1.5} />}
+                    </button>
+                </div>
 
                 <div className="nav-right-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {isShoppingContext && (
@@ -905,11 +928,15 @@ export default function Navbar() {
                 /* ── Responsive ── */
                 @media (max-width: 768px) {
                     .nav-desktop { display: none !important; }
-                    .nav-hamburger { display: flex !important; }
                     .nav-right-actions { display: none !important; }
+                    .nav-mobile-actions { display: flex !important; }
+                    .navbar-container { height: 64px !important; }
+                    .navbar-logo-wrap { height: 50px !important; min-width: 80px !important; }
+                    .navbar-logo-img { height: 50px !important; }
                 }
                 @media (min-width: 769px) {
                     .nav-mobile-menu { display: none !important; }
+                    .nav-mobile-actions { display: none !important; }
                 }
 
                 /* Mobile menu items */
@@ -962,6 +989,43 @@ export default function Navbar() {
                         </div>
                     )}
 
+                    {/* Selector de Idioma / Language Toggle Móvil */}
+                    <div style={{ padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: '#F8FAFC' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748B' }}>
+                            {locale === 'en' ? 'Language / Idioma:' : 'Idioma / Language:'}
+                        </span>
+                        <div style={{ display: 'flex', gap: '4px', backgroundColor: '#E2E8F0', padding: '3px', borderRadius: '9999px' }}>
+                            <button
+                                onClick={() => changeLanguage('es')}
+                                style={{
+                                    padding: '4px 12px',
+                                    borderRadius: '9999px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    backgroundColor: locale === 'es' ? 'white' : 'transparent',
+                                    color: locale === 'es' ? 'var(--primary)' : '#64748B',
+                                    boxShadow: locale === 'es' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                }}
+                            >ES</button>
+                            <button
+                                onClick={() => changeLanguage('en')}
+                                style={{
+                                    padding: '4px 12px',
+                                    borderRadius: '9999px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    backgroundColor: locale === 'en' ? 'white' : 'transparent',
+                                    color: locale === 'en' ? 'var(--primary)' : '#64748B',
+                                    boxShadow: locale === 'en' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                }}
+                            >EN</button>
+                        </div>
+                    </div>
+
                     {/* Enlaces de navegación general */}
                     {mounted && (
                         <>
@@ -988,6 +1052,17 @@ export default function Navbar() {
                             >
                                 <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
                             </Link>
+                            {isShoppingContext && (
+                                <Link 
+                                    href="/checkout" 
+                                    className="mobile-nav-link" 
+                                    onClick={() => setMobileOpen(false)}
+                                    style={{ fontWeight: '600', color: 'var(--primary)' }}
+                                >
+                                    <ShoppingCart size={16} strokeWidth={1.5} color={THEME.colors.primary} /> 
+                                    <span>{(t as any).cart || 'Carrito'} {items.length > 0 ? `(${items.length} refs · $${totalPrice.toLocaleString('es-CO')})` : '($0)'}</span>
+                                </Link>
+                            )}
                             {/* B2B Institutional link for all FruFresco colaboradores */}
                             {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                                 <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
@@ -1012,6 +1087,11 @@ export default function Navbar() {
                                 </Link>
                             )}
                             {hasPermission('orders') && (
+                                <Link href="/admin/orders/contingency-reconciliation" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <CheckCircle2 size={16} strokeWidth={1.5} color={THEME.colors.primary} /> Conciliación Post-Despacho
+                                </Link>
+                            )}
+                            {hasPermission('orders') && (
                                 <Link href="/admin/orders/contingency-print?mode=remissions" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                     <Printer size={16} strokeWidth={1.5} color="#0D7A57" /> Previsualización Impresión
                                 </Link>
@@ -1033,6 +1113,11 @@ export default function Navbar() {
                                         <Briefcase size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCommercial}
                                     </Link>
                                 </>
+                            )}
+                            {hasPermission('customer_service') && (
+                                <Link href="/admin/customer-service" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <ShieldCheck size={16} strokeWidth={1.5} color="#0D7A57" /> {t.navCustomerService}
+                                </Link>
                             )}
                             {hasPermission('hr') && (
                                 <Link href="/admin/hr" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
