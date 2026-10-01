@@ -240,6 +240,7 @@ export async function POST(req: Request) {
       // This immediately returns 200 OK to CloudMailin to prevent Vercel Function Invocation timeouts.
       const processMailAsync = async () => {
         const mailId = mailRecord?.id;
+        const draftUuid = mailRecord?.id || crypto.randomUUID();
         let fromField = '';
         let subject = '';
         console.log(`[Email Inbound] Asynchronously processing mail record: ${mailId}`);
@@ -253,18 +254,98 @@ export async function POST(req: Request) {
           subject = headers.subject || headers.Subject || '';
           const plainText = payload.plain || '';
           const htmlText = payload.html || '';
-          let attachments = payload.attachments || [];
-          
+          const rawAttachments = Array.isArray(payload.attachments) ? payload.attachments : [];
+          let resolvedHtmlText = htmlText;
+
+          // Helper para escapar caracteres especiales en regex
+          const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+          // Mapa de recursos subidos previamente para evitar subidas duplicadas
+          const preUploadedAssetMap = new Map<string, string>();
+
+          // Pre-procesar todos los adjuntos para subir imágenes inline y resolver referencias cid: en htmlText
+          if (rawAttachments.length > 0 && resolvedHtmlText) {
+            try {
+              try {
+                await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+              } catch (_) {}
+
+              for (let attIdx = 0; attIdx < rawAttachments.length; attIdx++) {
+                const att = rawAttachments[attIdx];
+                if (!att || !att.content) continue;
+
+                const attFileName = att.file_name || att.filename || `inline_${attIdx}.png`;
+                let mimeType = att.content_type || 'image/png';
+                const lowerName = attFileName.toLowerCase();
+                if (!att.content_type || att.content_type === 'application/octet-stream') {
+                  if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
+                  else if (lowerName.endsWith('.png')) mimeType = 'image/png';
+                  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+                  else if (lowerName.endsWith('.webp')) mimeType = 'image/webp';
+                  else if (lowerName.endsWith('.gif')) mimeType = 'image/gif';
+                }
+
+                const rawCid = (att.content_id || att.cid || (att.headers && (att.headers['content-id'] || att.headers['Content-ID'])) || '').trim();
+                const cleanCid = rawCid.replace(/^<|>$/g, '').trim();
+                const isInline = !!cleanCid || (att.disposition && att.disposition.toLowerCase() === 'inline');
+                const isImage = mimeType.startsWith('image/') || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp') || lowerName.endsWith('.gif');
+
+                if (isImage || isInline) {
+                  let publicUrl = '';
+                  try {
+                    const buffer = Buffer.from(att.content, 'base64');
+                    const sanitizedName = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    const storagePath = `${draftUuid}_inline_${attIdx}_${sanitizedName}`;
+                    const { error: upErr } = await supabaseAdmin.storage
+                      .from('order-attachments')
+                      .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
+
+                    if (!upErr) {
+                      const { data: { publicUrl: pUrl } } = supabaseAdmin.storage
+                        .from('order-attachments')
+                        .getPublicUrl(storagePath);
+                      publicUrl = pUrl;
+                    }
+                  } catch (upErr) {
+                    console.warn(`[Email Inbound] Error subiendo imagen inline ${attFileName} a storage:`, upErr);
+                  }
+
+                  const finalImgSrc = publicUrl || `data:${mimeType};base64,${att.content}`;
+
+                  if (cleanCid) {
+                    preUploadedAssetMap.set(cleanCid, finalImgSrc);
+                    const escCid = escapeRegex(cleanCid);
+                    resolvedHtmlText = resolvedHtmlText.replace(
+                      new RegExp(`(src=["']?)cid:[^"'>\\s]*${escCid}[^"'>\\s]*(["']?)`, 'gi'),
+                      `$1${finalImgSrc}$2`
+                    );
+                  }
+
+                  if (attFileName) {
+                    preUploadedAssetMap.set(lowerName, finalImgSrc);
+                    const escName = escapeRegex(attFileName);
+                    resolvedHtmlText = resolvedHtmlText.replace(
+                      new RegExp(`(src=["']?)cid:[^"'>\\s]*${escName}[^"'>\\s]*(["']?)`, 'gi'),
+                      `$1${finalImgSrc}$2`
+                    );
+                  }
+                }
+              }
+            } catch (inlineErr) {
+              console.warn('[Email Inbound] Error al pre-procesar imágenes inline:', inlineErr);
+            }
+          }
+
           // Check if there are documents (.pdf, .xlsx, .xls, .csv)
-          const hasDocuments = attachments.some((att: any) => {
+          const hasDocuments = rawAttachments.some((att: any) => {
             const name = (att.file_name || att.filename || '').toLowerCase();
             const mime = (att.content_type || '').toLowerCase();
             return name.endsWith('.pdf') || name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') ||
                    mime.includes('pdf') || mime.includes('spreadsheet') || mime.includes('excel');
           });
 
-          // Filter attachments:
-          attachments = attachments.filter((att: any) => {
+          // Filter attachments for order processing:
+          let attachments = rawAttachments.filter((att: any) => {
             if (!att.content) return false;
             const lowerName = (att.file_name || att.filename || '').toLowerCase();
             const mimeType = (att.content_type || '').toLowerCase();
@@ -277,10 +358,13 @@ export async function POST(req: Request) {
             }
             
             const sizeInKB = att.content.length / 1.33 / 1024;
-            const isInline = !!(att.content_id || att.cid || (att.disposition && att.disposition.toLowerCase() === 'inline'));
-            
+            const isLogoOrSignature = lowerName.includes('logo') || lowerName.includes('firma') || lowerName.includes('banner') ||
+                                      lowerName.includes('icon') || lowerName.includes('social') || lowerName.includes('facebook') ||
+                                      lowerName.includes('instagram') || lowerName.includes('whatsapp') || lowerName.includes('twitter');
+
             if (isImage) {
-              if (sizeInKB < 40 || isInline || lowerName.includes('logo') || lowerName.includes('firma') || lowerName.includes('banner')) {
+              // Si no hay documentos PDF/Excel, las imágenes sustanciales (>= 15KB) que no sean logos son órdenes/pedidos (ej. OxoHotel)
+              if (sizeInKB < 15 || isLogoOrSignature) {
                 console.log(`[Email Inbound] Ignorando adjunto de imagen pequeño/firma: ${lowerName} (${Math.round(sizeInKB)}KB)`);
                 return false;
               }
@@ -601,7 +685,6 @@ export async function POST(req: Request) {
       console.error('[Email Ingest] Error pre-fetching active products:', e);
     }
 
-    const draftUuid = mailRecord?.id || crypto.randomUUID();
     let attachmentUrl: string | null = null;
     let attachmentName: string | null = null;
 
@@ -723,34 +806,37 @@ export async function POST(req: Request) {
         const lowerMime = mimeType.toLowerCase();
         const attIsExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
-        // A. Upload to Supabase Storage in parallel
-        let publicUrl = '';
-        try {
+        // A. Upload to Supabase Storage in parallel (o reutilizar si ya fue subido en el pre-procesamiento inline)
+        const cleanContentId = (attachment.content_id || attachment.cid || (attachment.headers && (attachment.headers['content-id'] || attachment.headers['Content-ID'])) || '').replace(/^<|>$/g, '').trim();
+        let publicUrl = (cleanContentId ? preUploadedAssetMap.get(cleanContentId) : '') || preUploadedAssetMap.get(lowerName) || '';
+        if (!publicUrl || publicUrl.startsWith('data:')) {
           try {
-            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
-          } catch (_) {}
+            try {
+              await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+            } catch (_) {}
 
-          const buffer = Buffer.from(base64Data, 'base64');
-          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
-          const { error: uploadError } = await supabaseAdmin.storage
-            .from('order-attachments')
-            .upload(storagePath, buffer, {
-              contentType: mimeType,
-              upsert: true
-            });
-
-          if (!uploadError) {
-            const { data: { publicUrl: pUrl } } = supabaseAdmin.storage
+            const buffer = Buffer.from(base64Data, 'base64');
+            const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
+            const { error: uploadError } = await supabaseAdmin.storage
               .from('order-attachments')
-              .getPublicUrl(storagePath);
-            publicUrl = pUrl;
-            console.log(`[Email Inbound] Parallel attachment ${i} (${attFileName}) uploaded to Supabase: ${publicUrl}`);
-          } else {
-            console.error(`[Email Inbound] Failed parallel upload for attachment ${i}:`, uploadError);
+              .upload(storagePath, buffer, {
+                contentType: mimeType,
+                upsert: true
+              });
+
+            if (!uploadError) {
+              const { data: { publicUrl: pUrl } } = supabaseAdmin.storage
+                .from('order-attachments')
+                .getPublicUrl(storagePath);
+              publicUrl = pUrl;
+              console.log(`[Email Inbound] Parallel attachment ${i} (${attFileName}) uploaded to Supabase: ${publicUrl}`);
+            } else {
+              console.error(`[Email Inbound] Failed parallel upload for attachment ${i}:`, uploadError);
+            }
+          } catch (uploadErr) {
+            console.error(`[Email Inbound] Parallel storage upload handler crashed for attachment ${i}:`, uploadErr);
           }
-        } catch (uploadErr) {
-          console.error(`[Email Inbound] Parallel storage upload handler crashed for attachment ${i}:`, uploadErr);
         }
 
         // B. Parse attachment text content if Excel, or call Gemini
@@ -884,6 +970,8 @@ export async function POST(req: Request) {
         return {
           name: attFileName,
           url: publicUrl,
+          content_id: cleanContentId || null,
+          is_inline: !!cleanContentId || (attachment.disposition && attachment.disposition.toLowerCase() === 'inline'),
           processed: false,
           orderId: null,
           purchaseOrder: detectedPoInAtt,
@@ -1473,7 +1561,7 @@ export async function POST(req: Request) {
               attachmentName: att.name || null,
               attachments: [att],
               autoRejectedReason: hasValid ? null : 'Sin productos ni requerimientos detectados',
-              emailHtml: htmlText || null
+              emailHtml: resolvedHtmlText || htmlText || null
             },
             ...processedItems
           ],
@@ -1518,7 +1606,7 @@ export async function POST(req: Request) {
             attachmentName: primarySource.name || attachmentName || null,
             attachments: validAttachments.length > 0 ? validAttachments : (attachmentUrl ? [{ url: attachmentUrl, name: attachmentName || 'documento.pdf', items: [] }] : []),
             autoRejectedReason: hasValid ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
-            emailHtml: htmlText || null
+            emailHtml: resolvedHtmlText || htmlText || null
           },
           ...processedItems
         ],

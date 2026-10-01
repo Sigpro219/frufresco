@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.82 (Resolución de Columna Canónica purchase_order_number en Orders, Navegación Enter Producto a Producto, Visibilidad OC en Ficha Logística y Selector Ergonómico de Fechas Disponibles con Píldoras Rápidas, Escenario BDD 116)
+> **Versión:** 1.9.83 (Protocolo Canónico de Tolerancia Fonética Z-S, Búsqueda Multi-Token no Contigua y Resiliencia en Memoria de Pedidos, Escenario BDD 118)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4945,4 +4945,43 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   3. **Purga Inmediata de Claves Obsoletas:** Las opciones eliminadas se limpian instantáneamente de `customizingModalItem.options` y de `editableItems[].selected_options`, impidiendo que variables borradas reaparezcan al reabrir el modal o el customizador.
   4. **Referencia a Producto Fresco:** La apertura del configurador de variantes obtiene siempre el objeto más reciente de `products.find(p => p.id === product.id)`.
 
+---
 
+#### Escenario 118: Protocolo Canónico de Tolerancia Fonética, Seseo y Búsqueda Multi-Token en Omnibox y Digestores de Pedidos (SDD v1.9.83)
+- **Given** los motores de búsqueda omnibox en mesas de borradores de pedidos (`EmailDraftsModule.tsx`), módulo de creación manual (`/admin/orders/create/page.tsx`) y el pipeline de digestión inteligente de documentos (`order-parser-engine.ts`, `/api/orders/reparse-draft`).
+- **When** un operador o cliente introduce términos de búsqueda con variaciones ortográficas del español latinoamericano (ej. seseo `"tusa"` en lugar de `"tuza"`, ausencia de tildes o términos no contiguos como `"mazorca 992"` o `"mazorca institucional"`):
+- **Then**:
+  1. **Tolerancia Fonética Z $\leftrightarrow$ S y Seseo/Ceceo:**
+     - El motor de filtrado ejecuta una normalización fonética paralela (`z` $\leftrightarrow$ `s`, `ce` $\leftrightarrow$ `se`, `ci` $\leftrightarrow$ `si`) sobre el nombre del producto, SKU, palabras clave y apodos.
+     - **Caso Canónico:** Escribir `"tusa"`, `"mazorca en tusa"` o `"tusa institucional"` localiza inmediatamente a **`Mazorca en tuza institucional`** (Accounting ID: `992`), erradicando falsos negativos por discrepancia de grafías.
+  2. **Búsqueda Multi-Token No Contigua:**
+     - Se supera la restricción de subcadena continua estricta (`normName.includes(query)`). La consulta se descompone en tokens (`queryTokens = cleanQuery.split(/\s+/)`). Si todas las palabras coinciden en cualquier orden a lo largo de los campos canónicos del producto, se califica como coincidencia válida.
+     - **Ejemplo:** La búsqueda `"mazorca 992"` localiza con precisión la mazorca institucional sin exigir que el número esté pegado al nombre.
+  3. **Extracción y Priorización Heurística de ID Contable:**
+     - Si la consulta incorpora patrones como `(992)`, el motor extrae el ID contable y le otorga máxima bonificación (+8.000 pts) sobre el campo `accounting_id`.
+  4. **Prevalencia y Relevancia Absoluta de Acuerdos Comerciales (+4.000 pts):**
+     - Si el cliente posee un acuerdo comercial activo (`quotes` con `status = 'agreement'`), los productos del convenio reciben un bono preferente de relevancia (+4.000 pts) para liderar siempre la lista desplegable.
+     - Los productos institucionales vinculados a convenios no deben ser ocultados de las consolas operativas por banderas restrictivas de tienda web (`show_on_web`).
+  5. **Resiliencia en Memoria de Apodos (Self-Healing Memory):**
+     - En el pipeline de re-lectura IA (`findBestProductMatchDetails`), el acceso a registros de apodos de cliente (`product_nicknames` y `document_learning_memory`) se sanitiza con fallback no nulo (`m.normalized_text || m.nickname || m.raw_pdf_text || ''`), previniendo excepciones fatales de tipo `TypeError: Cannot read properties of undefined (reading 'includes')`.
+
+
+
+
+
+---
+
+#### Escenario 119: Ingesta Resiliente y Renderizado de Imágenes Inline (CID) y Adjuntos Gráficos en Borradores de Pedidos (SDD v1.9.84)
+- **Given** correos electrónicos entrantes con imágenes incrustadas en el cuerpo (Content-ID / `cid:` emitidos por Outlook o Gmail) o capturas de pantalla de pedidos pegadas directamente en el mensaje sin adjunto independiente.
+- **When** el webhook de ingesta (`/api/orders/email-ingest`) recibe el payload y el visor de documentos originales (`EmailDraftsModule.tsx` $\rightarrow$ `GmailMessageViewer`) renderiza el HTML del mensaje:
+- **Then**:
+  1. **Pre-procesamiento y Resolución Atómica de CIDs en Ingesta:**
+     - El pipeline de ingesta (`/api/orders/email-ingest`) analiza todos los adjuntos entrantes (`rawAttachments`). Para cualquier imagen o elemento con `content_id` o `disposition: 'inline'`, sube el buffer a Supabase Storage (`order-attachments`) y reemplaza de inmediato todas las referencias `cid:...` en el HTML del correo (`emailHtml`) por su URL pública permanente o Data URI Base64.
+  2. **Eliminación del Filtro Excluyente de Imágenes Inline de Pedido:**
+     - Se elimina la condición obsoleta `sizeInKB < 40 || isInline` que descartaba indiscriminadamente imágenes legítimas de pedidos.
+     - Si el correo carece de documentos PDF o Excel (como ocurre en solicitudes de hoteles/restaurantes donde la tabla de pedido se pega como imagen en el cuerpo), cualquier imagen sustancial ($\ge 15\text{ KB}$) que no corresponda a un logo o firma corporativa es catalogada y enviada al motor multimodal de Gemini para extracción de ítems.
+  3. **Preservación Canónica de Metadatos de Adjuntos:**
+     - En `parsedAttachments` y `metadata.attachments`, se conservan explícitamente `content_id`, `is_inline`, `url` y `name`, permitiendo la reconciliación bidireccional exacta.
+  4. **Resolución Client-Side y Fallback Elegante en GmailMessageViewer:**
+     - `GmailMessageViewer` enriquece la resolución de CIDs contrastando contra todos los adjuntos (`allAtts`), incluyendo mapeo heurístico 1-a-1 cuando hay una única imagen y un único CID.
+     - El `iframe` sandbox incorpora un interceptor `onerror` que sustituye imágenes rotas o externas inaccesibles por una píldora visual discreta (`[🖼️ Imagen inline no disponible]`), erradicando los cuadros rotos nativos del navegador.

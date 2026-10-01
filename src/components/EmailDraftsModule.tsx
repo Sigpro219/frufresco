@@ -668,31 +668,43 @@ const GmailMessageViewer = ({
   const resolvedHtml = (() => {
     if (!rawHtml) return null;
     let html = rawHtml;
-    if (attachments.length > 0) {
+    const allAtts = [
+      ...(Array.isArray(attachments) ? attachments : []),
+      ...(metadata?.attachmentUrl ? [{ url: metadata.attachmentUrl, name: metadata.attachmentName || '' }] : [])
+    ];
+    if (allAtts.length > 0) {
       const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      attachments.forEach((att: any) => {
+      allAtts.forEach((att: any) => {
         try {
           const name = att.name || att.file_name || att.filename;
           const contentId = att.content_id || att.contentId || att.cid;
           if (contentId && att.url) {
-            const escapedCid = escapeRegex(String(contentId).replace(/^<|>$/g, '').trim());
+            const cleanCid = String(contentId).replace(/^<|>$/g, '').trim();
+            const escapedCid = escapeRegex(cleanCid);
             if (escapedCid) {
-              html = html.replace(new RegExp(`src=["']cid:[^"']*${escapedCid}[^"']*["']`, 'gi'), `src="${att.url}"`);
+              html = html.replace(new RegExp(`(src=["']?)cid:[^"'>\\s]*${escapedCid}[^"'>\\s]*(["']?)`, 'gi'), `$1${att.url}$2`);
             }
           }
           if (name && att.url) {
             const cleanName = String(name).replace(/[^a-zA-Z0-9.-]/g, '');
             if (cleanName) {
               const escapedClean = escapeRegex(cleanName);
-              html = html.replace(new RegExp(`src=["']cid:[^"']*${escapedClean}[^"']*["']`, 'gi'), `src="${att.url}"`);
+              html = html.replace(new RegExp(`(src=["']?)cid:[^"'>\\s]*${escapedClean}[^"'>\\s]*(["']?)`, 'gi'), `$1${att.url}$2`);
             }
             const escapedName = escapeRegex(String(name));
-            html = html.replace(new RegExp(`src=["']cid:[^"']*${escapedName}[^"']*["']`, 'gi'), `src="${att.url}"`);
+            html = html.replace(new RegExp(`(src=["']?)cid:[^"'>\\s]*${escapedName}[^"'>\\s]*(["']?)`, 'gi'), `$1${att.url}$2`);
           }
         } catch (cidErr) {
           console.warn('⚠️ Error al resolver CID en HTML:', cidErr);
         }
       });
+
+      // Fallback: If there is exactly 1 image attachment and exactly 1 unresolved CID in the HTML, map it!
+      const remainingCidMatches = html.match(/src=["']?cid:[^"'>\s]+["']?/gi);
+      const imageAtts = allAtts.filter((a: any) => a.url && (String(a.name || '').match(/\.(png|jpe?g|gif|webp)$/i) || String(a.content_type || '').startsWith('image/')));
+      if (remainingCidMatches && remainingCidMatches.length === 1 && imageAtts.length === 1) {
+        html = html.replace(/src=["']?cid:[^"'>\s]+["']?/gi, `src="${imageAtts[0].url}"`);
+      }
     }
     return html;
   })();
@@ -771,7 +783,7 @@ const GmailMessageViewer = ({
         {resolvedHtml ? (
           <div style={{ width: '100%', minHeight: '260px' }}>
             <iframe
-              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:8px;}table{border-collapse:collapse;}img{max-width:100%;height:auto;border-radius:6px;}</style></head><body>${resolvedHtml}</body></html>`}
+              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:12px;}table{border-collapse:collapse;max-width:100%;}img{max-width:100%;height:auto;border-radius:6px;vertical-align:middle;}.img-broken-notice{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;}</style><script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("img").forEach(function(img){img.addEventListener("error",function(){if(!this.dataset.handled){this.dataset.handled="true";var span=document.createElement("div");span.className="img-broken-notice";span.innerHTML="<span>🖼️</span> <span>[Imagen inline no disponible]</span>";this.parentNode.insertBefore(span,this);this.style.display="none";}});});});</script></head><body>${resolvedHtml}</body></html>`}
               style={{ width: '100%', minHeight: '380px', border: 'none', backgroundColor: 'transparent' }}
               sandbox="allow-same-origin allow-popups"
             />
