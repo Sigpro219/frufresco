@@ -592,24 +592,46 @@ export default function BillingDashboard() {
                     .eq('key', 'system_roles')
                     .single();
 
+                let parsedRoles: any[] = [];
                 if (!error && data && data.value) {
-                    const parsedRoles = JSON.parse(data.value);
-                    setRoles(parsedRoles);
+                    try {
+                        parsedRoles = JSON.parse(data.value);
+                        setRoles(parsedRoles);
+                    } catch (parseErr) {
+                        console.error('Error parsing system_roles in Billing page:', parseErr);
+                    }
+                }
 
-                    const canInvoicing = checkUserPermission(profile, 'billing_invoicing_access', parsedRoles);
-                    const canPortfolio = checkUserPermission(profile, 'billing_portfolio_access', parsedRoles);
-                    const canConfig = checkUserPermission(profile, 'billing_config_access', parsedRoles);
+                // Jerarquía canónica de permisos (PermissionTreeEditor & Roles)
+                const canInvoicing = 
+                    checkUserPermission(profile, 'admin.commercial.billing.invoicing', parsedRoles) ||
+                    checkUserPermission(profile, 'admin.commercial.billing', parsedRoles) ||
+                    checkUserPermission(profile, 'admin.commercial', parsedRoles) ||
+                    checkUserPermission(profile, 'billing_invoicing_access', parsedRoles) ||
+                    checkUserPermission(profile, 'billing', parsedRoles);
 
-                    setHasInvoicingAccess(canInvoicing);
-                    setHasPortfolioAccess(canPortfolio);
-                    setHasConfigAccess(canConfig);
+                const canPortfolio = 
+                    checkUserPermission(profile, 'admin.commercial.billing.portfolio', parsedRoles) ||
+                    checkUserPermission(profile, 'admin.commercial.billing', parsedRoles) ||
+                    checkUserPermission(profile, 'admin.commercial', parsedRoles) ||
+                    checkUserPermission(profile, 'billing_portfolio_access', parsedRoles) ||
+                    checkUserPermission(profile, 'billing', parsedRoles);
 
-                    if (!canInvoicing) {
-                        if (canPortfolio) {
-                            setActiveTab('portfolio');
-                        } else if (canConfig) {
-                            setActiveTab('configuration');
-                        }
+                const canConfig = 
+                    checkUserPermission(profile, 'admin.commercial.billing.config', parsedRoles) ||
+                    checkUserPermission(profile, 'admin.commercial.billing', parsedRoles) ||
+                    checkUserPermission(profile, 'admin.commercial', parsedRoles) ||
+                    checkUserPermission(profile, 'billing_config_access', parsedRoles);
+
+                setHasInvoicingAccess(canInvoicing);
+                setHasPortfolioAccess(canPortfolio);
+                setHasConfigAccess(canConfig);
+
+                if (!canInvoicing) {
+                    if (canPortfolio) {
+                        setActiveTab('portfolio');
+                    } else if (canConfig) {
+                        setActiveTab('configuration');
                     }
                 }
             } catch (e) {
