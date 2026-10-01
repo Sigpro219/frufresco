@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.53 (Acuerdo Genérico Abierto a Consumo con Precio Cero $0, Ingesta Sin Bloqueo Tarifario, Emisión de Remisión de Entrega y Liquidación Posterior a Costo Vigente en Facturación, Escenario BDD 91)
+> **Versión:** 1.9.54 (Estándar de Hoja Membreteada Universal para Comunicaciones Imprimibles a Terceros, Propuestas Comerciales Ordenadas por Categoría A-Z, Exportación Excel .xlsx y Diseño Swiss Precision, Escenario BDD 92)
 > **Fecha:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Dirección de Operaciones, Mesa de Control Logística, Gestión de Calidad & Facturación / Cartera
@@ -951,10 +951,25 @@ El submódulo de Acuerdos Comerciales gobierna la formalización jurídica y fin
 2. **Plantilla Maestra Institucional (`masterTemplate`):**
    - Banco de precios maestro corporativo que permite cargar un Excel base y aplicarlo en bloque a cualquier cliente o conjunto de contratos.
 
-#### F. Formato de Impresión Ejecutiva & Exportación
-1. **Documento de Acuerdo Formal (`/b2b/agreements/[id]/print`):**
-   - Formato Carta (*Letter Portrait*) con membrete de *Investments Cortés S.A.S. (NIT 901.393.217-5)*, tabla completa de ítems pactados, unidad de medida, tarifa acordada, IVA y casillas de firma del representante comercial y el cliente.
-2. **Exportación Excel:** Descarga instantánea de la matriz de precios a hoja `.xlsx` para auditoría externa o entrega al economato del cliente.
+#### F. Estándar de Identidad Documental Oficial a Terceros (Universal Letterhead), Propuestas Comerciales & Exportación
+1. **Principio de Identidad Documental Unificada (`Letterhead`):**
+   - Todas las comunicaciones e informes formales imprimibles dirigidos a clientes y terceros (Remisiones de Entrega, Propuestas Comerciales, Acuerdos de Precios Contractuales y Estados de Cuenta) deben portar obligatoriamente la **Hoja Membreteada Canónica** de *Investments Cortés S.A.S. (NIT 901.393.217-5)*.
+   - **Gobernanza de Marca de Agua:** Para documentos de tabla densa (catálogos y propuestas de precios con más de 10 ítems), la marca de agua diagonal de fondo se desactiva explícitamente (`showWatermark={false}`) para evitar artefactos visuales, rebanadas de contraste o interferencias de lectura sobre las filas alternadas (cebra).
+   - **Nomenclatura Documental:** El título corporativo en la cabecera del documento se estandariza a `PROPUESTA COMERCIAL DE PRECIOS`, garantizando uniformidad sin recortes de cinta.
+
+2. **Ordenamiento Jerárquico Automatizado Doble A-Z (Categoría y Producto):**
+   - **Agrupación por Categoría:** Los productos se agrupan automáticamente por su categoría taxonómica (`products.category` o `"General"` si no está tipificada) y se ordenan alfabéticamente en sentido ascendente (A $\rightarrow$ Z).
+   - **Ordenamiento Intra-Categoría:** Al interior de cada categoría, los renglones de producto se ordenan de forma estricta y automática por el nombre del producto en orden alfabético (A $\rightarrow$ Z).
+   - **Cintas Separadoras de Categoría (*Swiss Precision Ribbons*):** Cada categoría se encabeza con un listón visual minimalista de fondo gris suave pizarra (`bg-slate-100/90 text-slate-800`), borde fino y badge con conteo dinámico de productos (`N productos`).
+
+3. **Purificación UI / UX con Iconografía Vectorial Lucide (*disenador-web*):**
+   - Queda estrictamente prohibido el uso de emojis unicode (`🟢`, `📁`, `📦`, `🔴`) en interfaces imprimibles, modales ejecutivos y plantillas transaccionales HTML.
+   - Toda la semántica visual se renderiza mediante componentes vectoriales de `lucide-react` (`<Layers />`, `<ShieldCheck />`, `<Tag />`, `<CheckCircle2 />`, `<FileSpreadsheet />`, `<Building2 />`, `<Calendar />`, `<FileText />`, `<Info />`).
+
+4. **Exportación Estructurada a Hoja de Cálculo Excel (`.xlsx`):**
+   - La barra de herramientas del modal de visualización incluye el botón nativo **`[📊 Descargar Excel]`** (`handleExportAgreementExcel`).
+   - Genera dinámicamente un archivo Excel (`.xlsx`) con anchos de columna automáticos, tipografía legible y una estructura exhaustiva de 11 columnas corporativas:
+     `Categoría`, `Código Contable`, `Producto / Insumo`, `Presentación`, `Precio Pactado (COP)`, `Tarifa IVA (%)`, `Cliente`, `NIT / CC`, `Referencia`, `Vigencia Desde`, `Vigencia Hasta`.
 
 #### G. Protocolo de Notificaciones Transaccionales & Banner de Alta Visibilidad (HITL)
 1. **Flujo de Trabajo por Lotes (Zero Interruption Workflow):**
@@ -4012,3 +4027,16 @@ La visualización en la Torre de Control y en [`EmailOutboxModule.tsx`](file:///
   2. En el piso de operaciones, la Sábana de Alistamiento y el kit de contingencia (`/admin/orders/contingency-print?mode=remissions`) imprimen la **Remisión de Entrega** completa con cantidades, unidades y notas de bodega para el despacho y firma del cliente.
   3. Al llegar a la Mesa de Facturación (`/admin/commercial/billing`), el pedido exhibe el badge ámbar `⚠️ Por Liquidar Tarifa`.
   4. El facturador presiona **`[⚡ Liquidar Precios a Costo Vigente]`**, actualizando automáticamente cada producto al costo base de `commercial_cost_matrix` vigente en la fecha de facturación, calculando IVA y totalizando la orden antes de emitir la Factura Electrónica y exportar a World Office.
+
+#### Escenario 92: Visualización, Impresión y Exportación de Propuesta Comercial con Hoja Membreteada Oficial A-Z y Descarga Excel
+- **Given** un Acuerdo Comercial B2B pactado y activo con el cliente corporativo "Hoteles Dann Carlton".
+- **When** el analista comercial hace clic en el acuerdo en `/admin/commercial?tab=clients&clientTab=agreements` y presiona **`[👁️ Ver Acuerdo / Propuesta]`**.
+- **Then**:
+  1. El sistema abre el modal ejecutivo con la **Hoja Membreteada Universal (`Letterhead`)** de *Investments Cortés S.A.S. (NIT 901.393.217-5)* y el título `PROPUESTA COMERCIAL DE PRECIOS`.
+  2. La marca de agua se encuentra desactivada (`showWatermark={false}`) garantizando nitidez sobre las filas alternadas.
+  3. Todos los ítems se agrupan automáticamente por su **Categoría taxonómica en orden alfabético A $\rightarrow$ Z** (ej. *Frutas Frescas*, *Hortalizas & Verduras*, *Procesados & Pulpa*).
+  4. Al interior de cada categoría, los renglones de producto se ordenan **alfabéticamente de la A a la Z** con tipografía tabular para los precios pactados e IVA.
+  5. Todas las representaciones gráficas emplean iconos vectoriales de `lucide-react` con cero emojis unicode.
+  6. Al presionar **`[🖨️ Imprimir]`**, se abre una ventana limpia con los estilos `@media print` en formato Carta (*Letter Portrait*).
+  7. Al presionar **`[📊 Descargar Excel]`**, la biblioteca `xlsx` genera y descarga de inmediato el libro estructurado con las 11 columnas corporativas oficiales para el cliente.
+
