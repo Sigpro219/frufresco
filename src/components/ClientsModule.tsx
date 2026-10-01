@@ -6636,17 +6636,30 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                     });
                                                 }}
                                                 style={{
-                                                    padding: '3px 8px',
+                                                    padding: '4px 10px',
                                                     borderRadius: '6px',
-                                                    border: '1px solid #F59E0B',
-                                                    backgroundColor: formData.allow_off_agreement_purchases !== false ? '#FEF3C7' : '#F3F4F6',
-                                                    color: formData.allow_off_agreement_purchases !== false ? '#92400E' : '#4B5563',
+                                                    border: `1.5px solid ${formData.allow_off_agreement_purchases !== false ? '#10B981' : '#EF4444'}`,
+                                                    backgroundColor: formData.allow_off_agreement_purchases !== false ? '#ECFDF5' : '#FEF2F2',
+                                                    color: formData.allow_off_agreement_purchases !== false ? '#065F46' : '#991B1B',
                                                     fontSize: '0.72rem',
                                                     fontWeight: '800',
-                                                    cursor: 'pointer'
+                                                    cursor: isReadOnly ? 'default' : 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px'
                                                 }}
                                             >
-                                                {formData.allow_off_agreement_purchases !== false ? 'Permitido (ON)' : 'Restringido (OFF)'}
+                                                {formData.allow_off_agreement_purchases !== false ? (
+                                                    <>
+                                                        <Unlock size={12} style={{ color: '#059669' }} />
+                                                        <span>Permitido Fuera de Convenio</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Lock size={12} style={{ color: '#DC2626' }} />
+                                                        <span>Bloqueado (Solo Convenio)</span>
+                                                    </>
+                                                )}
                                             </button>
                                         )}
                                     </div>
@@ -6735,16 +6748,50 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 setFormData({...formData, allow_off_agreement_purchases: !formData.allow_off_agreement_purchases});
                                             }}
                                             style={{ 
-                                                padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#CBD5E1'}`, 
-                                                backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryLight : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
-                                                boxShadow: formData.allow_off_agreement_purchases !== false ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                padding: '0.65rem 1rem', 
+                                                borderRadius: THEME.radius.md, 
+                                                border: `1.5px solid ${formData.allow_off_agreement_purchases !== false ? '#10B981' : '#EF4444'}`, 
+                                                backgroundColor: formData.allow_off_agreement_purchases !== false ? '#ECFDF5' : '#FEF2F2', 
+                                                cursor: isReadOnly ? 'default' : 'pointer', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'space-between',
+                                                gap: '8px', 
+                                                transition: 'all 0.2s ease',
+                                                boxShadow: formData.allow_off_agreement_purchases !== false ? '0 2px 8px rgba(16, 185, 129, 0.12)' : '0 2px 8px rgba(239, 68, 68, 0.12)',
                                                 opacity: isReadOnly ? 0.9 : 1
                                             }}
-                                            title="Permite o restringe que la casa matriz y sus sucursales compren productos fuera de su convenio comercial"
+                                            title="Haz clic para alternar: Permite o restringe que la casa matriz y sus sucursales compren productos fuera de su convenio comercial"
                                         >
-                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#94A3B8' }}></div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: formData.allow_off_agreement_purchases !== false ? '#065F46' : '#475569', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                PERMITE COMPRAS FUERA DE CONVENIO
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {formData.allow_off_agreement_purchases !== false ? (
+                                                    <Unlock size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                                                ) : (
+                                                    <Lock size={16} style={{ color: '#DC2626', flexShrink: 0 }} />
+                                                )}
+                                                <span style={{ 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '800', 
+                                                    color: formData.allow_off_agreement_purchases !== false ? '#065F46' : '#991B1B', 
+                                                    fontFamily: THEME.typography.fontFamilySecondary 
+                                                }}>
+                                                    {formData.allow_off_agreement_purchases !== false 
+                                                        ? 'PERMITE COMPRAS FUERA DE CONVENIO' 
+                                                        : 'NO PERMITE COMPRAS FUERA DE CONVENIO'}
+                                                </span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                fontWeight: '800',
+                                                padding: '2px 8px',
+                                                borderRadius: '9999px',
+                                                backgroundColor: formData.allow_off_agreement_purchases !== false ? '#D1FAE5' : '#FEE2E2',
+                                                color: formData.allow_off_agreement_purchases !== false ? '#047857' : '#B91C1C',
+                                                border: `1px solid ${formData.allow_off_agreement_purchases !== false ? '#A7F3D0' : '#FECACA'}`,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.04em'
+                                            }}>
+                                                {formData.allow_off_agreement_purchases !== false ? 'Abierto' : 'Solo Convenio'}
                                             </span>
                                         </div>
                                     </div>

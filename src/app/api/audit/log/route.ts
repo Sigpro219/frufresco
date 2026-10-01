@@ -1,14 +1,21 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
-const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+export const dynamic = 'force-dynamic';
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+function getSupabaseAdmin() {
+    const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+    const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+    const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error('Credenciales de Supabase no configuradas en el entorno');
+    }
+    return createClient(supabaseUrl, supabaseServiceKey);
+}
 
 export async function POST(req: NextRequest) {
     try {
+        const supabaseAdmin = getSupabaseAdmin();
         const body = await req.json();
         const { action, module, collaborator_name, collaborator_id, details } = body;
 

@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+export const dynamic = 'force-dynamic';
+
+function getSupabaseAdmin() {
+    const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+    const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+    const serviceRoleKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error('Credenciales de Supabase no configuradas en el entorno');
+    }
+    return createClient(supabaseUrl, serviceRoleKey);
+}
 
 const GENERAL_INSTITUCIONAL_MODEL_ID = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
 
 // GET: Retorna el Modelo Institucional General activo con todos sus quote_items enriquecidos
 export async function GET() {
     try {
+        const supabaseAdmin = getSupabaseAdmin();
         const { data: template, error: tErr } = await supabaseAdmin
             .from('quotes')
             .select('id, quote_number, client_name, model_id, model_snapshot_name, subtotal_amount, total_tax_amount, total_amount, status, created_at, updated_at')
@@ -43,6 +52,7 @@ export async function GET() {
 // POST: Guarda o actualiza el Modelo Institucional General
 export async function POST(req: NextRequest) {
     try {
+        const supabaseAdmin = getSupabaseAdmin();
         const body = await req.json();
         const { name, items, author } = body;
 

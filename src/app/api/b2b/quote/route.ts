@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
-const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+export const dynamic = 'force-dynamic';
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+function getSupabase() {
+  const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+  const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+  const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Credenciales de Supabase no configuradas en el entorno');
+  }
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
 
 const ALL_CATEGORIES = [
   'Verduras',
@@ -68,6 +74,7 @@ const ANCHOR_PRIORITY: Record<string, string[]> = {
 
 export async function POST(request: Request) {
     try {
+        const supabase = getSupabase();
         const body = await request.json();
         const { 
             company_name, 

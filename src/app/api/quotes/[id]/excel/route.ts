@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+export const dynamic = 'force-dynamic';
+
+function getSupabaseAdmin() {
+    const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+    const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+    const serviceRoleKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error('Credenciales de Supabase no configuradas en el entorno');
+    }
+    return createClient(supabaseUrl, serviceRoleKey);
+}
 
 const formatQuoteNumber = (num: number, createdDate?: string) => {
     const d = new Date(createdDate || Date.now());
@@ -19,6 +27,7 @@ export async function GET(
     context: { params: Promise<{ id: string }> }
 ) {
     try {
+        const supabaseAdmin = getSupabaseAdmin();
         const { id } = await context.params;
         if (!id) {
             return NextResponse.json({ error: 'ID de cotización requerido' }, { status: 400 });

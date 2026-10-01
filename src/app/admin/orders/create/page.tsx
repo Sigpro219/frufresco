@@ -1150,17 +1150,11 @@ function CreateOrderContent() {
                 }
                 
                 if (candidateAgreement) {
+                    activeAgreement = candidateAgreement;
                     const start = candidateAgreement.start_date?.split('T')[0];
                     const end = candidateAgreement.valid_until?.split('T')[0];
-                    let isValid = true;
-                    if (start && start > checkDate) isValid = false;
-                    if (end && end < checkDate) isValid = false;
-
-                    if (isValid) {
-                        activeAgreement = candidateAgreement;
-                    } else {
-                        expired = true;
-                    }
+                    if (start && start > checkDate) expired = true;
+                    if (end && end < checkDate) expired = true;
                 }
             }
 
@@ -1330,7 +1324,7 @@ function CreateOrderContent() {
 
                 // SPEC.md Secc. 7.2: Inmunidad Contractual - Campañas aplican a productos de catálogo/modelo, NO a SKUs congelados en Acuerdo Comercial
                 Object.keys(campMap).forEach((productId) => {
-                    if (agreementProductIds.has(productId)) {
+                    if (agrProdIds.has(productId)) {
                         return; // Blindado por contrato vigente
                     }
                     const basePrice = map[productId] || 0;

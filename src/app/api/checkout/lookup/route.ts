@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
-const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+export const dynamic = 'force-dynamic';
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabase() {
+    const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+    const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+    const supabaseKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Credenciales de Supabase no configuradas en el entorno');
+    }
+    return createClient(supabaseUrl, supabaseKey);
+}
 
 function maskText(str: string): string {
     if (!str) return '';
@@ -20,6 +26,7 @@ const cleanPhone = (p: string) => (p || '').replace(/\D/g, '');
 
 export async function POST(request: Request) {
     try {
+        const supabase = getSupabase();
         const body = await request.json();
         const { email, nit, phone } = body;
 

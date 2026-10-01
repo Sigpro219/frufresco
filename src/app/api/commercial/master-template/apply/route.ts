@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+export const dynamic = 'force-dynamic';
+
+function getSupabaseAdmin() {
+    const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+    const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+    const serviceRoleKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error('Credenciales de Supabase no configuradas en el entorno');
+    }
+    return createClient(supabaseUrl, serviceRoleKey);
+}
 
 const GENERAL_INSTITUCIONAL_MODEL_ID = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
 
 // POST: Aplica los precios del Modelo Institucional General activo a una cotización/acuerdo existente
 export async function POST(req: NextRequest) {
     try {
+        const supabaseAdmin = getSupabaseAdmin();
         const body = await req.json();
         const { quote_id, author } = body;
 
