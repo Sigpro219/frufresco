@@ -2389,12 +2389,14 @@ Para blindar el flujo comercial, se establecen cuatro salvaguardas de gobernanza
      - **Si el usuario acepta:** El sistema ejecuta atómicamente un `UPDATE products SET is_active = true WHERE id IN (...)`, notificando el éxito con un toast verde, y procede a registrar el acuerdo comercial garantizando sincronización total con el catálogo activo.
      - **Si el usuario cancela:** El acuerdo se guarda con los ítems manteniendo su estado actual en base de datos, respetando la potestad del usuario pero habiendo dejado constancia explícita de la advertencia.
 
-3. **Gobernanza Retrospectiva en Drawer de Precios Congelados:**
+3. **Gobernanza Retrospectiva y Experiencia Visual en Drawer de Precios Congelados (SDD v1.9.45 / Skill Estándar Galerías):**
    - En la consulta de acuerdos existentes (`handleViewPrices`), la consulta `commercial_agreement_items` recupera `products(name, sku, unit, is_active)`.
-   - Si el acuerdo consultado contiene uno o más SKUs inactivos, el drawer renderiza un banner prominente de alerta superior:
-     - Identifica el número de ítems pactados que están inactivos y por ende no aparecen en la toma de pedidos.
-     - Dispone de un botón de acción directa en 1 clic: `[Reactivar (N) Productos en Catálogo]`.
-     - Al ser accionado, ejecuta la función `handleAutoActivateDrawerInactive`, actualizando en tiempo real la base de datos Supabase y refrescando el estado del drawer sin obligar a recargar la página.
+   - **Diseño Limpio y No Invasivo (Swiss Industrial UI):** Se eliminan banners invasivos redundantes en el cuerpo del drawer. Los badges de cabecera adoptan tipografías y paletas sobrias (`#F1F5F9` / `#334155`).
+   - **Poka-Yoke Compacto Integrado:** Si el acuerdo contiene SKUs inactivos, se renderiza una píldora compacta alineada a la derecha de la barra de KPIs (`PRODUCTOS CARGADOS`) con el botón de acción directa en 1 clic: `[Reactivar]`, sin consumir filas verticales adicionales ni obstaculizar la visibilidad de la tabla.
+   - **Acople Magnético Sticky Multi-Nivel:**
+     - **Línea 1 Sticky (Toolbar con Omnibox y Botones):** `position: 'sticky'`, `top: 0`, `zIndex: 40`, fondo `#FFFFFF` sólido y sombra delimitadora.
+     - **Línea 2 Sticky (Thead / Th de Tabla):** `position: 'sticky'`, `top: '50px'`, `zIndex: 30`, fondo `#F8FAFC` 100% sólido con `borderCollapse: 'separate', borderSpacing: 0` (Tolerancia Cero / Gap = 0px).
+   - Al ser accionado el botón de reactivación, ejecuta `handleAutoActivateDrawerInactive`, actualizando en tiempo real la base de datos Supabase y refrescando el estado del drawer.
 
 ### 17.3 Criterios de Aceptación BDD (Gherkin)
 
