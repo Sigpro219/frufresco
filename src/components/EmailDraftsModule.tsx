@@ -3067,6 +3067,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const openCustomizingModal = (product: any, rowIndex: number) => {
     if (!product) return;
+    const freshProduct = products.find(p => p.id === product.id) || product;
     const item = editableItems[rowIndex] || {};
     const origQtyNum = Number(item.originalQuantity);
     const currQtyNum = Number(item.quantity);
@@ -3076,23 +3077,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } else if (!isNaN(origQtyNum) && origQtyNum > 0) {
       initialQtyStr = Number(origQtyNum.toFixed(2)).toString().replace('.', ',');
     }
-    const defaultUnit = product.unit_of_measure || 'Kg';
+    const defaultUnit = freshProduct.unit_of_measure || 'Kg';
     const isKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
-    const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
+    const nominalBaseWeight = !isKg && freshProduct.weight_kg && Number(freshProduct.weight_kg) > 0 ? Number(freshProduct.weight_kg) : 1;
     let unit = (item.conversion_factor && item.conversion_factor !== 1) ? (item.originalUnit || item.unit || defaultUnit) : defaultUnit;
     let factor = item.conversion_factor || nominalBaseWeight;
     const opts = { ...(item.selected_options || {}) };
 
+    // Purge obsolete options not in freshProduct.options_config
+    const validOptionNames = new Set((freshProduct.options_config || []).map((o: any) => o.name.toLowerCase()));
+    Object.keys(opts).forEach(k => {
+      if (!k.startsWith('_') && !validOptionNames.has(k.toLowerCase())) {
+        delete opts[k];
+      }
+    });
+
     // Pre-populate structured preferred options if exist
-    const exc = clientExceptions.find(e => e.product_id === product.id);
+    const exc = clientExceptions.find(e => e.product_id === freshProduct.id);
     if (Object.keys(opts).length === 0 && exc?.preferred_options && typeof exc.preferred_options === 'object') {
       Object.entries(exc.preferred_options).forEach(([k, v]) => {
-        if (v) opts[k] = String(v);
+        if (v && validOptionNames.has(k.toLowerCase())) opts[k] = String(v);
       });
     }
 
     // Pre-populate default presentation option if not already selected
-    const presOpt = (product.options_config || []).find((opt: any) =>
+    const presOpt = (freshProduct.options_config || []).find((opt: any) =>
       opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
     );
     if (presOpt && (!opts[presOpt.name] || opts[presOpt.name] === '')) {
@@ -3102,7 +3111,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     // Determine initial unit and factor from presentation options if selected or default
-    (product.options_config || []).forEach((opt: any) => {
+    (freshProduct.options_config || []).forEach((opt: any) => {
       if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
         const optVal = opts[opt.name];
         if (optVal) {
@@ -3130,8 +3139,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
     setCustomizingModalItem({
       rowIndex,
-      product,
-      originalText: item.originalName || item.name || product.name,
+      product: freshProduct,
+      originalText: item.originalName || item.name || freshProduct.name,
       originalQuantity: item.originalQuantity || item.quantity || 1,
       originalUnit: item.originalUnit || item.unit || 'Kg',
       options: opts,
@@ -5019,7 +5028,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
         if (selectedProductForVariant) {
           e.preventDefault();
-          setVariantConfigProduct(selectedProductForVariant);
+          setVariantConfigProduct(products.find(p => p.id === selectedProductForVariant.id) || selectedProductForVariant);
           return;
         }
         if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
@@ -11307,7 +11316,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <button
                 type="button"
                 tabIndex={-1}
-                onClick={() => setVariantConfigProduct(selectedProductForVariant)}
+                onClick={() => setVariantConfigProduct(products.find(p => p.id === selectedProductForVariant.id) || selectedProductForVariant)}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -12548,7 +12557,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <button
                   type="button"
                   tabIndex={-1}
-                  onClick={() => setVariantConfigProduct(product)}
+                  onClick={() => setVariantConfigProduct(products.find(p => p.id === product.id) || product)}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -12569,7 +12578,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <button
                   type="button"
                   tabIndex={-1}
-                  onClick={() => setManageConversionsProduct(product)}
+                  onClick={() => setManageConversionsProduct(products.find(p => p.id === product.id) || product)}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -13159,19 +13168,58 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       
       {variantConfigProduct && (
           <VariantModal
-              product={variantConfigProduct}
+              product={products.find(p => p.id === variantConfigProduct.id) || variantConfigProduct}
               onClose={() => setVariantConfigProduct(null)}
               onSave={async (optionsConfig, variants) => {
                   const success = await handleSaveVariantsFromEmail(variantConfigProduct.id, optionsConfig, variants);
                   if (success) {
+                      // 1. Actualizar array maestro de productos en memoria
                       setProducts(prev => prev.map(p => 
                           p.id === variantConfigProduct.id 
                               ? { ...p, options_config: optionsConfig, variants: variants } 
                               : p
                       ));
+
+                      // 2. Actualizar selectedProductForVariant si está abierto
                       if (selectedProductForVariant && selectedProductForVariant.id === variantConfigProduct.id) {
                           setSelectedProductForVariant((prev: any) => ({ ...prev, options_config: optionsConfig, variants: variants }));
                       }
+
+                      // 3. Actualizar customizingModalItem en vivo y depurar variables eliminadas
+                      if (customizingModalItem && customizingModalItem.product?.id === variantConfigProduct.id) {
+                          const validOptionNames = new Set((optionsConfig || []).map((o: any) => o.name.toLowerCase()));
+                          const updatedSelectedOptions: Record<string, string> = {};
+                          Object.entries(customizingModalItem.options || {}).forEach(([k, v]) => {
+                              if (validOptionNames.has(k.toLowerCase())) {
+                                  const optDef = (optionsConfig || []).find((o: any) => o.name.toLowerCase() === k.toLowerCase());
+                                  if (optDef && Array.isArray(optDef.values) && optDef.values.includes(v)) {
+                                      updatedSelectedOptions[k] = v;
+                                  }
+                              }
+                          });
+
+                          setCustomizingModalItem((prev: any) => prev ? {
+                              ...prev,
+                              product: { ...prev.product, options_config: optionsConfig, variants: variants },
+                              options: updatedSelectedOptions
+                          } : null);
+                      }
+
+                      // 4. Limpiar opciones obsoletas en editableItems del borrador
+                      setEditableItems(prev => prev.map(it => {
+                          if (it.matched_product_id === variantConfigProduct.id && it.selected_options) {
+                              const validOptionNames = new Set((optionsConfig || []).map((o: any) => o.name.toLowerCase()));
+                              const cleanOpts: Record<string, string> = {};
+                              Object.entries(it.selected_options).forEach(([k, v]) => {
+                                  if (k.startsWith('_') || validOptionNames.has(k.toLowerCase())) {
+                                      cleanOpts[k] = v as string;
+                                  }
+                              });
+                              return { ...it, selected_options: cleanOpts };
+                          }
+                          return it;
+                      }));
+
                       showToast('Variantes del producto actualizadas', 'success');
                   }
                   return success;
