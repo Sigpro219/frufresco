@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.72 (Mega Menú Industrial SCOS en 2 Columnas Semánticas, Resiliencia de Viewport Dinámico 100dvh, Contención de Scroll en Eje Y y Poka-Yoke Anti-Desbordamiento en Pantallas Bajas, Escenario BDD 105)
+> **Versión:** 1.9.73 (Estándar de Resiliencia Mobile-First, Viewport Dinámico en Modales, Paridad en Navegación Móvil y Header Compacto 64px, Escenario BDD 106)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4637,4 +4637,35 @@ El desplegable de navegación central "Operaciones" en `Navbar.tsx` se divide en
   1. El sistema despliega un Mega Menú estructurado en 2 columnas simétricas (*Operación & Logística* vs *Gestión & Administración*) con un ancho de 560px anclado a la derecha del botón.
   2. La totalidad de los 15 módulos operacionales se visualiza de forma simultánea sin quedar cortados por el borde inferior de la pantalla.
   3. En caso de pantallas ultra-bajas o consolas de desarrollador abiertas, el menú no rebasa la pantalla, limitándose a `calc(100dvh - 100px)` y permitiendo el desplazamiento vertical interno fluido sin mover la página de fondo.
+
+---
+
+## 29. ESTÁNDAR DE RESILIENCIA MOBILE-FIRST, VIEWPORT DINÁMICO EN MODALES Y PARIDAD EN NAVEGACIÓN MÓVIL (SDD v1.9.73)
+
+### 29.1 Principio de Continuidad Operativa en Dispositivos Móviles
+La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y tabletas) no debe degradar las capacidades de acceso ni el flujo de compra/operación:
+1. **Regla de Oro de Modales (Modal Dynamic Viewport Standard):**
+   - Todo modal flotante o ventana emergente de captura/selección (`QuickViewModal`, modales de historial o formularios interactivos) debe implementar obligatoriamente:
+     - `maxHeight: 'calc(100dvh - 32px)'`
+     - `overflowY: 'auto'`
+     - `overscrollBehavior: 'contain'`
+     - Micro-scrollbar industrial `.custom-scrollbar`
+   - **Poka-Yoke Anti-Corte de Botón Primario:** Queda estrictamente prohibido que botones de acción crítica (como *"Agregar al Carrito"* o *"Confirmar Pedido"*) queden por fuera de la pantalla en dispositivos con teclado virtual desplegado o pantallas de altura reducida (< 667px).
+2. **Paridad de Navegación Omnicanal en Navbar Móvil:**
+   - El selector de idioma (`ES / EN`) y el acceso directo al Carrito de compras deben preservarse accesibles en vista móvil.
+   - El menú hamburguesa móvil para colaboradores debe mantener paridad funcional con el Mega Menú de escritorio, incluyendo módulos de misión crítica como *Conciliación Post-Despacho* (`/admin/orders/contingency-reconciliation`) y *Gestión de Calidad / PQRS* (`/admin/customer-service`).
+3. **Optimización de Huella Vertical del Header & Stacking Sticky:**
+   - En resoluciones móviles (`<= 768px`), el contenedor principal del `<header>` reduce su altura de 85px a **64px** y el logotipo escala a **54px**, reduciendo la fricción visual y ganando más de 20px de viewport libre.
+   - La barra de búsqueda y filtros del catálogo (`.sticky-catalog-controls`) coordina su anclaje a `top: 64px`, evitando la sobrecarga de elementos congelados en el tercio superior de la pantalla.
+
+---
+
+#### Escenario 106: Interacción Móvil Resiliente en Landing Page, Configuración de Producto en Modal y Persistencia de Idioma
+- **Given** un cliente navegando la landing page de FruFresco desde un teléfono inteligente con pantalla compacta (resolución vertical $\le 667\text{ px}$).
+- **When** abre el modal de producto para configurar un SKU con múltiples atributos (Presentación, Maduración, Calibre y cantidad).
+- **Then**:
+  1. El modal `QuickViewModal` restringe su altura a `calc(100dvh - 32px)` con desplazamiento vertical interno aislado.
+  2. El botón primario *"Agregar al Carrito"* permanece accesible mediante scroll interno fluido sin desbordar el documento.
+  3. En la barra superior móvil compactada a 64px de alto, el usuario dispone del selector de idioma (ES / EN) y el acceso al Carrito dentro del menú o barra de acciones.
+  4. Para colaboradores autorizados, el menú móvil despliega la totalidad de módulos operativos incluyendo *Conciliación Post-Despacho* y *Gestión de Calidad*.
 

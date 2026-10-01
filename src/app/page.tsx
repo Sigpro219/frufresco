@@ -401,9 +401,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
           @media (max-width: 768px) {
             .sticky-catalog-controls {
-              top: 85px;
-              padding: 0.75rem 0 1rem 0;
-              margin: 0 -0.5rem 1.5rem -0.5rem;
+              top: 64px !important;
+              padding: 0.5rem 0 0.75rem 0 !important;
+              margin: 0 -0.5rem 1rem -0.5rem !important;
             }
           }
         `}} />

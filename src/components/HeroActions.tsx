@@ -21,7 +21,7 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
   };
 
   return (
-    <div style={{ 
+    <div className="hero-actions-container" style={{ 
       display: 'flex', 
       flexDirection: 'row',
       gap: '1rem', 
@@ -30,6 +30,22 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
       marginTop: '0.5rem',
       flexWrap: 'wrap'
     }}>
+      <style jsx>{`
+        @media (max-width: 480px) {
+          .hero-actions-container {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            width: 100% !important;
+          }
+          .hero-actions-container button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .hero-actions-container a {
+            width: 100% !important;
+          }
+        }
+      `}</style>
       {/* Main CTA: Catalog */}
       <button 
         onClick={scrollToCatalog}

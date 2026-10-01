@@ -289,6 +289,12 @@ input:-webkit-autofill:active {
   -webkit-backdrop-filter: blur(16px);
 }
 
+@media (max-width: 768px) {
+  .sticky-catalog-controls {
+    top: 64px !important;
+  }
+}
+
 /* Global Print Mode Hardening */
 @media print {
   header,

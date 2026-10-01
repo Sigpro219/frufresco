@@ -327,15 +327,21 @@ export default function ReorderHeroBanner() {
                     justifyContent: 'center',
                     padding: '1rem'
                 }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '24px',
-                        maxWidth: '520px',
-                        width: '100%',
-                        padding: '2rem',
-                        boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
-                        textAlign: 'left'
-                    }}>
+                    <div 
+                        className="custom-scrollbar"
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: '24px',
+                            maxWidth: '520px',
+                            width: '100%',
+                            maxHeight: 'calc(100dvh - 32px)',
+                            overflowY: 'auto',
+                            overscrollBehavior: 'contain',
+                            padding: '1.75rem',
+                            boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
+                            textAlign: 'left'
+                        }}
+                    >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <History size={22} color="#059669" />
@@ -467,15 +473,21 @@ export default function ReorderHeroBanner() {
                     justifyContent: 'center',
                     padding: '1rem'
                 }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '24px',
-                        maxWidth: '460px',
-                        width: '100%',
-                        padding: '2rem',
-                        boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
-                        textAlign: 'left'
-                    }}>
+                    <div 
+                        className="custom-scrollbar"
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: '24px',
+                            maxWidth: '460px',
+                            width: '100%',
+                            maxHeight: 'calc(100dvh - 32px)',
+                            overflowY: 'auto',
+                            overscrollBehavior: 'contain',
+                            padding: '1.75rem',
+                            boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
+                            textAlign: 'left'
+                        }}
+                    >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <RotateCcw size={18} color="#059669" /> Repetir Pedido Anterior

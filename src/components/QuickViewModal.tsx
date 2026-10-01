@@ -358,16 +358,22 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div style={{
-                backgroundColor: 'white',
-                borderRadius: '24px',
-                padding: '2rem',
-                width: '90%',
-                maxWidth: '480px',
-                position: 'relative',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                animation: 'modalFadeUp 0.3s ease-out'
-            }}>
+            <div 
+                className="custom-scrollbar"
+                style={{
+                    backgroundColor: 'white',
+                    borderRadius: '24px',
+                    padding: '1.75rem',
+                    width: '92%',
+                    maxWidth: '480px',
+                    maxHeight: 'calc(100dvh - 32px)',
+                    overflowY: 'auto',
+                    overscrollBehavior: 'contain',
+                    position: 'relative',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    animation: 'modalFadeUp 0.3s ease-out'
+                }}
+            >
                 <style jsx>{`
                     @keyframes modalFadeUp {
                         from { opacity: 0; transform: translateY(20px); }
