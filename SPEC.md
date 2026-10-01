@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.75 (Arquitectura Telemática Dual M2M/Móvil, Tracker Resiliente 60s para Vehículos Tercerizados, Watchdog de Señal 15min y Purgado Nocturno 48h, Escenario BDD 108)
+> **Versión:** 1.9.76 (Selector Extemporáneo de Tandas en Facturación con Disparador showPicker Poka-Yoke, Erradicación de Glifos Unicode y Rigor Iconográfico Lucide en UI Industrial, Escenario BDD 109)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -3700,9 +3700,24 @@ El módulo exporta el archivo plano oficial estructurado bajo el estándar de im
 - **Columnas Requeridas:** Tipo de Documento (`FAC` o `NC`), Consecutivo, Fecha, NIT de Tercero, Código de Cuenta Contable (PUC 4135 Ingresos, PUC 1305 Clientes, PUC 2408 IVA Generado, PUC 2365 Retenciones), Centro de Costos, Valor Débito, Valor Crédito, Detalle/Concepto y Referencia de Pedido.
 - **Validación de Balance Débito/Crédito:** El exportador asegura que $\sum \text{Débitos} = \sum \text{Créditos}$ con tolerancia 0 COP.
 
+### 21.7 Telemetría de Tandas de Facturación, Selector Extemporáneo Resiliente (Poka-Yoke) y Rigor Iconográfico Lucide
+1. **Telemetría Automática y Preservación de Tanda Activa:**
+   - La galería de facturación (`/admin/commercial/billing`) inspecciona por defecto la tanda `Hoy` ($D$).
+   - Si no existen pedidos pendientes por facturar en el día corriente, el sistema audita de forma proactiva la existencia de pedidos sin corte correspondientes a `Ayer` ($D-1$) y conmuta la vista automáticamente, evitando pantallas vacías ficticias.
+2. **Selector Extemporáneo Poka-Yoke & Disparador Imperativo `showPicker()`:**
+   - Para auditar tandas de fines de semana, festivos o fechas extemporáneas, el módulo provee un selector de fecha reactivo.
+   - **Ergonomía Web & Compatibilidad Chromium:** El elemento interactivo vincula un disparador imperativo `HTMLInputElement.prototype.showPicker()` mediante `useRef<HTMLInputElement>` activado por cualquier evento `onClick` del contenedor píldora.
+   - Se erradican estilos colapsantes (`fontSize: 0px`, `opacity: 0` sin dimensiones de indicador) que anulan el Shadow DOM nativo en navegadores Chromium/WebKit.
+   - Se elimina la restricción artificial `max={hoy}` para permitir la inspección de entregas programadas $D+1$ y $D+2$ bajo el filtro de tanda operativa.
+3. **Píldora Activa con Botón de Reseteo Rápido:**
+   - Cuando una fecha extemporánea está activa, la píldora adopta estado primario (`#0D7A57`, texto blanco) e incorpora un micro-botón `[x]` (Lucide `X`) con aislamiento de propagación (`e.stopPropagation()`) para restablecer instantáneamente la tanda a `Hoy`.
+4. **Rigor Iconográfico Lucide & Erradicación de Glifos Unicode (Skin 1):**
+   - Queda estrictamente prohibida la inyección de emojis Unicode (`📅`, `⚠️`, `✓`) en etiquetas, badges o fallbacks de interfaz.
+   - Toda iconografía del módulo debe derivarse exclusivamente de `lucide-react` (`Calendar`, `AlertTriangle`, `CheckCircle2`, `X`).
+
 ---
 
-### 21.7 Criterios de Aceptación BDD Adicionales (Gherkin)
+### 21.8 Criterios de Aceptación BDD Adicionales (Gherkin)
 
 #### Escenario 59: Emisión Oficial de RNC y Análisis de Causa Raíz en Calidad
 - **Given** una reclamación de calidad (`customer_service_pqrs`) radicada para el cliente "Hotel Tequendama" sobre el pedido `#2609_1045` por 15 kg de "Fresas con pudrición".
@@ -3777,6 +3792,17 @@ El módulo exporta el archivo plano oficial estructurado bajo el estándar de im
   3. Si $\Delta\% \le -15\%$, muestra el badge verde `📉 Mejorando (-X%)`; si $\Delta\% \ge +15\%$, muestra el badge rojo crítico `🚨 Empeorando (+X%)`; de lo contrario, muestra `➡️ Estable`.
   4. La gráfica SVG renderiza las barras temporales con su curva polilínea de tendencia suavizada e hito de plan CAPA, y la tabla de desglose dibuja mini sparklines SVG de 6 barras con botones directos `[+ Plan CAPA]`.
   5. La barra de selección de macrocausas se distribuye en modo fluido multi-línea (`flex-wrap`) con micro-contadores reactivos de incidencias (`[🔴 Daño Mecánico (N)]`), eliminando al 100% las barras de desplazamiento horizontal del navegador.
+
+#### Escenario 109: Selección Extemporánea de Tandas con Disparador showPicker y Rigor Iconográfico Lucide en Facturación
+- **Given** el analista de facturación situado en la cabecera operativa de `/admin/commercial/billing` con la tanda automática de `Ayer (2026-09-30)` seleccionada.
+- **When** el analista requiere auditar y facturar un lote de pedidos retenidos correspondientes al viernes anterior (`2026-09-25`).
+- **And** hace clic en la píldora `[ Otra fecha ]` (con icono Lucide `<Calendar />`).
+- **Then**:
+  1. El sistema invoca imperativamente `HTMLInputElement.prototype.showPicker()` mediante `useRef<HTMLInputElement>`, desplegando de inmediato el calendario nativo del navegador sin importar el motor Chromium/WebKit.
+  2. Al seleccionar la fecha `2026-09-25`, la píldora se activa en verde primario (`#0D7A57`, texto blanco) desplegando la fecha elegida y habilitando el micro-botón `[x]` (Lucide `<X />`).
+  3. La consulta de pedidos filtra de forma reactiva `delivery_date = '2026-09-25'`, activando el banner de alerta de tanda extemporánea si la fecha supera las 48 horas sin corte.
+  4. Al hacer clic en el micro-botón `[x]`, la propagación se aísla (`e.stopPropagation()`) y la vista se restablece instantáneamente a `Hoy`.
+  5. Ningún glifo de emoji Unicode (`📅`, `⚠️`, `✓`) se renderiza en la barra de control ni en las celdas de la tabla, manteniéndose fidelidad al 100% con los iconos SVG de `lucide-react`.
 ---
 
 ### 20.8 Protocolo de PQRS Proactiva por Quiebre de Abastecimiento en Plaza con Auto-Liberación Poka-Yoke & Anexión al Siguiente Pedido (D+1) (SDD v1.9.41)

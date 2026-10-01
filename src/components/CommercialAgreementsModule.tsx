@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
 import { 
     Search, 
     Calendar, 
@@ -309,6 +310,24 @@ export default function CommercialAgreementsModule() {
     const [loadingItems, setLoadingItems] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerSearchTerm, setDrawerSearchTerm] = useState('');
+
+    // Superbuscador Omnibox de Ítems de Acuerdo
+    const filteredAgreementItems = useMemo(() => {
+        if (!drawerSearchTerm.trim()) return agreementItems;
+        return agreementItems.filter(item => matchesUniversalSearch(
+            item,
+            drawerSearchTerm,
+            it => [
+                it.product_name || '',
+                (it.products?.accounting_id || '').toString(),
+                it.products?.category || '',
+                it.unit_of_measure || '',
+                it.notes || '',
+                it.products?.sku || ''
+            ],
+            it => it.products?.accounting_id || it.product_id
+        ));
+    }, [agreementItems, drawerSearchTerm]);
 
     // In-situ price editing in drawer
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -3877,210 +3896,172 @@ export default function CommercialAgreementsModule() {
                             </div>
                         </div>
 
-                        {/* Drawer Search Bar */}
-                        <div style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar producto por nombre o código contable..."
-                                    value={drawerSearchTerm}
-                                    onChange={(e) => setDrawerSearchTerm(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '0.55rem 2rem 0.55rem 2.2rem',
-                                        borderRadius: '8px',
-                                        border: `1px solid ${THEME.colors.border}`,
-                                        fontSize: '0.82rem',
-                                        outline: 'none'
-                                    }}
-                                />
-                                {drawerSearchTerm && (
+                        {/* Drawer Search Bar con Superbuscador Omnibox Universal */}
+                        <div style={{
+                            padding: '0.65rem 1.5rem',
+                            backgroundColor: '#FFFFFF',
+                            borderBottom: `1px solid ${THEME.colors.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            flexWrap: 'wrap'
+                        }}>
+                            {/* Superbuscador Omnibox */}
+                            <GalleryOmnibox
+                                value={drawerSearchTerm}
+                                onChange={setDrawerSearchTerm}
+                                placeholder="Buscar producto, código contable (#ID), categoría o U.M...."
+                                filteredCount={filteredAgreementItems.length}
+                                totalCount={agreementItems.length}
+                                style={{ flex: '1 1 300px', maxWidth: '440px' }}
+                            />
+
+                            {/* Botonera de Acciones de Cabecera */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                {masterTemplate && (
                                     <button
-                                        onClick={() => setDrawerSearchTerm('')}
-                                        style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+                                        type="button"
+                                        onClick={() => setConfirmApplyMasterTarget(selectedAgreement)}
+                                        disabled={isApplyingMasterToAgreement === selectedAgreement.id}
+                                        style={{
+                                            padding: '0.45rem 0.75rem',
+                                            borderRadius: '8px',
+                                            backgroundColor: '#F0FDF4',
+                                            color: '#166534',
+                                            border: '1.5px solid #86EFAC',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                        title="Sincronizar y cargar los precios del Modelo Institucional General a este acuerdo"
                                     >
-                                        <X size={14} />
+                                        <Sparkles size={13} color="#16A34A" />
+                                        {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : 'Cargar Modelo General'}
                                     </button>
                                 )}
-                            </div>
-                            {masterTemplate && (
                                 <button
                                     type="button"
-                                    onClick={() => setConfirmApplyMasterTarget(selectedAgreement)}
-                                    disabled={isApplyingMasterToAgreement === selectedAgreement.id}
+                                    onClick={() => setIsPrintModalOpen(true)}
                                     style={{
-                                        padding: '0.55rem 0.95rem',
+                                        padding: '0.45rem 0.75rem',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#F8FAFC',
+                                        color: '#334155',
+                                        border: '1.5px solid #CBD5E1',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                    title="Abrir vista de impresión y exportación"
+                                >
+                                    <Printer size={13} color="#475569" />
+                                    Vista Imprimible
+                                </button>
+                                {(() => {
+                                    const modifiedLogsCount = Object.keys(agreementAuditLogs).length;
+                                    return (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenNotificationModal(modifiedLogsCount > 0 ? 'PRICE_UPDATE_DIFF' : 'NEW_AGREEMENT')}
+                                            style={{
+                                                padding: '0.45rem 0.75rem',
+                                                borderRadius: '8px',
+                                                backgroundColor: modifiedLogsCount > 0 ? '#FEF3C7' : '#EFF6FF',
+                                                color: modifiedLogsCount > 0 ? '#92400E' : '#1D4ED8',
+                                                border: modifiedLogsCount > 0 ? '1.5px solid #FCD34D' : '1.5px solid #93C5FD',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            title="Notificar formalmente por correo electrónico"
+                                        >
+                                            <Mail size={13} color={modifiedLogsCount > 0 ? '#D97706' : '#2563EB'} />
+                                            {modifiedLogsCount > 0 ? `Notificar Novedades (${modifiedLogsCount})` : 'Notificar por Correo'}
+                                        </button>
+                                    );
+                                })()}
+                                <button
+                                    type="button"
+                                    onClick={handleOpenPartialBatchModal}
+                                    style={{
+                                        padding: '0.45rem 0.75rem',
                                         borderRadius: '8px',
                                         backgroundColor: '#F0FDF4',
                                         color: '#166534',
                                         border: '1.5px solid #86EFAC',
-                                        fontSize: '0.78rem',
-                                        fontWeight: 'bold',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '700',
                                         cursor: 'pointer',
-                                        display: 'flex',
+                                        display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '6px',
-                                        whiteSpace: 'nowrap',
-                                        boxShadow: '0 1px 3px rgba(22, 101, 52, 0.08)'
+                                        gap: '5px',
+                                        whiteSpace: 'nowrap'
                                     }}
-                                    title="Sincronizar y cargar los precios del Modelo Institucional General a este acuerdo"
+                                    title="Abrir asistente de modificación parcial de precios"
                                 >
-                                    <Sparkles size={14} color="#16A34A" />
-                                    {isApplyingMasterToAgreement === selectedAgreement.id ? 'Aplicando...' : 'Cargar Modelo General'}
+                                    <ClipboardList size={13} color="#16A34A" />
+                                    Adenda / Ajuste Parcial
                                 </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => setIsPrintModalOpen(true)}
-                                style={{
-                                    padding: '0.55rem 0.95rem',
-                                    borderRadius: '8px',
-                                    backgroundColor: '#F8FAFC',
-                                    color: '#334155',
-                                    border: '1.5px solid #CBD5E1',
-                                    fontSize: '0.78rem',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
-                                }}
-                                title="Abrir vista de impresión y exportación tal como en la fotografía de referencia"
-                            >
-                                <Printer size={15} color="#475569" />
-                                Vista Imprimible
-                            </button>
-                            {(() => {
-                                const modifiedLogsCount = Object.keys(agreementAuditLogs).length;
-                                return (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleOpenNotificationModal(modifiedLogsCount > 0 ? 'PRICE_UPDATE_DIFF' : 'NEW_AGREEMENT')}
-                                        style={{
-                                            padding: '0.55rem 0.95rem',
-                                            borderRadius: '8px',
-                                            backgroundColor: modifiedLogsCount > 0 ? '#FEF3C7' : '#EFF6FF',
-                                            color: modifiedLogsCount > 0 ? '#92400E' : '#1D4ED8',
-                                            border: modifiedLogsCount > 0 ? '1.5px solid #FCD34D' : '1.5px solid #93C5FD',
-                                            fontSize: '0.78rem',
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            whiteSpace: 'nowrap',
-                                            boxShadow: modifiedLogsCount > 0 ? '0 2px 6px rgba(217, 119, 6, 0.18)' : '0 1px 2px rgba(29, 78, 216, 0.08)'
-                                        }}
-                                        title="Notificar formalmente por correo electrónico al cliente o sucursales sobre las tarifas de este acuerdo comercial"
-                                    >
-                                        <Mail size={15} color={modifiedLogsCount > 0 ? '#D97706' : '#2563EB'} />
-                                        {modifiedLogsCount > 0 ? `Notificar Novedades (${modifiedLogsCount} ${modifiedLogsCount === 1 ? 'modificado' : 'modificados'})` : 'Notificar por Correo'}
-                                    </button>
-                                );
-                            })()}
-                            <button
-                                type="button"
-                                onClick={handleOpenPartialBatchModal}
-                                style={{
-                                    padding: '0.55rem 0.95rem',
-                                    borderRadius: '8px',
-                                    backgroundColor: '#F0FDF4',
-                                    color: '#166534',
-                                    border: '1.5px solid #86EFAC',
-                                    fontSize: '0.78rem',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 1px 3px rgba(22, 101, 52, 0.08)'
-                                }}
-                                title="Abrir asistente de modificación parcial de precios por cosecha o abastecimiento"
-                            >
-                                <ClipboardList size={15} color="#16A34A" />
-                                Adenda / Ajuste Parcial
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleOpenAddProductModal}
-                                style={{
-                                    padding: '0.55rem 0.95rem',
-                                    borderRadius: '8px',
-                                    backgroundColor: THEME.colors.primary,
-                                    color: 'white',
-                                    border: 'none',
-                                    fontSize: '0.78rem',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
-                                }}
-                                title="Agregar un nuevo producto al acuerdo comercial"
-                            >
-                                <Plus size={15} />
-                                Agregar Producto
-                            </button>
-                            <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                                {agreementItems.filter(item => {
-                                    if (!drawerSearchTerm.trim()) return true;
-                                    const q = drawerSearchTerm.toLowerCase().trim();
-                                    const name = (item.product_name || '').toLowerCase();
-                                    const accountingId = (item.products?.accounting_id || '').toString().toLowerCase();
-                                    return name.includes(q) || accountingId.includes(q);
-                                }).length} de {agreementItems.length}
-                            </span>
+                                <button
+                                    type="button"
+                                    onClick={handleOpenAddProductModal}
+                                    style={{
+                                        padding: '0.45rem 0.85rem',
+                                        borderRadius: '8px',
+                                        backgroundColor: THEME.colors.primary,
+                                        color: 'white',
+                                        border: 'none',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                    }}
+                                    title="Agregar un nuevo producto al acuerdo comercial"
+                                >
+                                    <Plus size={14} />
+                                    Agregar Producto
+                                </button>
+                            </div>
                         </div>
 
-                        {/* BANNER DE ALTA VISIBILIDAD PARA NOVEDADES DE PRECIOS PENDIENTES DE NOTIFICAR */}
+                        {/* BANNER COMPACTO PARA NOVEDADES DE PRECIOS PENDIENTES DE NOTIFICAR */}
                         {(() => {
                             const modifiedLogsCount = Object.keys(agreementAuditLogs).length;
                             if (modifiedLogsCount === 0) return null;
                             return (
                                 <div style={{
-                                    margin: '0.75rem 1.5rem 0 1.5rem',
-                                    padding: '0.9rem 1.25rem',
+                                    margin: '0.4rem 1.5rem 0 1.5rem',
+                                    padding: '0.35rem 0.85rem',
                                     backgroundColor: '#EFF6FF',
-                                    border: '2px solid #93C5FD',
-                                    borderRadius: '10px',
+                                    border: '1px solid #93C5FD',
+                                    borderRadius: '8px',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    gap: '14px',
-                                    boxShadow: '0 3px 10px rgba(37, 99, 235, 0.12)'
+                                    gap: '10px'
                                 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{
-                                            width: '36px',
-                                            height: '36px',
-                                            borderRadius: '8px',
-                                            backgroundColor: '#DBEAFE',
-                                            border: '1px solid #BFDBFE',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: '#2563EB',
-                                            flexShrink: 0
-                                        }}>
-                                            <Mail size={20} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '0.84rem', fontWeight: 900, color: '#1E3A8A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span>Novedades de Precios Registradas ({modifiedLogsCount} {modifiedLogsCount === 1 ? 'producto modificado' : 'productos modificados'})</span>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '2px 7px', borderRadius: '100px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
-                                                    ● Pendiente Notificar
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: '0.74rem', color: '#3B82F6', marginTop: '2px' }}>
-                                                Los cambios ya rigen en el sistema. Puedes despachar la notificación formal con la tabla comparativa Diff de precios.
-                                            </div>
-                                        </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: '#1E3A8A' }}>
+                                        <Mail size={13} style={{ color: '#2563EB', flexShrink: 0 }} />
+                                        <span>
+                                            <strong>Novedades de Precios:</strong> {modifiedLogsCount} {modifiedLogsCount === 1 ? 'producto modificado' : 'productos modificados'} pendientes de notificar.
+                                        </span>
                                     </div>
                                     <button
                                         type="button"
@@ -4089,47 +4070,44 @@ export default function CommercialAgreementsModule() {
                                             backgroundColor: '#2563EB',
                                             color: 'white',
                                             border: 'none',
-                                            padding: '8px 18px',
-                                            borderRadius: '8px',
-                                            fontSize: '0.82rem',
-                                            fontWeight: 900,
+                                            padding: '3px 10px',
+                                            borderRadius: '5px',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '800',
                                             cursor: 'pointer',
-                                            display: 'flex',
+                                            display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '8px',
-                                            whiteSpace: 'nowrap',
-                                            boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
-                                            transition: 'all 0.15s ease'
+                                            gap: '4px',
+                                            whiteSpace: 'nowrap'
                                         }}
                                     >
-                                        <Send size={15} /> Notificar al Cliente
+                                        <Send size={11} /> Notificar al Cliente
                                     </button>
                                 </div>
                             );
                         })()}
 
-                        {/* Drawer Inactive SKUs Poka-Yoke Warning */}
+                        {/* Drawer Inactive SKUs Poka-Yoke Warning (Slim) */}
                         {(() => {
                             const inactiveList = agreementItems.filter(it => it.products?.is_active === false);
                             if (inactiveList.length === 0) return null;
                             return (
                                 <div style={{
-                                    margin: '0.75rem 1.5rem 0 1.5rem',
-                                    padding: '0.85rem 1.25rem',
+                                    margin: '0.4rem 1.5rem 0 1.5rem',
+                                    padding: '0.35rem 0.85rem',
                                     backgroundColor: '#FFFBEB',
-                                    border: '1.5px solid #FDE68A',
+                                    border: '1px solid #FDE68A',
                                     borderRadius: '8px',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    gap: '12px',
-                                    boxShadow: '0 1px 3px rgba(217, 119, 6, 0.08)'
+                                    gap: '10px'
                                 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0 }} />
-                                        <div style={{ fontSize: '0.82rem', color: '#92400E' }}>
-                                            <strong>Atención Comercial ({inactiveList.length} SKUs inactivos en catálogo):</strong> Estos productos están pactados en este acuerdo pero están desactivados en la tabla maestra de productos, por lo que <em>no se pueden seleccionar</em> al montar pedidos.
-                                        </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '0.76rem', color: '#92400E' }}>
+                                        <AlertTriangle size={13} color="#D97706" style={{ flexShrink: 0 }} />
+                                        <span>
+                                            <strong>{inactiveList.length} SKUs inactivos en catálogo:</strong> Pactados pero desactivados en la tabla maestra de productos.
+                                        </span>
                                     </div>
                                     <button
                                         type="button"
@@ -4139,59 +4117,32 @@ export default function CommercialAgreementsModule() {
                                             backgroundColor: '#D97706',
                                             color: 'white',
                                             border: 'none',
-                                            padding: '7px 14px',
-                                            borderRadius: '6px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 'bold',
+                                            padding: '3px 10px',
+                                            borderRadius: '5px',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '800',
                                             cursor: activatingDrawerSkus ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
+                                            display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '6px',
-                                            whiteSpace: 'nowrap',
-                                            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.2)'
+                                            gap: '4px',
+                                            whiteSpace: 'nowrap'
                                         }}
                                     >
-                                        <CheckCircle2 size={14} /> {activatingDrawerSkus ? 'Reactivando...' : 'Reactivar en Catálogo'}
+                                        <CheckCircle2 size={11} /> {activatingDrawerSkus ? 'Reactivando...' : 'Reactivar en Catálogo'}
                                     </button>
                                 </div>
                             );
                         })()}
 
-                        {/* Educational banner for partial price adjustments */}
-                        <div style={{
-                            margin: '0.75rem 1.5rem 0.5rem 1.5rem',
-                            padding: '0.65rem 1rem',
-                            backgroundColor: '#F0FDF4',
-                            border: '1px solid #BBF7D0',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '12px'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#166534' }}>
-                                <Sliders size={16} color="#16A34A" style={{ flexShrink: 0 }} />
-                                <span>
-                                    <strong>Modificaciones Parciales:</strong> Puedes ajustar precios individuales directamente con el lápiz ✏️ o usar el botón <strong>[Adenda / Ajuste Parcial]</strong> para variaciones masivas por cosecha/clima con justificación y despacho unificado.
-                                </span>
-                            </div>
-                        </div>
-
                         {/* Drawer List Content */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '0 1.5rem 1.5rem 1.5rem' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.5rem 1.5rem 1.5rem' }}>
                             {loadingItems ? (
                                 <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 'bold' }}>Cargando lista de precios...</div>
                             ) : agreementItems.length === 0 ? (
                                 <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay ítems registrados en este acuerdo comercial.</div>
                             ) : (
                                 (() => {
-                                    const filtered = agreementItems.filter(item => {
-                                        if (!drawerSearchTerm.trim()) return true;
-                                        const q = drawerSearchTerm.toLowerCase().trim();
-                                        const name = (item.product_name || '').toLowerCase();
-                                        const accountingId = (item.products?.accounting_id || '').toString().toLowerCase();
-                                        return name.includes(q) || accountingId.includes(q);
-                                    });
+                                    const filtered = filteredAgreementItems;
 
                                     if (filtered.length === 0) {
                                         return (
