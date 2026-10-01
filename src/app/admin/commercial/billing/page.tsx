@@ -1285,7 +1285,16 @@ export default function BillingDashboard() {
         ));
     }, [cuts, billingSearchQuery]);
 
-    // Filter Returns
+    // COM-32: Poka-Yoke — fecha bloqueada si ya tiene corte cerrado/exportado
+    const isDateLockedByCut = useMemo(() => {
+        if (selectedBillingDate === 'all') return false;
+        return cuts.some(c =>
+            c.scheduled_date === selectedBillingDate &&
+            (c.status === 'closed' || c.status === 'exported')
+        );
+    }, [cuts, selectedBillingDate]);
+
+
     const filteredReturns = useMemo(() => {
         if (!billingSearchQuery) return returns;
         return returns.filter(ret => matchesUniversalSearch(
@@ -2588,7 +2597,86 @@ export default function BillingDashboard() {
                                         >
                                             Todas
                                         </button>
+                                        {/* COM-32: Selector de fecha extemporáneo con Poka-Yoke */}
+                                        <label
+                                            title="Seleccionar fecha específica (festivos, fines de semana, días anteriores)"
+                                            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
+                                        >
+                                            <span style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.66rem',
+                                                fontWeight: (selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all') ? '800' : '600',
+                                                backgroundColor: (selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all') ? '#0D7A57' : 'transparent',
+                                                color: (selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all') ? 'white' : '#475569',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s'
+                                            }}>
+                                                <Calendar size={10} />
+                                                {(selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all')
+                                                    ? selectedBillingDate
+                                                    : '📅'}
+                                            </span>
+                                            <input
+                                                type="date"
+                                                max={getBogotaDate(0)}
+                                                value={(selectedBillingDate !== 'all' && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1)) ? selectedBillingDate : ''}
+                                                onChange={(e) => {
+                                                    if (e.target.value) setSelectedBillingDate(e.target.value);
+                                                }}
+                                                style={{
+                                                    position: 'absolute',
+                                                    opacity: 0,
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    top: 0,
+                                                    left: 0,
+                                                    cursor: 'pointer',
+                                                    fontSize: '0px'
+                                                }}
+                                            />
+                                        </label>
                                     </div>
+
+                                    {/* COM-32: Poka-Yoke — Indicador de estado de la fecha seleccionada */}
+                                    {(() => {
+                                        if (selectedBillingDate === 'all' || selectedBillingDate === getBogotaDate(0) || selectedBillingDate === getBogotaDate(-1)) return null;
+                                        const closedCutsForDate = cuts.filter(c =>
+                                            c.scheduled_date === selectedBillingDate && (c.status === 'closed' || c.status === 'exported')
+                                        );
+                                        if (closedCutsForDate.length > 0) {
+                                            return (
+                                                <div style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                    backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1',
+                                                    padding: '0.2rem 0.55rem', borderRadius: '5px',
+                                                    fontSize: '0.65rem', fontWeight: '800', color: '#475569'
+                                                }}>
+                                                    <Lock size={10} style={{ color: '#94A3B8' }} />
+                                                    Modo Consulta — {closedCutsForDate.map(c => `Corte #${c.cut_number.toString().padStart(4,'0')} Cerrado`).join(', ')}
+                                                </div>
+                                            );
+                                        }
+                                        const msAgo = Date.now() - new Date(selectedBillingDate + 'T23:59:59-05:00').getTime();
+                                        const hrsAgo = msAgo / (1000 * 60 * 60);
+                                        if (hrsAgo > 48) {
+                                            return (
+                                                <div style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                    backgroundColor: '#FFFBEB', border: '1px solid #FDE68A',
+                                                    padding: '0.2rem 0.55rem', borderRadius: '5px',
+                                                    fontSize: '0.65rem', fontWeight: '800', color: '#92400E'
+                                                }}>
+                                                    <AlertTriangle size={10} style={{ color: '#D97706' }} />
+                                                    Tanda extemporánea: {selectedBillingDate} ({Math.floor(hrsAgo)}h sin corte)
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
 
                                     {/* Checkbox Tanda Operativa */}
                                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.68rem', fontWeight: '700', color: '#334155', backgroundColor: '#F8FAFC', padding: '3px 7px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
@@ -2735,22 +2823,25 @@ export default function BillingDashboard() {
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleOpenCutPreview('AM')}
+                                                        onClick={() => isDateLockedByCut ? undefined : handleOpenCutPreview('AM')}
+                                                        disabled={isDateLockedByCut}
+                                                        title={isDateLockedByCut ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' : 'Generar Corte AM'}
                                                         style={{
                                                             backgroundColor: '#F1F5F9',
-                                                            color: '#334155',
-                                                            border: '1px solid #CBD5E1',
+                                                            color: isDateLockedByCut ? '#94A3B8' : '#334155',
+                                                            border: isDateLockedByCut ? '1px solid #E2E8F0' : '1px solid #CBD5E1',
                                                             padding: '0.48rem 1rem',
                                                             borderRadius: '8px',
                                                             fontWeight: '700',
                                                             fontSize: '0.78rem',
-                                                            cursor: 'pointer',
+                                                            cursor: isDateLockedByCut ? 'not-allowed' : 'pointer',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '6px'
+                                                            gap: '6px',
+                                                            opacity: isDateLockedByCut ? 0.55 : 1
                                                         }}
                                                     >
-                                                        <Sun size={14} /> Auditar y Generar Corte AM ({pendingOrdersCount})
+                                                        {isDateLockedByCut ? <Lock size={14} /> : <Sun size={14} />} {isDateLockedByCut ? 'Corte Cerrado (Solo Consulta)' : 'Auditar y Generar Corte AM (' + pendingOrdersCount + ')'}
                                                     </button>
                                                 </div>
                                             )}
@@ -3074,25 +3165,26 @@ export default function BillingDashboard() {
 
                                         <button
                                             type="button"
-                                            onClick={() => handleOpenCutPreview('AM')}
-                                            disabled={pendingOrdersCount === 0 || isProcessing}
+                                            onClick={() => isDateLockedByCut ? undefined : handleOpenCutPreview('AM')}
+                                            disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCut}
+                                            title={isDateLockedByCut ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' : 'Generar Corte AM'}
                                             style={{
-                                                backgroundColor: '#0D7A57',
-                                                color: 'white',
+                                                backgroundColor: isDateLockedByCut ? '#E2E8F0' : '#0D7A57',
+                                                color: isDateLockedByCut ? '#64748B' : 'white',
                                                 border: 'none',
                                                 padding: '0.4rem 0.8rem',
                                                 borderRadius: '8px',
                                                 fontWeight: '800',
                                                 fontSize: '0.74rem',
-                                                cursor: pendingOrdersCount === 0 ? 'not-allowed' : 'pointer',
-                                                opacity: pendingOrdersCount === 0 ? 0.6 : 1,
+                                                cursor: (pendingOrdersCount === 0 || isDateLockedByCut) ? 'not-allowed' : 'pointer',
+                                                opacity: (pendingOrdersCount === 0 || isDateLockedByCut) ? 0.6 : 1,
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '5px',
-                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                                boxShadow: isDateLockedByCut ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.2)'
                                             }}
                                         >
-                                            <Sun size={13} /> Auditar y Generar Corte AM {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length} sel)` : `(${pendingOrdersCount})`}
+                                            {isDateLockedByCut ? <Lock size={13} /> : <Sun size={13} />} {isDateLockedByCut ? 'Corte Cerrado (Solo Consulta)' : 'Auditar y Generar Corte AM ' + (selectedOrderIds.length > 0 ? '(' + selectedOrderIds.length + ' sel)' : '(' + pendingOrdersCount + ')')}
                                         </button>
                                     </div>
                                 </div>
