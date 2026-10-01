@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.78 (Modal Previsualización de Factura/Pedido: Erradicación de Glifos no Lucide, Captura Dinámica de Orden de Compra OC y Thead Sticky Congelado en Productos del Pedido, Escenario BDD 111)
+> **Versión:** 1.9.79 (Dogma de Maduración Estándar, Supresión Canónica del Badge 'Maduro' y Purga de Redundancias Nominales en Montaje de Pedidos, Escenario BDD 112)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -2778,10 +2778,17 @@ La sábana física de alistamiento es un instrumento de trabajo de alta velocida
 2. **Columna SUCURSAL / CLIENTE Estricta:**  
    En la cabecera de fila de cada pedido, la columna `SUCURSAL / CLIENTE` debe mostrar **exclusivamente el nombre de la sucursal** (`ord.branch_name`). Se suprime la segunda línea con la razón social corporativa del cliente (`ord.client_name`), evitando redundancia visual y truncamiento de texto.
 3. **Filtro Poka-Yoke Anti-Redundancia con el Nombre del Producto (`isRedundantAttribute`):**  
-   Si una opción o atributo estructurado (ej: *Maduro*, *Verde*, *Blanca*) **ya está explícitamente contenido en el nombre del SKU o producto** (ej: `Plátano maduro`, `Plátano verde`, `Cebolla cabezona blanca`), se suprime automáticamente de la Fila 2.
-   - La celda secundaria **DEBE PERMANECER 100% VACÍA**, eliminando el pleonasmo visual (mostrar `Maduro` debajo de la columna `Plátano maduro`).
-   - Solo se renderiza la segunda línea si aporta una especificación física/operativa diferencial no dicha en el nombre del producto (ej: empaque/peso `12 und de 2 kg` o maduración de productos base como `Papaya maradol` $\rightarrow$ `Maduro` o `Mango tommy` $\rightarrow$ `Pintón`).
-4. **Erradicación Absoluta de Inferencia por Palabras Clave o Fallbacks de Texto Libre:**  
+   Si una opción o atributo estructurado (ej: *Maduro*, *Verde*, *Blanca*) **ya está explícitamente contenido en el nombre del SKU o producto** (ej: `Plátano maduro`, `Plátano verde`, `Cebolla cabezona blanca`), se suprime automáticamente tanto de la Fila 2 de la sábana como de los badges visuales en el modal de montaje de pedidos.
+   - La celda secundaria **DEBE PERMANECER 100% VACÍA**, eliminando el pleonasmo visual (mostrar `Maduro` debajo de la columna o al lado de `Plátano maduro`).
+   - Solo se renderiza la segunda línea o badge si aporta una especificación física/operativa diferencial no dicha en el nombre del producto (ej: empaque/peso `12 und de 2 kg` o maduración de productos base como `Mango tommy` $\rightarrow$ `Pintón`).
+
+4. **Dogma de Maduración Estándar & Supresión del Badge 'Maduro' (SDD v1.9.79):**  
+   La línea base biológica y operativa de FruFresco establece que **todo producto de catálogo se despacha por defecto en estado Maduro / Listo para consumo**.
+   - Queda terminantemente prohibido generar badges, pastillas o etiquetas visuales con la palabra `Maduro` en las tablas de pedidos (`EmailDraftsModule`, `loading`, `create`), en la sábana de alistamiento o en la planilla de compras.
+   - Si un pedido tiene maduración `Maduro` (o no especifica maduración), la fila se renderiza limpia en estado `Estándar`.
+   - **Exclusividad de Badges Diferenciales:** Los badges de maduración se reservan estricta y exclusivamente para condiciones operativas excepcionales: `[Pintón]`, `[Verde]`, `[Biche]` y `[Listo para tajar]`.
+
+5. **Erradicación Absoluta de Inferencia por Palabras Clave o Fallbacks de Texto Libre:**  
    Queda terminantemente prohibido escanear alias, nicknames o campos de texto libre (`nickname`, `variant_label`, observaciones comerciales) con listas de palabras clave (*keywords* como `primera`, `tajar`, `mediano`, `delgado`, `limpio`, `"bananos"`, `"paquete x 1 kilo"`, `"1000 gr"`, etc.) para intentar adivinar o inventar variantes no estructuradas.
    - **Prevalencia Estricta de la Estructura Canónica de Origen:** Solo se respetan notas y características que nacieron con estructura formal en el pedido a través de **`selected_options`** (motor dual-unit: `_original_qty`, `_unit_weight_gr`, o atributos culinarios normalizados: `Maduración`, `Corte`, `Calibre`, `Punto`).
    - Si un pedido no contiene opciones estructuradas en `selected_options`, `formatStructuredSpecification(item)` retorna `null`. La celda secundaria en la sábana **PERMANECE 100% VACÍA**, y el ítem se clasifica irrefutablemente como producto estándar a granel, erradicando de raíz la aparición de etiquetas espurias.
@@ -4859,4 +4866,14 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   3. **Comportamiento Thead Sticky Congelado en Productos del Pedido:**
      - El contenedor de la tabla de productos (`PRODUCTOS DEL PEDIDO`) aísla el scroll con `maxHeight: '380px'`, `overflowY: 'auto'`, `borderCollapse: 'separate'` y `borderSpacing: 0`.
      - Las cabeceras `<th>` (`Producto (Mapeado)`, `Presentación & Atributos`, `Cant. Facturada`, `Precio Unitario`, `Subtotal`) permanecen fijas en `position: 'sticky', top: 0, zIndex: 30` con fondo sólido `#F8FAF9`, borde inferior `2px solid #E2E8F0` y elevación visual `boxShadow: '0 1px 2px rgba(0,0,0,0.05)'`, garantizando visibilidad perpetua de las columnas al desplazarse por pedidos de gran volumen de ítems.
+
+---
+
+#### Escenario 112: Supresión Canónica del Badge Redundante 'Maduro' y Preservación del Estado Estándar Limpio en Montaje de Pedidos
+- **Given** un ítem en el modal de montaje/aprobación de pedidos (`EmailDraftsModule`, `loading`, `create`) correspondiente a un producto como `"Plátano maduro institucional"` o `"Papaya maradol"`.
+- **When** se evalúan sus opciones estructuradas (`selected_options`) o texto del documento (`variant_label` / `nickname`):
+- **Then**:
+  1. **Supresión del Estado por Defecto 'Maduro':** Al ser la maduración madura la condición estándar de todo producto de catálogo en FruFresco, el sistema no genera pastillas ni badges visuales con el texto `[Maduro]`. La celda de *Presentación & Atributos* se renderiza limpia con la etiqueta en cursiva `Estándar`.
+  2. **Poka-Yoke Anti-Redundancia con el Nombre (`isRedundantAttribute`):** Si un producto contiene en su nombre la palabra del atributo (ej. `"Plátano maduro"` o `"Plátano verde"`), se suprime cualquier badge homónimo, erradicando pleonasmos visuales en la tabla.
+  3. **Exclusividad para Maduraciones Diferenciales:** Únicamente se generan badges visuales cuando la maduración representa una instrucción operativa excepcional no dicha en el nombre (ej. `[Pintón]`, `[Verde]`, `[Biche]`, `[Listo para tajar]`).
 

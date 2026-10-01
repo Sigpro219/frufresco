@@ -516,14 +516,37 @@ export function resolveProductCharacteristicsBadges(item: {
         else if (rawRipeness.includes('verde')) normalizedRipeness = 'Verde';
         else if (rawRipeness.includes('biche')) normalizedRipeness = 'Biche';
         
-        badges.push({
-            type: 'ripeness',
-            label: 'Maduración',
-            text: normalizedRipeness,
-            color: '#15803D',
-            backgroundColor: '#DCFCE7',
-            borderColor: '#BBF7D0'
-        });
+        // POKA-YOKE SUPRESIÓN DE RUIDO (SDD v1.9.76):
+        // 1. "Maduro" es la norma biológica y estándar por defecto de cualquier producto en FruFresco.
+        // 2. Si el nombre del producto ya contiene el término (ej. "Plátano maduro", "Plátano verde"), es redundante.
+        // Por tanto, SOLO generamos badge cuando sea una condición diferencial (Pintón, Verde, Biche, Listo para tajar) Y no esté en el nombre.
+        const isDefaultMaduro = normalizedRipeness === 'Maduro';
+        const isRedundantWithName = isRedundantAttribute(normalizedRipeness, prodName);
+
+        if (!isDefaultMaduro && !isRedundantWithName) {
+            let badgeColor = '#15803D';
+            let badgeBg = '#DCFCE7';
+            let badgeBorder = '#BBF7D0';
+
+            if (normalizedRipeness === 'Pintón') {
+                badgeColor = '#B45309';
+                badgeBg = '#FEF3C7';
+                badgeBorder = '#FDE68A';
+            } else if (normalizedRipeness === 'Listo para tajar') {
+                badgeColor = '#6B21A8';
+                badgeBg = '#F3E8FF';
+                badgeBorder = '#E9D5FF';
+            }
+
+            badges.push({
+                type: 'ripeness',
+                label: 'Maduración',
+                text: normalizedRipeness,
+                color: badgeColor,
+                backgroundColor: badgeBg,
+                borderColor: badgeBorder
+            });
+        }
         textToAnalyze = textToAnalyze.replace(new RegExp(`\\b${ripenessMatch[0]}\\b`, 'gi'), ' ');
     }
 

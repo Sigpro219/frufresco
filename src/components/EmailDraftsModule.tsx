@@ -16,7 +16,7 @@ import Link from 'next/link';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
-import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges } from '@/lib/orderUtils';
+import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -10713,7 +10713,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         (origQty && Math.abs(origQty - qty) > 0.001)
                       );
 
-                      const explicitOpts = Object.entries(opts).filter(([k, v]) => !k.startsWith('_') && v && typeof v === 'string');
+                      const explicitOpts = Object.entries(opts).filter(([k, v]) => {
+                        if (k.startsWith('_') || !v || typeof v !== 'string') return false;
+                        const cleanVal = v.trim().toLowerCase();
+                        const cleanKey = k.trim().toLowerCase();
+                        if (cleanVal === 'estandar' || cleanVal === 'estándar') return false;
+                        if (cleanKey.includes('madura') && cleanVal === 'maduro') return false;
+                        if (prod?.name && isRedundantAttribute(v, prod.name)) return false;
+                        return true;
+                      });
 
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
