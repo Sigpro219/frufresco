@@ -5853,7 +5853,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           latitude: draftCoordinates?.lat || metadata?.latitude || null,
           longitude: draftCoordinates?.lng || metadata?.longitude || null,
           document_url: draftAttachmentUrl,
-          client_po_number: purchaseOrder?.trim() || null
+          purchase_order_number: purchaseOrder?.trim() || null
         })
         .select()
         .single();
@@ -7759,6 +7759,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       ) : null;
                     })()}
                     <span>•</span>
+                    <span style={{ 
+                      backgroundColor: purchaseOrder ? '#EFF6FF' : '#FEF3C7', 
+                      color: purchaseOrder ? '#1E40AF' : '#92400E', 
+                      border: `1px solid ${purchaseOrder ? '#BFDBFE' : '#FCD34D'}`, 
+                      padding: '1px 6px', 
+                      borderRadius: '4px', 
+                      fontWeight: '800', 
+                      fontSize: '0.70rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}>
+                      <Tag size={10} color={purchaseOrder ? '#2563EB' : '#D97706'} />
+                      {purchaseOrder ? `OC: ${purchaseOrder}` : 'Sin OC'}
+                    </span>
+                    <span>•</span>
                     <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
                       <strong>Asunto:</strong> {cleanSubject(selectedDraft.email_subject)}
                     </span>
@@ -8721,33 +8737,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || matchedProd;
                                   if (selectedProd) {
                                     selectProduct(selectedProd, i);
-                                    setActiveRowSearchQuery(null);
-                                    setActiveDropdownRowIndex(null);
-                                    const qtyInput = document.getElementById(`draft-qty-input-${i}`) as HTMLInputElement | null;
-                                    if (qtyInput) {
-                                      qtyInput.focus();
-                                      qtyInput.select();
-                                    } else {
-                                      const nextIdx = i + 1;
-                                      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                      if (nextInput) {
-                                        nextInput.focus({ preventScroll: true });
-                                        nextInput.select();
-                                        scrollToDraftRow(nextIdx);
-                                      } else {
-                                        document.getElementById('btn-approve-draft')?.focus();
-                                      }
-                                    }
+                                  }
+                                  setActiveRowSearchQuery(null);
+                                  setActiveDropdownRowIndex(null);
+                                  const nextIdx = i + 1;
+                                  const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                  if (nextInput) {
+                                    nextInput.focus({ preventScroll: true });
+                                    nextInput.select();
+                                    scrollToDraftRow(nextIdx);
                                   } else {
-                                    setActiveRowSearchQuery(null);
-                                    setActiveDropdownRowIndex(null);
-                                    const nextIdx = i + 1;
-                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                    if (nextInput) {
-                                      nextInput.focus({ preventScroll: true });
-                                      nextInput.select();
-                                      scrollToDraftRow(nextIdx);
-                                    }
+                                    document.getElementById('btn-approve-draft')?.focus();
                                   }
                                 } else if (e.key === 'ArrowDown') {
                                   e.preventDefault();
@@ -10916,7 +10916,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Delivery Date */}
             <div style={{ marginBottom: '1.5rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>FECHA DE ENTREGA:</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4B5563', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                    FECHA DE ENTREGA:
+                  </label>
+                  {matchedProfile?.logistics_data?.allowed_days && matchedProfile.logistics_data.allowed_days.length > 0 && (
+                    <span style={{ fontSize: '0.72rem', color: '#0369A1', fontWeight: 700 }}>
+                      Días habituales: {matchedProfile.logistics_data.allowed_days.map((d: number) => ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d === 7 ? 0 : d]).join(', ')}
+                    </span>
+                  )}
+                </div>
                 <div style={{
                   position: 'relative',
                   display: 'flex',
@@ -10925,12 +10934,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   border: `1.5px solid ${THEME.colors.border}`,
                   borderRadius: '10px',
                   padding: '0.65rem 0.9rem',
-                  gap: '10px'
+                  gap: '10px',
+                  cursor: 'pointer'
+                }} onClick={(e) => {
+                  const input = e.currentTarget.querySelector('input[type="date"]') as any;
+                  if (input && typeof input.showPicker === 'function') input.showPicker();
                 }}>
                   <Calendar size={18} color="#0D7A57" />
                   <input 
                     type="date" 
-                    className="hide-native-date-picker-indicator"
                     value={deliveryDate} 
                     onChange={(e) => {
                       const newDate = e.target.value;
@@ -10947,6 +10959,68 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {formatDeliveryDateLabel(deliveryDate)}
                   </span>
                 </div>
+
+                {/* Píldoras de Fechas Disponibles Próximas */}
+                {(() => {
+                  const quickDates: { dateStr: string; label: string; isAllowed: boolean; isTomorrow: boolean }[] = [];
+                  const allowed = matchedProfile?.logistics_data?.allowed_days || matchedProfile?.logistics_data?.days || [];
+                  const jDays = allowed.map((d: number) => d === 7 ? 0 : d);
+                  
+                  const base = new Date();
+                  const utc = base.getTime() + (base.getTimezoneOffset() * 60000);
+                  const bogotaToday = new Date(utc + (3600000 * -5));
+                  
+                  for (let offset = 1; offset <= 7; offset++) {
+                    const d = new Date(bogotaToday);
+                    d.setDate(bogotaToday.getDate() + offset);
+                    const dStr = d.toISOString().split('T')[0];
+                    const dayOfWeek = d.getDay();
+                    const isAllowed = jDays.length === 0 || jDays.includes(dayOfWeek);
+                    const isTom = offset === 1;
+                    
+                    if (isAllowed || isTom) {
+                      quickDates.push({
+                        dateStr: dStr,
+                        label: isTom ? `Mañana (${d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', '')})` : d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', ''),
+                        isAllowed,
+                        isTomorrow: isTom
+                      });
+                    }
+                  }
+
+                  return quickDates.length > 0 ? (
+                    <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700 }}>Fechas disponibles:</span>
+                      {quickDates.map((q) => {
+                        const isSelected = deliveryDate === q.dateStr;
+                        return (
+                          <button
+                            key={q.dateStr}
+                            type="button"
+                            onClick={() => setDeliveryDate(q.dateStr)}
+                            style={{
+                              backgroundColor: isSelected ? '#0D7A57' : (q.isTomorrow ? '#F0FDF4' : '#F8FAFC'),
+                              color: isSelected ? '#FFFFFF' : (q.isTomorrow ? '#166534' : '#334155'),
+                              border: isSelected ? '1.5px solid #0D7A57' : (q.isTomorrow ? '1.5px solid #86EFAC' : '1px solid #CBD5E1'),
+                              padding: '3px 9px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: isSelected ? 800 : 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {isSelected && <Check size={11} />}
+                            {q.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
 

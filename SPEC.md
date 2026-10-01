@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.81 (Extracción Multimodal de Orden de Compra OC/OCC/PO en Ingesta IA, Respeto de Fecha de Entrega Solicitada en Documentos y Sincronización con Restricciones Logísticas D+1, Escenario BDD 115)
+> **Versión:** 1.9.82 (Resolución de Columna Canónica purchase_order_number en Orders, Navegación Enter Producto a Producto, Visibilidad OC en Ficha Logística y Selector Ergonómico de Fechas Disponibles con Píldoras Rápidas, Escenario BDD 116)
 > **Fecha:** 01 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -4909,9 +4909,25 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   1. **Extracción Multimodal Exhaustiva de Orden de Compra (OC):**
      - El pipeline de IA (`genericPrompt`, `excelPrompt`, `order-parser-engine.ts`, `reparse-draft`) rastrea con prioridad absoluta recuadros de encabezado, cajas de datos y firmas con etiquetas `"Orden de Compra"`, `"O/C"`, `"PO Number"`, `"OCC"`, `"SOLPED"` o `"Pedido N°"`.
      - Se activa una capa heurística / regex resiliente (`extractPurchaseOrderFromText`) que inspecciona el asunto del correo (`email_subject`, ej. `FW: OCC 66351 EUROFARMA`) y el cuerpo del mensaje como salvaguarda inmediata.
-     - El valor detectado se inyecta en el estado reactivo `purchaseOrder` y en los metadatos del borrador, mostrándose de forma destacada en la tarjeta del cliente y persistiendo en `client_po_number` de `orders`.
+     - El valor detectado se inyecta en el estado reactivo `purchaseOrder` y en los metadatos del borrador, mostrándose de forma destacada en la tarjeta del cliente y persistiendo en `purchase_order_number` de `orders`.
   2. **Fidelidad de Fecha de Entrega Solicitada en el Documento:**
      - Si el documento del cliente especifica una fecha explícita de entrega (ej. `Entrega 2026-10-02`) y dicha fecha es vigente ($\ge$ hoy en Bogotá `todayBogotaStr`), el sistema adopta `2026-10-02` como fecha base inicial.
      - Queda estrictamente prohibido que la hora del día del operador en jornada nocturna/tarde (e.g. después de las 17:00) fuerce un salto artificial a D+2/D+4 ignorando la fecha requerida por el cliente en compras institucionales.
      - El algoritmo `getNextAllowedDeliveryDate` evalúa la fecha base contra los `allowed_days` configurados en la ficha logística del cliente (`matchedProfile.logistics_data.allowed_days`). Si el día solicitado (ej. Viernes = 5) está permitido en la matriz del cliente (`[1, 3, 5]`), la fecha `2026-10-02` se preserva con exactitud matemática 100%.
+
+---
+
+#### Escenario 116: Persistencia Canónica de Orden de Compra en Orders (`purchase_order_number`), Ergonomía de Teclado Producto a Producto y Selector de Fechas Disponibles
+- **Given** el módulo de borradores de pedidos (`EmailDraftsModule.tsx`) durante la revisión y aprobación de órdenes de compra B2B.
+- **When** el operador interactúa con la mesa de trabajo, revisa la cabecera del cliente y aprueba el pedido:
+- **Then**:
+  1. **Corrección de Esquema en Persistencia de Orders:**
+     - Al confirmar el pedido, la inserción en la tabla `orders` utiliza formalmente la columna canónica de base de datos `purchase_order_number` (y la respalda en `admin_notes`), erradicando de raíz el error de PostgREST `Could not find the 'client_po_number' column of 'orders'`.
+  2. **Ergonomía de Teclado Rápida (Producto a Producto con Enter):**
+     - Al presionar `Enter` en el campo SKU de una fila (`sku-input-${i}`), el foco salta directamente al campo SKU de la siguiente fila (`sku-input-${i+1}`) sin detenerse en la cantidad, agilizando la validación visual rápida de productos de gran volumen.
+  3. **Visibilidad Continua de la OC en Ficha Logística / Cabecera:**
+     - La tarjeta de cabecera de `Encargado & Origen del Pedido` (Columna 3) expone de forma permanente la píldora interactiva con el número de OC detectado (`OC: [Número]`).
+  4. **Selector Ergonómico de Fechas Disponibles en el Modal de Factura:**
+     - El modal expone la fecha de entrega con disparador nativo de calendario interactivo al clic y una botonera horizontal de **Píldoras de Fechas Disponibles** (calculadas dinámicamente: Mañana y los días permitidos por la ficha logística del cliente).
+     - El operador puede hacer clic en cualquier píldora para seleccionar al instante la fecha deseada sin bloqueos.
 
