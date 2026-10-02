@@ -370,7 +370,7 @@ interface CostTrendItem {
 
 interface CommercialAlertItem {
     id: string;
-    type: 'quote_expiring' | 'quote_expired' | 'agreement_expiring' | 'lead_pending' | 'churn_risk' | 'cost_expired' | 'cost_expiring';
+    type: 'quote_expiring' | 'quote_expired' | 'agreement_expiring' | 'lead_pending' | 'churn_risk' | 'cost_expired' | 'cost_expiring' | 'unpriced_dispatch';
     severity: 'critical' | 'warning' | 'info';
     title: string;
     subtitle: string;
@@ -570,7 +570,7 @@ export default function CommercialUnifiedDashboard({
             (profilesData || []).forEach(p => profileMap.set(p.id, p));
 
             // 2. Fetch Active Products Catalog, Matrix Costs, Purchases, Leads, Quotes & Bulletin Audit
-            const [productsRes, matrixRes, appSettingsRes, purchasesRes, leadsRes, quotesRes, bulletinAuditRes] = await Promise.all([
+            const [productsRes, matrixRes, appSettingsRes, purchasesRes, leadsRes, quotesRes, bulletinAuditRes, unpricedOrdersRes] = await Promise.all([
                 supabase
                     .from('products')
                     .select('id, name, sku, accounting_id, category, unit_of_measure, is_active, base_price')
@@ -599,7 +599,14 @@ export default function CommercialUnifiedDashboard({
                     .from('app_settings')
                     .select('key, value')
                     .eq('key', 'last_weekly_bulletin_dispatch')
-                    .maybeSingle()
+                    .maybeSingle(),
+                supabase
+                    .from('orders')
+                    .select('id, sequence_id, created_at, admin_notes, profiles (company_name, contact_name)')
+                    .or('admin_notes.ilike.%DESPACHADO SIN PRECIO%,admin_notes.ilike.%SE DESPACHÓ SIN PRECIO%')
+                    .neq('status', 'cancelled')
+                    .order('created_at', { ascending: false })
+                    .limit(10)
             ]);
 
             if (bulletinAuditRes?.data?.value) {
@@ -1206,6 +1213,25 @@ export default function CommercialUnifiedDashboard({
                         amount: c.currentAmount
                     });
                 }
+            });
+
+            // Alertas Críticas de Pedidos Despachados Sin Precio ($0 COP) - Escenario 121 SDD
+            (unpricedOrdersRes?.data || []).forEach((uo: any) => {
+                const prof = Array.isArray(uo.profiles) ? uo.profiles[0] : uo.profiles;
+                const clientName = prof?.company_name || prof?.contact_name || 'Cliente';
+                const matchItems = uo.admin_notes?.match(/PENDIENTE FIJAR TARIFA COMERCIAL: ([^\]]+)\]/);
+                const itemsList = matchItems ? matchItems[1] : 'Ítems sin tarifa';
+
+                generatedAlerts.push({
+                    id: `unpriced-order-${uo.id}`,
+                    type: 'unpriced_dispatch',
+                    severity: 'critical',
+                    title: `🚨 ASIGNAR PRECIO: Pedido #${uo.sequence_id || uo.id.slice(0, 8)}`,
+                    subtitle: `${clientName} (${itemsList})`,
+                    dateInfo: 'Despachado a alistamiento sin precio',
+                    linkUrl: `/admin/commercial/billing?search=${uo.sequence_id || uo.id.slice(0, 8)}`,
+                    linkText: 'Fijar Precio'
+                });
             });
 
             const severityWeight = { critical: 0, warning: 1, info: 2 };

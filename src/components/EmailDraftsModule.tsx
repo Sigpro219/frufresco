@@ -17,6 +17,7 @@ import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
+import { useAuth } from '@/lib/authContext';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -1220,6 +1221,7 @@ interface EmailDraftsModuleProps {
 }
 
 export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleProps = {}) {
+  const { user } = useAuth();
   const [drafts, setDrafts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [conversions, setConversions] = useState<any[]>([]);
@@ -4885,6 +4887,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
   const [notifyClientOfModifications, setNotifyClientOfModifications] = useState(false);
+  const [allowZeroPriceDispatch, setAllowZeroPriceDispatch] = useState<boolean>(false);
 
   const stateRef = useRef({
     isEditing,
@@ -5780,6 +5783,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setSaving(false);
       setSendConfirmationEmail(true);
       setDeliverySlot(editableDeliverySlot === 'PM' ? 'PM' : 'AM');
+      setAllowZeroPriceDispatch(false);
       setShowConfirmModal(true);
     } catch (e) {
       console.error('Error in handleApprove:', e);
@@ -5874,6 +5878,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
       let hasOpenConsumption = false;
+      const unpricedItems: any[] = [];
 
       for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
@@ -5890,7 +5895,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             if (resolvedPrice === 0 && !isExplicitContractZero) {
               hasZeroPriceItem = true;
               zeroPriceItemName = prod.name;
-              break;
+              unpricedItems.push({ item, prod });
+              if (!allowZeroPriceDispatch) {
+                break;
+              }
             }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             totalAmount += resolvedPrice * qtyNum;
@@ -5935,10 +5943,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
 
-      if (hasZeroPriceItem) {
+      if (hasZeroPriceItem && !allowZeroPriceDispatch) {
         setConfirmingOrder(false);
-        showToast(`Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Por favor asigne precio manualmente antes de aprobar.`, 'error');
+        showToast(`Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Debe autorizar el envío con precio $0 marcando la casilla de autorización o asignar precio antes de continuar.`, 'error');
         return;
+      }
+
+      if (unpricedItems.length > 0 && allowZeroPriceDispatch) {
+        const unpricedNames = unpricedItems.map(u => u.prod.name).join(', ');
+        finalAdminNotes = `[DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${unpricedNames}]\n${finalAdminNotes}`.trim();
       }
 
       if (hasOpenConsumption && !finalAdminNotes.includes('CONSUMO ABIERTO')) {
@@ -6009,6 +6022,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       if (itemsError) {
         throw new Error('Error al registrar ítems: ' + itemsError.message);
+      }
+
+      // Si se autorizó el despacho de ítems sin precio ($0), emitir tarea urgente para el Área Comercial
+      if (order && unpricedItems.length > 0 && allowZeroPriceDispatch) {
+        try {
+          const clientName = selectedDraft.client_detected_name || 'Cliente por Correo';
+          const unpricedNames = unpricedItems.map(u => u.prod.name).join(', ');
+          await supabase
+            .from('admin_tasks')
+            .insert([{
+              title: `🚨 ASIGNAR PRECIO URGENTE: Pedido #${order.sequence_id || order.id.slice(0, 8)} (${clientName})`,
+              description: `El pedido #${order.sequence_id || order.id.slice(0, 8)} del cliente "${clientName}" fue despachado a alistamiento con precio $0 COP en los siguientes productos:\n- ${unpricedNames}\n\nAcción comercial urgente: Fijar la tarifa acordada por kilo/unidad para habilitar la facturación electrónica.`,
+              priority: 'high',
+              status: 'todo',
+              target_role: 'comercial',
+              created_by: user?.id || null
+            }]);
+        } catch (taskErr) {
+          console.warn('Error al registrar tarea comercial urgente:', taskErr);
+        }
       }
 
       // 4. Update the draft status to approved and save updated attachments list
@@ -11235,6 +11268,60 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
                 </div>
               )}
+
+              {(() => {
+                const unpricedItemsInModal = editableItems.filter(itm => !itm.isDeleted && itm.matched_product_id).filter(itm => {
+                  const prod = products.find(p => p.id === itm.matched_product_id);
+                  if (!prod) return false;
+                  const isContractPriceDefined = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null;
+                  const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : (Number(prod.base_price) || 0);
+                  const isExplicitContractZero = isContractPriceDefined && resolvedPrice === 0;
+                  return resolvedPrice === 0 && !isExplicitContractZero;
+                });
+
+                if (unpricedItemsInModal.length === 0) return null;
+
+                const unpricedNames = unpricedItemsInModal.map(i => i.originalName || products.find(p => p.id === i.matched_product_id)?.name).join(', ');
+
+                return (
+                  <div 
+                    style={{
+                      backgroundColor: allowZeroPriceDispatch ? '#FEF2F2' : '#FFF1F2',
+                      border: `1.5px solid ${allowZeroPriceDispatch ? '#DC2626' : '#FCA5A5'}`,
+                      borderRadius: '12px',
+                      padding: '1rem 1.25rem',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      marginTop: '0.5rem'
+                    }}
+                    onClick={() => setAllowZeroPriceDispatch(!allowZeroPriceDispatch)}
+                  >
+                    <input 
+                      type="checkbox" 
+                      id="chk-allow-zero-price-dispatch"
+                      checked={allowZeroPriceDispatch} 
+                      onChange={() => {}} 
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '3px', accentColor: '#DC2626' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.86rem', fontWeight: '800', color: '#991B1B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>⚠️ Ítems sin precio registrado ({unpricedItemsInModal.length})</span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#B91C1C', marginTop: '2px', lineHeight: '1.4' }}>
+                        <strong>Productos afectados:</strong> {unpricedNames}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: allowZeroPriceDispatch ? '#7F1D1D' : '#991B1B', marginTop: '3px', lineHeight: '1.4', fontWeight: allowZeroPriceDispatch ? '700' : '400' }}>
+                        {allowZeroPriceDispatch
+                          ? '✓ AUTORIZADO: El pedido pasará a alistamiento con precio $0 COP para no retrasar la entrega física. Se enviará tarea prioritaria al Área Comercial para fijar el precio y Facturación retendrá la emisión fiscal.'
+                          : 'Autorizo enviar a alistamiento con precio $0 (Pendiente fijar tarifa comercial).'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Confirm Actions */}

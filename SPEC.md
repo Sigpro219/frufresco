@@ -4987,7 +4987,7 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
 
 ---
 
-#### Escenario 119: Ingesta Resiliente y Renderizado de Imágenes Inline (CID) y Adjuntos Gráficos en Borradores de Pedidos (SDD v1.9.84)
+#### Escenario 120: Ingesta Resiliente y Renderizado de Imágenes Inline (CID) y Adjuntos Gráficos en Borradores de Pedidos (SDD v1.9.84)
 - **Given** correos electrónicos entrantes con imágenes incrustadas en el cuerpo (Content-ID / `cid:` emitidos por Outlook o Gmail) o capturas de pantalla de pedidos pegadas directamente en el mensaje sin adjunto independiente.
 - **When** el webhook de ingesta (`/api/orders/email-ingest`) recibe el payload y el visor de documentos originales (`EmailDraftsModule.tsx` $\rightarrow$ `GmailMessageViewer`) renderiza el HTML del mensaje:
 - **Then**:
@@ -5001,3 +5001,27 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   4. **Resolución Client-Side y Fallback Elegante en GmailMessageViewer:**
      - `GmailMessageViewer` enriquece la resolución de CIDs contrastando contra todos los adjuntos (`allAtts`), incluyendo mapeo heurístico 1-a-1 cuando hay una única imagen y un único CID.
      - El `iframe` sandbox incorpora un interceptor `onerror` que sustituye imágenes rotas o externas inaccesibles por una píldora visual discreta (`[🖼️ Imagen inline no disponible]`), erradicando los cuadros rotos nativos del navegador.
+
+---
+
+#### Escenario 121: Protocolo Canónico de Autorización de Despacho de Ítems sin Precio ($0), Tareas Comerciales Urgentes y Poka-Yoke de Facturación (SDD v1.9.85)
+- **Given** un pedido B2B donde el cliente solicita uno o más productos legítimos que no tienen precio fijado en el acuerdo comercial ni en catálogo público (ej. `Maiz porba` ID: 189 a tarifa `$0 COP` / `SIN PRECIO`).
+- **When** el operador revisa el borrador en la Mesa de Trabajo (`EmailDraftsModule.tsx`) y procede a confirmarlo:
+- **Then**:
+  1. **Erradicación del Bloqueo Rígido en Mesa de Montaje:**
+     - Queda estrictamente prohibido detener la orden, bloquear el alistamiento de bodega o bajar el producto del camión con un error impeditivo de tarifa cero.
+     - El modal de confirmación identifica los productos sin tarifa y despliega un panel de advertencia con el switch/checkbox explícito:
+       `[✓] Autorizo enviar a alistamiento con precio $0 (Pendiente fijar tarifa comercial)`.
+     - Si el operador autoriza, el pedido se aprueba y se guarda en estado `approved` / `loading` para cumplir la promesa de entrega física matutina al cliente.
+  2. **Estampado Canónico de Auditoría:**
+     - La orden se registra con `has_unpriced_items: true` y estampa en `admin_notes`:
+       `[DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: [Lista de Productos]]`.
+     - Los ítems correspondientes en `order_items` se guardan con `unit_price: 0`.
+  3. **Generación de Tarea Urgente en Módulo Comercial:**
+     - En el Módulo Comercial (`/admin/commercial`), se activa una tarjeta/alerta de alta prioridad listando los pedidos despachados con ítems pendientes de precio.
+     - El asesor comercial puede ingresar directamente la tarifa acordada por kilo/unidad, actualizando atómicamente `order_items.unit_price` y ofreciendo su incorporación al acuerdo comercial del cliente.
+  4. **Visibilidad y Poka-Yoke de Facturación (`/admin/commercial/billing`):**
+     - En la Mesa de Facturación & Cartera, el pedido se resalta con el badge de advertencia: `⚠️ Se despachó sin precio`.
+     - **Poka-Yoke Preventivo:** Se prohíbe la emisión de la Factura Electrónica DIAN definitiva mientras existan ítems con tarifa `$0`, salvaguardando a la empresa contra pérdidas o inconsistencias fiscales.
+     - La remisión de transporte y el alistamiento físico operan sin restricciones numéricas.
+

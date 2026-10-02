@@ -138,6 +138,7 @@ export interface CutPreviewOrder {
     stopSequence: number;
     documentRequirement: string;
     type?: string;
+    admin_notes?: string;
     profile: {
         company_name: string;
         razon_social?: string;
@@ -1119,10 +1120,10 @@ export default function BillingDashboard() {
     const handleLiquidateSelectedOrAllOpenOrders = async () => {
         const targetIds = selectedOrderIds.length > 0 
             ? selectedOrderIds 
-            : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO')).map(o => o.id);
+            : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).map(o => o.id);
 
         if (targetIds.length === 0) {
-            alert('No hay pedidos con tarifa $0 o sobre lista abierta a consumo para liquidar.');
+            alert('No hay pedidos con tarifa $0, despachados sin precio o sobre lista abierta a consumo para liquidar.');
             return;
         }
 
@@ -1176,7 +1177,7 @@ export default function BillingDashboard() {
 
     const { ready: readyCount, grace: graceCount, inRoute: inRouteCount, novelties: noveltiesCount, inProcess: inProcessCount } = pendingGraceCounts;
     const openConsumptionCount = useMemo(() => {
-        return pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO')).length;
+        return pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).length;
     }, [pendingOrders]);
 
     // Filter & Sort Pending Orders
@@ -1552,6 +1553,7 @@ export default function BillingDashboard() {
                     stopSequence,
                     documentRequirement: prof?.print_invoice ? 'Factura Requerida' : 'Remisión Entrega',
                     type: o.type,
+                    admin_notes: o.admin_notes,
                     profile: prof ? {
                         company_name: prof.company_name || 'Cliente sin nombre',
                         razon_social: prof.razon_social,
@@ -1579,6 +1581,19 @@ export default function BillingDashboard() {
     // Execute Official Cut Generation
     const handleConfirmGenerateCut = async () => {
         if (previewOrders.length === 0) return;
+
+        // Poka-Yoke Canónico (Escenario 121 SDD):
+        // Se prohíbe emitir corte o factura definitiva sobre pedidos despachados sin precio o consumo abierto no liquidado
+        const unpricedOrder = previewOrders.find(o => 
+            o.netTotal === 0 || 
+            o.admin_notes?.includes('DESPACHADO SIN PRECIO') || 
+            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')
+        );
+        if (unpricedOrder) {
+            alert(`⛔ POKA-YOKE DE FACTURACIÓN ACTIVO:\n\nEl pedido #${unpricedOrder.sequence_id || unpricedOrder.id.slice(0, 8)} fue despachado sin precio (o sobre consumo abierto no liquidado).\n\nAcción requerida: El Área Comercial debe fijar la tarifa o se debe liquidar el pedido a costo vigente antes de emitir la factura electrónica.`);
+            return;
+        }
+
         setIsProcessing(true);
 
         try {
@@ -3694,33 +3709,57 @@ export default function BillingDashboard() {
 
                                                         {/* 8. Total Pedido */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                                                            {order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO') ? (
-                                                                <div>
-                                                                    <div style={{ fontWeight: '800', color: '#D97706', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                                                                        <Zap size={11} className="text-amber-500 animate-pulse" />
-                                                                        {formatMoney(order.total || 0)}
-                                                                    </div>
-                                                                    <div style={{ fontSize: '0.60rem', color: '#B45309', fontWeight: '700', backgroundColor: '#FEF3C7', padding: '1px 4px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
-                                                                        <AlertTriangle size={9} style={{ color: '#D97706', flexShrink: 0 }} />
-                                                                        <span>Consumo Abierto</span>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <>
-                                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
-                                                                        {formatMoney(order.total || 0)}
-                                                                    </div>
-                                                                    <div style={{ fontSize: '0.62rem', color: '#64748B' }}>
-                                                                        Tarifa {order.profiles?.iva_responsible ? '19% IVA' : '0% IVA'}
-                                                                    </div>
-                                                                </>
-                                                            )}
+                                                            {(() => {
+                                                                const isUnpricedDispatch = order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO');
+                                                                const isOpenConsumption = order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO');
+
+                                                                if (isUnpricedDispatch) {
+                                                                    return (
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '800', color: '#DC2626', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                                                <Zap size={11} className="text-red-500 animate-pulse" />
+                                                                                {formatMoney(order.total || 0)}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.60rem', color: '#991B1B', fontWeight: '800', backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', padding: '1px 5px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                                                                <AlertTriangle size={9} style={{ color: '#DC2626', flexShrink: 0 }} />
+                                                                                <span>⚠️ Se despachó sin precio</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                if (isOpenConsumption) {
+                                                                    return (
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '800', color: '#D97706', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                                                <Zap size={11} className="text-amber-500 animate-pulse" />
+                                                                                {formatMoney(order.total || 0)}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.60rem', color: '#B45309', fontWeight: '700', backgroundColor: '#FEF3C7', padding: '1px 4px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                                                                <AlertTriangle size={9} style={{ color: '#D97706', flexShrink: 0 }} />
+                                                                                <span>Consumo Abierto</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                return (
+                                                                    <>
+                                                                        <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                                                            {formatMoney(order.total || 0)}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.62rem', color: '#64748B' }}>
+                                                                            Tarifa {order.profiles?.iva_responsible ? '19% IVA' : '0% IVA'}
+                                                                        </div>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </td>
 
                                                         {/* 9. Acciones Rápidas */}
                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                {(order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO')) && (
+                                                                {(order.total === 0 || order.admin_notes?.includes('CONSUMO ABIERTO') || order.admin_notes?.includes('DESPACHADO SIN PRECIO') || order.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')) && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleLiquidateOpenOrder(order.id)}
