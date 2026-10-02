@@ -4947,7 +4947,23 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
 
 ---
 
-#### Escenario 118: Protocolo Canónico de Tolerancia Fonética, Seseo y Búsqueda Multi-Token en Omnibox y Digestores de Pedidos (SDD v1.9.83)
+#### Escenario 118: Regla Canónica Universal de Conversión de Unidades Documento vs Catálogo FruFresco (SDD v1.9.82)
+- **Given** órdenes de compra B2B recibidas en documentos (PDF, Excel, WhatsApp o Email) donde las presentaciones del cliente difieren de la unidad de inventario/facturación de FruFresco (ej. `LIBRA x 500`, `Lb`, `Libras`, `500g` vs `Kg`).
+- **When** el motor de inteligencia artificial (`order-parser-engine.ts`, `reparse-draft`) o el módulo de captura (`EmailDraftsModule.tsx`) procesan e inicializan los renglones del pedido:
+- **Then**:
+  1. **Conversión Matemática Homogénea (Sin Excepciones por Match Previo):**
+     - Si el producto en catálogo se administra en **`Kg`** y el documento solicita en **Libras** (`Lb`, `LIBRA x 500`, `500g`), la cantidad activa del pedido se computa siempre multiplicando por el factor de conversión $0.5$:
+       $$\text{Cantidad en Pedido (Kg)} = \text{Cantidad en Documento} \times 0.5$$
+     - Se prohíbe pasar cantidades en bruto sin convertir por el hecho de tener un match de producto previo.
+  2. **Sincronización Estricta del Rótulo de Unidad:**
+     - Al convertir la cantidad a kilogramos, la unidad activa de la fila y de la confirmación **SIEMPRE DEBE SER `Kg`** (la unidad del catálogo). Queda prohibido mostrar una cantidad reducida a la mitad rotulada con la unidad original (`2 Lb`), para evitar despachos con faltante del 50%.
+  3. **Trazabilidad Bidual Inalterable:**
+     - El sistema preserva siempre los campos `originalQuantity` y `originalUnit` del documento original y los expone mediante badges visuales (ej. `[200 libras detectadas]` o `(200 Lb)`), garantizando auditoría inmediata contra el PDF sin alterar la precisión del despacho.
+
+
+---
+
+#### Escenario 119: Protocolo Canónico de Tolerancia Fonética, Seseo y Búsqueda Multi-Token en Omnibox y Digestores de Pedidos (SDD v1.9.83)
 - **Given** los motores de búsqueda omnibox en mesas de borradores de pedidos (`EmailDraftsModule.tsx`), módulo de creación manual (`/admin/orders/create/page.tsx`) y el pipeline de digestión inteligente de documentos (`order-parser-engine.ts`, `/api/orders/reparse-draft`).
 - **When** un operador o cliente introduce términos de búsqueda con variaciones ortográficas del español latinoamericano (ej. seseo `"tusa"` en lugar de `"tuza"`, ausencia de tildes o términos no contiguos como `"mazorca 992"` o `"mazorca institucional"`):
 - **Then**:

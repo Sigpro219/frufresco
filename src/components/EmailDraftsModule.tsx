@@ -4451,13 +4451,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         if (!foundDbConversion) {
           const normPUnit = normalizeUnitName(parsedUnit);
-          const isLibra = normPUnit === 'libra' || parsedUnit === 'Lb';
+          const isLibra = normPUnit === 'libra' || parsedUnit === 'Lb' || normPUnit === 'lb' || normPUnit === 'libras' || normPUnit.includes('500');
           const isGram = normPUnit === 'gramo' || normPUnit === 'gramos' || normPUnit === 'gr' || normPUnit === 'g';
           
-          if (isLibra) {
+          if (isLibra && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
             conversionFactor = 0.5;
             finalUnit = prod?.unit_of_measure || 'Kg';
-          } else if (isGram) {
+          } else if (isGram && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
             conversionFactor = 0.001;
             finalUnit = prod?.unit_of_measure || 'Kg';
           } else {
@@ -4466,9 +4466,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }
         }
 
-        let finalQty = item.quantity !== undefined && item.quantity !== null && item.matched_product_id
-          ? parseFloat(Number(item.quantity).toFixed(2))
-          : parseFloat((initialQty * conversionFactor).toFixed(2));
+        const baseQty = item.originalQuantity !== undefined && item.originalQuantity !== null
+          ? Number(item.originalQuantity)
+          : initialQty;
+
+        let finalQty = parseFloat((baseQty * conversionFactor).toFixed(2));
 
         const minSaleKg = getProductMinSaleKg(prod);
         let defaultDualPresVal: string | null = null;
@@ -4488,17 +4490,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return {
             ...item,
             originalName: cleanName,
-            originalQuantity: initialQty,
+            originalQuantity: baseQty,
             quantity: finalQty,
             conversion_factor: conversionFactor,
-            originalUnit: parsedUnit,
+            originalUnit: item.originalUnit || parsedUnit,
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
             isConfirmed: item.isConfirmed || Boolean(item.matched_product_id),
             name: prod ? prod.name : cleanName,
             searchQuery: prod ? `${prod.name} (${getAccountingIdDisplay(prod)})` : '',
             skuQuery: prod?.sku || '',
-            unit: item.unit || finalUnit,
+            unit: finalUnit,
             observations: (() => {
               let extraDescription = '';
               if (prod && prod.name) {
@@ -9225,7 +9227,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         const rawUnit = (item.unit || '').trim();
                                         const rawLower = rawUnit.toLowerCase();
                                         const isGenericUnit = !rawUnit || rawLower === 'unidad' || rawLower === 'und' || rawLower === 'uds' || rawLower === 'unidades' || rawLower === 'u';
-                                        if (matchedProd && (!item.conversion_factor || item.conversion_factor === 1)) {
+                                        if (matchedProd) {
+                                          if (item.conversion_factor && item.conversion_factor !== 1) {
+                                            return item.unit || matchedProd.unit_of_measure || 'Kg';
+                                          }
                                           if (isGenericUnit || matchedProd.unit_of_measure) {
                                             return matchedProd.unit_of_measure || 'Kg';
                                           }

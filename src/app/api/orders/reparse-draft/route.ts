@@ -309,16 +309,35 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       const itName = it.name.trim();
       const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory);
       const matchedProd = matchResult.product;
-      const normUnit = (it.unit || '').toLowerCase().trim();
-      const resolvedUnit = (normUnit === 'unidad' || normUnit === 'und' || normUnit === 'uds' || normUnit === 'unidades' || normUnit === 'u' || !it.unit)
-        ? (matchedProd?.unit_of_measure || it.unit || 'Kg')
-        : (it.unit || matchedProd?.unit_of_measure || 'Kg');
+      const rawUnit = (it.unit || '').trim();
+      const normUnit = rawUnit.toLowerCase();
+      
+      const isLibra = normUnit === 'libra' || normUnit === 'libras' || normUnit === 'lb' || normUnit === 'lbs' || normUnit.includes('500') || itName.toLowerCase().includes('libra') || itName.toLowerCase().includes('500');
+      const isGram = normUnit === 'gramo' || normUnit === 'gramos' || normUnit === 'gr' || normUnit === 'g';
+      
+      let convFactor = 1;
+      let targetUnit = matchedProd?.unit_of_measure || (rawUnit || 'Kg');
+      
+      if (isLibra && (!matchedProd || matchedProd.unit_of_measure?.toLowerCase() === 'kg' || matchedProd.unit_of_measure?.toLowerCase() === 'kilo')) {
+        convFactor = 0.5;
+        targetUnit = 'Kg';
+      } else if (isGram && (!matchedProd || matchedProd.unit_of_measure?.toLowerCase() === 'kg' || matchedProd.unit_of_measure?.toLowerCase() === 'kilo')) {
+        convFactor = 0.001;
+        targetUnit = 'Kg';
+      } else if (matchedProd?.unit_of_measure) {
+        targetUnit = matchedProd.unit_of_measure;
+      }
+
+      const calculatedQty = parseFloat((it.quantity * convFactor).toFixed(3));
 
       return {
         originalName: itName,
         name: matchedProd ? matchedProd.name : itName,
-        quantity: it.quantity,
-        unit: resolvedUnit,
+        originalQuantity: it.quantity,
+        originalUnit: rawUnit || (isLibra ? 'Lb' : 'Und'),
+        quantity: calculatedQty,
+        conversion_factor: convFactor,
+        unit: targetUnit,
         matched_product_id: matchedProd ? matchedProd.id : null,
         confidenceScore: matchResult.confidenceScore,
         confidence: matchResult.confidence,
