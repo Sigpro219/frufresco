@@ -700,20 +700,48 @@ const GmailMessageViewer = ({
         }
       });
 
-      // Fallback: If there is exactly 1 image attachment and exactly 1 unresolved CID in the HTML, map it!
+      // Fallback: If there are image attachments and unresolved CIDs in the HTML, map them!
       const remainingCidMatches = html.match(/src=["']?cid:[^"'>\s]+["']?/gi);
       const imageAtts = allAtts.filter((a: any) => a.url && (String(a.name || '').match(/\.(png|jpe?g|gif|webp)$/i) || String(a.content_type || '').startsWith('image/')));
-      if (remainingCidMatches && remainingCidMatches.length === 1 && imageAtts.length === 1) {
-        html = html.replace(/src=["']?cid:[^"'>\s]+["']?/gi, `src="${imageAtts[0].url}"`);
+      if (remainingCidMatches && remainingCidMatches.length > 0 && imageAtts.length > 0) {
+        if (imageAtts.length === 1) {
+          // Si hay 1 único adjunto de imagen, mapearlo a la primera referencia CID
+          let replacedFirst = false;
+          html = html.replace(/src=["']?cid:[^"'>\s]+["']?/gi, (match) => {
+            if (!replacedFirst) {
+              replacedFirst = true;
+              return `src="${imageAtts[0].url}"`;
+            }
+            return match;
+          });
+        } else {
+          // Si hay múltiples imágenes adjuntas, mapearlas secuencialmente a los CIDs del HTML
+          let imgIdx = 0;
+          html = html.replace(/src=["']?cid:[^"'>\s]+["']?/gi, (match) => {
+            if (imgIdx < imageAtts.length) {
+              const u = imageAtts[imgIdx].url;
+              imgIdx++;
+              return `src="${u}"`;
+            }
+            return match;
+          });
+        }
       }
     }
 
-    // Para cualquier CID huérfano restante (correos históricos recibidos antes de la actualización de ingesta):
-    // Reemplaza la etiqueta img rota por una tarjeta explicativa amigable en lugar de un marco roto gigante
-    html = html.replace(
-      /<img[^>]*src=["']?cid:[^"'>\s]+["']?[^>]*>/gi,
-      `<div style="border:1.5px dashed #CBD5E1;background:#F8FAFC;border-radius:8px;padding:16px;margin:12px 0;text-align:center;color:#475569;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:540px;"><div style="font-size:22px;margin-bottom:4px;">🖼️</div><div style="font-size:12px;font-weight:700;color:#1E293B;">Imagen de pedido no disponible en este borrador histórico</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;">Este correo se recibió antes de la actualización del servidor (los bytes no fueron guardados en su momento). Para visualizar la imagen y extraer los productos automáticamente, <strong>reenvía este correo a pedidos@frufresco.com</strong>.</div></div>`
-    );
+    if (allAtts.length > 0) {
+      // Si hay adjuntos disponibles en el pedido, las referencias inline no resueltas son firmas o gráficos secundarios
+      html = html.replace(
+        /<img[^>]*src=["']?cid:[^"'>\s]+["']?[^>]*>/gi,
+        `<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;"><span>🖼️</span> <span>[Gráfico / Firma inline no disponible · Consulta la pestaña Adjunto para el documento principal]</span></div>`
+      );
+    } else {
+      // Para cualquier CID huérfano restante (correos históricos recibidos antes de la actualización de ingesta sin bytes guardados):
+      html = html.replace(
+        /<img[^>]*src=["']?cid:[^"'>\s]+["']?[^>]*>/gi,
+        `<div style="border:1.5px dashed #CBD5E1;background:#F8FAFC;border-radius:8px;padding:16px;margin:12px 0;text-align:center;color:#475569;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:540px;"><div style="font-size:22px;margin-bottom:4px;">🖼️</div><div style="font-size:12px;font-weight:700;color:#1E293B;">Imagen de pedido no disponible en este borrador histórico</div><div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;">Este correo se recibió antes de la actualización del servidor (los bytes no fueron guardados en su momento). Para visualizar la imagen y extraer los productos automáticamente, <strong>reenvía este correo a pedidos@frufresco.com</strong>.</div></div>`
+      );
+    }
 
     return html;
   })();

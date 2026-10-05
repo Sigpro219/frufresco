@@ -262,6 +262,7 @@ export async function POST(req: Request) {
 
           // Mapa de recursos subidos previamente para evitar subidas duplicadas
           const preUploadedAssetMap = new Map<string, string>();
+          const preUploadedByIndex = new Map<number, string>();
 
           // Pre-procesar todos los adjuntos para subir imágenes inline y resolver referencias cid: en htmlText
           if (rawAttachments.length > 0 && resolvedHtmlText) {
@@ -273,6 +274,7 @@ export async function POST(req: Request) {
               for (let attIdx = 0; attIdx < rawAttachments.length; attIdx++) {
                 const att = rawAttachments[attIdx];
                 if (!att || !att.content) continue;
+                (att as any)._rawIndex = attIdx;
 
                 const attFileName = att.file_name || att.filename || `inline_${attIdx}.png`;
                 let mimeType = att.content_type || 'image/png';
@@ -311,6 +313,7 @@ export async function POST(req: Request) {
                   }
 
                   const finalImgSrc = publicUrl || `data:${mimeType};base64,${att.content}`;
+                  preUploadedByIndex.set(attIdx, finalImgSrc);
 
                   if (cleanCid) {
                     preUploadedAssetMap.set(cleanCid, finalImgSrc);
@@ -330,6 +333,20 @@ export async function POST(req: Request) {
                     );
                   }
                 }
+              }
+
+              // Fallback para CIDs huérfanos en HTML (ej. correos de Outlook con CIDs como UUIDs y adjuntos genéricos image.png)
+              const remainingCids = resolvedHtmlText.match(/src=["']?cid:[^"'>\s]+["']?/gi);
+              if (remainingCids && remainingCids.length > 0) {
+                let rIdx = 0;
+                resolvedHtmlText = resolvedHtmlText.replace(/src=["']?cid:[^"'>\s]+["']?/gi, (match) => {
+                  while (rIdx < rawAttachments.length) {
+                    const src = preUploadedByIndex.get(rIdx);
+                    rIdx++;
+                    if (src) return `src="${src}"`;
+                  }
+                  return match;
+                });
               }
             } catch (inlineErr) {
               console.warn('[Email Inbound] Error al pre-procesar imágenes inline:', inlineErr);
@@ -808,7 +825,8 @@ export async function POST(req: Request) {
 
         // A. Upload to Supabase Storage in parallel (o reutilizar si ya fue subido en el pre-procesamiento inline)
         const cleanContentId = (attachment.content_id || attachment.cid || (attachment.headers && (attachment.headers['content-id'] || attachment.headers['Content-ID'])) || '').replace(/^<|>$/g, '').trim();
-        let publicUrl = (cleanContentId ? preUploadedAssetMap.get(cleanContentId) : '') || preUploadedAssetMap.get(lowerName) || '';
+        const rawIdx = (attachment as any)._rawIndex ?? i;
+        let publicUrl = (cleanContentId ? preUploadedAssetMap.get(cleanContentId) : '') || preUploadedByIndex.get(rawIdx) || preUploadedAssetMap.get(lowerName) || '';
         if (!publicUrl || publicUrl.startsWith('data:')) {
           try {
             try {

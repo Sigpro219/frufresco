@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionAndPermission } from '@/lib/auth';
 
@@ -6,23 +8,54 @@ const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, ''
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+const ConfirmRequestSchema = z.object({
+    assignments: z.record(z.string(), z.array(z.string())),
+    vehicles: z.array(z.any()).min(1, 'Se requiere al menos un vehículo'),
+    isOptimized: z.boolean().optional(),
+    theoreticalMetrics: z.any().optional(),
+    params: z.record(z.string(), z.any()).optional(),
+    routeStartTimes: z.record(z.string(), z.string()).optional()
+});
+
 export async function POST(request: Request) {
+    const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
     try {
         const auth = await verifySessionAndPermission(request, 'admin.transport.edit');
         if (!auth.authorized) {
-            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/unauthorized',
+                title: 'Unauthorized',
+                status: 401,
+                detail: auth.error || 'No autorizado para confirmar rutas',
+                requestId
+            }, { status: 401, headers: { 'x-request-id': requestId } });
         }
 
-        const body = await request.json();
-        const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes } = body;
+        const rawBody = await request.json().catch(() => null);
+        const parsed = ConfirmRequestSchema.safeParse(rawBody);
 
-        if (!assignments || !vehicles) {
-            return NextResponse.json({ error: 'Missing required data' }, { status: 400 });
+        if (!parsed.success) {
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/invalid-payload',
+                title: 'Bad Request',
+                status: 400,
+                detail: 'Payload de confirmación inválido',
+                errors: parsed.error.issues.map(i => ({ field: i.path.join('.'), issue: i.message })),
+                requestId
+            }, { status: 400, headers: { 'x-request-id': requestId } });
         }
+
+        const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes } = parsed.data;
 
         const allOrderIds: string[] = Object.values(assignments).flat() as string[];
         if (allOrderIds.length === 0) {
-            return NextResponse.json({ error: 'No order assignments provided' }, { status: 400 });
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/missing-assignments',
+                title: 'Bad Request',
+                status: 400,
+                detail: 'No se enviaron pedidos asignados para confirmar rutas',
+                requestId
+            }, { status: 400, headers: { 'x-request-id': requestId } });
         }
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -34,7 +67,13 @@ export async function POST(request: Request) {
             .in('id', allOrderIds);
 
         if (!allOrders || allOrders.length === 0) {
-            return NextResponse.json({ error: 'No orders found matching the assignments' }, { status: 400 });
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/orders-not-found',
+                title: 'Not Found',
+                status: 404,
+                detail: 'No se encontraron pedidos correspondientes a las asignaciones',
+                requestId
+            }, { status: 404, headers: { 'x-request-id': requestId } });
         }
 
         const deliveryDate = allOrders[0].delivery_date;
@@ -55,6 +94,22 @@ export async function POST(request: Request) {
 
         // Filtrar paradas que pertenezcan a la fecha de entrega objetivo
         const activeStops = (existingStops || []).filter((s: any) => s.order?.delivery_date === deliveryDate);
+
+        // Idempotency & Concurrency Guard: Detect if any of the orders are already in an active route
+        const alreadyAssignedOrders = activeStops
+            .filter((s: any) => allOrderIds.includes(s.order_id))
+            .map((s: any) => s.order_id);
+
+        if (alreadyAssignedOrders.length > 0) {
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/orders-already-routed',
+                title: 'Conflict',
+                status: 409,
+                detail: `Conflicto de Idempotencia: ${alreadyAssignedOrders.length} pedido(s) ya cuentan con ruta confirmada para la fecha ${deliveryDate}`,
+                already_assigned_order_ids: alreadyAssignedOrders,
+                requestId
+            }, { status: 409, headers: { 'x-request-id': requestId } });
+        }
 
         // Fetch the departure times of active routes on this date
         const { data: activeRoutes } = await supabase
@@ -183,14 +238,17 @@ export async function POST(request: Request) {
 
             if (rErr) throw rErr;
 
-            // 2. Create Route Stops, Allocate Spaces, and Update Orders
+            // 2. Prepare Route Stops, Allocate Spaces, and Update Orders in Batch
             const routeSpacesList: number[] = [];
             const orderSpacesMap: Record<string, number[]> = {};
+            const routeStopsToInsert: any[] = [];
+            const ordersToUpdate: Array<{ id: string; cratesCount: number; spacesAssigned: number[] }> = [];
+
             for (let i = 0; i < orderIds.length; i++) {
                 const orderId = orderIds[i];
                 const orderDetail = allOrders.find(o => String(o.id).trim().toLowerCase() === String(orderId).trim().toLowerCase());
                 
-                await supabase.from('route_stops').insert({
+                routeStopsToInsert.push({
                     route_id: route.id,
                     order_id: orderId,
                     sequence_number: i + 1,
@@ -226,17 +284,30 @@ export async function POST(request: Request) {
                     orderSpacesMap[orderId] = spacesAssigned;
                 }
 
-                const { error: updateErr } = await supabase.from('orders').update({
-                    status: 'picking',
-                    crates_count: cratesCount,
-                    warehouse_spaces: spacesAssigned
-                }).eq('id', orderId);
+                ordersToUpdate.push({
+                    id: orderId,
+                    cratesCount,
+                    spacesAssigned
+                });
+            }
 
-                if (updateErr) {
-                    console.error(`[SPACE ALLOC ERROR] Failed to update order ${orderId}:`, updateErr);
-                    throw updateErr;
+            // Batch insert all route stops in ONE roundtrip
+            if (routeStopsToInsert.length > 0) {
+                const { error: stopsErr } = await supabase.from('route_stops').insert(routeStopsToInsert);
+                if (stopsErr) {
+                    console.error('[CONFIRM] Failed to bulk insert route stops:', stopsErr);
+                    throw stopsErr;
                 }
             }
+
+            // Concurrently update orders status and assigned spaces
+            await Promise.all(ordersToUpdate.map(u => 
+                supabase.from('orders').update({
+                    status: 'picking',
+                    crates_count: u.cratesCount,
+                    warehouse_spaces: u.spacesAssigned
+                }).eq('id', u.id)
+            ));
             
             routeConfirmations.push({
                 id: route.id,
@@ -251,11 +322,21 @@ export async function POST(request: Request) {
             });
         }
 
-        return NextResponse.json({ success: true, routeConfirmations });
+        return NextResponse.json({ 
+            success: true, 
+            routeConfirmations,
+            requestId
+        }, { status: 200, headers: { 'x-request-id': requestId } });
 
     } catch (error: any) {
         console.error('Error in confirm routes API:', error);
-        return NextResponse.json({ error: error.message || 'Error al confirmar las rutas' }, { status: 500 });
+        return NextResponse.json({
+            type: 'https://frufresco.com/errors/confirm-routes-failure',
+            title: 'Internal Server Error',
+            status: 500,
+            detail: error.message || 'Error al confirmar las rutas',
+            requestId
+        }, { status: 500, headers: { 'x-request-id': requestId } });
     }
 }
 

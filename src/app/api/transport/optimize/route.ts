@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
@@ -12,6 +13,11 @@ import path from 'path';
 import crypto from 'crypto';
 import { verifySessionAndPermission } from '@/lib/auth';
 
+const OptimizeRequestSchema = z.object({
+    orders: z.array(z.any()).min(1, 'Se requiere al menos un pedido para optimizar rutas'),
+    vehicles: z.array(z.any()).min(1, 'Se requiere al menos un vehículo en la flota'),
+    parameters: z.record(z.string(), z.any()).optional()
+});
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -22,19 +28,29 @@ let cachedOAuthToken: { token: string; expiresAt: number; projectId: string } | 
 
 // This API serves as a proxy and data-transformer for the Google Maps Route Optimization API
 export async function POST(request: Request) {
+    const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
     try {
         // Validate session and permission
         const auth = await verifySessionAndPermission(request, 'admin.transport.edit');
         if (!auth.authorized) {
-            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({
+                error: auth.error || 'Unauthorized',
+                requestId
+            }, { status: 401, headers: { 'x-request-id': requestId } });
         }
 
-        const body = await request.json();
-        const { orders, vehicles, parameters } = body;
+        const rawBody = await request.json().catch(() => null);
+        const parsed = OptimizeRequestSchema.safeParse(rawBody);
 
-        if (!orders || !vehicles) {
-            return NextResponse.json({ error: 'Missing orders or vehicles' }, { status: 400 });
+        if (!parsed.success) {
+            return NextResponse.json({
+                error: 'Payload de optimización inválido',
+                details: parsed.error.issues.map(i => ({ field: i.path.join('.'), issue: i.message })),
+                requestId
+            }, { status: 400, headers: { 'x-request-id': requestId } });
         }
+
+        const { orders, vehicles, parameters } = parsed.data;
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -190,7 +206,10 @@ export async function POST(request: Request) {
         // Check if fleet actually has certified refrigerated vehicles
         const hasRefrigeratedFleet = vehicles.some((v: any) => v.is_refrigerated === true || v.refrigerated === true);
 
+        const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string }> = [];
+
         const gcpRequest = {
+            timeout: "6s",
             model: {
                 globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
                 globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
@@ -216,11 +235,18 @@ export async function POST(request: Request) {
                     // 2. Poka-Yoke Sanitization for Coordinates (Bogotá & Sabana bounding box)
                     let rawLat = parseFloat(o.latitude || o.profiles?.latitude);
                     let rawLng = parseFloat(o.longitude || o.profiles?.longitude);
-                    if (isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0 || rawLat < 3.5 || rawLat > 6.0 || rawLng < -75.5 || rawLng > -73.0) {
+                    const hasInvalidCoords = isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0 || rawLat < 3.5 || rawLat > 6.0 || rawLng < -75.5 || rawLng > -73.0;
+
+                    if (hasInvalidCoords) {
+                        geocodingWarnings.push({
+                            orderId: String(o.id),
+                            customerName: o.customer_name || o.profiles?.full_name || 'Cliente',
+                            reason: 'Coordenadas GPS ausentes o fuera de Bogotá/Sabana; asignado temporalmente a bodega central'
+                        });
                         rawLat = 4.633653;
                         rawLng = -74.160647;
                     }
- 
+
                     const demands: Record<string, { amount: string }> = {
                         "weight": { "amount": String(sanitizedWeight) },
                         "crates": { "amount": String(cratesCount) }
@@ -229,11 +255,8 @@ export async function POST(request: Request) {
                         demands["refrigerated"] = { "amount": isRefrigerated ? "1" : "0" };
                     }
 
+                    // Delivery-only task: Cargo is assumed loaded at vehicle.startLocation (Depot)
                     return {
-                        pickups: [
-                            // Depot location (Bodega Principal)
-                            { arrivalLocation: { latitude: 4.633653, longitude: -74.160647 } }
-                        ],
                         deliveries: [
                             { 
                                 arrivalLocation: { 
@@ -300,26 +323,45 @@ export async function POST(request: Request) {
         const gcpProjectId = process.env.GCP_PROJECT_ID;
         const gcpApiKey = process.env.GCP_OPTIMIZATION_KEY;
 
-        const serviceAccountPath = path.join(process.cwd(), 'gcp-service-account.json');
-        let hasServiceAccount = false;
-        try {
-            hasServiceAccount = fs.existsSync(serviceAccountPath);
-        } catch (_) {}
+        let serviceAccountData: any = null;
+        if (process.env.GCP_SERVICE_ACCOUNT_KEY) {
+            try {
+                const rawKey = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
+                if (rawKey.startsWith('{')) {
+                    serviceAccountData = JSON.parse(rawKey);
+                } else {
+                    const decoded = Buffer.from(rawKey, 'base64').toString('utf8');
+                    serviceAccountData = JSON.parse(decoded);
+                }
+            } catch (envErr) {
+                console.error("Error parsing GCP_SERVICE_ACCOUNT_KEY environment variable:", envErr);
+            }
+        }
+
+        if (!serviceAccountData) {
+            const serviceAccountPath = path.join(process.cwd(), 'gcp-service-account.json');
+            try {
+                if (fs.existsSync(serviceAccountPath)) {
+                    serviceAccountData = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+                }
+            } catch (_) {}
+        }
+
+        const hasServiceAccount = !!serviceAccountData;
 
         if (hasServiceAccount || (gcpProjectId && gcpApiKey)) {
             let accessToken: string | null = null;
-            let projectId = gcpProjectId || 'frufresco'; // fallback to frufresco project
+            let projectId = gcpProjectId || serviceAccountData?.project_id || 'frufresco';
 
             // Check if we have a valid cached OAuth2 token
             if (cachedOAuthToken && cachedOAuthToken.expiresAt > Date.now() + 60000) {
                 accessToken = cachedOAuthToken.token;
                 projectId = cachedOAuthToken.projectId;
                 console.log("⚡ [Optimizer] Reusing cached GCP OAuth2 token (expires in", Math.round((cachedOAuthToken.expiresAt - Date.now()) / 1000), "s)");
-            } else if (hasServiceAccount) {
+            } else if (hasServiceAccount && serviceAccountData) {
                 try {
-                    console.log("🔑 [Optimizer] Generating fresh GCP OAuth2 token via Service Account JSON...");
-                    const keyFileContent = fs.readFileSync(serviceAccountPath, 'utf8');
-                    const keyData = JSON.parse(keyFileContent);
+                    console.log("🔑 [Optimizer] Generating fresh GCP OAuth2 token via Service Account credentials...");
+                    const keyData = serviceAccountData;
                     projectId = keyData.project_id || projectId;
                     
                     // Generate OAuth2 token using service account
@@ -352,14 +394,22 @@ export async function POST(request: Request) {
 
                     const jwtToken = `${signatureInput}.${signature}`;
 
-                    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: new URLSearchParams({
-                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                            assertion: jwtToken
-                        })
-                    });
+                    const tokenController = new AbortController();
+                    const tokenTimeout = setTimeout(() => tokenController.abort(), 5000);
+                    let tokenResponse;
+                    try {
+                        tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: new URLSearchParams({
+                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                                assertion: jwtToken
+                            }),
+                            signal: tokenController.signal
+                        });
+                    } finally {
+                        clearTimeout(tokenTimeout);
+                    }
 
                     if (!tokenResponse.ok) {
                         const err = await tokenResponse.text();
@@ -391,13 +441,26 @@ export async function POST(request: Request) {
                 headers['Authorization'] = `Bearer ${accessToken}`;
             }
 
-            const gcpResponse = await fetch(url, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(gcpRequest)
-            });
+            const gcpController = new AbortController();
+            const gcpTimeout = setTimeout(() => gcpController.abort(), 8000);
+            let gcpResponse: Response | null = null;
+            let gcpFetchError: any = null;
 
-            if (gcpResponse.ok) {
+            try {
+                gcpResponse = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(gcpRequest),
+                    signal: gcpController.signal
+                });
+            } catch (fetchErr: any) {
+                gcpFetchError = fetchErr;
+                console.warn(`⚠️ [Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 8s' : fetchErr.message}). Falling back to internal simulation heuristic. RequestId: ${requestId}`);
+            } finally {
+                clearTimeout(gcpTimeout);
+            }
+
+            if (gcpResponse && gcpResponse.ok) {
                 const gcpData = await gcpResponse.json();
                 
                 // Transform Google's assigned routes back to assignments map { vehicleId: [orderIds] }
@@ -461,6 +524,12 @@ export async function POST(request: Request) {
                     });
                 }
 
+                // Extract skipped shipments from Google Cloud Route Optimization response
+                const skippedOrders = (gcpData.skippedShipments || []).map((s: any) => ({
+                    orderId: s.label || (s.index !== undefined ? orders[s.index]?.id : undefined),
+                    reasons: s.reasons || []
+                }));
+
                 // Generate AI explanation of the routing plan
                 const assignedOrderIds = new Set(Object.values(assignments).flat());
                 const unassignedOrders = orders.filter(o => !assignedOrderIds.has(String(o.id)));
@@ -475,14 +544,15 @@ export async function POST(request: Request) {
                         distance_km: Math.round((gcpData.metrics?.totalDistanceMeters || 0) / 1000),
                         duration_min: Math.round((gcpData.metrics?.totalDuration?.seconds || 0) / 60)
                     },
+                    skipped_orders: skippedOrders,
+                    geocoding_warnings: geocodingWarnings,
                     gcp_raw: gcpData,
                     simulation: false,
                     explanation: explanation
-                });
+                }, { status: 200, headers: { 'x-request-id': requestId } });
             } else {
-                const errText = await gcpResponse.text();
-                console.error('GCP Optimizer Error:', errText);
-                throw new Error(`Google API Error: ${errText}`);
+                const errText = gcpResponse ? await gcpResponse.text() : String(gcpFetchError?.message || 'Network / Timeout Error');
+                console.warn(`⚠️ [Optimizer] GCP RouteOptimization API non-OK response: ${errText}. RequestId: ${requestId}. Cascading to simulation fallback heuristic.`);
             }
         }
         
@@ -493,6 +563,11 @@ export async function POST(request: Request) {
         const assignedSimIds = new Set(Object.values(simulatedAssignments).flat());
         const unassignedSimOrders = orders.filter(o => !assignedSimIds.has(String(o.id)));
         const explanation = await generateAiExplanation(orders, vehicles, simulatedAssignments, unassignedSimOrders);
+
+        const simSkippedOrders = unassignedSimOrders.map(o => ({
+            orderId: String(o.id),
+            reasons: [{ code: 'DEMAND_EXCEEDS_VEHICLE_CAPACITY' }]
+        }));
         
         return NextResponse.json({
             message: "OptimizeTours Request Structured Successfully (Simulation Mode)",
@@ -506,12 +581,20 @@ export async function POST(request: Request) {
                 distance_km: vehicles.length * 4,
                 duration_min: vehicles.length * 20
             },
+            skipped_orders: simSkippedOrders,
+            geocoding_warnings: geocodingWarnings,
             explanation: explanation
-        });
+        }, { status: 200, headers: { 'x-request-id': requestId } });
 
     } catch (error: any) {
         console.error('Optimizer API Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({
+            type: 'https://frufresco.com/errors/optimizer-failure',
+            title: 'Internal Server Error',
+            status: 500,
+            detail: error.message || 'Error interno al optimizar rutas',
+            requestId
+        }, { status: 500, headers: { 'x-request-id': requestId } });
     }
 }
 
@@ -559,24 +642,14 @@ function calculateSimulationAssignments(orders: any[], vehicles: any[], fleetSta
             }
         });
 
-        // Fallback to vehicle with lowest current weight if capacity limit is reached for all
-        if (minWeight === Infinity) {
-            let lowestWeight = Infinity;
-            vehicles.forEach(v => {
-                const currentWeight = newAssignments[v.id].reduce((sum, id) => {
-                    const o = orders.find(ord => ord.id === id);
-                    return sum + (o?.total_weight_kg || 0);
-                }, 0);
-                if (currentWeight < lowestWeight) {
-                    lowestWeight = currentWeight;
-                    bestVehicle = v;
-                }
+        // Assign to best vehicle only if capacity limit is respected
+        if (minWeight !== Infinity && bestVehicle) {
+            group.forEach(order => {
+                newAssignments[bestVehicle.id].push(order.id);
             });
         }
-
-        group.forEach(order => {
-            newAssignments[bestVehicle.id].push(order.id);
-        });
+        // If minWeight === Infinity, group does not fit in any vehicle without violating capacity_kg.
+        // It remains unassigned and is cleanly reported in skipped_orders.
     });
 
     // Calculate dynamic departure times for each vehicle based on earliest delivery window

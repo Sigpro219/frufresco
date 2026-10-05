@@ -2853,6 +2853,273 @@ La pestaña de Muelle y Bahías (`StagingSpacesManagement.tsx`) se ratifica como
 
 ---
 
+### 18.12 Pipeline Canónico de la API de Google Maps & Optimización Satelital (/especialista-api Standard) (SDD v1.9.96)
+
+#### A. Los Siete (7) Mandamientos de Arquitectura de APIs Industriales
+El pipeline de integración con Google Cloud (Google Maps Geocoding API y Google Route Optimization API) y orquestación de transporte opera bajo el estándar innegociable de la habilidad `/especialista-api`:
+
+1. **Mandamiento 1: Validación de Esquema Zod-First Estricta:**
+   - Todo endpoint valida la integridad de los parámetros de entrada antes de instanciar clientes de red o cómputo.
+   - En `/api/geocode`, el esquema `GeocodeQuerySchema` valida que exista al menos `address` o `latlng` en formato `latitude,longitude`, rechazando consultas vacías con HTTP 400.
+   - En `/api/transport/optimize`, el esquema `OptimizeRequestSchema` exige al menos un pedido (`orders.length >= 1`) y al menos un vehículo (`vehicles.length >= 1`), previniendo llamadas estériles a Google Cloud.
+   - En `/api/transport/confirm`, el esquema `ConfirmRequestSchema` valida la estructura estricta de `assignments`, `vehicles`, `params` y `routeStartTimes` antes de interactuar con la base de datos.
+
+2. **Mandamiento 2: Idempotencia y Blindaje Transaccional:**
+   - La optimización de rutas (`/api/transport/optimize`) es un cálculo puro que no ejecuta mutaciones destructivas colaterales.
+   - La confirmación de rutas (`/api/transport/confirm`) cuenta con un **Guardia de Idempotencia y Concurrencia**: si un despachador hace doble clic en el botón de confirmación o reenvía un lote con pedidos ya asignados a rutas activas para esa fecha de entrega, el sistema detiene la duplicación y responde inmediatamente con `409 Conflict` (RFC 7807), reportando la lista exacta de `already_assigned_order_ids`.
+
+3. **Mandamiento 3: Respuestas de Error Estándar RFC 7807 (Problem Details):**
+   - Todo fallo estructurado se emite bajo la convención RFC 7807, incluyendo `type`, `title`, `status`, `detail` y el correlacionador `requestId`.
+   ```json
+   {
+     "type": "https://frufresco.com/errors/orders-already-routed",
+     "title": "Conflict",
+     "status": 409,
+     "detail": "Conflicto de Idempotencia: 15 pedido(s) ya cuentan con ruta confirmada para la fecha 2026-10-06",
+     "already_assigned_order_ids": ["ord-101", "ord-102"],
+     "requestId": "550e8400-e29b-41d4-a716-446655440000"
+   }
+   ```
+
+4. **Mandamiento 4: Timeouts Mandatorios, Solver Bounds y AbortControllers Serverless:**
+   - Queda terminantemente prohibido ejecutar un `fetch()` sin un temporizador de cancelación explícito.
+   - **Geocoding API:** Timeout perentorio de **5.000 ms** (5s).
+   - **Google Cloud OAuth Token Exchange:** Timeout perentorio de **5.000 ms** (5s).
+   - **Route Optimization API (`optimizeTours`):**
+     * **Solver Bound Interno:** Se inyecta `"timeout": "6s"` directamente en el payload `gcpRequest`. Esto instruye a Google Cloud a detener su búsqueda algorítmica y entregar la mejor solución parcial encontrada a los 6 segundos.
+     * **AbortController Externo:** Temporizador de corte forzoso de **8.000 ms** (8s). Al entregar Google a los 6s, la respuesta arriba de forma segura antes de que el servidor corte la conexión.
+
+5. **Mandamiento 5: Transporte M2M Seguro, Secrets Multiproveedor y Token Cache:**
+   - La autenticación contra Google Cloud Optimization API prioriza Service Account JWT con firma criptográfica local `RSA-SHA256`.
+   - **Flexibilidad Serverless:** Admite credenciales desde la variable de entorno `GCP_SERVICE_ACCOUNT_KEY` (en formato string JSON crudo o codificado en base64 para Vercel Secrets), con fallback automático al archivo físico `gcp-service-account.json` en desarrollo local.
+   - **Caché en Memoria de Proceso:** El token OAuth2 generado (`cachedOAuthToken`) se almacena en memoria con un TTL de **55 minutos (3.300 segundos)**, eliminando llamadas innecesarias al endpoint de tokens de Google en despachos recurrentes.
+
+6. **Mandamiento 6: Telemetría Estructurada, Advertencias de Geocodificación y `x-request-id`:**
+   - Cada solicitud recibe o genera un UUID de trazabilidad único (`x-request-id`) propagado en todas las cabeceras HTTP y cuerpos de error.
+   - **Auditoría de Coordenadas (`geocoding_warnings`):** Cuando un pedido carece de coordenadas válidas o se encuentra fuera de la delimitación geográfica de Bogotá y la Sabana, el sistema no solo le asigna temporalmente la coordenada del depósito central, sino que retorna un array explícito `geocoding_warnings` con el `orderId` y cliente para alertar visualmente al despachador.
+   - **Trazabilidad de Rechazos (`skipped_orders`):** Los pedidos que no caben en la flota por volumen o ventanas incompatibles se devuelven en el contrato estructurado `skipped_orders` con su código de causa oficial (`CANNOT_BE_PERFORMED_WITHIN_VEHICLE_TIME_WINDOWS`, etc.).
+
+7. **Mandamiento 7: Resiliencia Crítica Gemba, Operaciones Batch & Priorización Pareto Asimétrica:**
+   - **Doble Circuit Breaker:** Si la llamada a Google Cloud Route Optimization falla o supera los 8 segundos, el backend nunca emite un HTTP 500 no controlado. Conmuta silenciosamente a `calculateSimulationAssignments(orders, vehicles, fleet_start, fleet_end)`.
+   - **Gobernanza ante Saturación de Flota (Demanda > Capacidad):**
+     * **Restricción Dura Inviolable (Cero Sobrecarga):** Los vehículos poseen límites físicos estrictos (`capacity_kg` y `max_crates_capacity`). El sistema tiene prohibido sobrecargar los camiones más allá del 100% de su capacidad.
+     * **Priorización Pareto Asimétrica:** Se configura `penaltyCost` diferenciado: **$500.000 COP para pedidos B2B** vs **$1.000 COP para B2C**. Ante una flota insuficiente, el solver matemático prioriza la atención de restaurantes, hoteles y cuentas corporativas de alto volumen, reteniendo las órdenes minoristas excedentes en el pool de `skipped_orders` con causa `DEMAND_EXCEEDS_VEHICLE_CAPACITY`.
+     * **Alertas Andon de IA (Gemini Flash):** El reporte modal expone de forma explícita el déficit de kilogramos y los pedidos excluidos para que la Torre de Control convoque un furgón adicional o active una segunda ola de despacho.
+   - **Modelo Delivery-Only (Cero Pickups Ficticios):** Como los camiones parten desde la bodega central (`startLocation` del vehículo), los envíos se modelan exclusivamente con tareas de entrega (`deliveries`), suprimiendo los `pickups` duplicados. Esto reduce los nodos del grafo de $2N$ a $N$, acelerando al doble el cómputo de Google.
+   - **Operaciones en Lote (Anti-N+1):** En `/api/transport/confirm`, las paradas de ruta se insertan mediante un único `bulk insert` a `route_stops`, y la actualización de estados de pedidos se ejecuta de forma concurrente con `Promise.all()`, reduciendo el tiempo de confirmación en bodega de 12 segundos a menos de 400 milisegundos.
+
+---
+
+#### B. Diagrama de Secuencia del Pipeline (Mermaid)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dispatcher as Despachador (4:30 AM)
+    participant UI as RoutePlanner.tsx
+    participant OptAPI as /api/transport/optimize
+    participant ConfAPI as /api/transport/confirm
+    participant Cache as OAuth2 Token Cache
+    participant GCP as Google Cloud Route Optimization
+    participant DB as Supabase PostgreSQL
+
+    Dispatcher->>UI: Clic en "Optimizar Rutas Automáticamente"
+    UI->>OptAPI: POST /api/transport/optimize (orders, vehicles, params)
+    OptAPI->>OptAPI: Validar Zod + Inyectar x-request-id + Verificar Coordenadas
+    OptAPI->>Cache: Obtener Token OAuth2 (Memoria TTL 55m)
+    OptAPI->>GCP: POST /v1/projects/:optimizeTours (timeout: "6s", Abort: 8s)
+    alt Google Cloud Responde OK (< 6s)
+        GCP-->>OptAPI: Solución Combinatoria + skippedShipments
+    else Falla de Conexión o Timeout (> 8s)
+        GCP--xOptAPI: AbortError / Error de Red
+        OptAPI->>OptAPI: Conmutar a Heurística Greedy Local (Simulation Fallback)
+    end
+    OptAPI-->>UI: HTTP 200 OK (routes, start_times, stop_etas, skipped_orders, warnings)
+    UI-->>Dispatcher: Muestra Rutas y Advertencias en Pantalla
+
+    Dispatcher->>UI: Clic en "Confirmar Rutas"
+    UI->>ConfAPI: POST /api/transport/confirm (assignments, vehicles, metrics)
+    ConfAPI->>ConfAPI: Validar ConfirmRequestSchema + x-request-id
+    ConfAPI->>DB: Consultar pedidos ya asignados en route_stops activos
+    alt Pedidos ya cuentan con ruta (Conflicto / Doble Clic)
+        ConfAPI-->>UI: HTTP 409 Conflict (RFC 7807)
+    else Asignación Válida
+        ConfAPI->>DB: Insertar cabecera en routes (status = 'loading')
+        ConfAPI->>DB: Batch Insert route_stops (1 sola transacción)
+        ConfAPI->>DB: Parallel Update orders (status = 'picking', bahías 1..150)
+        ConfAPI-->>UI: HTTP 200 OK (routeConfirmations, requestId)
+        UI-->>Dispatcher: Rutas cerradas y enviadas a picking
+    end
+```
+
+---
+
+#### C. Catálogo Canónico de Endpoints
+
+##### 1. Endpoint: `GET /api/geocode`
+- **Propósito:** Georreferenciación precisa de direcciones de clientes y centros de acopio mediante Google Maps Geocoding API.
+- **Headers:** `x-request-id` (propagado).
+- **Query Parameters:** `address`, `city` (default: `"Bogotá"`), `latlng`.
+- **Protección:** AbortController (5.000 ms).
+- **Respuestas:** 200 OK, 400 Bad Request, 502 Bad Gateway, 504 Gateway Timeout.
+
+##### 2. Endpoint: `POST /api/transport/optimize`
+- **Propósito:** Orquestación, cubicaje y optimización combinatoria de flota para el despacho matutino de pedidos B2B.
+- **Headers:** `Content-Type: application/json`, `x-request-id`, Cookie de sesión Supabase (`admin.transport.edit`).
+- **Parámetros del Solver:** `"timeout": "6s"`, AbortController 8s, modelo Delivery-Only.
+- **Respuesta Exitosa (HTTP 200):**
+  ```json
+  {
+    "message": "Optimization generated by REAL Google Engine",
+    "routes": {
+      "veh-1": ["ord-101", "ord-104", "ord-102"]
+    },
+    "route_start_times": { "veh-1": "04:30" },
+    "stop_etas": { "ord-101": "05:15", "ord-104": "05:45", "ord-102": "06:20" },
+    "theoretical_metrics": { "distance_km": 34, "duration_min": 145 },
+    "skipped_orders": [],
+    "geocoding_warnings": [],
+    "simulation": false,
+    "explanation": "Se asignaron 3 pedidos al vehículo WKL-890 optimizando el corredor de Chapinero..."
+  }
+  ```
+
+##### 3. Endpoint: `POST /api/transport/confirm`
+- **Propósito:** Asentamiento atómico de rutas de transporte, asignación temporal de bahías de muelle (1 a 150) y pase a alistamiento WMS.
+- **Headers:** `Content-Type: application/json`, `x-request-id`, Cookie de sesión Supabase (`admin.transport.edit`).
+- **Cuerpo de la Petición (Zod Schema `ConfirmRequestSchema`):**
+  ```json
+  {
+    "assignments": { "veh-1": ["ord-101", "ord-104"] },
+    "vehicles": [{ "id": "veh-1", "plate": "WKL-890" }],
+    "isOptimized": true,
+    "theoreticalMetrics": { "distance_km": 25, "duration_min": 90 },
+    "params": { "fleet_start_time": "04:30" },
+    "routeStartTimes": { "veh-1": "04:30" }
+  }
+  ```
+- **Respuesta Exitosa (HTTP 200):**
+  ```json
+  {
+    "success": true,
+    "routeConfirmations": [
+      {
+        "id": "route-uuid-001",
+        "vehicle_plate": "WKL-890",
+        "driver_name": "Carlos Rodríguez",
+        "total_kilos": 450.5,
+        "stops_count": 2,
+        "departure_time": "04:30",
+        "warehouse_spaces": [12, 13],
+        "order_ids": ["ord-101", "ord-104"],
+        "order_spaces": { "ord-101": [12], "ord-104": [13] }
+      }
+    ],
+    "requestId": "req-confirm-001"
+  }
+  ```
+- **Respuesta de Conflicto de Idempotencia (HTTP 409):**
+  ```json
+  {
+    "type": "https://frufresco.com/errors/orders-already-routed",
+    "title": "Conflict",
+    "status": 409,
+    "detail": "Conflicto de Idempotencia: 2 pedido(s) ya cuentan con ruta confirmada para la fecha 2026-10-06",
+    "already_assigned_order_ids": ["ord-101", "ord-104"],
+    "requestId": "req-confirm-001"
+  }
+  ```
+
+---
+
+#### D. Ejemplos de Invocación cURL
+
+##### 1. Geocodificación Satelital:
+```bash
+curl -X GET "https://frufresco.com/api/geocode?address=Corabastos%20Bogota&city=Bogota" \
+  -H "x-request-id: req-test-geo-001"
+```
+
+##### 2. Optimización de Rutas con Token y Trazabilidad:
+```bash
+curl -X POST "https://frufresco.com/api/transport/optimize" \
+  -H "Content-Type: application/json" \
+  -H "x-request-id: req-opt-trace-999" \
+  -H "Cookie: sb-access-token=...; sb-refresh-token=..." \
+  -d '{
+    "orders": [{"id": "ord-1", "customer_name": "Test", "latitude": 4.6, "longitude": -74.1, "total_weight_kg": 20}],
+    "vehicles": [{"id": "veh-1", "plate": "ABC-123", "capacity_kg": 1000}],
+    "parameters": {"optimization_strategy": "minimize_time"}
+  }'
+```
+
+##### 3. Confirmación Atómica de Rutas con Guardia de Idempotencia:
+```bash
+curl -X POST "https://frufresco.com/api/transport/confirm" \
+  -H "Content-Type: application/json" \
+  -H "x-request-id: req-confirm-trans-101" \
+  -H "Cookie: sb-access-token=...; sb-refresh-token=..." \
+  -d '{
+    "assignments": {"veh-1": ["ord-1"]},
+    "vehicles": [{"id": "veh-1", "plate": "ABC-123"}],
+    "isOptimized": true
+  }'
+```
+
+---
+
+#### E. Criterios de Aceptación BDD (Gherkin)
+
+##### Escenario 26: Optimización Primaria con Google Cloud Route Optimization API
+- **Given** una tanda de 20 pedidos de clientes en Bogotá con coordenadas georreferenciadas válidas y 2 camiones disponibles.
+- **And** las credenciales de Service Account de Google Cloud están configuradas correctamente en `GCP_SERVICE_ACCOUNT_KEY` o archivo local.
+- **When** el despachador pulsa "Optimizar Rutas" y se envía la solicitud a `/api/transport/optimize`.
+- **Then**:
+  1. El backend valida el payload contra `OptimizeRequestSchema` en menos de 5ms.
+  2. Obtiene o reutiliza el token OAuth2 desde la caché en memoria.
+  3. Ejecuta la llamada al motor de Google con un `timeout` interno de 6 segundos y un `AbortController` de 8 segundos sin pickups redundantes.
+  4. Recibe la solución óptima, mapea las visitas a los vehículos, extrae `skipped_orders` si existieran, y compila `geocoding_warnings`.
+  5. Retorna HTTP 200 con la cabecera `x-request-id` idéntica a la enviada y `simulation: false`.
+
+##### Escenario 27: Conmutación Automática por Falla o Timeout de Google API (Circuit Breaker)
+- **Given** que el servicio de Google Cloud Optimization experimenta una degradación global de red o agota su cuota de peticiones.
+- **When** se invoca `/api/transport/optimize` con 25 pedidos programados para las 04:30 AM.
+- **Then**:
+  1. El `AbortController` interrumpe la conexión tras 8.000 ms o captura la respuesta de error de Google.
+  2. El servidor emite un registro de advertencia estructurado en consola con el `requestId`.
+  3. El sistema no propaga un HTTP 500 al cliente; conmuta inmediatamente a `calculateSimulationAssignments`.
+  4. Genera rutas ordenadas por proximidad espacial respetando la capacidad máxima en kilogramos de los furgones.
+  5. Retorna HTTP 200 con `simulation: true`, `status: "ready_for_key"` y la cabecera `x-request-id`, permitiendo a la bodega despachar la mercancía sin interrupción física.
+
+##### Escenario 28: Detección y Prevención de Doble Confirmación (Guardia de Idempotencia)
+- **Given** que el despachador ha confirmado una ruta para 10 pedidos mediante `/api/transport/confirm`.
+- **When** debido a latencia o doble clic el cliente reenvía la misma solicitud de confirmación.
+- **Then**:
+  1. El backend consulta los pedidos en `route_stops` activos para esa fecha de entrega.
+  2. Detecta que los pedidos ya se encuentran asignados a una ruta en curso.
+  3. Detiene la transacción antes de insertar registros en `routes` o duplicar bahías en piso.
+  4. Retorna HTTP 409 Conflict bajo formato RFC 7807 con la lista de `already_assigned_order_ids` y `requestId`.
+
+##### Escenario 29: Inserción en Lote y Asignación Atómica de Bahías de Muelle
+- **Given** una tanda de 15 camiones y 120 pedidos aprobados para confirmación de rutas.
+- **When** se procesa la solicitud en `/api/transport/confirm`.
+- **Then**:
+  1. Todas las paradas se insertan en `route_stops` mediante un único `bulk insert`.
+  2. Las actualizaciones de estado y bahías de piso en `orders` se ejecutan en paralelo con `Promise.all()`.
+  3. La respuesta HTTP 200 se entrega en menos de 1 segundo sin alcanzar el umbral de timeout serverless.
+
+##### Escenario 30: Saturación Extrema de Capacidad, Cero-Sobrecarga y Priorización Pareto B2B
+- **Given** una tanda de 35 pedidos que suman 2.440 kg frente a una flota disponible de un solo camión de 800 kg y 60 canastillas (sobrecupo del 305%).
+- **When** se procesa la solicitud en `/api/transport/optimize`.
+- **Then**:
+  1. El endpoint responde con código HTTP 200 en menos de 6 segundos sin colapsar ni emitir un error 500.
+  2. El furgón se estiba hasta el 90-100% de su capacidad segura (725 - 800 kg), sin sobrecargar ni un solo kilogramo de masa física.
+  3. Los cupos disponibles son otorgados prioritariamente a cuentas corporativas B2B (restaurantes y hoteles), en virtud de su penalidad de $500.000 COP frente a $1.000 COP de B2C.
+  4. Los 27 a 29 pedidos que no cupieron se retornan íntegramente en el array `skipped_orders` con su código formal de motivo (`CANNOT_BE_PERFORMED_WITHIN_VEHICLE_CAPACITY_LIMITS` o `DEMAND_EXCEEDS_VEHICLE_CAPACITY`).
+  5. En `RoutePlanner.tsx`, los pedidos rechazados se retienen en el panel lateral de "Pedidos Pendientes", y el Centinela Cognitivo de IA despliega una alerta modal recomendando convocar un camión adicional o programar una segunda ola de despacho.
+
+---
+
 ## 19. ESTÁNDAR CANÓNICO DE ESPECIFICACIONES OPERATIVAS, AGRUPACIÓN DE VARIANTES Y SUPRESIÓN DE RUIDO VISUAL
 
 ### 19.0 Principio Fundacional: La Barrera Canónica de Estandarización (Gateway Pedidos ➔ Gemba)
