@@ -601,10 +601,10 @@ export default function ManualDispatchWizardModal({
                 {/* Stepper Bar (Indicador de Progreso 4 Pasos) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                     {[
-                        { num: 1, title: '1. Muelle & Bahías', subtitle: 'Distribución & Sábana', icon: Grid, confirmed: step1Confirmed },
-                        { num: 2, title: '2. Compras & Recibo', subtitle: 'Corabastos e Ingreso', icon: FileText, confirmed: step2Confirmed },
-                        { num: 3, title: '3. Remisiones Carta', subtitle: 'Duplicado Legal & Flota', icon: Truck, confirmed: step3Confirmed },
-                        { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas & Lanzamiento', icon: Tag, confirmed: step4Confirmed }
+                        { num: 1, title: '1. Muelle & Bahías', subtitle: 'Asignación de espacios', icon: Grid, confirmed: step1Confirmed },
+                        { num: 2, title: '2. Compras & Recibo', subtitle: 'Corabastos e ingreso', icon: FileText, confirmed: step2Confirmed },
+                        { num: 3, title: '3. Remisiones & Manifiesto', subtitle: 'Entrega a clientes y ruta', icon: Truck, confirmed: step3Confirmed },
+                        { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas de canastilla', icon: Tag, confirmed: step4Confirmed }
                     ].map(step => {
                         const isActive = currentStep === step.num;
                         const isPast = currentStep > step.num;
@@ -1025,10 +1025,10 @@ export default function ManualDispatchWizardModal({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.25rem' }}>
                             <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                Cruce de Demanda vs. Inventario en Bodega (Corabastos)
+                                Cruce de Demanda vs. Inventario en Bodega
                             </div>
                             <p style={{ margin: 0, fontSize: '0.76rem', color: '#64748B', lineHeight: '1.4' }}>
-                                El sistema cruza la demanda consolidada de los {selectedOrdersList.length} pedidos contra el inventario inicial de bodega (INV). Genera las planillas independientes con salto de página para los compradores de plaza y el archivo maestro para compras y contabilidad.
+                                Cruce de demanda contra el inventario de bodega para {selectedOrdersList.length} pedidos. Genera las planillas de compra para Corabastos, el consolidado en Excel, el control de ingreso y el conteo físico.
                             </p>
                         </div>
 
@@ -1202,7 +1202,7 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep2Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                 />
-                                Planillas de compra, recibo y toma de inventario físico emitidas.
+                                Planillas de compra, recibo y conteo físico emitidas.
                             </label>
 
                             <button
@@ -1216,23 +1216,23 @@ export default function ManualDispatchWizardModal({
                                     cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
                                 }}
                             >
-                                Continuar a Remisiones Carta <ArrowRight size={14} />
+                                Continuar a Remisiones &amp; Manifiesto <ArrowRight size={14} />
                             </button>
                         </div>
                     </div>
                 )}
 
                 {/* ========================================================================= */}
-                {/* PASO 3: REMISIONES FÍSICAS DUPLICADAS & MANIFIESTO (CARTA / LÁSER)         */}
+                {/* PASO 3: REMISIONES & MANIFIESTO DE DESPACHO                               */}
                 {/* ========================================================================= */}
                 {currentStep === 3 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '16px', padding: '1.25rem' }}>
                             <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#1E40AF', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                Bandeja Carta / Impresora Láser (Títulos Valor y Soporte Contable)
+                                Remisiones de Entrega y Manifiesto de Despacho
                             </div>
                             <p style={{ margin: 0, fontSize: '0.76rem', color: '#1E3A8A', lineHeight: '1.4' }}>
-                                Cada pedido genera <strong>2 páginas continuas obligatorias</strong>: Impar (`[ ORIGINAL - CLIENTE ]`) y Par (`[ COPIA - ARCHIVO Y CONTABILIDAD ]`). Las remisiones ya llevan estampado el recuadro superior <strong>Bahía de Piso: ESPACIO [ XX ]</strong> que coincide matemáticamente con la sábana de muelle.
+                                Genera las remisiones en duplicado (Original y Copia) con la bahía asignada estampada y el manifiesto de ruta para control en portería.
                             </p>
                         </div>
 
@@ -1242,17 +1242,17 @@ export default function ManualDispatchWizardModal({
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1D4ED8', fontWeight: '900', fontSize: '0.84rem' }}>
-                                            <FileText size={16} /> Remisiones de Entrega
+                                            <FileText size={16} /> Entrega a Clientes
                                         </div>
                                         <span style={{ fontSize: '0.66rem', backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
-                                            {selectedOrdersList.length * 2} Páginas Carta
+                                            {selectedOrdersList.length * 2} Hojas (Original + Copia)
                                         </span>
                                     </div>
                                     <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A', marginTop: '8px' }}>
-                                        Juegos de Remisión (Original + Copia)
+                                        Remisiones de Entrega
                                     </div>
                                     <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '6px', lineHeight: '1.4' }}>
-                                        Incluye membrete formal de <em>Investments Cortés S.A.S.</em>, casilla manuscrita para <strong>KG-UN recibe</strong>, cuadro de firmas, cédula, sello húmedo y comodato de canastillas.
+                                        Juegos en duplicado (Original Cliente y Copia Archivo) con bahía, casillas de recibido y control de canastillas.
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
@@ -1288,17 +1288,17 @@ export default function ManualDispatchWizardModal({
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontWeight: '900', fontSize: '0.84rem' }}>
-                                            <Truck size={16} /> Salida de Planta
+                                            <Truck size={16} /> Portería y Ruta
                                         </div>
                                         <span style={{ fontSize: '0.66rem', backgroundColor: '#F1F5F9', color: '#475569', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
-                                            Portería &amp; Vigilancia
+                                            Control de Flota
                                         </span>
                                     </div>
                                     <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A', marginTop: '8px' }}>
-                                        Manifiesto de Ruta &amp; Balance Canastillas
+                                        Manifiesto de Despacho
                                     </div>
                                     <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '6px', lineHeight: '1.4' }}>
-                                        Control físico en puerta: Placa, conductor, total de canastillas plásticas entregadas al camión, devueltas vacías y firmas de salida.
+                                        Relación de pedidos por vehículo, conductor, balance de canastillas y firmas de salida.
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '1.2rem' }}>
@@ -1310,7 +1310,7 @@ export default function ManualDispatchWizardModal({
                                             borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                                         }}
-                                        title="Descargar Manifiesto de Flota en formato PDF"
+                                        title="Descargar Manifiesto de Despacho en formato PDF"
                                     >
                                         <Download size={14} /> Descargar PDF
                                     </Link>
@@ -1349,7 +1349,7 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep3Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                 />
-                                Remisiones duplicadas y manifiesto de flota en bandeja de salida láser.
+                                Remisiones de entrega y manifiesto de despacho impresos.
                             </label>
 
                             <button
@@ -1376,10 +1376,10 @@ export default function ManualDispatchWizardModal({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ backgroundColor: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '16px', padding: '1.25rem' }}>
                             <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#7E22CE', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                Rollo Térmico Continuo (100x50mm) / Impresora Térmica
+                                Rótulos Térmicos de Canastilla
                             </div>
                             <p style={{ margin: 0, fontSize: '0.76rem', color: '#6B21A8', lineHeight: '1.4' }}>
-                                Los rótulos térmicos salen ordenados bajo la <strong>misma secuencia sincrónica de ruta</strong> que las remisiones, permitiendo que el personal grape o rotule las canastillas plásticas sin cruzar pedidos.
+                                Etiquetas adhesivas ordenadas en la misma secuencia de entrega para rotular las canastillas por cliente y bahía.
                             </p>
                         </div>
 
@@ -1390,10 +1390,10 @@ export default function ManualDispatchWizardModal({
                                     <Tag size={16} /> Identificación de Canastillas
                                 </div>
                                 <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A', marginTop: '6px' }}>
-                                    Rótulos Térmicos Adhesivos con QR
+                                    Rótulos Térmicos con QR
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
-                                    Cliente, Secuencia, Bahía de Piso, Franja Horaria y recuadro [ Canastilla ___ de ___ ].
+                                    Etiquetas con cliente, bahía de muelle, horario de entrega y control de canastillas.
                                 </div>
                             </div>
 
@@ -1428,7 +1428,7 @@ export default function ManualDispatchWizardModal({
                         {/* Checklist Final de Lanzamiento */}
                         <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: '16px', padding: '1.25rem' }}>
                             <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0F172A', marginBottom: '8px' }}>
-                                Resumen del Kit de Contingencia Preparado:
+                                Resumen del Kit de Despacho Preparado:
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.74rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step1Confirmed ? '#166534' : '#64748B' }}>
@@ -1441,16 +1441,16 @@ export default function ManualDispatchWizardModal({
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step3Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step3Confirmed ? '#16A34A' : '#94A3B8'} />
-                                    3. {selectedOrdersList.length} Remisiones duplicadas (Original/Copia)
+                                    3. Remisiones de entrega y manifiesto de despacho
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step4Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step4Confirmed ? '#16A34A' : '#94A3B8'} />
-                                    4. Rótulos térmicos de canastillas emitidos
+                                    4. Rótulos térmicos de canastilla emitidos
                                 </div>
                             </div>
                         </div>
 
-                        {/* Botón de Impresión de Contingencia Total 1-Clic */}
+                        {/* Botón de Impresión de Despacho Total 1-Clic */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FEF3C7', border: '1.5px solid #FCD34D', borderRadius: '14px', padding: '12px 16px', flexWrap: 'wrap', gap: '10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <div style={{ backgroundColor: '#FDE68A', padding: '6px', borderRadius: '8px', display: 'flex' }}>
@@ -1458,10 +1458,10 @@ export default function ManualDispatchWizardModal({
                                 </div>
                                 <div>
                                     <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#92400E' }}>
-                                        Impresión Completa del Kit de Contingencia (1-Clic)
+                                        Impresión Completa del Kit de Despacho (1-Clic)
                                     </div>
                                     <div style={{ fontSize: '0.70rem', color: '#B45309' }}>
-                                        Envía a imprimir todos los documentos físicos de la tanda juntos: Compras, Sábana, Remisiones y Rótulos.
+                                        Imprime todos los documentos físicos de la tanda: Compras, Sábana, Remisiones y Rótulos.
                                     </div>
                                 </div>
                             </div>
