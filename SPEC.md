@@ -2461,6 +2461,27 @@ Para blindar el flujo comercial, se establecen cuatro salvaguardas de gobernanza
   1. El Drawer lateral se abre y muestra en la parte superior el banner ámbar: *"Atención: Este acuerdo contiene X producto(s) inactivos en el catálogo..."*.
   2. Al pulsar el botón "Reactivar X Productos en Catálogo", el sistema ejecuta la mutación en Supabase, remueve el banner y actualiza los badges a estado activo instantáneamente.
 
+### 17.4 Arquitectura de Precios Jerárquicos B2B (Matriz vs. Sucursales Específicas) (SDD v1.9.47)
+- **Principio de Resolución Jerárquica (Cascading Price Resolution):**
+  Al liquidar un pedido o cotizar un borrador (`EmailDraftsModule.tsx`, `/admin/orders/create`), el motor busca acuerdos activos con la siguiente precedencia:
+  $$\text{Acuerdo Vigente} = \text{Acuerdo}(\text{Sucursal}) \parallel \text{Acuerdo}(\text{Casa Matriz}) \parallel \text{Catálogo Estándar}$$
+- **Aislamiento e Independencia de Precios:**
+  Cuando una sede corporativa o sucursal (`profiles.parent_id IS NOT NULL`) requiere una lista de precios personalizada (e.g. *WOK FAMILIA* vs. *RESTAURANTES WOK*), se crea un acuerdo comercial dedicado apuntando a su `client_id` específico.
+- **Sobrescritura No Destructiva:**
+  La creación o actualización del acuerdo de una sucursal no altera ni vence el acuerdo general de la Casa Matriz. La Casa Matriz continúa rigiendo para todas las demás sedes que no tengan acuerdo propio.
+- **Experiencia de Usuario en Wizard (`CommercialAgreementsModule.tsx`):**
+  - **Píldoras de Filtro Rápido:** `[Todos (N)]`, `[Casas Matrices (M)]` y `[Sucursales (K)]`.
+  - **Identidad Visual Nítida:** Badges distintivos `[🏢 CASA MATRIZ]` vs `[📍 SUCURSAL ESPECÍFICA]` con indicación explícita de su Casa Matriz dependiente.
+  - **Card Explicativa de Precios Dedicados:** Al seleccionar una sucursal, el modal confirma de manera inequívoca que los precios pactados aplicarán con prioridad exclusiva a esa sede.
+
+#### Escenario 21: Creación de Acuerdo Exclusivo para Sucursal Específica
+- **Given** una Casa Matriz "LAO KAO S.A." con un acuerdo vigente general (Quote 156) y dos sucursales: "RESTAURANTES WOK" y "WOK FAMILIA".
+- **When** el ejecutivo abre "+ Nuevo Acuerdo" y selecciona la sucursal "LAO KAO S.A. - RESTAURANTES WOK".
+- **Then**:
+  1. El sistema despliega el badge `[📍 SUCURSAL ESPECÍFICA CON PRECIOS DEDICADOS]` y la leyenda *"Dependiente de Casa Matriz: LAO KAO S.A."*.
+  2. Muestra la tarjeta informativa indicando que los precios del archivo Excel sobrescribirán las tarifas de la matriz para esa sucursal.
+  3. Al guardar el acuerdo, se asienta en `quotes` con `client_id` de la sucursal, manteniendo intacto el acuerdo general de la matriz para las demás sedes.
+
 ---
 
 ## 18. Módulo de Transporte, Flota & Torre de Control Logística (`/admin/transport`) (SDD v1.9.0)
@@ -5941,5 +5962,337 @@ Las canastillas plásticas estándar (dimensiones 60×40×25 cm, tara oficial 2.
        `"Pedido idéntico: Coincide en cliente, fecha, sede, valor ($X) y peso con #XXXX"`.
   5. **Protocolo Canónico de Supresión y Trazabilidad (`/api/orders/delete`):**
      - La anulación o eliminación de una orden duplicada debe ejecutarse mediante el endpoint auditado, registrando en `order_audit_logs` la copia completa de la orden y sus líneas antes de purgar `order_items` y `orders`, previniendo compras fantasmas en Corabastos y saturación innecesaria de la flota de transporte.
+
+
+
+---
+
+## 31. GOBERNANZA DE TESORERÍA DE PLAZA, CAJA MENOR Y COMPRAS DE CONTADO (`/admin/procurement/cash`) (SDD v1.9.96)
+
+### 31.1 Misión del Dominio de Caja Menor & Tesorería de Abastecimiento
+Garantizar el resguardo patrimonial estricto, la trazabilidad financiera y el cuadre en tiempo real del flujo de dinero físico en efectivo (billetes y monedas) entregado a las cuadrillas de compras en Corabastos y plazas mayoristas satélites, erradicando los faltantes no legalizados, los saldos ciegos en memoria y asegurando que cada peso desembolsado alimente de forma auditable la Columna G (Compras Plaza) del Balance de Masa o el libro contable de gastos de operación.
+
+### 31.2 Reglas Canónicas de Negocio (El Circuito de Efectivo de Plaza)
+
+#### Regla 1: Saldo Dinámico de Caja Menor y Presupuesto Oficial (`cash_budgets`)
+1. **Erradicación del Saldo Estático:** Queda terminantemente prohibido el uso de saldos teóricos hardcodeados en el cliente. El saldo de caja menor es una magnitud dinámica computada:
+   $$\text{Saldo Disponible en Caja} = \text{Presupuesto Autorizado Hoy} - \sum \text{Materia Prima Comprada (Hoy)} - \sum \text{Gastos Operativos (Hoy)}$$
+2. **Fuente de Presupuesto:** El `Presupuesto Autorizado Hoy` proviene exclusivamente de los registros en `cash_budgets` con `target_date = CURRENT_DATE` y `status = 'authorized'`.
+3. **Estado "Sin Asignar":** Si Tesorería no ha radicado el presupuesto del día en `/admin/procurement/treasury`, la caja menor señala de inmediato *"Presupuesto Pendiente / Sin Asignar"*, alertando que las cuadrillas operan sin techo financiero formal.
+
+#### Regla 2: Imputación Dual Estricta (Materia Prima vs Gastos Operativos)
+Todo desembolso de efectivo en plaza se bifurca determinísticamente en dos flujos mutuamente excluyentes:
+1. **Flujo A: Materia Prima / Producto SKU (`purchases`):**
+   - Requiere obligatoriamente un `product_id` activo del catálogo.
+   - El proveedor de plaza (`provider_id`) es opcional para compras abiertas en módulos de plaza, pero recomendado.
+   - Requiere `quantity > 0`, `purchase_unit` válida ('Kg', 'Bulto', 'Caja', 'Canastilla', 'Unidad') y `unit_price > 0`.
+   - Asienta atómicamente en `purchases` con `payment_method = 'cash'`, `status = 'completed'` y `total_cost = quantity \times unit_price`.
+   - **Impacto Físico:** Alimenta directamente la **Columna G (Compras Plaza)** del Balance Diario de Masa (24 Columnas).
+2. **Flujo B: Gastos Operativos y Logísticos (`cash_movements`):**
+   - No afecta inventario de producto físico, pero descuenta la caja física y afecta el estado de pérdidas y ganancias.
+   - Requiere categorización formal dentro de las 7 categorías maestras:
+     `'transporte'` (Fletes plaza-bodega), `'coteros'` (Cargue y descargue), `'alimentacion'` (Refrigerios de cuadrilla), `'combustible'` (Gasolina camión nodriza), `'empaques'` (Costales, zunchos, bolsas), `'viaticos'` (Peajes/parqueaderos) y `'otros'`.
+   - Requiere `description` clara y soporte o número de recibo físico (`reference_doc`).
+   - Asienta en `cash_movements` con `type = 'expense'`.
+
+#### Regla 3: Umbral Andon de Alerta de Liquidez Crítica (< $300.000 COP)
+Si el `Saldo Disponible en Caja` desciende por debajo de **$300.000 COP** y existe presupuesto asignado, la tarjeta de saldo cambia a color rojo (`#DC2626`) y emite una advertencia visual inmediata para solicitar fondeo de emergencia a Tesorería antes del cierre de plaza (07:00 AM).
+
+#### Regla 4: Filtros de Auditoría Reactiva y Búsqueda Omnibox
+La tabla de movimientos de contado implementa filtrado reactivo multi-criterio:
+1. **Buscador Omnibox:** Evalúa de forma simultánea nombre de producto, SKU, nombre de proveedor, descripción de gasto y consecutivo de recibo de soporte.
+2. **Píldora Selectora de Dominio:** Permite conmutar instantáneamente entre *Todos los Movimientos*, *Materia Prima* y *Gastos Operativos*.
+
+---
+
+### 31.3 Especificación de Arquitectura de Datos
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│               MODELO RELACIONAL DE TESORERÍA Y CAJA MENOR DE PLAZA                     │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1. cash_budgets (Presupuesto Diario de Cuadrilla)                                      │
+│    - id: uuid (PK)                                                                     │
+│    - authorized_by: uuid (FK a profiles / Dirección Financiera)                        │
+│    - amount: numeric (Monto asignado en efectivo para la jornada)                      │
+│    - target_date: date (Fecha de operación)                                            │
+│    - status: text ('authorized' | 'pending' | 'closed')                                │
+│    - notes: text                                                                       │
+│    - created_at: timestamptz                                                           │
+│                                                                                        │
+│ 2. purchases (Compras Físicas en Efectivo)                                             │
+│    - id: uuid (PK)                                                                     │
+│    - product_id: uuid (FK a products)                                                  │
+│    - provider_id: uuid (FK a providers, nullable para compras libres)                  │
+│    - quantity: numeric                                                                 │
+│    - purchase_unit: text ('Kg' | 'Bulto' | 'Caja' | 'Canastilla' | 'Unidad')           │
+│    - unit_price: numeric                                                               │
+│    - total_cost: numeric (quantity * unit_price)                                       │
+│    - payment_method: text ('cash')                                                     │
+│    - budget_id: uuid (FK a cash_budgets, nullable)                                     │
+│    - status: text ('completed')                                                        │
+│    - created_at: timestamptz                                                           │
+│                                                                                        │
+│ 3. cash_movements (Egresos Operativos de Caja Menor)                                   │
+│    - id: uuid (PK)                                                                     │
+│    - budget_id: uuid (FK a cash_budgets, nullable)                                     │
+│    - amount: numeric (Monto exacto pagado)                                             │
+│    - type: text ('expense')                                                            │
+│    - category: text ('transporte' | 'coteros' | 'alimentacion' | 'combustible' | ...)  │
+│    - description: text                                                                 │
+│    - reference_doc: text (Recibo de caja, factura física o vale de cotero)             │
+│    - recipient_id: uuid (FK a profiles, nullable)                                      │
+│    - created_at: timestamptz                                                           │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Escenario 128: Registro Canónico de Compra de Materia Prima en Efectivo (Plaza Corabastos) y Deducción Atómica de Caja Menor (SDD v1.9.96)
+- **Given** una cuadrilla de abastecimiento operando en Corabastos con un presupuesto diario asignado en `cash_budgets` de $5.000.000 COP para la fecha de hoy.
+- **When** el jefe de compras o cotero registra en `/admin/procurement/cash` la compra de 20 bultos de Papa Pastusa a $85.000 COP cada uno al proveedor Juan Pereira:
+- **Then**:
+  1. El sistema valida estrictamente que la cantidad (20) y el precio unitario ($85.000) sean números positivos válidos.
+  2. Calcula el costo total de la compra:
+     $$\text{total\_cost} = 20 \times 85.000 = \$1.700.000\text{ COP}$$
+  3. Inserta atómicamente en `purchases` con `payment_method = 'cash'`, `purchase_unit = 'Bulto'`, `status = 'completed'` y timestamp actual.
+  4. La tarjeta de telemetría de *Materia Prima (Hoy)* se incrementa en $1.700.000 COP.
+  5. El *Saldo en Caja* se actualiza en tiempo real:
+     $$\text{Saldo en Caja} = \$5.000.000 - \$1.700.000 = \$3.300.000\text{ COP}$$
+  6. El movimiento se refleja instantáneamente en la tabla de operaciones con la pastilla verde `PRODUCTO SKU`, SKU correspondiente y hora exacta de registro.
+
+---
+
+#### Escenario 129: Legalización de Gastos Operativos de Abastecimiento (Fletes, Coteros, Empaques) y Alerta de Umbral de Liquidez Crítica (SDD v1.9.96)
+- **Given** la caja menor de plaza con un saldo remanente de $500.000 COP tras las compras de la mañana.
+- **When** el transportador legaliza un pago de cargue y flete a coteros por valor de $250.000 COP seleccionando la pestaña *Gasto / Operación*:
+- **Then**:
+  1. El sistema valida que el campo de descripción contenga el concepto ("Descargue camión nodriza muelle 4") y el monto ($250.000).
+  2. Inserta el registro en `cash_movements` con `type = 'expense'`, `category = 'coteros'` y referencia de soporte.
+  3. La tarjeta de *Gastos Ops (Hoy)* se actualiza sumando los $250.000 COP.
+  4. El *Saldo en Caja* desciende a:
+     $$\text{Saldo en Caja} = \$500.000 - \$250.000 = \$250.000\text{ COP}$$
+  5. **Disparo de Alerta Andon de Liquidez:** Al ser $\$250.000 < \$300.000\text{ COP}$, la tarjeta de Saldo en Caja se tiñe inmediatamente de rojo (`#DC2626`) y la tipografía advierte el estado crítico de efectivo para que la central proceda con la reposición de fondos.
+
+---
+
+### 31.5 Especificación Canónica de Tesorería & Presupuestos (`/admin/procurement/treasury`)
+
+#### A. Ciclo de Vida y Estados del Presupuesto Diario (`cash_budgets`)
+1. **`pending` (Solicitado / En Revisión):**
+   - La cuadrilla de compras o el jefe de bodega radica una solicitud de fondos previo a la medianoche.
+   - No autoriza el gasto ni alimenta el saldo de caja en `/admin/procurement/cash`.
+2. **`authorized` (Aprobado & Habilitado):**
+   - La Dirección Financiera / Tesorería valida y autoriza la bolsa de efectivo para la fecha (`target_date`).
+   - Se convierte inmediatamente en el techo financiero disponible en `/admin/procurement/cash`.
+3. **`closed` (Cerrado & Conciliado):**
+   - Al finalizar el ciclo de compras de la mañana (08:00 AM), el presupuesto se bloquea.
+   - El remanente no ejecutado se concilia contra el efectivo físico devuelto a la caja fuerte de planta.
+
+#### B. Telemetría Tripartita en Tiempo Real
+La pantalla de Tesorería consolida tres fuentes vivas de la base de datos sin datos mockeados:
+1. **Presupuesto Hoy:** $\sum \text{cash\_budgets.amount}$ con `target_date = TODAY` y `status = 'authorized'`.
+2. **Ejecutado en Plaza:** $\sum \text{purchases.total\_cost}$ (`payment_method = 'cash'`) $+ \sum \text{cash\_movements.amount}$ (`type = 'expense'`).
+3. **Saldo Remanente:** $\text{Presupuesto Hoy} - \text{Ejecutado en Plaza}$.
+
+---
+
+#### Escenario 130: Asignación Formal de Presupuesto Diario de Compras y Sincronización Automática con Terminal de Caja (SDD v1.9.96)
+- **Given** las 02:00 AM del día de operación comercial con los pedidos de clientes consolidados en demanda neta de abastecimiento.
+- **When** el Director Financiero ingresa a `/admin/procurement/treasury` y asigna un presupuesto de $6.500.000 COP con destino "Cuadrilla Corabastos madrugada (Camilo y Wilson)" en estado `AUTORIZADO`:
+- **Then**:
+  1. El sistema inserta el registro inmutable en `cash_budgets` con `target_date = CURRENT_DATE` y `status = 'authorized'`.
+  2. La tarjeta de *Presupuesto Hoy* en Tesorería se actualiza a $6.500.000 COP.
+  3. Al abrir simultáneamente `/admin/procurement/cash`, la tarjeta de cabecera transmuta automáticamente de *"Presupuesto Pendiente / Sin Asignar"* a **"Saldo en Caja: $6.500.000 COP"** con helper text *"Presupuesto Base: $6.500.000"*.
+  4. Cada compra o gasto que la cuadrilla radique en Corabastos descuenta en tiempo real este fondo sin desalineaciones contables ni saldos ciegos.
+
+---
+
+### 31.6 Especificación Canónica de Legalización y Clasificación de Gastos de Abastecimiento (`/admin/procurement/expenses`)
+
+#### A. Taxonomía de Gastos de Plaza (`cash_movements.category`)
+La operación de abastecimiento en Corabastos y campo exige una categorización estricta para el control de mermas, fletes y costos indirectos de adquisición:
+1. **`transporte` (Fletes y Acarreos):** Movimiento de carga pesada desde fincas o bodegas de acopio hacia planta principal.
+2. **`coteros` (Mano de Obra Gemba):** Cuadrillas de descargue, zarandeo, estibado y pesaje en muelle y bodegas de plaza.
+3. **`combustible` (Gasolina / ACPM):** Suministro para vehículos recolectores y camiones refrigerados.
+4. **`empaques` (Canastillas, Costales y Mallas):** Adquisición o reposición de material de embalaje retornable o de un solo uso.
+5. **`alimentacion` (Viáticos de Cuadrilla):** Refrigerios y alimentación del personal de madrugada.
+6. **`viaticos` (Peajes y Pernoctas):** Gastos de ruta de conductores y supervisores de calidad en carretera.
+7. **`servicios` (Básculas y Montacargas):** Alquiler de básculas camioneras, pesaje por tiquete y montacargas de patio.
+8. **`otros` (Gastos Menores Gemba):** Cualquier otro desembolso menor debidamente justificado.
+
+#### B. Pipeline de Auditoría y Legalización Poka-Yoke
+1. **Asociación de Soporte Físico:** Todo gasto registrado exige descripción clara y documento de soporte opcional (`reference_doc`, ej: "Recibo Vale #482", "Factura Simplificada 1930").
+2. **Cálculo de Desembolsos en Tiempo Real:** El total acumulado por categoría y el gran total de gastos del día se recalculan dinámicamente desde `cash_movements` (`type = 'expense'`).
+3. **Sincronización Atómica:** La inserción de un gasto descuenta en tiempo real la disponibilidad de caja menor en `/admin/procurement/cash` y suma al balance de ejecución en `/admin/procurement/treasury`.
+
+---
+
+#### Escenario 131: Clasificación Multicategoría y Legalización de Gastos de Plaza con Auditoría Inmutable (SDD v1.9.96)
+- **Given** una cuadrilla de compras que incurre en $180.000 COP de mano de obra de coteros para descargue y $90.000 COP de peajes en ruta.
+- **When** el responsable ingresa a `/admin/procurement/expenses`, pulsa *Legalizar Gasto*, selecciona la categoría `coteros`, introduce el valor $180.000, soporte "Vale #104" y confirma:
+- **Then**:
+  1. El sistema valida los datos requeridos e inserta en `cash_movements` con `type = 'expense'`, `category = 'coteros'`, y el monto exacto.
+  2. La tarjeta de telemetría de *Total Gastos Registrados* se incrementa en $180.000 COP.
+  3. La tabla reactiva despliega el movimiento con su pastilla de categoría ámbar/indigo y fecha con hora.
+  4. La barra de filtros por categoría permite aislar inmediatamente todos los desembolsos de `coteros`, recalculando la suma visual instantáneamente.
+
+---
+
+### 31.7 Especificación Canónica de Exportación Contable World Office de 50 Columnas (`/admin/procurement/export`)
+
+#### A. Arquitectura de Integración Contable Multi-Entidad
+El motor de exportación World Office consolida los flujos de abastecimiento, ventas y terceros en una matriz de 50 columnas normalizada compatible con el software ERP World Office (v12.0+):
+1. **Cortes de Facturación (`cuts` $\rightarrow$ `FV`):**
+   - Extrae pedidos y líneas despachadas en el rango de fechas.
+   - Documento contable: Factura de Venta (`FV`), Prefijo `FF`.
+   - Tercero: NIT y Razón Social del cliente corporativo (`profiles.nit`, `profiles.company_name`).
+   - Centro de Costos: `VENTAS`.
+2. **Compras de Contado en Plaza (`cash` $\rightarrow$ `CP`):**
+   - Compras realizadas en Corabastos o campo (`payment_method = 'cash'`).
+   - Documento contable: Comprobante de Compra (`CP`), Prefijo `CONT`.
+   - Tercero: NIT/Identificación del proveedor (`providers.tax_id`), Nombre del proveedor.
+   - Centro de Costos: `COMPRAS`.
+3. **Gastos Operativos de Plaza (`expenses` $\rightarrow$ `CE`):**
+   - Egresos legalizados en `cash_movements` (`type = 'expense'`).
+   - Documento contable: Comprobante de Egreso (`CE`), Prefijo `GST`.
+   - Tercero: NIT Genérico de Plaza (`222222222`), Razón `GASTO - {CATEGORIA}`.
+   - Centro de Costos: `OPERACIONES`.
+4. **Maestro de Terceros Proveedores (`providers` $\rightarrow$ `TER`):**
+   - Fichas maestras de proveedores con datos fiscales, plazos de crédito (`payment_terms_days`) y direcciones.
+   - Documento contable: Terceros (`TER`), Prefijo `PRV`.
+
+#### B. Pipeline de Transformación y Telemetría en Terminal
+1. **Filtro de Rango Horario Integral:** Cobertura de día completo `T00:00:00` a `T23:59:59.999` para evitar mutilación de movimientos de jornada nocturna o madrugada.
+2. **Terminal Reactiva de Exportación:** Emite telemetría paso a paso (`Iniciando...`, `Consultando...`, `Procesando N registros...`, `Total consolidado: $X COP`, `Generando .xlsx...`, `¡Exportación exitosa!`).
+3. **Prevención de Valores Nulos:** Normaliza dinámicamente las 50 columnas obligatorias rellenando con cadenas vacías los campos auxiliares no requeridos para evitar rechazo sintáctico en el importador contable.
+
+---
+
+#### Escenario 132: Generación Canónica de Archivo Plano World Office para Compras y Gastos de Plaza (SDD v1.9.96)
+- **Given** una jornada de abastecimiento finalizada con 35 compras de materia prima y 6 gastos operativos en Corabastos.
+- **When** el analista contable ingresa a `/admin/procurement/export`, selecciona *Compras Cont.*, define el rango de la fecha actual y hace clic en *Generar Archivo Plano*:
+- **Then**:
+  1. El sistema consulta `purchases` uniendo con `products` y `providers(tax_id, name)`.
+  2. La terminal despliega la secuencia de ejecución en verde esmeralda y reporta la suma total acumulada en COP.
+  3. Construye en memoria el libro Excel `.xlsx` con la hoja `WorldOffice` y las 50 columnas reglamentarias.
+  4. Dispara la descarga automática en el navegador con nomenclatura `Export_WO_cash_YYYY-MM-DD.xlsx`.
+  5. El archivo generado es importable directamente en World Office sin descuadres de NIT, cantidades ni valores unitarios.
+
+---
+
+### 31.8 Especificación Canónica del Directorio Maestro y Gobernanza de Proveedores (`/admin/procurement/providers`)
+
+#### A. Arquitectura del Maestro de Terceros Proveedores (`providers`)
+El Directorio Maestro de Proveedores es la fuente única de verdad para el aprovisionamiento de materias primas e insumos operativos:
+1. **Identificación Legal y Fiscal:**
+   - `tax_id`: NIT o Cédula de Ciudadanía con dígito de verificación (único por tercero).
+   - `document_type`: `'NIT'` | `'CC'`.
+   - `name`: Razón Social registrada en Cámara de Comercio o Nombre del productor agrícola.
+   - `world_office_id`: Código de homologación contable en World Office.
+2. **Clasificación Operativa:**
+   - `category`: `'PRODUCTOS'` (Agro / Perecederos / Materia Prima) vs `'GENERAL'` (Servicios / Mantenimiento / Dotación / Empaques).
+   - `product`: Lista de insumos o SKUs principales abastecidos (ej: Papa Pastusa, Cebolla Larga, Canastillas).
+   - `warehouse_location` y `puesto`: Ubicación física dentro de Corabastos (Bodega / Muelle / Número de Puesto).
+3. **Condiciones Financieras y Comerciales:**
+   - `type`: `'contado'` vs `'credito'`.
+   - `payment_terms_days`: Plazo contractual en días (0 para contado, 8, 15, 30 o 45 días para crédito).
+   - `billing_type`: `'electronica'` (Factura Electrónica DIAN) vs `'soporte'` (Documento Soporte Electrónico para no obligados a facturar).
+   - `payment_condition`: Descripción de acuerdos especiales de pago.
+   - Datos Bancarios: `bank_name`, `bank_account_type` (`Ahorros` / `Corriente`), `bank_account_number`.
+4. **Bóveda Documental de Compliance (Supabase Storage: `providers`):**
+   - Soporte de subida y versionamiento de: Registro Único Tributario (`rut_url`), Certificación Bancaria (`bank_certificate_url`), Certificaciones de Calidad (`quality_certifications_url`) y Documentos Adicionales (`additional_docs_url`).
+5. **Gobernanza RBAC:**
+   - Lectura: `admin.procurement.providers.view` o `admin.procurement`.
+   - Escritura / Edición / Archivo: `admin.procurement.providers.edit` o `admin.procurement`.
+
+#### B. Pipeline de Carga Masiva (Bulk Upsert) & Exportación Bidireccional
+1. **Importación Poka-Yoke Excel:**
+   - Parser reactivo que valida columnas requeridas (`tax_id`, `name`) fila por fila.
+   - Detección inteligente de UUIDs existentes o coincidencia por `tax_id` para alternar automáticamente entre `INSERT` y `UPDATE`.
+   - Ejecución por lotes (`chunks` de 50 registros) vía `/api/providers` protegiendo contra rate limits.
+2. **Exportación Segmentada:** Descarga inmediata de plantillas o inventarios en formato Excel filtrado por categoría (`PRODUCTOS`, `GENERAL`, `ALL`).
+
+---
+
+#### Escenario 133: Creación y Homologación Integral de Proveedor Agrícola con Adjuntos de Cumplimiento (SDD v1.9.96)
+- **Given** un nuevo productor de aguacate Hass en Cajamarca que suministrará a FruFresco bajo esquema de crédito a 15 días con documento soporte.
+- **When** el analista de compras ingresa a `/admin/procurement/providers`, abre el modal de registro y diligencia NIT, razón social, ubicación en Corabastos, plazo de 15 días, cuenta bancaria y sube el RUT en PDF:
+- **Then**:
+  1. El sistema almacena el PDF en el bucket `providers` de Supabase Storage y enlaza la URL pública inmutable.
+  2. Inserta el registro en `providers` con `type = 'credito'`, `payment_terms_days = 15`, `billing_type = 'soporte'` y `is_active = true`.
+  3. Los contadores de telemetría de cabecera incrementan el total de *Proveedores Crédito* y *Proveedores Activos*.
+  4. La tarjeta del proveedor se vuelve seleccionable de inmediato en la terminal de compras de plaza (`/admin/procurement/cash`) y en la consola central (`/admin/procurement`).
+
+---
+
+### 31.9 Especificación Canónica de la Consola Central de Compras 360 (`/admin/procurement`)
+
+#### A. Arquitectura del Hub de Operaciones Financieras y Abastecimiento
+La Consola Central de Compras 360 es el punto neurálgico de gobernanza donde convergen las operaciones de caja menor, tesorería, legalizaciones y terceros:
+1. **Telemetría Dinámica en Tiempo Real (Cero Mockups):**
+   - **Presupuesto Hoy:** $\sum \text{cash\_budgets.amount}$ con `target_date = TODAY` y `status = 'authorized'`.
+   - **Ejecutado en Plaza:** $\sum \text{purchases.total\_cost}$ (`payment_method = 'cash'`, hoy) $+ \sum \text{cash\_movements.amount}$ (`type = 'expense'`, hoy).
+   - **Remanente en Caja:** $\text{Presupuesto Hoy} - \text{Ejecutado en Plaza}$. Alerta Andon cromática si remanente $< \$300.000\text{ COP}$.
+   - **Proveedores Activos:** Conteo instantáneo de `providers` con `is_active = true`.
+2. **Matriz de 4 Módulos Estratégicos:**
+   - *Caja Menor & Compras Gemba* (`/admin/procurement/cash`): Captura táctica en plaza.
+   - *Tesorería & Presupuestos* (`/admin/procurement/treasury`): Desembolso y techos de gasto.
+   - *Legalización de Gastos* (`/admin/procurement/expenses`): Clasificación de egresos por rubro.
+   - *Directorio de Proveedores* (`/admin/procurement/providers`): Homologación fiscal y bóveda documental.
+3. **Acciones Rápidas de Cabecera:**
+   - Botón de refresco manual de telemetría (`RefreshCw`).
+   - Acceso al formato de recepción física (`/admin/procurement/receiving-print`).
+   - Acceso directo a la exportación WorldOffice (`/admin/procurement/export`).
+
+---
+
+#### Escenario 134: Monitoreo Unificado de Fondos y Navegación Operativa en Consola Compras 360 (SDD v1.9.96)
+- **Given** una jornada de abastecimiento en curso con presupuesto autorizado de $8.000.000 COP y $5.200.000 COP ejecutados en compras y descargues.
+- **When** el Director de Operaciones ingresa a `/admin/procurement`:
+- **Then**:
+  1. El sistema consulta en paralelo `cash_budgets`, `purchases`, `cash_movements` y `providers`.
+  2. La tarjeta de *Presupuesto Hoy* reporta $8.000.000 COP con pastilla "Autorizado".
+  3. La tarjeta de *Ejecutado en Plaza* reporta $5.200.000 COP con pastilla "Compras + Gastos".
+  4. La tarjeta de *Remanente en Caja* reporta $2.800.000 COP en verde esmeralda con pastilla "Disponible Gemba".
+  5. Las 4 tarjetas modulares permiten saltar con un clic al flujo de trabajo correspondiente sin desorientación operativa.
+
+---
+
+### 31.10 Especificación Canónica de Formatos Golden Print de Abastecimiento (`/admin/procurement/purchases-print` & `/receiving-print`)
+
+#### A. Orden Oficial de Compra Neta (`/admin/procurement/purchases-print`)
+1. **Algoritmo de Neteo Contra Cierre Oficial (§30.2.2):**
+   - Demanda Bruta: Sumatoria de pedidos operativos autorizados (`orders.order_items`).
+   - Stock Inicial: Extraído inmutablemente del último Cierre Diario de Bodega (`daily_inventory_closings.snapshot_items`).
+   - Merma Técnica: Aplicación de coeficientes de merma por producto para calcular la compra física requerida:
+     $$\text{A Comprar} = \max(0, \text{Demanda Neta} - \text{Stock Bodega}) \times (1 + \% \text{Merma})$$
+2. **Jerarquía Visual y Segmentación:**
+   - Agrupación por familias de producto y sublistas de compra (`purchase_sublist`).
+   - Compatibilidad con exportación inmediata a Microsoft Excel (`.xlsx`).
+
+#### B. Planilla Física de Control de Llegada e Ingreso a Bodega (`/admin/procurement/receiving-print`)
+1. **Diseño Industrial de Doble Columna (A-Z):**
+   - Disposición de alta densidad en dos columnas para maximizar el uso del papel y reducir desperdicio físico.
+   - Sello corporativo Investments Cortés SAS con logosímbolo oficial.
+   - Campos de anotación física en Gemba: Cantidad Recibida, Número de Lote, Proveedor y Check de Calidad Sensorial.
+2. **Arquitectura Golden Print:**
+   - Selector dinámico de formato de papel (Carta / Oficio) con márgenes industriales fijos (`0.5cm 0.6cm`).
+   - Aislamiento de impresión mediante ventana independiente (`printViaNewWindow`) para evitar fugas de cabeceras de navegador y artefactos CSS.
+   - Conmutador integrado de documentos de impresión (`PrintDocumentSwitcher`) que sincroniza fecha y filtros entre formatos.
+
+---
+
+#### Escenario 135: Generación e Impresión de la Planilla de Ingreso a Bodega para Cuadrilla de Muelle (SDD v1.9.96)
+- **Given** una tanda de 12 camiones con 64 SKUs agrícolas que arribarán a planta a las 05:30 AM.
+- **When** el jefe de bodega ingresa a `/admin/procurement/receiving-print`, selecciona la fecha de entrega y pulsa *Imprimir Control de Llegada*:
+- **Then**:
+  1. El sistema consolida todos los pedidos operativos autorizados de esa fecha.
+  2. Genera las páginas en formato 2 columnas A-Z con paginación estricta y membrete oficial.
+  3. Abre la ventana de impresión limpia con configuración de tamaño Letter/Oficio.
+  4. La planilla física permite a los operarios en muelle chequear cada canastilla y registrar diferencias de pesaje directamente contra el manifiesto.
+
+
+
 
 

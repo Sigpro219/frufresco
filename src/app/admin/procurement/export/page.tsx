@@ -43,6 +43,8 @@ export default function WorldOfficeExportPage() {
 
         try {
             let data: any[] = [];
+            const startIso = `${dateRange.start}T00:00:00`;
+            const endIso = `${dateRange.end}T23:59:59.999`;
             
             if (exportType === 'cuts') {
                 addLog('Consultando cortes de facturación activos...', 'info');
@@ -50,11 +52,11 @@ export default function WorldOfficeExportPage() {
                     .from('order_items')
                     .select(`
                         id, quantity, unit_price, nickname,
-                        orders!inner(id, billing_cut_id, sequence_id, profiles(nit, company_name)),
+                        orders!inner(id, billing_cut_id, sequence_id, created_at, profiles(nit, company_name)),
                         products(sku, name, category)
                     `)
-                    .gte('orders.created_at', dateRange.start)
-                    .lte('orders.created_at', dateRange.end);
+                    .gte('orders.created_at', startIso)
+                    .lte('orders.created_at', endIso);
                 
                 if (error) throw error;
                 data = cuts || [];
@@ -65,11 +67,11 @@ export default function WorldOfficeExportPage() {
                     .select(`
                         *,
                         product:products(sku, name),
-                        provider:providers(nit, name)
+                        provider:providers(tax_id, name)
                     `)
                     .eq('payment_method', 'cash')
-                    .gte('created_at', dateRange.start)
-                    .lte('created_at', dateRange.end);
+                    .gte('created_at', startIso)
+                    .lte('created_at', endIso);
                 
                 if (error) throw error;
                 data = purchases || [];
@@ -81,13 +83,13 @@ export default function WorldOfficeExportPage() {
                 if (error) throw error;
                 data = providers || [];
             } else {
-                addLog('Consultando gastos operativos y fijos...', 'info');
+                addLog('Consultando gastos operativos y de plaza...', 'info');
                 const { data: exp, error } = await supabase
                     .from('cash_movements')
                     .select('*')
                     .eq('type', 'expense')
-                    .gte('created_at', dateRange.start)
-                    .lte('created_at', dateRange.end);
+                    .gte('created_at', startIso)
+                    .lte('created_at', endIso);
                 if (error) throw error;
                 data = exp || [];
             }
@@ -120,7 +122,7 @@ export default function WorldOfficeExportPage() {
                     row['TipoDocumento'] = 'FV'; 
                     row['Prefijo'] = 'FF';
                     row['Numero'] = item.orders?.sequence_id || index + 1;
-                    row['Fecha'] = dateRange.start;
+                    row['Fecha'] = item.orders?.created_at?.split('T')[0] || dateRange.start;
                     row['NitTercero'] = item.orders?.profiles?.nit || '222222222';
                     row['NombreTercero'] = item.orders?.profiles?.company_name || 'CLIENTE MOSTRADOR';
                     row['CodigoProducto'] = item.products?.sku || 'GENERIC';
@@ -135,7 +137,7 @@ export default function WorldOfficeExportPage() {
                     row['Prefijo'] = 'PRV';
                     row['Numero'] = item.world_office_id || (index + 1);
                     row['Fecha'] = new Date().toISOString().split('T')[0];
-                    row['NitTercero'] = item.tax_id || item.nit || '111111111';
+                    row['NitTercero'] = item.tax_id || '111111111';
                     row['NombreTercero'] = item.name || 'PROVEEDOR';
                     row['Ciudad'] = item.city || 'Bogotá D.C.';
                     row['Direccion'] = item.address || '';
@@ -145,12 +147,27 @@ export default function WorldOfficeExportPage() {
                     row['Plazo'] = item.payment_terms_days || 0;
                     row['Observaciones'] = item.observations || '';
                     row['CentroCostos'] = 'COMPRAS';
+                } else if (exportType === 'expenses') {
+                    row['TipoDocumento'] = 'CE'; 
+                    row['Prefijo'] = 'GST';
+                    row['Numero'] = item.reference_doc || (index + 1);
+                    row['Fecha'] = item.created_at?.split('T')[0] || dateRange.start;
+                    row['NitTercero'] = '222222222';
+                    row['NombreTercero'] = item.category ? `GASTO - ${item.category.toUpperCase()}` : 'GASTOS OPERATIVOS';
+                    row['CodigoProducto'] = item.category?.toUpperCase() || 'GASTO';
+                    row['NombreProducto'] = item.description || item.category || 'Gasto Operativo';
+                    row['Cantidad'] = 1;
+                    row['ValorUnitario'] = item.amount || 0;
+                    row['ValorTotal'] = item.amount || 0;
+                    row['CentroCostos'] = 'OPERACIONES';
+                    row['UnidadMedida'] = 'GLB';
+                    row['Observaciones'] = item.description || '';
                 } else {
                     row['TipoDocumento'] = 'CP'; 
                     row['Prefijo'] = 'CONT';
-                    row['Numero'] = item.external_doc_number || index + 1;
+                    row['Numero'] = item.external_doc_number || (index + 1);
                     row['Fecha'] = item.created_at?.split('T')[0] || dateRange.start;
-                    row['NitTercero'] = item.provider?.nit || '111111111';
+                    row['NitTercero'] = item.provider?.tax_id || '111111111';
                     row['NombreTercero'] = item.provider?.name || 'PROVEEDOR VARIOS';
                     row['CodigoProducto'] = item.product?.sku || 'RAW';
                     row['NombreProducto'] = item.product?.name || 'COMPRA';
@@ -158,6 +175,7 @@ export default function WorldOfficeExportPage() {
                     row['ValorUnitario'] = item.unit_price || (item.total_cost / item.quantity);
                     row['ValorTotal'] = item.total_cost || (item.quantity * item.unit_price);
                     row['CentroCostos'] = 'COMPRAS';
+                    row['UnidadMedida'] = item.purchase_unit || 'UND';
                 }
 
                 columns.forEach(col => {
@@ -166,6 +184,11 @@ export default function WorldOfficeExportPage() {
 
                 return row;
             });
+
+            const totalSum = woData.reduce((acc, r) => acc + (Number(r['ValorTotal']) || 0), 0);
+            if (totalSum > 0) {
+                addLog(`Total consolidado: $${totalSum.toLocaleString('es-CO')} COP`, 'info');
+            }
 
             addLog('Generando archivo Excel (.xlsx)...', 'success');
             const ws = XLSX.utils.json_to_sheet(woData);

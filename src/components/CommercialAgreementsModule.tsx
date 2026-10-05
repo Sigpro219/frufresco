@@ -25,6 +25,7 @@ import {
     ChevronRight, 
     Building,
     Building2, 
+    MapPin,
     FileText,
     Plus,
     HelpCircle,
@@ -428,6 +429,7 @@ export default function CommercialAgreementsModule() {
     const [agreementName, setAgreementName] = useState('');
     const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
     const [clientSearchQuery, setClientSearchQuery] = useState('');
+    const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'matriz' | 'sucursal'>('all');
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
     const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -547,7 +549,7 @@ export default function CommercialAgreementsModule() {
 
     const fetchB2bClients = async () => {
         try {
-            // Fetch all b2b_client profiles to compute branch relations and isolate true Casas Matrices
+            // Fetch all b2b_client profiles to compute branch relations and support both Casas Matrices and specific Sucursales
             const { data, error } = await supabase
                 .from('profiles')
                 .select('id, company_name, contact_name, nit, parent_id, is_corporate_parent, address, phone')
@@ -558,23 +560,30 @@ export default function CommercialAgreementsModule() {
 
             const allProfiles = data || [];
             
-            // Map branch counts for each parent_id
+            // Map branch counts for each parent_id and parent company names
             const branchCounts: Record<string, number> = {};
+            const parentNameMap: Record<string, string> = {};
             allProfiles.forEach(p => {
+                parentNameMap[p.id] = p.company_name || p.contact_name || 'Casa Matriz';
                 if (p.parent_id) {
                     branchCounts[p.parent_id] = (branchCounts[p.parent_id] || 0) + 1;
                 }
             });
 
-            // Filter STRICTLY for legitimate Casas Matrices (must have is_corporate_parent=true and parent_id=null)
-            const verifiedCasasMatrices = allProfiles
-                .filter(p => !p.parent_id && p.is_corporate_parent === true)
-                .map(p => ({
+            // Enrich all B2B clients: both Casas Matrices and Sucursales
+            const enrichedClients = allProfiles.map(p => {
+                const isSucursal = Boolean(p.parent_id);
+                const isMatriz = !isSucursal;
+                return {
                     ...p,
-                    branchCount: branchCounts[p.id] || 0
-                }));
+                    isMatriz,
+                    isSucursal,
+                    parentName: isSucursal ? (parentNameMap[p.parent_id] || 'Casa Matriz') : null,
+                    branchCount: isMatriz ? (branchCounts[p.id] || 0) : 0
+                };
+            });
 
-            setB2bClients(verifiedCasasMatrices);
+            setB2bClients(enrichedClients);
         } catch (err: any) {
             console.error('Error fetching B2B clients:', err);
         }
@@ -926,6 +935,7 @@ export default function CommercialAgreementsModule() {
         setSelectedClientId('');
         setSelectedClientIds([]);
         setIsMultiClientMode(false);
+        setClientTypeFilter('all');
         setClientSearchQuery('');
         setUploadedItems([]);
         setExcelPreviewData(null);
@@ -2960,8 +2970,14 @@ export default function CommercialAgreementsModule() {
     };
 
     const filteredB2bClients = b2bClients.filter(c => {
-        // Strictly only Casas Matrices (no branches / parent_id is null)
-        if (c.parent_id) return false;
+        // Multi-client mode (General Institutional): strictly Casas Matrices / Root clients
+        if (isMultiClientMode) {
+            if (c.parent_id) return false;
+        } else {
+            // Individual client mode: filter by type if selected
+            if (clientTypeFilter === 'matriz' && c.parent_id) return false;
+            if (clientTypeFilter === 'sucursal' && !c.parent_id) return false;
+        }
 
         if (!clientSearchQuery.trim()) return true;
         const query = clientSearchQuery.toLowerCase().trim();
@@ -2969,7 +2985,8 @@ export default function CommercialAgreementsModule() {
         const matchesName = c.company_name?.toLowerCase().includes(query);
         const matchesContact = c.contact_name?.toLowerCase().includes(query);
         const matchesNit = String(c.nit || '').toLowerCase().includes(query);
-        return Boolean(matchesName || matchesContact || matchesNit);
+        const matchesParent = c.parentName?.toLowerCase().includes(query);
+        return Boolean(matchesName || matchesContact || matchesNit || matchesParent);
     });
 
     const toggleSort = (col: typeof sortColumn) => {
@@ -3596,13 +3613,13 @@ export default function CommercialAgreementsModule() {
                                                             <span style={{ 
                                                                 fontSize: '0.66rem', 
                                                                 backgroundColor: '#EFF6FF', 
-                                                                color: '#1D4ED8', 
-                                                                border: '1px solid #BFDBFE', 
+                                                                color: '#0284C7', 
+                                                                border: '1px solid #BAE6FD', 
                                                                 padding: '1px 6px', 
                                                                 borderRadius: '4px', 
                                                                 fontWeight: '700' 
                                                             }}>
-                                                                <Building size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Sucursal
+                                                                <MapPin size={11} style={{ verticalAlign: 'middle', marginRight: '3px', display: 'inline' }} /> Sucursal
                                                             </span>
                                                         ) : (
                                                             <span style={{ 
@@ -3618,11 +3635,15 @@ export default function CommercialAgreementsModule() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {agreement.profiles?.nit && (
+                                                    {agreement.profiles?.parent_id ? (
+                                                        <div style={{ fontSize: '0.7rem', color: '#0369A1', marginTop: '2px', fontWeight: '500' }}>
+                                                            Sucursal de: <strong>{b2bClients.find(c => c.id === agreement.profiles?.parent_id)?.company_name || 'Casa Matriz'}</strong> {agreement.profiles?.nit ? `• NIT: ${agreement.profiles.nit}` : ''}
+                                                        </div>
+                                                    ) : agreement.profiles?.nit ? (
                                                         <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
                                                             NIT: {agreement.profiles.nit}
                                                         </div>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         </td>
@@ -6054,16 +6075,78 @@ export default function CommercialAgreementsModule() {
                                         /* --- MODO INDIVIDUAL --- */
                                         !selectedClientId ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
-                                                    Buscar Casa Matriz por Nombre o NIT:
-                                                </label>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                                        Buscar Casa Matriz o Sucursal Específica:
+                                                    </label>
+                                                    {/* Filter Pills */}
+                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setClientTypeFilter('all')}
+                                                            style={{
+                                                                padding: '3px 10px',
+                                                                borderRadius: '14px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 'bold',
+                                                                border: clientTypeFilter === 'all' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                backgroundColor: clientTypeFilter === 'all' ? '#EAEFEA' : '#FFFFFF',
+                                                                color: clientTypeFilter === 'all' ? '#0D7A57' : '#64748B',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            Todos ({b2bClients.length})
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setClientTypeFilter('matriz')}
+                                                            style={{
+                                                                padding: '3px 10px',
+                                                                borderRadius: '14px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 'bold',
+                                                                border: clientTypeFilter === 'matriz' ? '1.5px solid #6D28D9' : '1px solid #CBD5E1',
+                                                                backgroundColor: clientTypeFilter === 'matriz' ? '#F5F3FF' : '#FFFFFF',
+                                                                color: clientTypeFilter === 'matriz' ? '#6D28D9' : '#64748B',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            <Building2 size={12} /> Casas Matrices ({b2bClients.filter(c => !c.parent_id).length})
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setClientTypeFilter('sucursal')}
+                                                            style={{
+                                                                padding: '3px 10px',
+                                                                borderRadius: '14px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 'bold',
+                                                                border: clientTypeFilter === 'sucursal' ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
+                                                                backgroundColor: clientTypeFilter === 'sucursal' ? '#E0F2FE' : '#FFFFFF',
+                                                                color: clientTypeFilter === 'sucursal' ? '#0284C7' : '#64748B',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            <MapPin size={12} /> Sucursales ({b2bClients.filter(c => Boolean(c.parent_id)).length})
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 
                                                 <div style={{ position: 'relative' }}>
                                                     <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                                                     <input 
                                                         type="text"
                                                         autoFocus
-                                                        placeholder="Escribe para buscar... ej: Aldimark, ECCI, Lao Kao, Colsubsidio..."
+                                                        placeholder="Escribe para buscar... ej: Restaurantes Wok, Wok Familia, Lao Kao, ECCI, Aldimark..."
                                                         value={clientSearchQuery}
                                                         onChange={(e) => setClientSearchQuery(e.target.value)}
                                                         style={{
@@ -6089,7 +6172,7 @@ export default function CommercialAgreementsModule() {
                                                     )}
                                                 </div>
 
-                                                {/* Live List of Casas Matrices */}
+                                                {/* Live List of Clients & Branches */}
                                                 <div style={{
                                                     maxHeight: '280px',
                                                     overflowY: 'auto',
@@ -6103,97 +6186,149 @@ export default function CommercialAgreementsModule() {
                                                         <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#64748B' }}>
                                                             <Building2 size={32} style={{ margin: '0 auto 8px auto', color: '#CBD5E1' }} />
                                                             <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#475569' }}>
-                                                                No se encontraron Casas Matrices con "{clientSearchQuery}"
+                                                                No se encontraron clientes ni sucursales con "{clientSearchQuery}"
                                                             </div>
                                                             <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '4px' }}>
-                                                                Solo se muestran Casas Matrices principales (las sucursales heredan el acuerdo de su matriz).
+                                                                Intenta cambiar los filtros de tipo o buscar por nombre o NIT.
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        filteredB2bClients.map((c) => (
-                                                            <div
-                                                                key={c.id}
-                                                                onClick={() => {
-                                                                    setSelectedClientId(c.id);
-                                                                    setClientSearchQuery('');
-                                                                    if (!isNameManuallyEdited) {
-                                                                        setAgreementName(computeDefaultAgreementName(c, false, startDate));
-                                                                    }
-                                                                }}
-                                                                style={{
-                                                                    padding: '12px 16px',
-                                                                    borderBottom: '1px solid #F1F5F9',
-                                                                    cursor: 'pointer',
-                                                                    display: 'flex',
-                                                                    justifyContent: 'space-between',
-                                                                    alignItems: 'center',
-                                                                    transition: 'all 0.15s ease'
-                                                                }}
-                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
-                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                            >
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369A1', flexShrink: 0 }}>
-                                                                        <Building2 size={18} />
+                                                        filteredB2bClients.map((c) => {
+                                                            const isSucursal = Boolean(c.parent_id);
+                                                            return (
+                                                                <div
+                                                                    key={c.id}
+                                                                    onClick={() => {
+                                                                        setSelectedClientId(c.id);
+                                                                        setClientSearchQuery('');
+                                                                        if (!isNameManuallyEdited) {
+                                                                            setAgreementName(computeDefaultAgreementName(c, false, startDate));
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '12px 16px',
+                                                                        borderBottom: '1px solid #F1F5F9',
+                                                                        cursor: 'pointer',
+                                                                        display: 'flex',
+                                                                        justifyContent: 'space-between',
+                                                                        alignItems: 'center',
+                                                                        transition: 'all 0.15s ease'
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSucursal ? '#F0F9FF' : '#F0FDF4'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                                >
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                        <div style={{ 
+                                                                            width: '36px', 
+                                                                            height: '36px', 
+                                                                            borderRadius: '8px', 
+                                                                            backgroundColor: isSucursal ? '#E0F2FE' : '#F5F3FF', 
+                                                                            display: 'flex', 
+                                                                            alignItems: 'center', 
+                                                                            justifyContent: 'center', 
+                                                                            color: isSucursal ? '#0284C7' : '#6D28D9', 
+                                                                            flexShrink: 0 
+                                                                        }}>
+                                                                            {isSucursal ? <MapPin size={18} /> : <Building2 size={18} />}
+                                                                        </div>
+                                                                        <div>
+                                                                            <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1E293B' }}>
+                                                                                {c.company_name}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                                {isSucursal && (
+                                                                                    <span style={{ color: '#0369A1', fontWeight: '600' }}>
+                                                                                        Sucursal de: <strong>{c.parentName}</strong>
+                                                                                    </span>
+                                                                                )}
+                                                                                {c.nit && <span>NIT: <strong>{c.nit}</strong></span>}
+                                                                                {c.contact_name && c.contact_name !== c.company_name && !isSucursal && <span>• Contacto: {c.contact_name}</span>}
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
-                                                                    <div>
-                                                                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1E293B' }}>
-                                                                            {c.company_name}
-                                                                        </div>
-                                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
-                                                                            {c.nit && <span>NIT: <strong>{c.nit}</strong></span>}
-                                                                            {c.contact_name && c.contact_name !== c.company_name && <span>• Contacto: {c.contact_name}</span>}
-                                                                        </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                        {isSucursal ? (
+                                                                            <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0284C7', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #BAE6FD' }}>
+                                                                                <MapPin size={12} /> Sucursal Específica
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#F5F3FF', color: '#6D28D9', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #DDD6FE' }}>
+                                                                                <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
+                                                                            </span>
+                                                                        )}
+                                                                        <ChevronRight size={16} color="#94A3B8" />
                                                                     </div>
                                                                 </div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                    <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0369A1', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
-                                                                    </span>
-                                                                    <ChevronRight size={16} color="#94A3B8" />
-                                                                </div>
-                                                            </div>
-                                                        ))
+                                                            );
+                                                        })
                                                     )}
                                                 </div>
                                             </div>
                                         ) : (
-                                            /* Selected Casa Matriz Card */
+                                            /* Selected Client Card (Matriz or Sucursal) */
                                             (() => {
                                                 const selectedClient = b2bClients.find(c => c.id === selectedClientId);
+                                                const isSucursal = Boolean(selectedClient?.parent_id);
                                                 return (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                                         <div style={{
-                                                            backgroundColor: '#F0FDF4',
-                                                            border: '2px solid #0D7A57',
+                                                            backgroundColor: isSucursal ? '#F0F9FF' : '#F0FDF4',
+                                                            border: `2px solid ${isSucursal ? '#0284C7' : '#0D7A57'}`,
                                                             borderRadius: '12px',
                                                             padding: '1.25rem 1.5rem',
                                                             display: 'flex',
                                                             justifyContent: 'space-between',
                                                             alignItems: 'center',
                                                             gap: '1rem',
-                                                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.08)'
+                                                            boxShadow: isSucursal ? '0 4px 12px rgba(2, 132, 199, 0.08)' : '0 4px 12px rgba(13, 122, 87, 0.08)'
                                                         }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', flexShrink: 0 }}>
-                                                                    <Building2 size={24} strokeWidth={2.2} />
+                                                                <div style={{ 
+                                                                    width: '48px', 
+                                                                    height: '48px', 
+                                                                    borderRadius: '12px', 
+                                                                    backgroundColor: isSucursal ? '#BAE6FD' : '#DCFCE7', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center', 
+                                                                    color: isSucursal ? '#0369A1' : '#0D7A57', 
+                                                                    flexShrink: 0 
+                                                                }}>
+                                                                    {isSucursal ? <MapPin size={24} strokeWidth={2.2} /> : <Building2 size={24} strokeWidth={2.2} />}
                                                                 </div>
                                                                 <div>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                        <span style={{ fontSize: '0.7rem', color: '#15803D', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                            <Check size={13} strokeWidth={2.5} /> Casa Matriz Verificada
+                                                                        <span style={{ 
+                                                                            fontSize: '0.7rem', 
+                                                                            color: isSucursal ? '#0369A1' : '#15803D', 
+                                                                            fontWeight: 'bold', 
+                                                                            textTransform: 'uppercase', 
+                                                                            letterSpacing: '0.03em', 
+                                                                            display: 'inline-flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '4px' 
+                                                                        }}>
+                                                                            {isSucursal ? (
+                                                                                <><MapPin size={13} strokeWidth={2.5} /> SUCURSAL ESPECÍFICA CON PRECIOS DEDICADOS</>
+                                                                            ) : (
+                                                                                <><Check size={13} strokeWidth={2.5} /> CASA MATRIZ VERIFICADA</>
+                                                                            )}
                                                                         </span>
-                                                                        {selectedClient?.branchCount !== undefined && selectedClient.branchCount > 0 && (
+                                                                        {!isSucursal && selectedClient?.branchCount !== undefined && selectedClient.branchCount > 0 && (
                                                                             <span style={{ fontSize: '0.65rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
                                                                                 {selectedClient.branchCount} {selectedClient.branchCount === 1 ? 'sucursal vinculada' : 'sucursales vinculadas'}
                                                                             </span>
                                                                         )}
                                                                     </div>
-                                                                    <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#064E3B', marginTop: '2px' }}>
+                                                                    <div style={{ fontSize: '1.05rem', fontWeight: '900', color: isSucursal ? '#0C4A6E' : '#064E3B', marginTop: '2px' }}>
                                                                         {selectedClient?.company_name || 'Cliente B2B'}
                                                                     </div>
-                                                                    <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
-                                                                        {selectedClient?.nit ? `NIT: ${selectedClient.nit}` : ''} {selectedClient?.phone ? `• Tel: ${selectedClient.phone}` : ''}
+                                                                    <div style={{ fontSize: '0.8rem', color: isSucursal ? '#0284C7' : '#047857', marginTop: '2px' }}>
+                                                                        {isSucursal ? (
+                                                                            <span>🏢 Dependiente de Casa Matriz: <strong>{selectedClient.parentName}</strong> {selectedClient?.nit ? `• NIT: ${selectedClient.nit}` : ''}</span>
+                                                                        ) : (
+                                                                            <span>{selectedClient?.nit ? `NIT: ${selectedClient.nit}` : ''} {selectedClient?.phone ? `• Tel: ${selectedClient.phone}` : ''}</span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -6220,6 +6355,24 @@ export default function CommercialAgreementsModule() {
                                                                 <RefreshCw size={13} /> Cambiar de Cliente
                                                             </button>
                                                         </div>
+
+                                                        {/* Contextual Notice for Specific Branch Agreement */}
+                                                        {isSucursal && (
+                                                            <div style={{
+                                                                backgroundColor: '#EFF6FF',
+                                                                border: '1px solid #BFDBFE',
+                                                                borderRadius: '10px',
+                                                                padding: '0.9rem 1.25rem',
+                                                                display: 'flex',
+                                                                gap: '10px',
+                                                                alignItems: 'flex-start'
+                                                            }}>
+                                                                <Info size={18} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                                                <div style={{ fontSize: '0.82rem', color: '#1E40AF', lineHeight: '1.4' }}>
+                                                                    <strong>Acuerdo Exclusivo de Sucursal:</strong> Los productos y precios acordados que cargues en este formulario aplicarán <strong>única y exclusivamente</strong> a los pedidos de <strong>{selectedClient?.company_name}</strong>. Esta tarifa tendrá prioridad y anulará automáticamente cualquier acuerdo general de la Casa Matriz ({selectedClient?.parentName}).
+                                                                </div>
+                                                            </div>
+                                                        )}
 
                                                         {/* ACTIVE AGREEMENT STATUS OR SUCCESS CONFIRMATION */}
                                                         {(() => {
@@ -6256,7 +6409,7 @@ export default function CommercialAgreementsModule() {
                                                                         <div style={{ flex: 1 }}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                                                 <strong style={{ color: '#92400E', fontSize: '0.95rem' }}>
-                                                                                    Advertencia: Esta Casa Matriz ya tiene un Acuerdo Comercial Vigente
+                                                                                    Advertencia: {isSucursal ? 'Esta Sucursal' : 'Esta Casa Matriz'} ya tiene un Acuerdo Comercial Vigente
                                                                                 </strong>
                                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', color: '#B45309', fontWeight: 'bold', border: '1px solid #FDE68A' }}>
                                                                                     {formatAgreementNumber(activeAgreement.quote_number, activeAgreement.created_at)}
@@ -6275,17 +6428,17 @@ export default function CommercialAgreementsModule() {
                                                             } else {
                                                                 return (
                                                                     <div style={{ 
-                                                                        backgroundColor: '#F0FDF4', 
-                                                                        border: '1px solid #BBF7D0', 
+                                                                        backgroundColor: isSucursal ? '#F0F9FF' : '#F0FDF4', 
+                                                                        border: `1px solid ${isSucursal ? '#BAE6FD' : '#BBF7D0'}`, 
                                                                         borderRadius: '10px', 
                                                                         padding: '0.9rem 1.25rem', 
                                                                         display: 'flex', 
                                                                         gap: '10px', 
                                                                         alignItems: 'center' 
                                                                     }}>
-                                                                        <CheckCircle2 size={18} color="#16A34A" />
-                                                                        <span style={{ fontSize: '0.82rem', color: '#166534', fontWeight: '600' }}>
-                                                                            Casa Matriz verificada sin acuerdos comerciales vigentes previos. Lista para configurar vigencia y precios.
+                                                                        <CheckCircle2 size={18} color={isSucursal ? '#0284C7' : '#16A34A'} />
+                                                                        <span style={{ fontSize: '0.82rem', color: isSucursal ? '#0369A1' : '#166534', fontWeight: '600' }}>
+                                                                            {isSucursal ? 'Sucursal específica' : 'Casa Matriz'} sin acuerdos comerciales vigentes previos. Lista para configurar vigencia y precios.
                                                                         </span>
                                                                     </div>
                                                                 );
@@ -6303,25 +6456,46 @@ export default function CommercialAgreementsModule() {
                             {createStep === 2 && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingTop: '1.5rem' }}>
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                                                {isMultiClientMode ? 'Modo de Asignación Masiva:' : 'Cliente Seleccionado:'}
-                                            </span>
-                                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                {isMultiClientMode ? (
-                                                    <>
-                                                        <span style={{ color: THEME.colors.primary, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                            <Users size={18} /> Acuerdo Institucional General
-                                                        </span>
-                                                        <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px' }}>
-                                                            {selectedClientIds.length} Casas Matrices seleccionadas
-                                                        </span>
-                                                    </>
-                                                ) : (
-                                                    b2bClients.find(c => c.id === selectedClientId)?.company_name || 'Cliente B2B'
-                                                )}
-                                            </div>
-                                        </div>
+                                        {(() => {
+                                            const selectedClient = b2bClients.find(c => c.id === selectedClientId);
+                                            const isSucursal = Boolean(selectedClient?.parent_id);
+                                            return (
+                                                <div>
+                                                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                                        {isMultiClientMode ? 'Modo de Asignación Masiva:' : isSucursal ? 'Sucursal Seleccionada:' : 'Casa Matriz Seleccionada:'}
+                                                    </span>
+                                                    <div style={{ fontSize: '1rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        {isMultiClientMode ? (
+                                                            <>
+                                                                <span style={{ color: THEME.colors.primary, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <Users size={18} /> Acuerdo Institucional General
+                                                                </span>
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px' }}>
+                                                                    {selectedClientIds.length} Casas Matrices seleccionadas
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {isSucursal ? (
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0284C7' }}>
+                                                                        <MapPin size={18} /> {selectedClient?.company_name || 'Sucursal B2B'}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <Building2 size={18} /> {selectedClient?.company_name || 'Cliente B2B'}
+                                                                    </span>
+                                                                )}
+                                                                {isSucursal && (
+                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #BAE6FD' }}>
+                                                                        Sucursal de {selectedClient?.parentName}
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                         <button 
                                             type="button" 
                                             onClick={() => setCreateStep(1)}
