@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -5462,7 +5462,7 @@ function OrderLoadingContent() {
                                                                     color: '#334155',
                                                                     fontSize: '1rem'
                                                                 }}>
-                                                                    {formatNumber(item.quantity, 1)} 
+                                                                    {formatQuantity(item.quantity)} 
                                                                     <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '4px', fontWeight: '600' }}>
                                                                         {item.products?.unit_of_measure}
                                                                     </span>
