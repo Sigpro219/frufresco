@@ -5390,8 +5390,10 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   3. **Preservación Canónica de Metadatos de Adjuntos:**
      - En `parsedAttachments` y `metadata.attachments`, se conservan explícitamente `content_id`, `is_inline`, `url` y `name`, permitiendo la reconciliación bidireccional exacta.
   4. **Resolución Client-Side y Fallback Elegante en GmailMessageViewer:**
-     - `GmailMessageViewer` enriquece la resolución de CIDs contrastando contra todos los adjuntos (`allAtts`), incluyendo mapeo heurístico 1-a-1 cuando hay una única imagen y un único CID.
+     - `GmailMessageViewer` enriquece la resolución de CIDs contrastando contra todos los adjuntos (`allAtts`), incluyendo mapeo heurístico 1-a-1 cuando hay una única imagen y un único CID, así como mapeo secuencial determinista cuando se detectan múltiples CIDs continuos sin mapeo explícito.
      - El `iframe` sandbox incorpora un interceptor `onerror` que sustituye imágenes rotas o externas inaccesibles por una píldora visual discreta (`[🖼️ Imagen inline no disponible]`), erradicando los cuadros rotos nativos del navegador.
+  5. **Higiene de Estilos de Outlook y Preservación de Aspect Ratio:**
+     - El visor aplica filtros regex para neutralizar estilos inline con dimensiones fijas heredadas de Microsoft Outlook (ej. `height: 8.26in; width: 19.8in;`) e inyecta reglas CSS prioritarias (`max-width: 100% !important; height: auto !important; object-fit: contain !important;`) para prevenir distorsión visual o alargamiento vertical de capturas ERP.
 
 ---
 
@@ -5896,4 +5898,25 @@ Las canastillas plásticas estándar (dimensiones 60×40×25 cm, tara oficial 2.
   5. Durante la entrega capilar en `/ops/driver/delivery/[id]`, el registro de `canastillasDelivered` y `canastillasReceived` actualiza el libro `asset_movements` y el saldo en `profiles.crate_balance`.
   6. Toda devolución física viaja a la Zona de Cuarentena en patio; solo tras el dictamen de Calidad en `/ops/inventory` se imputa a la **Columna O (Reingreso)** o a la **Columna Q (Avería)**.
   7. Al concluir la jornada, el conteo ciego asentado en la **Columna T** concilia Faltantes (**Col V**) y Sobrantes (**Col W**), congelando el registro inmutable en `daily_inventory_closings` donde $\text{Col U} = T + O$ se transfiere automáticamente como el Inventario Inicial (**Columna E**) de la jornada siguiente.
+
+---
+
+#### Escenario 126: Protocolo Canónico de Renderizado Continuo Apilado, Erradicación de Distorsión de Aspecto y Unificación de Capturas ERP Multi-Parte (SDD v1.9.94)
+- **Given** un correo electrónico entrante emitido desde clientes de correo corporativo (ej. Microsoft Outlook, OWA, Exchange) que contiene múltiples recortes o capturas de pantalla consecutivas de un pedido B2B (tablas corridas de ERPs como SAP, Zeus, Siigo, etc.) con dimensiones fijas arbitrarias en pulgadas/píxeles o adjuntos de imagen apilados.
+- **When** el webhook de ingesta (`/api/orders/email-ingest`) procesa el payload y la Mesa de Montaje (`EmailDraftsModule.tsx`) renderiza tanto el cuerpo del correo como la pestaña de adjuntos originales:
+- **Then**:
+  1. **Regla de Ingesta No-Fragmentaria para Capturas ERP:**
+     - Si los adjuntos entrantes son exclusivamente imágenes (`allAttachmentsAreImages`) o comparten el mismo número de orden de compra (`samePoAcrossAttachments`), queda terminantemente prohibido fragmentar el correo en múltiples borradores independientes (`[Adjunto 1/5]`, `[Adjunto 2/5]`).
+     - El backend consolida todos los ítems extraídos en un **único borrador maestro**, agregando todas las capturas al array `metadata.attachments` con su índice físico `_rawIndex` preservado para evitar colisiones de nombres de archivo genéricos (`image.png`).
+  2. **Higiene Anti-Distorsión y Neutralización de Estilos de Outlook:**
+     - El visor HTML (`GmailMessageViewer`) limpia automáticamente los atributos `width` y `height` con unidades fijas en pulgadas (`in`), puntos (`pt`) o píxeles anómalos insertados por el motor de renderizado de Microsoft Word/Outlook (ej. `width: 19.8in; height: 8.26in` o `height="793"` con `width="1900"`).
+     - Se inyecta una regla CSS global obligatoria dentro del iframe del visor:
+       `img { max-width: 100% !important; height: auto !important; width: auto !important; object-fit: contain !important; }`
+       garantizando que las tablas y capturas preserven su proporción nativa (aspect ratio 1:1) sin alargamiento vertical ni colapso horizontal.
+  3. **Protocolo de Renderizado Continuo Apilado (`[ 📎 Adjunto ]`):**
+     - Cuando un borrador contiene 2 o más capturas de imagen (`allImageAtts.length > 1`), la pestaña de adjuntos activa por defecto la vista de **Documento Continuo Apilado** (`attachmentViewMode: 'stacked'`).
+     - Todas las capturas se renderizan verticalmente en secuencia continua sin márgenes muertos, reproduciendo la vista natural del documento original del ERP como si fuera una sola página corrida.
+     - Cada segmento incorpora un cintillo contextual sutil (`Captura X de N - nombre.png`) y un alternador rápido a vista de lupa individual (`'zoom'`) para inspección milimétrica de renglones o especificaciones dudosas.
+  4. **Resolución Secuencial Determinista de CIDs:**
+     - En correos donde múltiples imágenes incrustadas carecen de mapeo explícito de Content-ID o presentan CIDs indexados, el motor de resolución vincula las imágenes secuencialmente en orden de aparición en lugar de marcar "Gráfico no disponible", asegurando que cada recorte se renderice en su posición visual correspondiente.
 
