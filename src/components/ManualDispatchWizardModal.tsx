@@ -17,6 +17,7 @@ import {
     RefreshCw, 
     ExternalLink, 
     FileText, 
+    FileSpreadsheet,
     Truck, 
     Tag, 
     ShieldAlert, 
@@ -1033,17 +1034,17 @@ export default function ManualDispatchWizardModal({
 
                         {/* Tarjetas de Acción de Compras e Inventario */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
-                            {/* Card 2A: Planilla por Sublistas */}
+                            {/* Card 2A: Planillas de Compra en Plaza (Corabastos) */}
                             <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #A7F3D0', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065F46', fontWeight: '900', fontSize: '0.80rem' }}>
-                                        <FileText size={15} /> Planillas Plaza
+                                        <FileText size={15} /> Compras en Plaza
                                     </div>
                                     <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
-                                        Compras por Sublista
+                                        Planillas de Compra (Plaza)
                                     </div>
                                     <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
-                                        Hojas para Papa, Plátano, Frutas y Hortalizas con casillas de precio.
+                                        Hojas por sublista (Papa, Plátano, Frutas, Hortalizas) con casillas de precio y puesto.
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
@@ -1073,17 +1074,17 @@ export default function ManualDispatchWizardModal({
                                 </div>
                             </div>
 
-                            {/* Card 2B: Excel Maestro (11 Cols) */}
+                            {/* Card 2B: Consolidado Maestro en Excel */}
                             <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #BAE6FD', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.80rem' }}>
-                                        <Download size={15} /> Dataset Digital
+                                        <FileSpreadsheet size={15} /> Consolidado Digital
                                     </div>
                                     <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
-                                        Excel Maestro (11 Cols)
+                                        Consolidado Maestro (Excel)
                                     </div>
                                     <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
-                                        Archivo oficial para compras, directores y cruce contable World Office.
+                                        Matriz oficial en Excel para compras, directores y cruce contable World Office.
                                     </div>
                                 </div>
                                 <button
@@ -1094,23 +1095,23 @@ export default function ManualDispatchWizardModal({
                                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
                                         boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)'
                                     }}
-                                    title="Descarga directa compras_YYYY-MM-DD.xlsx con 11 columnas"
+                                    title="Descarga directa compras_YYYY-MM-DD.xlsx con matriz consolidada"
                                 >
                                     <Download size={13} /> Exportar Excel (.xlsx)
                                 </button>
                             </div>
 
-                            {/* Card 2C: Control de Llegada (Conteo a Ciegas / Recepción en Bodega) */}
+                            {/* Card 2C: Control de Ingreso y Báscula (Patio / Muelle de Recibo) */}
                             <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #FDE68A', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.80rem' }}>
-                                        <Layers size={15} /> Muelle Recibo
+                                        <Truck size={15} /> Muelle &amp; Báscula
                                     </div>
                                     <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
-                                        Control de Llegada
+                                        Control de Ingreso y Báscula
                                     </div>
                                     <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
-                                        Planilla en Carta (2 cols A-Z) para cotejo y pesaje en báscula patio.
+                                        Planilla en Carta (2 cols A-Z) para pesaje en patio, conteo a ciegas y calidad.
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
@@ -1122,7 +1123,7 @@ export default function ManualDispatchWizardModal({
                                             borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
-                                        title="Descargar Control de Llegada en PDF"
+                                        title="Descargar Control de Ingreso y Báscula en PDF"
                                     >
                                         <Download size={12} /> PDF
                                     </Link>
@@ -1140,17 +1141,17 @@ export default function ManualDispatchWizardModal({
                                 </div>
                             </div>
 
-                            {/* Card 2D: Inventario de Bodega (INVENTARIO.pdf / 6 Folios Carta) */}
+                            {/* Card 2D: Toma Física de Inventario en Bodega */}
                             <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #DDD6FE', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6D28D9', fontWeight: '900', fontSize: '0.80rem' }}>
-                                        <ClipboardList size={15} /> Inventario Bodega
+                                        <ClipboardList size={15} /> Piso de Bodega
                                     </div>
                                     <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
-                                        INVENTARIO (6 Folios)
+                                        Toma Física de Inventario
                                     </div>
                                     <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
-                                        Toma física por sublistas de bodega (Hortalizas, Frutas, Papas, etc.).
+                                        Hojas de conteo en bodega por familias de producto para auditar existencias iniciales.
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '0.85rem' }}>
@@ -1162,7 +1163,7 @@ export default function ManualDispatchWizardModal({
                                             borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', textDecoration: 'none',
                                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px'
                                         }}
-                                        title="Descargar INVENTARIO.pdf en PDF"
+                                        title="Descargar Toma Física de Inventario en PDF"
                                     >
                                         <Download size={12} /> PDF
                                     </Link>
@@ -1436,7 +1437,7 @@ export default function ManualDispatchWizardModal({
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step2Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step2Confirmed ? '#16A34A' : '#94A3B8'} />
-                                    2. Compras por sublista &bull; Planilla recibo a ciegas
+                                    2. Compras en plaza &bull; Ingreso y báscula &bull; Conteo físico
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step3Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step3Confirmed ? '#16A34A' : '#94A3B8'} />
