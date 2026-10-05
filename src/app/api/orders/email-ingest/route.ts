@@ -1544,7 +1544,19 @@ export async function POST(req: Request) {
       });
     };
 
-    if (validAttachments.length > 1) {
+    // Detect if attachments are spliced image screenshots or belong to the same PO
+    const allAttachmentsAreImages = validAttachments.length > 0 && validAttachments.every((a: any) => {
+      const n = (a.name || '').toLowerCase();
+      return n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.webp') || a.is_inline;
+    });
+
+    const uniquePos = [...new Set(validAttachments.map((a: any) => a.purchaseOrder).filter(Boolean))];
+    const samePoAcrossAttachments = uniquePos.length <= 1;
+
+    // Only split into separate drafts if they are multiple distinct documents with conflicting POs
+    const shouldSplitIntoSeparateDrafts = validAttachments.length > 1 && !allAttachmentsAreImages && !samePoAcrossAttachments;
+
+    if (shouldSplitIntoSeparateDrafts) {
       for (let index = 0; index < validAttachments.length; index++) {
         const att = validAttachments[index];
         const draftId = index === 0 ? draftUuid : crypto.randomUUID();
@@ -1591,14 +1603,13 @@ export async function POST(req: Request) {
       const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
       const finalSubject = `[${shortCode}] ${subject}`.trim().replace(/\s+/g, ' ');
       
-      const sourceItems = Array.isArray(primarySource.items) && primarySource.items.length > 0
-        ? primarySource.items
-        : (Array.isArray(extractedData.items) ? extractedData.items : []);
+      const sourceItems = validAttachments.length > 0
+        ? validAttachments.flatMap((att, idx) => processItemsArray(att.items || [], idx, att.name || `Captura_${idx + 1}`))
+        : processItemsArray(Array.isArray(extractedData.items) ? extractedData.items : [], 0, null);
 
-      const processedItems = processItemsArray(sourceItems, 0, primarySource.name || null);
       const clientDetected = (primarySource.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim();
-      const hasValid = processedItems.length > 0;
-      const primaryPo = primarySource.purchaseOrder || extractedData.purchaseOrder || extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(currentPlainText) || null;
+      const hasValid = sourceItems.length > 0;
+      const primaryPo = uniquePos[0] || primarySource.purchaseOrder || extractedData.purchaseOrder || extractPurchaseOrderFromText(subject) || extractPurchaseOrderFromText(currentPlainText) || null;
 
       draftsToInsert.push({
         id: draftUuid,
@@ -1626,7 +1637,7 @@ export async function POST(req: Request) {
             autoRejectedReason: hasValid ? null : 'Sin productos ni requerimientos detectados (No es un pedido transaccional)',
             emailHtml: resolvedHtmlText || htmlText || null
           },
-          ...processedItems
+          ...sourceItems
         ],
         status: hasValid ? 'pending' : 'rejected'
       });

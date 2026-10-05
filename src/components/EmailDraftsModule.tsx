@@ -743,6 +743,24 @@ const GmailMessageViewer = ({
       );
     }
 
+    // Limpiar estilos rígidos de ancho/alto fijos de Outlook en etiquetas img para erradicar cualquier distorsión vertical
+    html = html.replace(/<img\b([^>]*)>/gi, (match, attrs) => {
+      let cleanAttrs = attrs
+        .replace(/\b(?:width|height)=["']?[^"'\s>]+["']?/gi, '')
+        .replace(/style=["']([^"']*)["']/gi, (_: string, styleContent: string) => {
+          const stripped = styleContent
+            .replace(/(?:^|;)\s*height\s*:[^;]+/gi, '')
+            .replace(/(?:^|;)\s*width\s*:[^;]+/gi, '')
+            .replace(/(?:^|;)\s*max-width\s*:[^;]+/gi, '')
+            .trim();
+          return `style="${stripped ? stripped + ';' : ''}max-width:100%;height:auto;object-fit:contain;"`;
+        });
+      if (!/style=["']/i.test(cleanAttrs)) {
+        cleanAttrs += ' style="max-width:100%;height:auto;object-fit:contain;"';
+      }
+      return `<img ${cleanAttrs.trim()}>`;
+    });
+
     return html;
   })();
 
@@ -820,7 +838,7 @@ const GmailMessageViewer = ({
         {resolvedHtml ? (
           <div style={{ width: '100%', minHeight: '260px' }}>
             <iframe
-              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:12px;}table{border-collapse:collapse;max-width:100%;}img{max-width:100%;height:auto;border-radius:6px;vertical-align:middle;}.img-broken-notice{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;}</style><script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("img").forEach(function(img){img.addEventListener("error",function(){if(!this.dataset.handled){this.dataset.handled="true";var span=document.createElement("div");span.className="img-broken-notice";span.innerHTML="<span>🖼️</span> <span>[Imagen inline no disponible]</span>";this.parentNode.insertBefore(span,this);this.style.display="none";}});});});</script></head><body>${resolvedHtml}</body></html>`}
+              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:12px;background:#FFFFFF;}table,div,p,span{max-width:100% !important;box-sizing:border-box !important;}img{max-width:100% !important;width:auto !important;height:auto !important;object-fit:contain !important;display:block !important;margin:8px auto !important;border-radius:4px !important;box-shadow:0 1px 3px rgba(0,0,0,0.08);}.img-broken-notice{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;}</style><script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("img").forEach(function(img){img.addEventListener("error",function(){if(!this.dataset.handled){this.dataset.handled="true";var span=document.createElement("div");span.className="img-broken-notice";span.innerHTML="<span>🖼️</span> <span>[Imagen inline no disponible]</span>";this.parentNode.insertBefore(span,this);this.style.display="none";}});});});</script></head><body>${resolvedHtml}</body></html>`}
               style={{ width: '100%', minHeight: '380px', border: 'none', backgroundColor: 'transparent' }}
               sandbox="allow-same-origin allow-popups"
             />
@@ -1272,6 +1290,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   } | null>(null);
   const [showFloatingEmail, setShowFloatingEmail] = useState(true);
   const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
+  const [attachmentViewMode, setAttachmentViewMode] = useState<'stacked' | 'zoom'>('stacked');
   const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
   const [excelSheetsData, setExcelSheetsData] = useState<any[]>([]);
   const [selectedExcelSheetIndex, setSelectedExcelSheetIndex] = useState<number>(0);
@@ -8543,10 +8562,124 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           }
                         }
 
-                        // Imagen con Sistema de Zoom, Panorámica y Rotación
+                        // Imagen con Sistema de Visualización Continua Apilada o Zoom Individual
                         if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+                          const allImageAtts = (metadata.attachments || []).filter((a: any) => {
+                            const u = a.url || '';
+                            const n = (a.name || '').toLowerCase();
+                            return u && (n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.webp') || (a.content_type || '').startsWith('image/'));
+                          });
+
+                          if (allImageAtts.length > 1 && attachmentViewMode === 'stacked') {
+                            return wrapContent(
+                              <div className="premium-scrollbar" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#F1F5F9', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+                                <div style={{ width: '100%', maxWidth: '850px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', fontSize: '0.74rem', color: '#64748B' }}>
+                                  <span style={{ fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>📑</span> Documento Continuo Apilado ({allImageAtts.length} capturas)
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttachmentViewMode('zoom')}
+                                    style={{
+                                      padding: '4px 10px',
+                                      backgroundColor: '#FFFFFF',
+                                      border: '1px solid #CBD5E1',
+                                      borderRadius: '6px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      color: '#2563EB',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                    }}
+                                  >
+                                    <ZoomIn size={12} /> Cambiar a Visor con Zoom
+                                  </button>
+                                </div>
+
+                                {allImageAtts.map((att: any, attIdx: number) => (
+                                  <div
+                                    key={attIdx}
+                                    style={{
+                                      width: '100%',
+                                      maxWidth: '850px',
+                                      backgroundColor: '#FFFFFF',
+                                      borderRadius: '8px',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                      border: '1px solid #E2E8F0',
+                                      overflow: 'hidden'
+                                    }}
+                                  >
+                                    <div style={{ padding: '6px 12px', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>
+                                      <span>{att.name || `Captura ${attIdx + 1}`}</span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span>Parte {attIdx + 1} de {allImageAtts.length}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedAttachmentIndex(attIdx);
+                                            setAttachmentViewMode('zoom');
+                                          }}
+                                          style={{
+                                            padding: '2px 8px',
+                                            backgroundColor: '#EFF6FF',
+                                            border: '1px solid #BFDBFE',
+                                            borderRadius: '4px',
+                                            color: '#1D4ED8',
+                                            fontSize: '0.65rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Ampliar con Zoom
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <img
+                                      src={att.url}
+                                      alt={att.name || `Parte ${attIdx + 1}`}
+                                      style={{
+                                        width: '100%',
+                                        height: 'auto',
+                                        display: 'block',
+                                        objectFit: 'contain'
+                                      }}
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+
                           return wrapContent(
-                            <div style={{ flex: 1, backgroundColor: '#0F172A', display: 'flex', position: 'relative', overflow: 'hidden', minHeight: '380px' }}>
+                            <div style={{ flex: 1, backgroundColor: '#0F172A', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', minHeight: '380px' }}>
+                              {allImageAtts.length > 1 && (
+                                <div style={{ position: 'absolute', top: '10px', right: '12px', zIndex: 10 }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttachmentViewMode('stacked')}
+                                    style={{
+                                      padding: '4px 10px',
+                                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                      border: '1px solid #CBD5E1',
+                                      borderRadius: '6px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      color: '#1E293B',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                                    }}
+                                  >
+                                    <span>📑</span> Ver Documento Apilado ({allImageAtts.length})
+                                  </button>
+                                </div>
+                              )}
                               <ImageZoomViewer src={currentUrl} alt={attachmentName} />
                             </div>
                           );
