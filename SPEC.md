@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.89 (Blindaje Mecánico Poka-Yoke en Paso 4: Inhibición Estricta del Botón de Sello Final ante Checkbox Incompleto o Lote Vacío)
+> **Versión:** 1.9.90 (Alineación Gemba Paso 4: Erradicación de Ficción QR Canastillas y Formalización Estricta de Etiquetas Térmicas Solo para SKUs con requires_label = true)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -5116,7 +5116,7 @@ flowchart TD
    - **Pieza 4 — Planilla de Conteo Físico de Bodega / 6 Folios Carta ([`/admin/inventory/physical-count-print`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/inventory/physical-count-print/page.tsx)):** Formato Carta de seis folios agrupados por familias de bodega para el levantamiento de inventario físico remanente al cierre de turno (**Columna T** de la Sábana).
    - **Pieza 5 — Juegos de Remisión Duplicadas ([`/admin/orders/contingency-print?mode=remissions`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)):** Formato Carta duplex continuo (`[ORIGINAL - CLIENTE]` e impar `[COPIA - ARCHIVO Y CONTABILIDAD]`) con membrete legal de *Investments Cortés S.A.S.*, recuadro de Bahía de Muelle estampada, casillas manuscritas para kilogramos/unidades recibidas, firmas, cédula, sello húmedo y control de comodato de canastillas plásticas.
    - **Pieza 6 — Manifiesto de Despacho & Balance de Canastillas / El Rutero ([`/admin/orders/contingency-print?mode=dispatch`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)):** Formato Carta por vehículo y conductor con placa, ruta de entrega, relación de remisiones asociadas, peso total transportado, saldo de canastillas plásticas entregadas vs devueltas y firmas de portería.
-   - **Pieza 7 — Rótulos Térmicos de Canastilla con QR ([`/admin/orders/print-labels`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/print-labels/page.tsx)):** Formato Rollo Térmico 100mm × 50mm impreso en secuencia sincrónica de ruta (LIFO) con QR de verificación, cliente, bahía, ventana de entrega y recuadro `[Canastilla ___ de ___]`.
+   - **Pieza 7 — Etiquetas Térmicas de Producto / SKUs Procesados ([`/admin/orders/print-labels`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/print-labels/page.tsx)):** Formato Rollo Térmico 100mm × 50mm para impresora Zebra/Xprinter. Se emiten **exclusiva y estrictamente para los SKUs del catálogo maestro que tienen activada la bandera `requires_label = true`** en la base de datos (productos procesados, empacados, porcionados, quesos, habichuela picada, raíz china, etc.). Cada etiqueta imprime: Nombre del producto, Lote del día (DD-MM-AA), Cantidad/Peso, Fecha de vencimiento, Razón Social del Cliente, Consecutivo del pedido y Código Contable / SKU. Los productos a granel estándar de plaza NO generan etiquetas térmicas.
    - *Dataset Digital Complementario:* Exportación del **Excel Maestro de 11 Columnas** (`compras_YYYY-MM-DD.xlsx`) con anchos pre-calibrados para la dirección de compras y precarga en World Office.
 
 4. **Bloqueo Poka-Yoke de Sello de Tanda:**

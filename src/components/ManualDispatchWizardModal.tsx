@@ -359,6 +359,52 @@ export default function ManualDispatchWizardModal({
         }, 0);
     }, [preparedOrders]);
 
+    // Productos en la tanda seleccionada que requieren etiqueta térmica de acuerdo al catálogo maestro (requires_label = true)
+    const itemsRequiringLabel = useMemo(() => {
+        const list: Array<{
+            orderId: string;
+            orderSequenceId: number | string;
+            clientName: string;
+            productName: string;
+            sku: string;
+            accountingId: string;
+            quantity: number;
+            unit: string;
+            labelCount: number;
+        }> = [];
+
+        selectedOrdersList.forEach(order => {
+            const clientName = order.profiles?.company_name || order.customer_name || 'Cliente';
+            (order.order_items || []).forEach((item: any) => {
+                const prod = item.products || item.product || {};
+                if (prod.requires_label === true) {
+                    const qty = Number(item.quantity) || 1;
+                    const fullUnits = Math.max(1, Math.floor(qty));
+                    const remainder = parseFloat((qty - fullUnits).toFixed(2));
+                    const labelCount = fullUnits + (remainder > 0 ? 1 : 0);
+
+                    list.push({
+                        orderId: order.id,
+                        orderSequenceId: order.sequence_id || '---',
+                        clientName,
+                        productName: (prod.name || item.nickname || 'Producto').toUpperCase(),
+                        sku: prod.sku || '',
+                        accountingId: String(prod.accounting_id || ''),
+                        quantity: qty,
+                        unit: (item.unit || prod.unit_of_measure || 'Kg').toUpperCase(),
+                        labelCount
+                    });
+                }
+            });
+        });
+
+        return list;
+    }, [selectedOrdersList]);
+
+    const totalProductLabelsNeeded = useMemo(() => {
+        return itemsRequiringLabel.reduce((sum, it) => sum + it.labelCount, 0);
+    }, [itemsRequiringLabel]);
+
     // Lanzamiento final a Proceso Logístico (status = para_compra)
     const handleFinalizeLaunch = async () => {
         if (!selectedOrderIds || selectedOrderIds.size === 0) {
@@ -621,7 +667,7 @@ export default function ManualDispatchWizardModal({
                         { num: 1, title: '1. Muelle & Bahías', subtitle: 'Asignación de espacios', icon: Grid, confirmed: step1Confirmed },
                         { num: 2, title: '2. Compras & Recibo', subtitle: 'Corabastos e ingreso', icon: FileText, confirmed: step2Confirmed },
                         { num: 3, title: '3. Remisiones & Manifiesto', subtitle: 'Entrega a clientes y ruta', icon: Truck, confirmed: step3Confirmed },
-                        { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas de canastilla', icon: Tag, confirmed: step4Confirmed }
+                        { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas de producto (SKUs)', icon: Tag, confirmed: step4Confirmed }
                     ].map(step => {
                         const isActive = currentStep === step.num;
                         const isPast = currentStep > step.num;
@@ -1393,30 +1439,62 @@ export default function ManualDispatchWizardModal({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ backgroundColor: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '16px', padding: '1.25rem' }}>
                             <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#7E22CE', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                Rótulos Térmicos de Canastilla
+                                Etiquetas Térmicas de Producto (SKUs Procesados)
                             </div>
                             <p style={{ margin: 0, fontSize: '0.76rem', color: '#6B21A8', lineHeight: '1.4' }}>
-                                Etiquetas adhesivas ordenadas en la misma secuencia de entrega para rotular las canastillas por cliente y bahía.
+                                Impresión en rollo térmico continuo (100×50mm) exclusivamente para los SKUs del catálogo que tienen activada la marca <strong>Requiere Etiqueta Térmica</strong> (procesados, empacados, porcionados o lácteos).
                             </p>
                         </div>
 
-                        {/* Card Rótulos Térmicos */}
+                        {/* Card Rótulos Térmicos de SKUs */}
                         <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #C084FC', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-                            <div>
+                            <div style={{ flex: 1, minWidth: '280px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#7E22CE', fontWeight: '900', fontSize: '0.84rem' }}>
-                                    <Tag size={16} /> Identificación de Canastillas
+                                    <Tag size={16} /> Productos con Etiquetado Obligatorio
                                 </div>
                                 <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A', marginTop: '6px' }}>
-                                    Rótulos Térmicos con QR
+                                    Etiquetas Térmicas de SKUs ({totalProductLabelsNeeded} etiquetas)
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
-                                    Etiquetas con cliente, bahía de muelle, horario de entrega y control de canastillas.
+                                    {itemsRequiringLabel.length > 0 ? (
+                                        <span>
+                                            Se detectaron <strong>{itemsRequiringLabel.length} productos</strong> que requieren rotulado térmico en esta tanda:
+                                        </span>
+                                    ) : (
+                                        <span>
+                                            Ningún SKU de esta tanda requiere etiqueta térmica (todos los productos son a granel o frescos directos de plaza).
+                                        </span>
+                                    )}
                                 </div>
+
+                                {itemsRequiringLabel.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                                        {itemsRequiringLabel.map((it, idx) => (
+                                            <span 
+                                                key={`req-lbl-${idx}`} 
+                                                style={{ 
+                                                    fontSize: '0.68rem', 
+                                                    backgroundColor: '#F3E8FF', 
+                                                    color: '#6B21A8', 
+                                                    fontWeight: '800', 
+                                                    padding: '3px 8px', 
+                                                    borderRadius: '6px', 
+                                                    border: '1px solid #D8B4FE',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <Package size={11} /> {it.productName} ({it.quantity} {it.unit}) &bull; <strong>{it.labelCount} rót.</strong>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <Link
-                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}`}
+                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`}
                                     target="_blank"
                                     style={{
                                         padding: '9px 12px', backgroundColor: '#FFFFFF', color: '#7E22CE', border: '1.5px solid #7E22CE',
@@ -1428,17 +1506,21 @@ export default function ManualDispatchWizardModal({
                                     <Download size={14} /> Visor PDF
                                 </Link>
                                 <Link
-                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}`}
+                                    href={`/admin/orders/print-labels?orderIds=${orderIdsParam}&type=product&filter=requires_label`}
                                     target="_blank"
                                     style={{
-                                        padding: '9px 14px', backgroundColor: '#7E22CE', color: '#FFFFFF',
+                                        padding: '9px 14px', 
+                                        backgroundColor: totalProductLabelsNeeded > 0 ? '#7E22CE' : '#94A3B8', 
+                                        color: '#FFFFFF',
                                         borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
                                         display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                        boxShadow: '0 2px 6px rgba(126, 34, 206, 0.3)'
+                                        boxShadow: totalProductLabelsNeeded > 0 ? '0 2px 6px rgba(126, 34, 206, 0.3)' : 'none',
+                                        pointerEvents: totalProductLabelsNeeded > 0 ? 'auto' : 'none',
+                                        cursor: totalProductLabelsNeeded > 0 ? 'pointer' : 'default'
                                     }}
-                                    title="Imprimir rótulos térmicos en rollo continuo 100x50mm"
+                                    title={totalProductLabelsNeeded > 0 ? "Imprimir rótulos térmicos en rollo continuo 100x50mm" : "No hay SKUs que requieran rotulado"}
                                 >
-                                    <Printer size={14} /> Imprimir Rótulos ({totalEstimatedCrates} canastillas) <ExternalLink size={10} />
+                                    <Printer size={14} /> {totalProductLabelsNeeded > 0 ? `Imprimir Etiquetas (${totalProductLabelsNeeded} rót.)` : '0 Etiquetas Requeridas'} <ExternalLink size={10} />
                                 </Link>
                             </div>
                         </div>
@@ -1463,7 +1545,7 @@ export default function ManualDispatchWizardModal({
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step4Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step4Confirmed ? '#16A34A' : '#94A3B8'} />
-                                    4. Rótulos térmicos de canastilla emitidos
+                                    4. Etiquetas térmicas de SKUs emitidas (o no requeridas en esta tanda)
                                 </div>
                             </div>
                         </div>
@@ -1524,7 +1606,9 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep4Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#7E22CE', cursor: 'pointer' }}
                                 />
-                                Rótulos térmicos y documentos físicos verificados.
+                                {itemsRequiringLabel.length > 0 
+                                    ? 'Etiquetas térmicas de producto verificadas e impresas.' 
+                                    : 'Verificado: Ningún SKU de esta tanda requiere etiqueta térmica.'}
                             </label>
 
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>

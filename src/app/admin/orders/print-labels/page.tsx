@@ -82,11 +82,13 @@ export default function BulkOrderPrintLabelsPage() {
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Operational Label Settings
-    const [labelType, setLabelType] = useState<'crate' | 'product'>('crate');
+    // Operational Label Settings (Default: Producto con requires_label = true)
+    const initialType = searchParams.get('type') === 'crate' ? 'crate' : 'product';
+    const [labelType, setLabelType] = useState<'crate' | 'product'>(initialType);
     const [cratesMode, setCratesMode] = useState<'auto' | 'single' | 'custom'>('auto');
     const [customMultiplier, setCustomMultiplier] = useState<number>(2);
-    const [productFilterMode, setProductFilterMode] = useState<'requires_label' | 'all'>('all');
+    const initialFilter = searchParams.get('filter') === 'all' ? 'all' : 'requires_label';
+    const [productFilterMode, setProductFilterMode] = useState<'requires_label' | 'all'>(initialFilter);
 
     // Date formatting helpers
     const getLoteDate = () => {
@@ -636,6 +638,14 @@ export default function BulkOrderPrintLabelsPage() {
                             </div>
                         </div>
                     ))
+                ) : productLabels.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3.5rem 2rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1.5px solid #CBD5E1', maxWidth: '650px', margin: '2rem auto', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                        <Tag size={40} color="#64748B" style={{ margin: '0 auto 1rem' }} />
+                        <h3 style={{ margin: '0 0 0.5rem', fontWeight: '800', fontSize: '1.1rem', color: '#0F172A' }}>No hay SKUs que requieran etiqueta térmica</h3>
+                        <p style={{ margin: 0, color: '#64748B', fontSize: '0.85rem' }}>
+                            Ninguno de los productos incluidos en los pedidos seleccionados tiene activada la casilla &ldquo;Requiere Etiqueta Térmica&rdquo; (requires_label = true) en el catálogo de SKUs.
+                        </p>
+                    </div>
                 ) : (
                     /* ======================================================== */
                     /* MODE 2: BROMATOLOGICAL ITEM LABELS (100mm x 50mm)        */
