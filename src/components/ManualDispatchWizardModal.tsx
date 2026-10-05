@@ -353,6 +353,15 @@ export default function ManualDispatchWizardModal({
 
     // Lanzamiento final a Proceso Logístico (status = para_compra)
     const handleFinalizeLaunch = async () => {
+        if (!selectedOrderIds || selectedOrderIds.size === 0) {
+            alert('No hay pedidos seleccionados para lanzar.');
+            return;
+        }
+        if (!step4Confirmed) {
+            alert('Debes confirmar la verificación de los rótulos térmicos y documentos físicos antes de finalizar.');
+            return;
+        }
+
         setFinalizingLoading(true);
         try {
             const { error } = await supabase
@@ -1512,29 +1521,40 @@ export default function ManualDispatchWizardModal({
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                                 <button
                                     onClick={handleFinalizeLaunch}
-                                    disabled={finalizingLoading}
+                                    disabled={finalizingLoading || !step4Confirmed || selectedOrderIds.size === 0}
                                     style={{
                                         padding: '12px 24px',
-                                        backgroundColor: '#059669',
+                                        backgroundColor: (!step4Confirmed || selectedOrderIds.size === 0) ? '#94A3B8' : '#059669',
                                         color: '#FFFFFF',
                                         border: 'none',
                                         borderRadius: '12px',
                                         fontWeight: '900',
                                         fontSize: '0.90rem',
                                         letterSpacing: '0.01em',
-                                        cursor: finalizingLoading ? 'wait' : 'pointer',
-                                        boxShadow: '0 4px 14px rgba(5, 150, 105, 0.4)',
+                                        cursor: finalizingLoading ? 'wait' : (!step4Confirmed || selectedOrderIds.size === 0) ? 'not-allowed' : 'pointer',
+                                        boxShadow: (!step4Confirmed || selectedOrderIds.size === 0) ? 'none' : '0 4px 14px rgba(5, 150, 105, 0.4)',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '8px',
-                                        transition: 'all 0.15s ease'
+                                        transition: 'all 0.15s ease',
+                                        opacity: (!step4Confirmed || selectedOrderIds.size === 0) ? 0.75 : 1
                                     }}
+                                    title={!step4Confirmed ? 'Debes marcar la casilla de verificación antes de finalizar' : 'Sellar y lanzar tanda'}
                                 >
                                     <CheckCircle2 size={18} />
                                     {finalizingLoading ? 'Sellando Tanda en Base de Datos...' : 'FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO'}
                                 </button>
-                                <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: '600' }}>
-                                    Pasa pedidos a <strong>para_compra</strong> (Compras Corabastos &amp; Alistamiento)
+                                <span style={{ fontSize: '0.66rem', color: !step4Confirmed ? '#DC2626' : '#64748B', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    {!step4Confirmed ? (
+                                        <>
+                                            <AlertTriangle size={12} color="#DC2626" />
+                                            Requiere verificación de rótulos para habilitar el botón
+                                        </>
+                                    ) : (
+                                        <>
+                                            Pasa pedidos a <strong>para_compra</strong> (Compras Corabastos &amp; Alistamiento)
+                                        </>
+                                    )}
                                 </span>
                             </div>
                         </div>

@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.88 (Ergonomía Industrial & Poka-Yoke Visual en Paso 1 de Asistente de Despacho Manual: Telemetría Limpia, Auto-Save Silencioso y Acordeón Nave 150 Bahías)
+> **Versión:** 1.9.89 (Blindaje Mecánico Poka-Yoke en Paso 4: Inhibición Estricta del Botón de Sello Final ante Checkbox Incompleto o Lote Vacío)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -5120,7 +5120,8 @@ flowchart TD
    - *Dataset Digital Complementario:* Exportación del **Excel Maestro de 11 Columnas** (`compras_YYYY-MM-DD.xlsx`) con anchos pre-calibrados para la dirección de compras y precarga en World Office.
 
 4. **Bloqueo Poka-Yoke de Sello de Tanda:**
-   - Al pulsar el botón `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO`, el sistema ejecuta la actualización transaccional de los pedidos seleccionados pasando su estado a `status = 'para_compra'`.
+   - **Inhibición Mecánica del Botón de Sello (`step4Confirmed` & `selectedOrderIds.size > 0`):** El botón `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO` permanece estrictamente deshabilitado (`disabled`) hasta que el operador marque de forma afirmativa y consciente el checkbox de verificación física de piso (`step4Confirmed = true`) y exista al menos un pedido seleccionado en la tanda. Queda erradicada cualquier posibilidad de sellar la tanda por descuido o aceleración del operario sin verificar físicamente las impresiones térmicas.
+   - **Transición de Estado Atómica:** Al pulsar el botón validado, el sistema ejecuta la actualización transaccional de los pedidos seleccionados pasando su estado a `status = 'para_compra'`.
    - **Blindaje Inmutable (Read-Only):** Los pedidos quedan estrictamente bloqueados contra edición de ítems, cantidades, cambio de sucursal o cancelación tanto desde la interfaz comercial como desde la autogestión B2B/tienda web. Cualquier alteración física posterior debe canalizarse a través de las compuertas de rectificación en muelle o servicio al cliente.
 
 5. **Ergonomía Industrial y Poka-Yoke Visual en Paso 1 (Muelle & Bahías):**
