@@ -351,6 +351,14 @@ export default function ManualDispatchWizardModal({
         });
     }, [preparedOrders, manualSpacesMap]);
 
+    // Total de canastillas estimadas para la tanda de pedidos seleccionados
+    const totalEstimatedCrates = useMemo(() => {
+        return preparedOrders.reduce((sum, o) => {
+            const { crates } = calculateCratesAndSpaces(o.total_weight_kg, 12.5, 36);
+            return sum + crates;
+        }, 0);
+    }, [preparedOrders]);
+
     // Lanzamiento final a Proceso Logístico (status = para_compra)
     const handleFinalizeLaunch = async () => {
         if (!selectedOrderIds || selectedOrderIds.size === 0) {
@@ -1415,9 +1423,9 @@ export default function ManualDispatchWizardModal({
                                         borderRadius: '8px', fontSize: '0.76rem', fontWeight: '900', textDecoration: 'none',
                                         display: 'inline-flex', alignItems: 'center', gap: '5px'
                                     }}
-                                    title="Descargar Rótulos Térmicos en PDF"
+                                    title="Abrir visor web y guardar en PDF (formato 100x50mm)"
                                 >
-                                    <Download size={14} /> PDF
+                                    <Download size={14} /> Visor PDF
                                 </Link>
                                 <Link
                                     href={`/admin/orders/print-labels?orderIds=${orderIdsParam}`}
@@ -1428,8 +1436,9 @@ export default function ManualDispatchWizardModal({
                                         display: 'inline-flex', alignItems: 'center', gap: '5px',
                                         boxShadow: '0 2px 6px rgba(126, 34, 206, 0.3)'
                                     }}
+                                    title="Imprimir rótulos térmicos en rollo continuo 100x50mm"
                                 >
-                                    <Printer size={14} /> Imprimir Rótulos ({selectedOrdersList.length}) <ExternalLink size={10} />
+                                    <Printer size={14} /> Imprimir Rótulos ({totalEstimatedCrates} canastillas) <ExternalLink size={10} />
                                 </Link>
                             </div>
                         </div>
