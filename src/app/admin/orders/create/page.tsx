@@ -3837,7 +3837,7 @@ function CreateOrderContent() {
                 .insert({
                     profile_id: finalProfileId,
                     total: Math.round(total),
-                    total_weight_kg: parseFloat(totalWeightKg.toFixed(2)),
+                    total_weight_kg: parseFloat(totalWeightKg.toFixed(3)),
                     subtotal: Math.round(subtotal),
                     tax: Math.round(tax),
                     status: 'pending_approval',
@@ -4189,7 +4189,7 @@ function CreateOrderContent() {
                         total: parseFloat(total.toFixed(2)),
                         subtotal: parseFloat(subtotal.toFixed(2)),
                         tax: parseFloat(tax.toFixed(2)),
-                        total_weight_kg: parseFloat(totalWeight.toFixed(2)),
+                        total_weight_kg: parseFloat(totalWeight.toFixed(3)),
                         status: 'pending_approval',
                         payment_status: 'Pendiente',
                         payment_method: paymentMethod,
@@ -8346,11 +8346,12 @@ function CreateOrderContent() {
                                                                 <label style={{ fontWeight: 'bold' }}>Factor:</label>
                                                                 <input
                                                                     type="number"
+                                                                    step="0.001"
                                                                     value={item.conversion_factor || ''}
                                                                     onChange={(e) => {
                                                                         const factor = parseFloat(e.target.value) || 1;
                                                                         const orig = item.originalQty || 1;
-                                                                        const calculatedQty = parseFloat((orig * factor).toFixed(2));
+                                                                        const calculatedQty = parseFloat((orig * factor).toFixed(3));
                                                                         setCart(prev => prev.map((itm, i) => i === idx ? {
                                                                             ...itm,
                                                                             conversion_factor: factor,
