@@ -34,6 +34,7 @@ export function normalizeText(str?: string | null): string {
 
 /**
  * Normaliza direcciones eliminando abreviaciones comunes, signos, espacios y tildes.
+ * Remueve sufijos y repeticiones de ciudad/departamento/país para evitar falsas diferencias de sede.
  */
 export function normalizeAddress(addr?: string | null): string {
     if (!addr) return '';
@@ -41,6 +42,7 @@ export function normalizeAddress(addr?: string | null): string {
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\b(bogota|cundinamarca|colombia|d\.?c\.?)\b/gi, '')
         .replace(/[^a-z0-9]/g, '')
         .trim();
 }

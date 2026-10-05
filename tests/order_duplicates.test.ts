@@ -76,3 +76,37 @@ test('getOrderDocumentSignature: extrae correctamente el nombre limpio y número
   assert.equal(sig.filename, '010occ17309_.pdf');
   assert.equal(sig.ocNumber, '17309');
 });
+
+test('detectDuplicateOrders: Detecta duplicados incluso con variaciones o sufijos repetidos de ciudad en la dirección', () => {
+  const orderA = {
+    id: 'ord-corferias-1',
+    sequence_id: 985,
+    profile_id: 'pid-corferias',
+    customer_name: 'Corferias',
+    delivery_date: '2026-10-06',
+    shipping_address: 'CRA 37 24-67 RECINTO FERIAL (puerta 3)., Bogotá, Cundinamarca, Bogotá, Cundinamarca',
+    total: 1532920,
+    total_weight_kg: 204.8,
+    document_url: 'https://storage.supabase.co/order-attachments/corferias_order.png',
+    status: 'pending_approval'
+  };
+
+  const orderB = {
+    id: 'ord-corferias-2',
+    sequence_id: 986,
+    profile_id: 'pid-corferias',
+    customer_name: 'Corferias',
+    delivery_date: '2026-10-06',
+    shipping_address: 'CRA 37 24-67 RECINTO FERIAL (puerta 3)., Bogotá, Cundinamarca, Bogotá, Cundinamarca, Bogotá, Cundinamarca',
+    total: 1532920,
+    total_weight_kg: 204.8,
+    document_url: 'https://storage.supabase.co/order-attachments/corferias_order.png',
+    status: 'pending_approval'
+  };
+
+  const result = detectDuplicateOrders([orderA, orderB]);
+  assert.equal(result.size, 2, 'Ambas órdenes deben ser detectadas como duplicadas a pesar de la repetición de ciudad en dirección');
+  assert.equal(result.get('ord-corferias-1')?.isDuplicate, true);
+  assert.equal(result.get('ord-corferias-2')?.isDuplicate, true);
+});
+

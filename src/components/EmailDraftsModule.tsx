@@ -4384,7 +4384,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
       
       if (matchedProfile && matchedProfile.address) {
-        const fullAddress = `${matchedProfile.address}${matchedProfile.municipality || matchedProfile.city ? `, ${matchedProfile.municipality || matchedProfile.city}` : ''}${matchedProfile.department ? `, ${matchedProfile.department}` : ''}`;
+        const city = matchedProfile.municipality || matchedProfile.city || '';
+        const dept = matchedProfile.department || '';
+        let fullAddress = matchedProfile.address;
+        if (city && !fullAddress.toLowerCase().includes(city.toLowerCase())) {
+          fullAddress += `, ${city}`;
+        }
+        if (dept && !fullAddress.toLowerCase().includes(dept.toLowerCase())) {
+          fullAddress += `, ${dept}`;
+        }
         setEditableAddress(fullAddress);
       } else {
         setEditableAddress(meta.address || '');
