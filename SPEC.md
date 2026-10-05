@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.93 (Radiografía End-to-End del Pipeline Digital OPS [10 Módulos], MIFA Canónico, Carga/Descarga de Inventario y Circuito Cerrado de Canastillas Plásticas)
+> **Versión:** 1.9.94 (Acople Transaccional TMS [/admin/transport] ⟷ WMS/OPS [/ops/*], Ecosistema Google Maps, Gobernanza de 150 Bahías y Modo Sandbox de Pruebas)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -2743,6 +2743,88 @@ La planificación algorítmica de despachos de FruFresco se articula directament
      `INICIAR ASISTENTE GUIADO (PASO A PASO) ➔`.
 2. **Acceso Directo Universal de Impresión 1-Clic:** Tanto en la vista modal de lanzamiento como en el paso final del asistente guiado, se dispone de un botón permanente y visible:  
    `[Imprimir Kit de Contingencia Completo (1-Clic)]` enlazado a `/admin/orders/contingency-print?mode=all&orderIds=...`, permitiendo al supervisor emitir la totalidad del juego físico (Sábana de Alistamiento, Consolidado de Compras, Remisiones Duplicadas y Rótulos Térmicos) sin bloqueos operativos.
+
+---
+
+### 18.11 Protocolo Canónico de Acople Integral TMS (/admin/transport) ⟷ WMS/OPS (/ops/*) & Cerradura de Pipeline
+
+#### A. Los Cuatro (4) Apretón de Manos (Handshakes) Operacionales
+Para erradicar fisuras entre la orquestación logística de oficina y la ejecución en el piso de bodega, el sistema impone cuatro acoples transaccionales atómicos e irreversibles:
+
+1. **Handshake 1: Planeación de Ruta ➔ Picking & Reserva de Bahías (TMS ➔ WMS):**
+   - Al presionar `Confirmar Rutas` en el Planeador Algorítmico (`RoutePlanner.tsx`), el endpoint `/api/transport/confirm` ejecuta una transacción atómica:
+     * Inserta la cabecera en `routes` con `status = 'loading'`, matrícula, conductor y snapshot de parámetros lógicos.
+     * Inserta los renglones en `route_stops` con `sequence_number` (orden 1 a N de entrega determinado por Google Route Optimization API).
+     * Ejecuta el algoritmo de asignación temporal de bahías libres en el intervalo $[\text{salida} - \text{duración} - 15\text{m buffer},\ \text{salida}]$, asignando de 1 a 3 bahías contiguas en el rango físico `[1..150]`.
+     * Transiciona los pedidos asociados a `status = 'picking'` y persiste `warehouse_spaces` y `crates_count` en la tabla `orders`.
+   - **Invarianza:** Los pedidos desaparecen de la bandeja de planeación y se activan inmediatamente en el piso de alistamiento.
+
+2. **Handshake 2: Células de Alistamiento ➔ Rótulos Térmicos & Bahías de Suelo (WMS ➔ Gemba):**
+   - Los operarios de las 6 células en `/ops/picking/terminal` pesan el producto en balanzas industriales y descuentan stock físico vía trigger PostgreSQL `trigger_deduct_picking`.
+   - Al completar el pedido, el generador térmico (`ThermalLabelModal.tsx`) imprime el rótulo adhesivo de 100×50mm (`requires_label = true`), estampando obligatoriamente el número canónico de bahía obtenido mediante `formatSpaceLabel(order.warehouse_spaces)` (ej. `Bahía 14`).
+   - Los estibadores trasladan las canastillas rotuladas y las apilan físicamente en la Bahía 14 de la nave central de Corabastos.
+   - La ocupación se refleja en tiempo real en la pantalla industrial de 65" de `AirportBoard` (FIDS) y en la consola de telemetría de `/ops/picking/dashboard`.
+
+3. **Handshake 3: Bahías de Suelo ➔ Rectificación LIFO & Veto de Despacho (Gemba ➔ TMS):**
+   - El equipo de rectificación en muelle abre la ruta en `/ops/rectificacion/[routeId]`.
+   - El sistema ordena las paradas en secuencia **LIFO Inversa (Last-In, First-Out)**: la parada 1 (primera en entregarse) se audita de última porque debe quedar pegada al portón trasero del furgón; la última parada se audita de primera porque va al fondo del chasis.
+   - Si se detecta un faltante por desabastecimiento general en Corabastos, el despachador declara la escasez (`order_shortage`), imputándola a la **Columna K** del Balance de Masa y ajustando la remisión neta para facturación exacta.
+   - Al certificar la totalidad de la carga, el operador digita el número de precinto de seguridad y sella la ruta digitalmente:
+     * `routes.status = 'rectified'`, `routes.is_certified_complete = true`.
+     * Todos los pedidos de la ruta transicionan a `status = 'ready_for_dispatch'`.
+   - **Compuerta Poka-Yoke de Veto de Despacho:** Un vehículo tiene prohibido abandonar el muelle de carga si la ruta no cuenta con estatus `rectified`.
+
+4. **Handshake 4: Conductor Móvil ➔ Torre de Control TMS & Balance Cero-Pérdida (TMS ➔ Última Milla):**
+   - El conductor inicia su jornada en la aplicación web móvil (`/ops/driver/route/[id]`).
+   - Valida la carga estibada y pulsa `Confirmar Cargue`, transicionando la ruta y sus pedidos a `status = 'in_transit'`.
+   - La aplicación móvil lanza el navegador satelital de Google Maps (`/ops/driver/route-map/[id]`), mientras la Torre de Control (`/admin/transport?tab=map`) sigue el desplazamiento en vivo con rotación de rumbo y velocidad.
+   - En cada entrega (`/ops/driver/delivery/[id]`):
+     * Captura la firma digital de recibido (POD) y georreferencia GPS de la parada.
+     * Si el cliente rechaza mercancía, toma soporte fotográfico y asienta la novedad en `billing_returns` y `inventory_movements` con destino a la **Zona de Cuarentena en Patio (Columna O)**.
+     * Registra el canje físico de canastillas (`canastillasDelivered` vs `canastillasReceived`), actualizando atómicamente el saldo deudor del cliente en `profiles.crate_balance` y el libro `asset_movements`.
+   - Al completar la última parada, la ruta transiciona automáticamente a `status = 'completed'`.
+
+#### B. Gobernanza del Candado Inteligente con Bypass de Modo Pruebas / Sandbox
+Para conciliar el rigor de auditoría industrial en producción con la agilidad requerida durante pruebas de interfaz, desarrollo y homologación:
+1. **Regla de Producción Estricta:**  
+   En la aplicación móvil del chofer (`/ops/driver/route/[id]`), el botón `[Confirmar Cargue]` permanece bloqueado e inactivo si la ruta no tiene el precinto de rectificación certificado (`routes.status !== 'rectified'`), mostrando el aviso:  
+   `🔒 Ruta pendiente de certificación física y precinto en muelle de salida`.
+2. **Bypass de Sandbox para Administradores / Entorno de Pruebas:**  
+   Si el usuario activo posee rol administrativo (`role in ('admin', 'sys_admin')`) o la aplicación se ejecuta en entorno de desarrollo (`localhost` / `development`), la interfaz despliega un control secundario cromático ámbar:  
+   `[⚡ Forzar Inicio de Ruta (Bypass Modo Pruebas)]`.  
+   - Al pulsarlo, el sistema levanta una confirmación modal explícita y permite transicionar la ruta y pedidos a `in_transit` de inmediato.
+   - La acción asienta un log en `audit_logs` con la etiqueta `TEST_MODE_BYPASS_RECTIFICATION`, permitiendo probar la app del chofer, la navegación y las entregas sin requerir personal físico en muelle.
+3. **Rutas Mock Inmunes:**  
+   Se mantienen activas y operativas las rutas de demostración (`mock-1`, `mock-2`) para pruebas de interfaz instantáneas sin interactuar con la base de datos de producción.
+
+#### C. Calibración Limpia de Variables en el Optimizador de Google (`/api/transport/optimize`)
+Para evitar distorsiones algorítmicas y garantizar estabilidad operativa en el backend serverless:
+1. **Mercancía Refrigerada (Arquitectura Escalable sin Placebos):**  
+   Se erradica el valor ficticio hardcodeado `refrigerated = 999`. La dimensión de refrigeración permanece latente y se activará de forma nativa cuando se incorporen camiones con Thermo-King parametrizados con `fleet_vehicles.is_refrigerated = true`. Mientras no existan camiones de frío dedicados, los alimentos frescos viajan bajo isotermia estándar sin generar restricciones artificiales en Google.
+2. **Pausa de Conducción en Reparto Matutino Corto:**  
+   Se desactiva la pausa activa obligatoria (`driver_break_mins = 0`) para rutas cuya duración sea inferior a cuatro (4) horas (franja matutina de 04:30 a 08:30 AM). Esto previene que Google descarte paradas de restaurantes por intentar acomodar un descanso de 45 minutos en plena hora pico de entrega de cocinas.
+3. **Fricción de Cobro Contra-Entrega en Tiempo de Parada:**  
+   Al calcular el tiempo de servicio (`unloadingTime`), si el pedido registra condición de pago contra-entrega en efectivo (`payment_method === 'cash_on_delivery'`), el algoritmo suma automáticamente **+5 minutos adicionales** para absorber el tiempo de conteo de billetes y validación de transferencias.
+4. **Resiliencia Serverless (Timeout Shield):**  
+   Se sustituye el modo exhaustivo `CONSUME_ALL_AVAILABLE_TIME` por el modo estándar de búsqueda de Google Cloud, garantizando respuestas en menos de 5 segundos y erradicando caídas por timeout de 15s/30s en Vercel.
+
+#### D. Ratificación del Gemelo Digital de Muelle (`/admin/transport?tab=staging`)
+La pestaña de Muelle y Bahías (`StagingSpacesManagement.tsx`) se ratifica como un componente esencial, no prescindible e innegociable del SCOS:
+- Constituye la representación visual exacta de las **150 Bahías Físicas de Suelo** de la bodega central de Corabastos.
+- Funciona como la consola táctica donde el supervisor de muelle audita qué pedidos, clientes y rutas ocupan cada cuadrante de piso en cada momento.
+- Permite la reubicación manual asistida ante eventualidades físicas en el Gemba (charcos, estibas rotas o congestión de carretillas), actualizando `orders.warehouse_spaces` en caliente.
+
+---
+
+#### Escenario 25: Acople Transaccional TMS-OPS con Bypass de Pruebas y Secuencia LIFO (SDD v1.9.94)
+- **Given** una tanda de 15 pedidos B2B confirmados y optimizados mediante Google Route Optimization API.
+- **When** el planeador de transporte ejecuta `/api/transport/confirm`:
+- **Then**:
+  1. Se generan las rutas en `routes` con `status = 'loading'` y los pedidos se actualizan a `status = 'picking'` con bahías de piso asignadas (1 a 150) sin solapamiento de intervalos.
+  2. En `/ops/picking/terminal`, las células pesan los productos e imprimen rótulos térmicos 100×50mm con el número de bahía estampada; las canastillas se estiban físicamente en la bahía de piso correspondiente.
+  3. En `/ops/rectificacion/[routeId]`, las paradas se auditan en secuencia LIFO inversa; al estampar el precinto numerado, la ruta pasa a `rectified` y los pedidos a `ready_for_dispatch`.
+  4. En la aplicación del chofer (`/ops/driver/route/[id]`), un conductor estándar tiene vetado el inicio de ruta si `status !== 'rectified'`; un usuario administrador cuenta con el botón `[⚡ Forzar Inicio de Ruta (Bypass Modo Pruebas)]` para avanzar al mapa de navegación sin bloqueos.
+  5. En `/ops/driver/delivery/[id]`, el chofer registra la firma POD, fotos de eventuales rechazos (contingencia en Columna O de patio) y el conteo neto de canastillas, actualizando de forma atómica `profiles.crate_balance` y cerrando la ruta con `status = 'completed'`.
 
 ---
 
