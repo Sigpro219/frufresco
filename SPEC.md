@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.92 (Principio Canónico de Isomorfismo Operativo: Fuente Única de Verdad SSOT entre Modo Manual de Piso y Modo Digital Nube / Portal OPS)
+> **Versión:** 1.9.93 (Radiografía End-to-End del Pipeline Digital OPS [10 Módulos], MIFA Canónico, Carga/Descarga de Inventario y Circuito Cerrado de Canastillas Plásticas)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -258,6 +258,19 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
   2. Migrar las instancias imperativas `new window.google.maps.Marker({...})` en `ClientsModule.tsx` hacia `new window.google.maps.marker.AdvancedMarkerElement({...})`.
   3. Reemplazar las importaciones de `<Marker />` por `<AdvancedMarker />` desde `@vis.gl/react-google-maps` (versión `^1.7.1` ya instalada y con la librería `marker` cargada en `providers.tsx`).
   4. Verificar la supresión total del mensaje amarillo de obsolescencia en la consola de desarrollo de Chrome/Edge.
+
+### ⏳ DEUDA TÉCNICA 18: Optimización Lean de Densidad Volumétrica en Canastillas y Buffers TOC en Muelle de Entrada
+- **Diagnóstico de Auditoría Lean (Gemba E2E):**
+  1. **Disparidad de Densidad Botánica vs Constante Cúbica Fija:** El sistema estima actualmente la cantidad de canastillas plásticas aplicando un divisor rígido uniforme de 12.5 kg ($\lceil \text{peso\_kg} / 12.5 \rceil$). En la realidad física de acopio, productos de baja densidad botánica (lechugas, hierbas aromáticas, espinacas) llenan una canastilla con 6 a 8 kg, mientras que productos de alta densidad (papa, cebolla cabezona, zanahoria) alcanzan de 18 a 22 kg por canastilla. Esta discrepancia distorsiona la ocupación estimada de bahías en bodega y el cubicaje de camiones pequeños.
+  2. **Acople Rígido en Básculas y Concurrencia Transaccional en Picking:** La descarga de stock físico se ejecuta de manera sincrónica a través del trigger PostgreSQL `trigger_deduct_picking` al asentar el pesaje neto de cada ítem en `order_items`. Durante ventanas de alto flujo con 6 células de pesaje simultáneas y pesajes continuos de bultos fraccionados, existe riesgo latente de contención en base de datos (*row-level locks*) y desfases si se requiere reclasificar un pesaje por tara errada.
+  3. **Riesgo de Aplastamiento Físico en Bahías de Staging (Límite de Apilamiento):** La capacidad nominal teórica de una bahía de piso es de hasta 36 canastillas. Físicamente, una pila superior a 4 niveles (1.60 m) genera inestabilidad mecánica y aplastamiento biológico sobre frutos tiernos en la base.
+  4. **Sincronización TOC Drum-Buffer-Rope entre Entrada y Picking:** La jornada nocturna arranca alistamiento mientras los camiones de Corabastos aún descargan en muelle. La ausencia de un búfer visual (*Release Gate*) de tanda puede generar momentos de desabastecimiento temporal en células si el comprador se retrasa en plaza.
+- **Estatus Arquitectónico & Resolución:**
+  - **Archivado como Deuda Técnica Estratégica (No Bloqueante):** Conforme al mandato de gerencia operativa, se decide **no implementar modificaciones complejas de reingeniería Lean/TOC de forma prematura ni alterar los modelos de cubicaje vigentes** para no introducir inestabilidad en la operación diaria.
+  - **Plan de Acción para Iteraciones Futuras:**
+    1. Incorporar el factor `density_factor_kg_per_crate` en la tabla maestra `products` para familias botánicas específicas.
+    2. Modelar un mecanismo de liberación por olas (*Wave Picking*) condicionado a la llegada del 100% de la sublista a muelle.
+    3. Establecer alerta preventiva en el panel de bahías de despacho si una asignación supera 24 canastillas (4 niveles sobre footprint estándar).
 
 ---
 
@@ -5253,3 +5266,253 @@ flowchart TD
   2. La cifra de **Stock INV / Bodega** en la pantalla digital coincide al 100% con la cifra de la planilla impresa, deduciéndose de la misma fuente de verdad (último cierre oficial en `daily_inventory_closings`).
   3. La **Meta Neta A Comprar** es matemáticamente idéntica en ambos medios, calculada por el mismo motor centralizado `calculateProcurementNetting` sin discrepancias de redondeo ni duplicación de código.
   4. Cualquier compra registrada en `/ops/compras` o transcrita manualmente desde la planilla impresa en `/admin/commercial/inventory` (Canal A / FastPlazaPurchasesModal) actualiza de forma homogénea e idéntica la Columna G del Balance de Masa de 24 columnas.
+
+---
+
+### 30.8 Radiografía End-to-End del Portal Operativo (/ops/*): Mapeo Exhaustivo de los 10 Módulos de Ejecución
+
+El Portal Operativo de FruFresco (`/ops/*`) constituye el sistema de ejecución de planta (Shop Floor Execution / WMS & TMS) sincronizado bidireccionalmente con la Torre de Control y el Balance Diario de Masa. Comprende diez (10) submódulos transaccionales especializados:
+
+```
+                                  MAPA DE LOS 10 SUBMÓDULOS DEL PORTAL OPS
+ ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ 02:00 AM - 04:30 AM | CORABASTOS                                                                │
+ │  [1. /ops/compras] ───────────────► [2. /ops/recogida] ───────────────► [Flete Interno Plaza]   │
+ │   Consolidación & Liquidación        Acarreo Zorrito Puesto a Puesto   Hacia Bodega Central      │
+ ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ 04:00 AM - 07:30 AM | PLANTA DE OPERACIONES (BODEGA FRUFRESCO)                                  │
+ │  [3. /ops/recepcion] ─────────────► [4. /ops/recepcion/supervisor]                              │
+ │   Pesaje Báscula Entrada Muelle      Auditoría Calidad & Compuerta Veto                         │
+ │           │                                                                                      │
+ │           ▼                                                                                      │
+ │  [5. /ops/picking] (Terminal) ────► [6. /ops/picking/dashboard] ──► [10. AirportBoard (FIDS)]  │
+ │   6 Células / Pesaje Neto Báscula    Telemetría Productividad         Tablero Salidas 65" TV     │
+ │           │                                                                                      │
+ │           ▼                                                                                      │
+ │  [7. /ops/rectificacion/[routeId]]                                                               │
+ │   Auditoría Canastillas LIFO / Bahías 1-150 / Precinto Furgón / Veto de Despacho                 │
+ ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ 07:00 AM - 15:00 PM | ÚLTIMA MILLA, PATIO & CIERRE                                              │
+ │  [8. /ops/driver/delivery/[id]] ──► [9. /ops/inventory]                                         │
+ │   Hoja de Ruta Móvil / Firma POD     Balance de Masa 24 Cols / Cuarentena / Canastillas          │
+ └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 1. Módulo de Compras en Plaza (`/ops/compras` - `src/app/ops/compras/page.tsx`)
+- **Propósito del Negocio:** Ejecución de compras mayoristas en los diferentes sectores de Corabastos por los compradores de piso.
+- **Entrada (Input):** Pedidos en estado `para_compra` agregados por clave canónica `product_id + "__" + canonical_spec`, inventario de cierre de bodega (`daily_inventory_closings.stock_closing`), sublistas asignadas (`procurement_sublists`).
+- **Salida (Output):** Inserción/actualización de registros en `purchases` (`unit_price`, `quantity`, `vendor_id`, `sublist_id`), compras rápidas con modal modalizado (`FastPlazaPurchasesModal`).
+- **Conexión & Balance:** Alimenta la **Columna G (Compras Plaza)** del Balance Diario de Masa y fija el costo base del Camino A en la Matriz Comercial.
+
+#### 2. Módulo de Recogida y Acarreo en Plaza (`/ops/recogida` - `src/app/ops/recogida/page.tsx`)
+- **Propósito del Negocio:** Coordinación del acarreador ("zorrito") que recorre los puestos de Corabastos recolectando la mercancía comprada.
+- **Entrada (Input):** Compras en estado `pending_pickup` emitidas por `/ops/compras`.
+- **Salida (Output):** Marcación de bultos/canastillas recogidas (`status = 'picked_up'`), consolidación por flete interno y despacho hacia el camión nodriza.
+- **Conexión & Balance:** Búfer de tránsito físico en Corabastos. No altera saldos contables de bodega hasta su pesaje formal en muelle.
+
+#### 3. Módulo de Recepción en Muelle (`/ops/recepcion` - `src/app/ops/recepcion/page.tsx`)
+- **Propósito del Negocio:** Báscula de entrada en el muelle de descarga de la bodega central de FruFresco.
+- **Entrada (Input):** Bultos arribando en el camión de Corabastos o vehículos de proveedores directos.
+- **Salida (Output):** Pesaje bruto, tara de canastilla/empaque, pesaje neto verificado en báscula. Inserción en `inventory_movements` con `type = 'entry'` y `reference_type = 'purchase_reception'`.
+- **Conexión & Balance:** Constituye la **Carga Oficial de Inventario en Bodega** $\to$ Alimenta la **Columna F (Compras Directas)** del Balance Diario de Masa.
+
+#### 4. Módulo de Supervisión de Recepción (`/ops/recepcion/supervisor` - `src/app/ops/recepcion/supervisor/page.tsx`)
+- **Propósito del Negocio:** Dictamen de calidad de entrada por el Supervisor de Recepción y Control de Calidad.
+- **Entrada (Input):** Lotes pesados en báscula de entrada pendientes de inspección organoléptica.
+- **Salida (Output):** Aprobación de lote, veto de entrada (rechazo total devuelto al proveedor) o deducción de merma directa en compra asentada en `purchases.rejected_qty`.
+- **Conexión & Balance:** Compuerta Poka-Yoke de entrada. Previene el ingreso de producto descompuesto al piso de alistamiento.
+
+#### 5. Módulo de Alistamiento y Terminal de Báscula (`/ops/picking` & `terminal/page.tsx`)
+- **Propósito del Negocio:** Estaciones de pesaje neto y empaque en las 6 células especializadas de bodega.
+- **Entrada (Input):** Pedidos asignados a la célula, sábanas de ítems por cliente, especificaciones de fruto entero y notas de calibre (`Cero`, `Mediana`, `Richy`).
+- **Salida (Output):** Pesaje neto verificado con tara automática de canastilla en balanza industrial. Impresión de rótulos térmicos de producto 100×50mm (`requires_label = true`). Actualización de `order_items.fulfilled_quantity_kg` y `status = 'picked'`.
+- **Conexión & Balance:** El trigger PostgreSQL `trigger_deduct_picking` genera el movimiento de descarga física `inventory_movements` (`type = 'exit'`, `reference_type = 'order_item'`), deduciendo la masa física del stock vendible.
+
+#### 6. Tablero de Telemetría de Picking (`/ops/picking/dashboard` - `src/app/ops/picking/dashboard/page.tsx`)
+- **Propósito del Negocio:** Monitoreo táctico en vivo del avance del alistamiento para el Jefe de Operaciones.
+- **Entrada (Input):** Telemetría en tiempo real de ítems pesados, ritmo de pesaje (kg/hora por célula), pedidos completados y asignación de bahías (1 a 150).
+- **Salida (Output):** Alertas Andon ante cuellos de botella en células retrasadas y proyección de cumplimiento hacia la hora de corte de despacho (06:30 AM).
+
+#### 7. Módulo de Rectificación y Despacho (`/ops/rectificacion` & `[routeId]/page.tsx`)
+- **Propósito del Negocio:** Auditoría final en muelle de salida antes de que los vehículos sean cargados y precintados.
+- **Entrada (Input):** Bahías de piso completadas con sus pilas de canastillas rotuladas por cliente.
+- **Salida (Output):** Validación de secuencia de carga LIFO (Last-In, First-Out), auditoría física de canastillas por pedido, precinto numerado de seguridad del furgón y firma del manifiesto digital.
+- **Conexión & Balance:** **Veto Físico de Salida:** El camión no puede abandonar el muelle de despacho si el manifiesto no ha sido sellado con estatus `rectified = true`.
+
+#### 8. Módulo de Conductor y Entrega Móvil (`/ops/driver/route` & `delivery/[id]/page.tsx`)
+- **Propósito del Negocio:** Aplicación móvil para los conductores y auxiliares de reparto en ruta capilar.
+- **Entrada (Input):** Hoja de ruta digital con secuencia de paradas georreferenciadas, datos de contacto del cliente y remisión digital.
+- **Salida (Output):** Captura de firma digital de recibido (POD), coordenadas GPS del punto de entrega, reporte fotográfico de devoluciones/rechazos en tiempo real (`billing_returns`), conteo de canastillas entregadas (`canastillasDelivered`) y recibidas (`canastillasReceived`).
+- **Conexión & Balance:** Actualiza `orders.status = 'delivered'`, actualiza el saldo de canastillas en `profiles.crate_balance` y registra el movimiento de retorno físico hacia la **Columna O (Cuarentena de Patio)**.
+
+#### 9. Módulo de Inventario y Balance de Masa (`/ops/inventory` - `src/app/ops/inventory/page.tsx`)
+- **Propósito del Negocio:** Torre de control de balance de masa de 24 columnas, liquidación de patio y cierre oficial de turno.
+- **Entrada (Input):** Entradas por muelle (Col F), compras plaza (Col G), salidas comerciales despachadas (Cols H/I/J), mermas operativas (Cols P/Q/R), mercancía devuelta en cuarentena (Col O) y transcripción del conteo ciego (Col T).
+- **Salida (Output):** Conciliación automática de Faltantes (Col V) y Sobrantes (Col W), congelamiento inmutable en `daily_inventory_closings` ($\text{Col U} \to \text{Col E}_{D+1}$) y liquidación de inventario de canastillas (`warehouse_crate_stock`).
+
+#### 10. Tablero de Operaciones Estilo Aeropuerto (`AirportBoard / FIDS` - `src/components/ops/AirportBoard.tsx`)
+- **Propósito del Negocio:** Visualizador de alta visibilidad para monitores industriales de 65" suspendidos en planta.
+- **Entrada (Input):** Suscripciones Supabase Realtime a `orders`, `routes`, `order_items` y asignación de bahías de piso.
+- **Salida (Output):** Matriz visual estilo *Flight Information Display System* (FIDS) que informa en tiempo real: número de ruta, vehículo, chofer asignado, bahía de piso, total de canastillas, porcentaje de alistamiento y estatus de despacho (`EN ALISTAMIENTO`, `EN RECTIFICACIÓN`, `DESPACHADO`).
+
+---
+
+### 30.9 MIFA Canónico de FruFresco: Flujo de Material Físico (Masa) vs Flujo de Información Digital (Nube)
+
+El Análisis del Flujo de Materiales e Información (MIFA - Material and Information Flow Analysis) mapea la sincronización entre el movimiento de kilogramos y canastillas en el Gemba versus las transacciones digitales en Supabase:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Cliente as Cliente B2B / Comercial
+    participant Corabastos as Corabastos / Proveedores
+    participant Muelle as Muelle & Báscula Entrada
+    participant Picking as Células de Alistamiento
+    participant Staging as Bahías de Salida (1-150)
+    participant Furgon as Furgón de Reparto (TMS)
+    participant Patio as Patio & Cierre Bodega
+
+    Note over Cliente,Patio: 18:00 - 20:00 D-1 | CIERRE COMERCIAL & PLANIFICACIÓN
+    Cliente->>Patio: Ingesta de Pedidos (Email / Manual / Web) -> orders ('approved')
+    Patio->>Patio: Neteo JIT: Demanda - Stock Cierre Bodega (Col U -> Col E) = Meta Neta
+
+    Note over Corabastos,Muelle: 02:00 - 05:00 D | COMPRAS, ACARREO & RECEPCIÓN
+    Patio->>Corabastos: Planilla de Compras (/ops/compras) -> purchases ('ordered')
+    Corabastos->>Corabastos: Acarreo Zorrito (/ops/recogida) -> purchases ('picked_up')
+    Corabastos->>Muelle: Camión Nodriza arriba a muelle FruFresco
+    Muelle->>Patio: Pesaje Báscula (/ops/recepcion) -> inventory_movements 'entry' (Col F)
+    Muelle->>Muelle: Dictamen Calidad (/ops/recepcion/supervisor) -> Aprueba Lote
+
+    Note over Picking,Staging: 04:30 - 07:00 D | ALISTAMIENTO & AUDITORÍA
+    Muelle->>Picking: Despliegue de masa a 6 células de pesaje
+    Picking->>Picking: Pesaje neto en balanza (/ops/picking) -> Rótulo Térmico 100x50mm
+    Picking->>Patio: trigger_deduct_picking genera inventory_movements 'exit'
+    Picking->>Staging: Canastillas rotuladas apiladas en Bahía asignada (1-150)
+
+    Note over Staging,Furgon: 06:30 - 07:30 D | RECTIFICACIÓN & PRECINTO LIFO
+    Staging->>Furgon: Carga física de furgón en orden LIFO inverso
+    Furgon->>Furgon: Auditoría (/ops/rectificacion) -> Precinto sellado -> Veto Liberado
+
+    Note over Furgon,Patio: 07:00 - 15:00 D | ÚLTIMA MILLA, CUARENTENA & CIERRE
+    Furgon->>Cliente: Entrega física, conteo de canastillas y firma POD (/ops/driver)
+    Furgon->>Patio: Retorno furgón con canastillas vacías y producto rechazado
+    Patio->>Patio: Cuarentena de Patio -> Calidad autoriza Col O (Reingreso) vs Col Q (Baja)
+    Patio->>Patio: Conteo Ciego (Col T) -> Concilia Col V / Col W -> Congela Cierre (Col U)
+```
+
+#### Matriz Comparativa del MIFA: Sincronización Gemba vs Nube
+
+| Fase & Horario | Flujo de Material Físico (Gemba) | Flujo de Información Digital (Nube) | Mecanismo Poka-Yoke / Interlock |
+|---|---|---|---|
+| **Fase 1 (18:00 - 20:00)** Planificación | Cero movimiento de masa en piso. Inventario físico permanece en bodega. | Corte de pedidos en `cutoff_hour_admin`. Ingesta unificada y neteo JIT `calculateProcurementNetting`. | Bloqueo solo-lectura: pedidos pasan a `status = 'para_compra'`. |
+| **Fase 2 (02:00 - 04:30)** Compras Plaza | Compradores negocian y separan bultos en puestos de Corabastos. Acarreador los recoge en zorrito. | Registro de compras en `/ops/compras` y `/ops/recogida` (`purchases`). | Poka-Yoke de Volatilidad (+/- > 20%) activa aprobación del Jefe Comercial. |
+| **Fase 3 (04:00 - 05:30)** Recepción Muelle | Camión nodriza arriba a muelle. Descarga de bultos y canastillas sobre báscula de entrada. | Pesaje neto en `/ops/recepcion`. Inserción en `inventory_movements` (`type: 'entry'`, Col F). | Veto de Calidad en `/ops/recepcion/supervisor`: Lotes rechazados no entran al piso. |
+| **Fase 4 (04:30 - 07:00)** Alistamiento | 6 células fraccionan, limpian y pesan producto en canastillas plásticas estándar. | Operador pesa en `/ops/picking/terminal`. Se imprime rótulo térmico 100×50mm (`requires_label`). | `trigger_deduct_picking` descuenta stock físico en `inventory_movements` en tiempo real. |
+| **Fase 5 (06:00 - 07:00)** Staging Bahías | Canastillas alistadas se apilan en bahías de piso (1 a 150) identificadas por cliente. | Telemetría en `/ops/picking/dashboard` y tablero `AirportBoard` (FIDS) en pantalla 65". | Alerta visual Andon ante acumulación de masa o retraso en células críticas. |
+| **Fase 6 (06:30 - 07:30)** Rectificación | Carga física del camión en secuencia LIFO (última entrega al fondo, primera al portón). | Auditoría de canastillas por cliente en `/ops/rectificacion/[routeId]`. Registro de precinto. | **Veto de Despacho:** El camión no puede salir si el manifiesto no está sellado (`rectified`). |
+| **Fase 7 (07:00 - 12:00)** Entrega Ruta | Conductor descarga canastillas en sede del cliente; recibe canastillas vacías en canje. | Aplicación móvil `/ops/driver/delivery/[id]`: firma POD, fotos de rechazos, GPS y conteo canastillas. | Registro inmediato en `billing_returns` y ajuste del saldo `profiles.crate_balance`. |
+| **Fase 8 (11:00 - 15:00)** Patio & Cierre | Camiones retornan a patio con canastillas vacías y producto rechazado. Conteo ciego físico. | Cuarentena de patio en `/ops/inventory`. Transcripción conteo ciego (Col T). Congelamiento Col U. | **Inmutabilidad de Cierre:** El saldo Col U hereda como Col E de D+1 sin alteración manual posible. |
+
+---
+
+### 30.10 Matriz Oficial de Carga y Descarga de Inventario (Entradas vs Salidas Físicas)
+
+Para garantizar la integridad del balance de masa y erradicar descuadres fantasma, el sistema gobierna con precisión matemática los puntos exactos de **Carga (Entrada)** y **Descarga (Salida)** en el ledger `inventory_movements` y en el Balance Diario de 24 Columnas:
+
+#### A. Puntos Canónicos de Carga de Inventario (Entradas Físicas)
+
+| # | Evento Operativo | Módulo / Componente | Transacción / Referencia | Columna Balance Diario | Regla de Negocio / Poka-Yoke |
+|---|---|---|---|---|---|
+| **E-1** | Recepción de Mercancía en Muelle | `/ops/recepcion` (`handleSaveReception`) | `inventory_movements`<br>`type = 'entry'`<br>`ref = 'purchase_reception'` | **Columna F**<br>(Compras Directas / Recepción) | Requiere pesaje neto verificado en báscula industrial de entrada y aprobación del supervisor. |
+| **E-2** | Compras Rápidas de Plaza Efectivo | `/ops/compras` & `FastPlazaPurchasesModal` | `inventory_movements`<br>`type = 'entry'`<br>`ref = 'purchase_fast'` | **Columna G**<br>(Compras Plaza / Efectivo) | Registra el ingreso de compras de oportunidad adquiridas en efectivo por los compradores en plaza. |
+| **E-3** | Reingreso por Devolución de Ruta | `/ops/inventory` (`handleAuthorizeReturn`) | `inventory_movements`<br>`type = 'entry'`<br>`ref = 'route_return'` | **Columna O**<br>(Devolución Clientes - Reingreso) | Mercancía devuelta por furgones. **Compuerta de Calidad:** Solo ingresa a Col O si Calidad dictamina producto inocuo. |
+| **E-4** | Ajuste Positivo por Sobrante de Conteo | `/ops/inventory` (`handleClosingSave`) | `inventory_movements`<br>`type = 'adjustment'`<br>`ref = 'closing_surplus'` | **Columna W**<br>(Sobrantes Conteo Ciego) | Se dispara al cierre cuando el inventario físico contado ($\text{Col T}$) supera al inventario calculado ($\text{Col S}$). |
+
+#### B. Puntos Canónicos de Descarga de Inventario (Salidas Físicas)
+
+| # | Evento Operativo | Módulo / Componente | Transacción / Referencia | Columna Balance Diario | Regla de Negocio / Poka-Yoke |
+|---|---|---|---|---|---|
+| **S-1** | Pesaje Neto en Célula de Alistamiento | `/ops/picking/terminal` (`handleSaveWeight`) | Trigger PostgreSQL<br>`trigger_deduct_picking` sobre `order_items` | Deducción física directa en saldo disponible | Al registrar el pesaje neto del ítem en báscula, el trigger descarga la cantidad en kilogramos del stock vendible. |
+| **S-2** | Despacho Comercial Consolidado B2B | `/admin/commercial/billing` | Facturación / Liquidación de pedidos entregados | **Columna H**<br>(Ventas Institucionales B2B) | Suma de kilogramos entregados y facturados a clientes corporativos e institucionales. |
+| **S-3** | Despacho Comercial Hogar B2C | `/admin/commercial/billing` | Liquidación de pedidos retail | **Columna I**<br>(Ventas Hogar B2C) | Kilogramos despachados para compras residenciales y consumo minorista. |
+| **S-4** | Entrega de Muestras Comerciales | `/admin/orders/create` (Tipo Muestra) | Pedidos con tarifa \$0 autorizados comercialmente | **Columna J**<br>(Muestras Comerciales) | Salida oficial de producto entregado sin cobro para prospección comercial de nuevos clientes. |
+| **S-5** | Agotados / Escasez en Corabastos | `/ops/compras` / `/ops/rectificacion` | `inventory_movements`<br>`type = 'exit'`<br>`ref = 'order_shortage'` | **Columna K**<br>(Faltante por Escasez Plaza) | Demanda comercial que no se pudo comprar en plaza por desabastecimiento general o fuerza mayor. |
+| **S-6** | Merma Operativa de Limpieza y Selección | `/ops/inventory` (`handleRecordShrinkage`) | `inventory_movements`<br>`type = 'exit'`<br>`ref = 'shrinkage_cleaning'` | **Columna P**<br>(Limpieza y Selección) | Merma inevitable generada por despuntes, hojas marchitas, raíces y preparación cosmética del SKU. |
+| **S-7** | Merma Operativa por Avería y Podredumbre | `/ops/inventory` & `/ops/recepcion/supervisor` | `inventory_movements`<br>`type = 'exit'`<br>`ref = 'shrinkage_damage'` | **Columna Q**<br>(Avería / Desecho) | Producto con deterioro biológico o aplastamiento físico no apto para consumo; enviado a disposición final. |
+| **S-8** | Merma Operativa por Deshidratación Natural | `/ops/inventory` (`handleRecordShrinkage`) | `inventory_movements`<br>`type = 'exit'`<br>`ref = 'shrinkage_evaporation'` | **Columna R**<br>(Deshidratación Natural) | Pérdida natural de peso por transpiración y pérdida de agua durante el almacenamiento nocturno. |
+| **S-9** | Ajuste Negativo por Faltante de Conteo | `/ops/inventory` (`handleClosingSave`) | `inventory_movements`<br>`type = 'adjustment'`<br>`ref = 'closing_shortage'` | **Columna V**<br>(Faltantes Conteo Ciego) | Se dispara al cierre cuando el inventario físico contado ($\text{Col T}$) es inferior al calculado ($\text{Col S}$). |
+
+---
+
+### 30.11 Circuito Cerrado de Canastillas Plásticas (Asset Tracking Loop)
+
+Las canastillas plásticas estándar (dimensiones 60×40×25 cm, tara oficial 2.0 kg, polietileno de alta densidad HDPE) constituyen un activo logístico retornable crítico de la operación. El sistema gobierna su trazabilidad en un circuito cerrado de 5 fases:
+
+```
+                      CIRCUITO CERRADO DE CANASTILLAS PLÁSTICAS (ASSET TRACKING)
+         ┌────────────────────────────────────────────────────────────────────────┐
+         ▼                                                                        │
+ ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐          │
+ │ 1. BODEGA       │──────►│ 2. ALISTAMIENTO │──────►│ 3. RECTIFICACIÓN│          │
+ │ Stock Central   │       │ Pesaje & Rótulo │       │ Asignación Ruta │          │
+ │ (warehouse_     │       │ Estimación:     │       │ y Precinto LIFO │          │
+ │  crate_stock)   │       │ ⌈kg / 12.5⌉     │       │                 │          │
+ └─────────────────┘       └─────────────────┘       └────────┬────────┘          │
+                                                              │                   │
+                                                              ▼                   │
+ ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐          │
+ │ 5. PATIO        │◄──────│ 4.B PUERTA      │◄──────│ 4.A DESPACHO    │          │
+ │ Liquidación     │       │ Canje / Deuda   │       │ Camión en Ruta  │          │
+ │ Reintegro Stock │       │ (profiles.      │       │ (asset_movements│          │
+ │ (/ops/inventory)│       │  crate_balance) │       │  en furgón)     │          │
+ └─────────────────┘       └─────────────────┘       └─────────────────┘          │
+         │                                                                        │
+         └────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Estimación Teórica de Cubicaje por Peso:**
+   - La cantidad requerida de canastillas se estima matemáticamente dividiendo el peso total del pedido por la constante de cubicaje (12.5 kg):
+     $$\text{Canastillas Estimadas} = \left\lceil \frac{\text{Peso Total Pedido (kg)}}{12.5} \right\rceil$$
+   - Este cálculo dimensiona el número de rótulos térmicos QR a emitir (`1 de N`, `2 de N`, etc.) y la ocupación en bahías de piso (máximo 36 canastillas por bahía).
+
+2. **Auditoría de Carga en Muelle de Salida (`/ops/rectificacion`):**
+   - El operador de rectificación audita físicamente las canastillas cargadas en el vehículo contra el manifiesto digital.
+   - El total consolidado de canastillas despachadas en la ruta queda asentado en `routes.total_crates`.
+
+3. **Canje Físico en la Puerta del Cliente (`/ops/driver/delivery/[id]`):**
+   - Al realizar la entrega física en la sucursal del cliente, el auxiliar o conductor registra dos valores exactos en la aplicación móvil:
+     * `canastillasDelivered`: Cantidad de canastillas llenas dejadas en la sede del cliente.
+     * `canastillasReceived`: Cantidad de canastillas vacías recogidas del cliente en canje inmediato.
+   - **Variación Neta ($\Delta$):**
+     $$\Delta_{\text{canastillas}} = \text{canastillasDelivered} - \text{canastillasReceived}$$
+   - **Asiento en el Libro de Activos (`asset_movements`):**
+     * Si $\Delta > 0$: Registra movimiento con `type = 'delivery_loan'` (préstamo operativo de canastillas).
+     * Si $\Delta = 0$: Registra movimiento con `type = 'exchange'` (canje 1 a 1 perfecto).
+     * Si $\Delta < 0$: Registra movimiento con `type = 'driver_pickup'` (recuperación de deuda histórica de canastillas).
+
+4. **Actualización Automática de Cartera de Canastillas (`profiles.crate_balance`):**
+   - El saldo neto del cliente se actualiza de forma atómica en Supabase:
+     $$\text{profiles.crate\_balance}_{\text{nuevo}} = \text{profiles.crate\_balance}_{\text{anterior}} + \Delta_{\text{canastillas}}$$
+   - **Alarma Andon de Morosidad:** Si un cliente acumula un saldo deudor superior a **40 canastillas** (`crate_balance > 40`), el sistema resalta al cliente en rojo en Torre de Control y emite una alerta a la Dirección Comercial para exigir la restitución física inmediata de los activos.
+
+5. **Reingreso Directo en Patio de Bodega (`/ops/inventory`):**
+   - Si un cliente devuelve canastillas vacías directamente en camión propio o flete a las instalaciones de FruFresco, el jefe de patio utiliza el control de retorno de canastillas de `/ops/inventory`.
+   - Se selecciona el cliente, se digita la cantidad devuelta y el sistema:
+     * Incrementa el stock físico central disponible en `app_settings.warehouse_crate_stock`.
+     * Descuenta exactamente las unidades del saldo deudor en `profiles.crate_balance`.
+     * Asienta la transacción auditable en `asset_movements` con `type = 'yard_return'`.
+
+---
+
+#### Escenario 125: Trazabilidad Integral y Balance Cero-Pérdida en el Pipeline Digital End-to-End (SDD v1.9.93)
+- **Given** una tanda de 30 pedidos B2B programados para despacho matutino gestionados íntegramente a través del Portal Operativo Nube (`/ops/*`).
+- **When** el equipo de operaciones procesa la tanda a través de los 10 submódulos operativos:
+- **Then**:
+  1. Las compras ejecutadas en Corabastos mediante `/ops/compras` y `/ops/recogida` ingresan al Balance de Masa en la **Columna G (Compras Plaza)**.
+  2. La llegada del camión nodriza a muelle en `/ops/recepcion` genera registros en `inventory_movements` (`type: 'entry'`) imputados deterministamente a la **Columna F (Compras Directas)** tras la validación en `/ops/recepcion/supervisor`.
+  3. Cada pesaje neto en `/ops/picking/terminal` ejecuta el trigger `trigger_deduct_picking`, descargando la masa física correspondiente y actualizando la telemetría en `/ops/picking/dashboard` y en la pantalla de 65" de `AirportBoard`.
+  4. Ningún furgón de reparto puede abandonar el muelle sin que el módulo `/ops/rectificacion` certifique la carga LIFO y selle el precinto digital en el manifiesto.
+  5. Durante la entrega capilar en `/ops/driver/delivery/[id]`, el registro de `canastillasDelivered` y `canastillasReceived` actualiza el libro `asset_movements` y el saldo en `profiles.crate_balance`.
+  6. Toda devolución física viaja a la Zona de Cuarentena en patio; solo tras el dictamen de Calidad en `/ops/inventory` se imputa a la **Columna O (Reingreso)** o a la **Columna Q (Avería)**.
+  7. Al concluir la jornada, el conteo ciego asentado en la **Columna T** concilia Faltantes (**Col V**) y Sobrantes (**Col W**), congelando el registro inmutable en `daily_inventory_closings` donde $\text{Col U} = T + O$ se transfiere automáticamente como el Inventario Inicial (**Columna E**) de la jornada siguiente.
+
