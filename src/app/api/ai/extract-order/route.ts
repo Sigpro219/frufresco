@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 import { verifySessionAndPermission } from '@/lib/auth';
 
 export async function POST(req: Request) {
@@ -140,10 +141,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'El archivo recibido está vacío (0 bytes). Por favor, intente subirlo nuevamente.' }, { status: 400 });
     }
 
-    const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-                    file.type === 'application/vnd.ms-excel' || 
-                    file.name.toLowerCase().endsWith('.xlsx') || 
-                    file.name.toLowerCase().endsWith('.xls');
+    const isExcel = isSpreadsheetFile(file.name, file.type);
 
     const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
 

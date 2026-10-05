@@ -1,7 +1,8 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { extractCommercialProposalAI, parseExcelPriceProposal, enrichCommercialProposal } from '@/lib/commercial/commercial-parser-engine';
 import { resolveClientProfile } from '@/lib/orders/order-parser-engine';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -63,9 +64,9 @@ export async function POST(req: Request) {
 
     // Check for Excel attachment
     const excelAtt = attachments.find((a: any) => {
-      const name = (a.name || a.filename || '').toLowerCase();
-      const type = (a.content_type || '').toLowerCase();
-      return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || type.includes('spreadsheet') || type.includes('excel');
+      const name = a.name || a.filename || '';
+      const type = a.content_type || '';
+      return isSpreadsheetFile(name, type);
     });
 
     // Check for PDF attachment

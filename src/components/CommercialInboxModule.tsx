@@ -8,6 +8,7 @@ import {
     Sparkles, RefreshCw, X, FileSpreadsheet, FileText, 
     Download, ShieldCheck, ZoomIn, ZoomOut
 } from 'lucide-react';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export default function CommercialInboxModule() {
     const [emails, setEmails] = useState<any[]>([]);
@@ -135,8 +136,8 @@ export default function CommercialInboxModule() {
 
             const attachments = selectedEmail.message?.attachments || selectedEmail.payload?.attachments || [];
             const excelAtt = attachments.find((a: any) => {
-                const name = (a.name || a.filename || '').toLowerCase();
-                return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv');
+                const name = a.name || a.filename || '';
+                return isSpreadsheetFile(name, a.content_type);
             });
 
             if (excelAtt && excelAtt.url) {
@@ -328,8 +329,8 @@ export default function CommercialInboxModule() {
                             const sender = email.message?.sender_email || email.to_email || 'Sin remitente';
                             const attachments = email.message?.attachments || email.payload?.attachments || [];
                             const hasProposalDoc = attachments.some((a: any) => {
-                                const n = (a.name || a.filename || '').toLowerCase();
-                                return n.endsWith('.xlsx') || n.endsWith('.xls') || n.endsWith('.csv') || n.endsWith('.pdf');
+                                const n = a.name || a.filename || '';
+                                return n.toLowerCase().endsWith('.pdf') || isSpreadsheetFile(n, a.content_type);
                             });
 
                             return (

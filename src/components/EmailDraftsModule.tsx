@@ -18,6 +18,7 @@ import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
 import { useAuth } from '@/lib/authContext';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -867,7 +868,7 @@ const GmailMessageViewer = ({
                 const lowerName = name.toLowerCase();
                 const isImg = lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp');
                 const isPdf = lowerName.endsWith('.pdf');
-                const isXls = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+                const isSpreadsheet = isSpreadsheetFile(name);
 
                 return (
                   <div
@@ -893,7 +894,7 @@ const GmailMessageViewer = ({
                       <span style={{ color: '#059669', display: 'flex', alignItems: 'center' }}><FileText size={18} /></span>
                     ) : isPdf ? (
                       <span style={{ color: '#DC2626', display: 'flex', alignItems: 'center' }}><FileText size={18} /></span>
-                    ) : isXls ? (
+                    ) : isSpreadsheet ? (
                       <span style={{ color: '#16A34A', display: 'flex', alignItems: 'center' }}><FileText size={18} /></span>
                     ) : (
                       <span style={{ color: '#64748B', display: 'flex', alignItems: 'center' }}><Paperclip size={18} /></span>
@@ -1463,7 +1464,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     let activeBlobUrl: string | null = null;
 
-    if (ext === 'xlsx' || ext === 'xls') {
+    if (isSpreadsheetFile(attachmentName)) {
       setLoadingAttachment(true);
       setAttachmentError(null);
       setAttachmentHtml(null);
@@ -8173,7 +8174,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         if (!currentUrl) return null;
 
                         const ext = (currentName || '').split('.').pop()?.toLowerCase() || '';
-                        const isExcel = ext === 'xlsx' || ext === 'xls';
+                        const isExcel = isSpreadsheetFile(currentName);
 
                         if (isExcel) {
                           return (
@@ -8298,8 +8299,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           );
                         }
 
-                        // Excel (.xlsx, .xls)
-                        if (ext === 'xlsx' || ext === 'xls') {
+                        // Hoja de Cálculo (.xlsx, .xls, .ods, .csv, etc.)
+                        if (isSpreadsheetFile(attachmentName)) {
                           if (loadingAttachment) {
                             return wrapContent(
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC', minHeight: 0 }}>
@@ -8814,7 +8815,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           }}
                         >
                           <Paperclip size={10} />
-                          {att.name.replace(/\.xlsx|\.pdf/i, '')} {attCount > 0 ? `(${attCount})` : ''}
+                          {att.name.replace(/\.(xlsx|xls|ods|csv|xlsm|pdf)$/i, '')} {attCount > 0 ? `(${attCount})` : ''}
                         </button>
                       );
                     })}
@@ -8976,7 +8977,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               {item.source_attachment_name && (
                                 <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }} title={`Anexo: ${item.source_attachment_name}`}>
                                   <Paperclip size={10} strokeWidth={2} />
-                                  <span>{item.purchase_order ? `OC: ${item.purchase_order}` : item.source_attachment_name.replace(/\.xlsx|\.pdf/i, '')}</span>
+                                  <span>{item.purchase_order ? `OC: ${item.purchase_order}` : item.source_attachment_name.replace(/\.(xlsx|xls|ods|csv|xlsm|pdf)$/i, '')}</span>
                                 </span>
                               )}
                               {matchedProd ? (

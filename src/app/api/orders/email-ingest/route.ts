@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import https from 'https';
 import * as XLSX from 'xlsx';
+import { isSpreadsheetFile, resolveSpreadsheetMimeType } from '@/lib/spreadsheets';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -353,12 +354,11 @@ export async function POST(req: Request) {
             }
           }
 
-          // Check if there are documents (.pdf, .xlsx, .xls, .csv)
+          // Check if there are documents (.pdf, .xlsx, .xls, .ods, .csv, etc.)
           const hasDocuments = rawAttachments.some((att: any) => {
             const name = (att.file_name || att.filename || '').toLowerCase();
             const mime = (att.content_type || '').toLowerCase();
-            return name.endsWith('.pdf') || name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') ||
-                   mime.includes('pdf') || mime.includes('spreadsheet') || mime.includes('excel');
+            return name.endsWith('.pdf') || mime.includes('pdf') || isSpreadsheetFile(name, mime);
           });
 
           // Filter attachments for order processing:
@@ -592,9 +592,7 @@ export async function POST(req: Request) {
                   if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
                   else if (lowerName.endsWith('.png')) mimeType = 'image/png';
                   else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
-                  else if (lowerName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                  else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
-                  else if (lowerName.endsWith('.csv')) mimeType = 'text/csv';
+                  else if (isSpreadsheetFile(lowerName)) mimeType = resolveSpreadsheetMimeType(lowerName);
                 }
 
                 try {
@@ -815,13 +813,11 @@ export async function POST(req: Request) {
           else if (lowerName.endsWith('.png')) mimeType = 'image/png';
           else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
           else if (lowerName.endsWith('.webp')) mimeType = 'image/webp';
-          else if (lowerName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-          else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
-          else if (lowerName.endsWith('.csv')) mimeType = 'text/csv';
+          else if (isSpreadsheetFile(lowerName)) mimeType = resolveSpreadsheetMimeType(lowerName);
         }
 
         const lowerMime = mimeType.toLowerCase();
-        const attIsExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
+        const attIsExcel = isSpreadsheetFile(lowerName, lowerMime);
 
         // A. Upload to Supabase Storage in parallel (o reutilizar si ya fue subido en el pre-procesamiento inline)
         const cleanContentId = (attachment.content_id || attachment.cid || (attachment.headers && (attachment.headers['content-id'] || attachment.headers['Content-ID'])) || '').replace(/^<|>$/g, '').trim();

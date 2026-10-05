@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction, findBestProductMatchDetails, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
         const fileBuf = await fileRes.arrayBuffer();
         const ext = (att.name || '').split('.').pop()?.toLowerCase() || '';
 
-        if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        if (isSpreadsheetFile(att.name)) {
           const workbook = XLSX.read(fileBuf, { type: 'array' });
           let csvContent = "";
           workbook.SheetNames.forEach(sheetName => {

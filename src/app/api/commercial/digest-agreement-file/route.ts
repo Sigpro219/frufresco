@@ -4,6 +4,7 @@ import { extractCommercialProposalAI, parseExcelPriceProposal } from '@/lib/comm
 import { findBestProductMatchDetails, sanitizeDocText } from '@/lib/orders/order-parser-engine';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import * as XLSX from 'xlsx';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -45,13 +46,7 @@ export async function POST(req: Request) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const isExcelOrCsv =
-        fileName.endsWith('.xlsx') ||
-        fileName.endsWith('.xls') ||
-        fileName.endsWith('.csv') ||
-        fileType.includes('spreadsheet') ||
-        fileType.includes('excel') ||
-        fileType.includes('csv');
+      const isExcelOrCsv = isSpreadsheetFile(fileName, fileType);
 
       const isPdf = fileName.endsWith('.pdf') || fileType.includes('pdf');
 

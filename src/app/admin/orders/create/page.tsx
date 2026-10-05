@@ -65,6 +65,7 @@ import VariantModal from '@/components/VariantModal';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
 import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
+import { isSpreadsheetFile } from '@/lib/spreadsheets';
 
 export const normalizeDocUnit = (unitStr: string): string => {
     if (!unitStr) return '';
@@ -6619,7 +6620,7 @@ function CreateOrderContent() {
                                                         <>
                                                             <FileText size={14} /> {(() => {
                                                                 const fileName = uploadedFile?.name?.toLowerCase() || '';
-                                                                const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
+                                                                const isExcel = isSpreadsheetFile(uploadedFile?.name);
                                                                 const isImg = fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp');
                                                                 const label = isExcel ? 'Excel' : (isImg ? 'Imagen' : (importValidation.documentType || 'PDF'));
                                                                 return showSideDocPreview ? `Ocultar Visor ${label}` : `Ver ${label} Lado a Lado`;
@@ -6818,7 +6819,7 @@ function CreateOrderContent() {
                                         {/* Left Side: Document Preview */}
                                         {uploadedFileUrl && showSideDocPreview && (() => {
                                             const fileName = uploadedFile?.name?.toLowerCase() || '';
-                                            const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
+                                            const isExcel = isSpreadsheetFile(uploadedFile?.name);
                                             const isImg = fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp');
 
                                             return (
