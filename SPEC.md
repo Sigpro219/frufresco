@@ -5920,3 +5920,26 @@ Las canastillas plásticas estándar (dimensiones 60×40×25 cm, tara oficial 2.
   4. **Resolución Secuencial Determinista de CIDs:**
      - En correos donde múltiples imágenes incrustadas carecen de mapeo explícito de Content-ID o presentan CIDs indexados, el motor de resolución vincula las imágenes secuencialmente en orden de aparición en lugar de marcar "Gráfico no disponible", asegurando que cada recorte se renderice en su posición visual correspondiente.
 
+---
+
+#### Escenario 127: Protocolo Canónico de Detección de Pedidos Duplicados, Poka-Yoke de Normalización de Sedes y Prevención de Doble Ingesta (SDD v1.9.95)
+- **Given** dos o más pedidos cargados o pre-aprobados en el sistema para entrega en la misma fecha (ej. pedidos `0510_0985` y `0510_0986` con fecha `06/10/2026`) que comparten cliente, montos, pesos o documentos fuente.
+- **When** el motor de detección de duplicados (`detectDuplicateOrders` en `src/lib/orderDuplicates.ts`) y la Torre de Control de Despachos (`/admin/orders/loading`) evalúan las órdenes activas:
+- **Then**:
+  1. **Poka-Yoke de Normalización Inmune a Repetición Geográfica:**
+     - La función `normalizeAddress` purga de forma estricta abreviaciones, signos, tildes y tokens geográficos redundantes (`bogota`, `cundinamarca`, `colombia`, `d.c.`, `dc`).
+     - **Regla Anti-Fragmentación de Sedes:** Se prohíbe que diferencias superficiales por repetición de ciudad o departamento (ej. `"CRA 37 24-67... Bogotá, Cundinamarca"` vs `"CRA 37 24-67... Bogotá, Cundinamarca, Bogotá, Cundinamarca"`) ubiquen a los pedidos en cubetas (`groupKey`) independientes, garantizando que órdenes de la misma sede física colisionen siempre en la misma cubeta de evaluación.
+  2. **Poka-Yoke contra Concatenación Recursiva de Direcciones (`EmailDraftsModule.tsx`):**
+     - Al construir la dirección editable del borrador (`editableAddress`), el sistema verifica si la ciudad, municipio o departamento ya se encuentran contenidos dentro de `matchedProfile.address` antes de concatenarlos, erradicando el crecimiento anómalo de strings en la base de datos de perfiles y pedidos.
+  3. **Jerarquía Rigurosa de Detección de Duplicados Reales (`areOrdersDuplicate`):**
+     - **Criterio A (Documento o Consecutivo Explícito):** Si ambas órdenes poseen el mismo número de Orden de Compra (OC, OCC, SC, SOLPED) o el mismo nombre/firma de archivo de documento adjunto (`document_url`), se declaran **DUPLICADAS** sin importar variaciones menores de digitación.
+     - **Criterio B (Identidad de Ítems y Carga Operativa):** Si carecen de consecutivo de documento, se comparan sus ítems (`product_id` + `quantity`). Si los productos coinciden o si existe identidad estricta de monto financiero ($|\Delta \text{total}| < 1\text{ COP}$) y masa física ($|\Delta \text{peso}| < 0.1\text{ kg}$), se declaran **DUPLICADAS**.
+     - **Criterio C (Diferenciación Legítima de Pedidos):** Si provienen de diferentes archivos PDF/OCs legítimos del mismo cliente en la misma fecha (ej. pedido matutino vs pedido vespertino), el motor las discrimina y permite su co-existencia sin falsos positivos.
+  4. **Señalización Visual Andon y Poka-Yoke en Torre de Despacho (`/admin/orders/loading`):**
+     - Todo pedido catalogado como duplicado se resalta con un borde izquierdo rojo de alta visibilidad (`8px solid #DC2626`), fondo de alerta (`#FEF2F2`), sombra perimetral de advertencia (`inset 0 0 0 1px #FCA5A5`) y contador reactivo en el encabezado.
+     - La tarjeta o fila despliega el mensaje contextual exacto:
+       `"Pedido idéntico: Coincide en cliente, fecha, sede, valor ($X) y peso con #XXXX"`.
+  5. **Protocolo Canónico de Supresión y Trazabilidad (`/api/orders/delete`):**
+     - La anulación o eliminación de una orden duplicada debe ejecutarse mediante el endpoint auditado, registrando en `order_audit_logs` la copia completa de la orden y sus líneas antes de purgar `order_items` y `orders`, previniendo compras fantasmas en Corabastos y saturación innecesaria de la flota de transporte.
+
+
