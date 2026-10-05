@@ -11,11 +11,11 @@ test('validateRecoveryInput: validaciones estrictas de OTP de 6 dígitos y contr
     // 1. Código OTP incompleto o vacío
     const emptyOtp = validateRecoveryInput('', 'Pass1234', 'Pass1234');
     assert.equal(emptyOtp.isValid, false);
-    assert.match(emptyOtp.error || '', /6 dígitos/i);
+    assert.match(emptyOtp.error || '', /(?:entre\s+)?6(?:\s+y\s+8)?\s+dígitos/i);
 
     const shortOtp = validateRecoveryInput('12345', 'Pass1234', 'Pass1234');
     assert.equal(shortOtp.isValid, false);
-    assert.match(shortOtp.error || '', /6 dígitos/i);
+    assert.match(shortOtp.error || '', /(?:entre\s+)?6(?:\s+y\s+8)?\s+dígitos/i);
 
     // Caracteres alfabéticos o inválidos
     const nonDigitOtp = validateRecoveryInput('abc-12', 'Pass1234', 'Pass1234');

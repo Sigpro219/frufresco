@@ -1,8 +1,8 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.84 (Protocolo Canónico de Tolerancia Fonética Z-S, Ingesta Resiliente de Imágenes Inline CID y Búsqueda Multi-Token, Escenarios BDD 118-119)
-> **Fecha:** 01 de Octubre, 2026  
+> **Versión:** 1.9.88 (Ergonomía Industrial & Poka-Yoke Visual en Paso 1 de Asistente de Despacho Manual: Telemetría Limpia, Auto-Save Silencioso y Acordeón Nave 150 Bahías)
+> **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
 
@@ -4380,7 +4380,9 @@ El módulo `/admin/settings` centraliza los parámetros maestros operativos, com
 5. **`min_order_institucional`:** Piso mínimo monetario para compras institucionales HORECA (B2B) (ej. $400.000 COP).
 6. **`max_order_hogar_cod` (NUEVO POKA-YOKE):** Monto máximo permitido para compras del segmento Hogar (B2C) bajo la modalidad de **Pago Contra Entrega** (`contra_entrega` / `Por Cobrar`), fijado en **$400.000 COP**.
 7. **`enable_b2b_lead_capture`:** Habilitación de formularios de prospección comercial en la tienda web.
-8. **`enable_cutoff_rules`:** Regla de corte de pedidos (5:00 PM) para programación de entregas en D+1 vs D+2.
+8. **`enable_cutoff_rules`:** Interruptor maestro para habilitar o suspender las reglas de hora de corte en toda la plataforma (`true` / `false`). Si está desactivado, no se aplica el salto forzado de D+1 a D+2 en ningún canal.
+8.1. **`cutoff_hour_admin` (NUEVO SDD v1.9.86):** Hora de corte canónica para la toma manual de pedidos de administración y conversión B2B (`/admin/orders/create`), fijada por defecto en **`20`** (8:00 PM). Permite a los operadores y comerciales registrar y confirmar pedidos para entrega al día siguiente (D+1) hasta las 20:00 (Hora Colombia). Pasada esta hora, la fecha mínima se programa automáticamente para D+2 con alerta visual informativa.
+8.2. **`cutoff_hour_public` (NUEVO SDD v1.9.86):** Hora de corte canónica para la tienda virtual web pública B2C y checkout (`/checkout`), fijada por defecto en **`17`** (5:00 PM). Al superar esta hora, el selector de entrega bloquea D+1 y programa la primera fecha disponible a D+2 para proteger los cortes de compras en Corabastos.
 9. **`allow_sunday_deliveries` & `allow_holiday_deliveries`:** Parámetros de servicio para fines de semana y festivos en Colombia.
 10. **`packaging_fee_enabled`, `packaging_fee_percentage` & `packaging_fee_note`:** Gobernanza de cobro por canastillas o empaques plásticos en checkout.
 
@@ -5025,3 +5027,189 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
      - **Poka-Yoke Preventivo:** Se prohíbe la emisión de la Factura Electrónica DIAN definitiva mientras existan ítems con tarifa `$0`, salvaguardando a la empresa contra pérdidas o inconsistencias fiscales.
      - La remisión de transporte y el alistamiento físico operan sin restricciones numéricas.
 
+
+
+---
+
+#### Escenario 122: Gobernanza Parametrizada de Horas de Corte en Admin y Tienda Pública (SDD v1.9.86)
+- **Given** los parámetros maestros `enable_cutoff_rules`, `cutoff_hour_admin` y `cutoff_hour_public` en `app_settings`.
+- **When** el administrador configura `cutoff_hour_admin` en `20` (8:00 PM) y `cutoff_hour_public` en `17` (5:00 PM) desde `/admin/settings`:
+- **Then**:
+  1. **Toma Manual y Mesa de Control Admin (`/admin/orders/create`):**
+     - El cálculo de fecha mínima (`minDeliveryDate`) toma pedidos para entrega al día siguiente (D+1) hasta las 20:00 (8:00 PM Hora Colombia).
+     - Si la hora actual en Bogotá es >= 20 (8:00 PM), conmuta automáticamente a D+2 y muestra un aviso informativo de despacho urgente si el operador selecciona manualmente una fecha anterior.
+  2. **Tienda Virtual Web y Checkout B2C (`/checkout`, `GlobalBanner`):**
+     - La tienda web pública respeta el parámetro `cutoff_hour_public` (17:00 / 5:00 PM).
+     - Al superar las 17:00, el banner superior informa el cierre de la tanda para mañana y el checkout programa la primera entrega disponible para D+2, bloqueando fechas anteriores.
+  3. **Suspensión de Corte por Pruebas o Emergencias:**
+     - Si `enable_cutoff_rules` está en `false` / `DESACTIVADA`, el salto forzado de D+1 a D+2 se desactiva en todos los canales, permitiendo programar entregas para mañana en cualquier momento.
+  4. **Persistencia Dinámica sin Despliegues (Zero-Downtime):**
+     - Cualquier ajuste en los selectores de `/admin/settings` se persiste de inmediato en `app_settings` y surte efecto en tiempo real sin requerir reconstrucción de bundles ni despliegues en Vercel.
+
+
+---
+
+## 30. PROTOCOLO CANÓNICO DE MODO MANUAL: CIRCUITO CERRADO DE 4 ESTACIONES (PEDIDOS ➔ INVENTARIOS ➔ CALIDAD ➔ FACTURACIÓN) (SDD v1.9.87)
+
+### 30.1 Principio Rector: Equivalencia Física del Gemba y Resiliencia en Piso
+El Modo Manual (Contingencia Operativa en Papel) no es un mecanismo degradado ni secundario; es la **columna vertebral física** que garantiza la continuidad del negocio ante caídas de conectividad en acopio, fallos de red en bodega o alta densidad operativa nocturna en muelle.
+El ciclo de vida del Modo Manual está concebido como un **circuito cerrado de cuatro (4) estaciones sistémicas interdependientes**, donde ningún documento físico emitido queda huérfano y cada transacción en papel encuentra una compuerta de conciliación digital obligatoria para equilibrar la masa física (kilogramos) y el valor financiero (COP):
+
+```mermaid
+flowchart TD
+    subgraph EST1["1. PEDIDOS (Emisión & Despacho)"]
+        E1["Corte Parametrizado (cutoff_hour_admin)"] --> E2["Tanda Única Consolidada"]
+        E2 --> E3["Neteo: Demanda + StockSeg - Cierre Bodega"]
+        E3 --> E4["Emisión Batería 7 Documentos Físicos"]
+        E4 --> E5["Bloqueo Poka-Yoke: status = 'para_compra'"]
+    end
+
+    subgraph EST2["2. INVENTARIOS (Balance 24 Columnas)"]
+        I1["Ingesta Entradas Plaza (Col G):\n• Modal Rápido (orden de papel)\n• Celda directa con fórmulas\n• Importación Excel"]
+        I2["Cruce Fin de Turno (Col T):\n• Conteo Físico 6 Folios\n• Conciliación Col V Faltante / Col W Sobrante\n• Cierre Oficial: Saldo hereda a Col E de mañana"]
+    end
+
+    subgraph EST3["3. CALIDAD & SAC (Árbitro Técnico Gemba)"]
+        Q1["Recepción PQR Cloud en Tiempo Real\n(WhatsApp SAC / Llamada / Portal B2B)"] --> Q2["Liquidación Administrativa Inmediata\n(Cero demora para el cliente)"]
+        Q2 --> Q3{"Flag de Retorno Físico\n¿Viene producto en el camión?"}
+        Q3 -- "SÍ" --> Q4["Inspección en Cuarentena Patio:\n• Reingreso vendible -> Col O\n• Merma / Baja avería -> Col Q"]
+        Q3 -- "NO (Faltante / Desecho Cliente)" --> Q5["Ajuste Contable Puro\n(Sin movimiento físico en bodega)"]
+        Q6["Remisión Física Firmada"] -. "Retorno en la tarde" .-> Q7["Archivo Probatorio & Fiscal DIAN"]
+    end
+
+    subgraph EST4["4. FACTURACIÓN & CONTABILIDAD (World Office / DIAN)"]
+        F1{"Perfil de la Sucursal\n(profiles.document_requirement)"}
+        F1 -- "Caso 1: remision_post_entrega\n(B2B Mayoritario)" --> F2["Camión viaja con Remisión Duplicada"]
+        F2 --> F3{"Ventana de Gracia: 2 Horas (120 min)"}
+        F3 -- "Sin Novedad en Calidad" --> F4["Factura Electrónica Neta Emitida\n(Cero discrepancias / Cero notas crédito)"]
+        F3 -- "Con Novedad Aprobada" --> F5["Sustracción Neta Previa:\nFactura nace con el valor exacto recibido"]
+        F1 -- "Caso 2: factura_pre_despacho\n(Exigencia Contractual)" --> F6["Camión viaja con Factura Electrónica"]
+        F6 --> F7{"¿Hubo Novedad en Calidad?"}
+        F7 -- "SÍ" --> F8["Nota Crédito DIAN Automática\n+ Renglón World Office (57 columnas)"]
+        F7 -- "NO" --> F9["Causación Limpia en Cartera"]
+    end
+
+    E4 -. "Entrada Almacén & 6 Folios" .-> I1 & I2
+    E4 -. "Remisiones & Rutero" .-> Q6 & F2
+    Q4 & Q5 --> I2
+    Q2 --> F5 & F8
+```
+
+---
+
+### 30.2 Estación 1: Módulo de Pedidos & Lanzamiento a Operación
+
+1. **Gobernanza de Tanda Única al Corte:**
+   - La tanda de despacho se consolida y lanza en un solo bloque unificado a la hora de corte configurada en `cutoff_hour_admin` (default: 20:00 / 8:00 PM).
+   - Cualquier pedido extemporáneo o de emergencia ingresado con posterioridad a la hora de corte se procesa bajo el concepto de **«Venta Adicional»**, generando una adición complementaria independiente sin reabrir ni regenerar los documentos de la tanda principal, impactando directamente la **Columna M (Ventas Adicionales)** del balance diario de inventarios.
+
+2. **Ecuación Canónica de Neteo de Compras:**
+   - Al momento de pulsar imprimir en el asistente de contingencia ([`ManualDispatchWizardModal.tsx`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/components/ManualDispatchWizardModal.tsx)), el motor unificado ([`procurementNettingEngine.ts`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/procurement/procurementNettingEngine.ts)) resuelve la compra requerida mediante la fórmula:
+     $$\mathbf{Compra\ Neta} = \max(0, (\mathbf{Demanda\ Consolidada} + \mathbf{Stock\ de\ Seguridad}) - \mathbf{Inventario\ Base\ Oficial})$$
+   - **Regla Innegociable de Integridad:** La variable $\mathbf{Inventario\ Base\ Oficial}$ toma como fuente de verdad obligatoria el **Cierre de Inventario Físico de Bodega** de la jornada inmediatamente anterior auditado en `daily_inventory_closings` ($\text{Columna U} \rightarrow \text{Columna E}$ de la Sábana), erradicando el uso de consultas a stocks transaccionales flotantes que puedan contener desalineaciones operativas.
+
+3. **La Batería Completa de los Siete (7) Documentos Impresos:**
+   El asistente de contingencia garantiza la emisión física completa y coordinada de 7 piezas operativas indispensables para el Gemba:
+   - **Pieza 1 — Sábana de Alistamiento por Células ([`/admin/orders/alistamiento-print`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/alistamiento-print/page.tsx)):** Formato Oficio horizontal. Matriz de pedidos/bahías (1 a 150) vs SKUs para el armado simultáneo en muelle.
+   - **Pieza 2 — Planillas de Compras de Plaza por Sublista ([`/admin/procurement/purchases-print`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/procurement/purchases-print/page.tsx)):** Formato Carta con salto de página por sublista (Papa, Frutas, Plátano, Hortalizas) para los compradores en Corabastos, con casillas manuscritas para precio de compra por kilo y cantidad real adquirida.
+   - **Pieza 3 — Control de Llegada / Entrada a Almacén ([`/admin/procurement/receiving-print`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/procurement/receiving-print/page.tsx)):** Formato Carta estructurado en dos columnas alfabéticas (A-Z). Destinado al pesaje a ciegas en báscula de patio para verificar lo descargado contra lo ordenado a los transportadores de plaza.
+   - **Pieza 4 — Planilla de Conteo Físico de Bodega / 6 Folios Carta ([`/admin/inventory/physical-count-print`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/inventory/physical-count-print/page.tsx)):** Formato Carta de seis folios agrupados por familias de bodega para el levantamiento de inventario físico remanente al cierre de turno (**Columna T** de la Sábana).
+   - **Pieza 5 — Juegos de Remisión Duplicadas ([`/admin/orders/contingency-print?mode=remissions`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)):** Formato Carta duplex continuo (`[ORIGINAL - CLIENTE]` e impar `[COPIA - ARCHIVO Y CONTABILIDAD]`) con membrete legal de *Investments Cortés S.A.S.*, recuadro de Bahía de Muelle estampada, casillas manuscritas para kilogramos/unidades recibidas, firmas, cédula, sello húmedo y control de comodato de canastillas plásticas.
+   - **Pieza 6 — Manifiesto de Despacho & Balance de Canastillas / El Rutero ([`/admin/orders/contingency-print?mode=dispatch`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)):** Formato Carta por vehículo y conductor con placa, ruta de entrega, relación de remisiones asociadas, peso total transportado, saldo de canastillas plásticas entregadas vs devueltas y firmas de portería.
+   - **Pieza 7 — Rótulos Térmicos de Canastilla con QR ([`/admin/orders/print-labels`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/print-labels/page.tsx)):** Formato Rollo Térmico 100mm × 50mm impreso en secuencia sincrónica de ruta (LIFO) con QR de verificación, cliente, bahía, ventana de entrega y recuadro `[Canastilla ___ de ___]`.
+   - *Dataset Digital Complementario:* Exportación del **Excel Maestro de 11 Columnas** (`compras_YYYY-MM-DD.xlsx`) con anchos pre-calibrados para la dirección de compras y precarga en World Office.
+
+4. **Bloqueo Poka-Yoke de Sello de Tanda:**
+   - Al pulsar el botón `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO`, el sistema ejecuta la actualización transaccional de los pedidos seleccionados pasando su estado a `status = 'para_compra'`.
+   - **Blindaje Inmutable (Read-Only):** Los pedidos quedan estrictamente bloqueados contra edición de ítems, cantidades, cambio de sucursal o cancelación tanto desde la interfaz comercial como desde la autogestión B2B/tienda web. Cualquier alteración física posterior debe canalizarse a través de las compuertas de rectificación en muelle o servicio al cliente.
+
+5. **Ergonomía Industrial y Poka-Yoke Visual en Paso 1 (Muelle & Bahías):**
+   - **Banner de Telemetría Limpio:** Indicador de estado de bahías con un único botón de acción contextual rápida (`[⚡ Auto-Asignar (LIFO + Clúster)]` si existen pedidos huérfanos o `[🔄 Re-calcular]` si todos tienen bahía asignada). Erradica la aglomeración de botones heterogéneos y botones de navegación externa que provocaban fuga del embudo guiado.
+   - **Protagonismo Inmediato de la Tabla de Pedidos:** La tabla editable de pedidos (#Seq, Cliente, Dirección, Ventana, Kilos, Canastillas y Bahía) se posiciona inmediatamente al inicio de la vista operativa (*above the fold*), maximizando el área útil de interacción y eliminando scrolls anidados.
+   - **Cuadrícula de 150 Bahías Bajo Demanda (Acordeón):** El mapa visual de las 150 bahías físicas permanece colapsado por defecto (`showFloorGridPreview = false`) y se posiciona como un acordeón desplegable inmediatamente debajo de la tabla de pedidos (`[🗺️ Inspeccionar Plano Físico de Nave Central (150 Bahías) ▾]`). Evita consumir el 45% del espacio vertical con celdas vacías y solo se consulta como instrumento de diagnóstico visual secundario.
+   - **Persistencia Silenciosa Atómica (Erradicación del Botón Intermedio "Guardar"):** Se elimina el botón intermedio "Guardar Bahías en BD". Toda modificación de bahías en la tabla se persiste automáticamente y de forma atómica en Supabase (`orders.warehouse_spaces`) al presionar el botón de avance del pie de página (`Continuar a Compras & Recibo ->`), garantizando una experiencia fluida, libre de fricción y sin riesgo de pérdida de datos por omisión.
+   - **Estandarización de Documentos de Planta:** Agrupación visual clara entre la acción primaria de piso (`[🖨️ Imprimir Sábana de Alistamiento (Oficio)]`) y la descarga secundaria (`[📄 Descargar PDF]`).
+
+---
+
+### 30.3 Estación 2: Módulo de Inventarios (Balance de Masa 24 Columnas)
+
+1. **Resiliencia Operativa: Tres (3) Canales de Ingesta para Compras de Plaza (Columna G):**
+   Para garantizar la máxima ergonomía y velocidad de transcripción al regreso de los compradores de Corabastos, el sistema provee tres canales redundantes que escriben sobre el balance de masa:
+   - **Canal A (Modal Rápido de Captura de Plaza):** Pantalla optimizada para navegación exclusiva por teclado (`Tab` + `Enter`), que presenta los productos exactamente en el mismo orden correlativo de la planilla impresa (agrupados por sublista y orden alfabético A-Z), permitiendo transcribir kilos y precios de toda la compra en menos de 90 segundos.
+   - **Canal B (Digitación Directa Celda por Celda en la Sábana):** Edición inline en la celda de la **Columna G**, equipada con el evaluador de expresiones matemáticas seguras (`evaluateExcelExpression`, ej: `=25+14.5+10`), guardando el valor liquidado final y la fórmula original en la bitácora de auditoría.
+   - **Canal C (Importación Masiva de Archivo Excel):** Módulo de carga masiva (`DailyBalanceExcelImportModal.tsx`) que procesa la hoja diligenciada por el área de compras o recibida desde plataformas externas.
+
+2. **Conciliación y Cierre de Inventario Físico Fin de Turno (Columna T):**
+   - El personal de bodega utiliza la **Planilla de Conteo Físico (6 Folios Carta)** para pesar y contar el producto real remanente en piso al finalizar las operaciones de alistamiento y despacho.
+   - Los datos se transcriben en la **Columna T (Inventario Agregado en Bodega)**.
+   - El motor de balance diario evalúa automáticamente la diferencia contra el Inventario Calculado ($\text{Col S}$):
+     $$\text{Columna S (Calculado)} = \text{Col E} + \text{Col F} + \text{Col G} - \text{Col H} - \text{Col J} - \text{Col K} - \text{Col M} - \text{Col N} + \text{Col L} + \text{Col O} - (\text{Col P} + \text{Col Q} + \text{Col R})$$
+     $$\text{Columna V (Faltantes)} = \max(0, \text{Col S} - \text{Col T})$$
+     $$\text{Columna W (Sobrantes)} = \max(0, \text{Col T} - \text{Col S})$$
+   - Si la variación excede el umbral de tolerancia técnica (merma admisible), el sistema solicita obligatoriamente una nota explicativa o causa raíz.
+   - **Congelamiento de Saldo de Cierre:** Al presionar `Cerrar Turno`, se genera el registro inmutable en `daily_inventory_closings`. El saldo final resultante en la **Columna U** ($\text{Col U} = \text{Col T} + \text{Col O}$) hereda de forma determinista como el **Inventario Inicial (Columna E)** de la jornada siguiente ($D+1$), sirviendo como base matemática inalterable para el neteo de la compra subsiguiente.
+
+3. **Gestión de Mercancía Física Devuelta en Camiones:**
+   - Todo producto devuelto por los clientes que retorne físicamente en los furgones entra obligatoriamente a una **Zona de Cuarentena Física** en patio.
+   - **Compuerta de Calidad:** Queda terminantemente prohibido reintegrar dicho producto al stock vendible de forma automática. Solo tras la emisión del Dictamen Técnico de Control de Calidad se autoriza su asiento:
+     * Si el producto es inocuo y recuperable: se registra en la **Columna O (Devolución de Clientes - Reingreso a Bodega)** para sumarse al saldo vendible.
+     * Si el producto presenta deterioro biológico o avería: se asienta en la **Columna Q (Baja por Avería)**, mandándolo a disposición final sin pasar por stock disponible.
+
+---
+
+### 30.4 Estación 3: Módulo de Gestión de Calidad & SAC (Árbitro Técnico Gemba)
+
+1. **Ingesta Cloud en Tiempo Real & Desacoplamiento Operativo:**
+   - La captura de quejas, rechazos y discrepancias opera en tiempo real a través de los canales digitales de SAC (Línea WhatsApp Business, PBX corporativa y módulo de autogestión en portal B2B).
+   - **Resolución Administrativa Inmediata:** Los agentes de SAC tienen potestad operativa para liquidar y radicar la PQR durante la interacción con el cliente, aplicando los criterios de compensación comercial sin dilatar la respuesta ni supeditarla a la hora tardía en que el camión de reparto retorne a la bodega.
+
+2. **La Remisión Física como Archivo Probatorio Auditable:**
+   - Las remisiones físicas firmadas y selladas que los conductores entregan al final de la ruta constituyen el **soporte probatorio documental** (sustento legal y fiscal ante revisiones contables y requerimientos DIAN ex-post).
+   - El personal administrativo archiva cronológicamente las remisiones para respaldar físicamente las notas crédito y ajustes emitidos durante la mañana.
+
+3. **Gobernanza del Flag de Retorno Físico a Bodega:**
+   - Toda novedad de producto radicada en `billing_returns` incluye el indicador booleano `has_physical_return`:
+     * **`has_physical_return = true`:** Indica que el cliente no aceptó el producto y este fue reembarcado en el furgón. Al arribar a bodega, el personal de calidad de patio inspecciona la canastilla en cuarentena y emite el dictamen para su clasificación en Inventarios (**Columna O** Reingreso vendible vs **Columna Q** Merma/Baja).
+     * **`has_physical_return = false`:** Aplica cuando el cliente retuvo o desechó el producto dañado con soporte fotográfico, o cuando se trató de un faltante de peso en báscula de despacho que nunca salió de bodega. En este caso, el impacto es **estrictamente financiero/contable**, sin generar movimientos de reingreso físico en las columnas de piso.
+
+---
+
+### 30.5 Estación 4: Módulo de Facturación & Cierre Contable (World Office / DIAN)
+
+1. **Bimodalidad Estricta por Requerimiento Contractual de Sucursal (`profiles.document_requirement`):**
+   El sistema respeta de manera determinista la configuración fiscal de cada cliente/sucursal:
+
+   - **Caso 1: `remision_post_entrega` (Esquema B2B Predeterminado / Facturación Cero-Discrepancias):**
+     * Los vehículos salen a reparto acompañados exclusivamente por el juego duplicado de la **Remisión Oficial de Entrega** (título valor operativo y soporte de transporte amparado por el Decreto 1079 de 2015).
+     * **Ventana de Gracia Canónica de Dos (2) Horas (120 minutos):** El motor de facturación (`getOrderGraceInfo`) computa 120 minutos a partir de la confirmación de entrega en ruta.
+     * **Emisión Limpia sin Notas Crédito:** Si transcurre la ventana de gracia sin reportes de PQR en Calidad, el pedido se habilita para el corte de facturación por lote AM/PM, emitiendo la Factura Electrónica DIAN por el valor exacto recibido y sin generar notas crédito intermedias.
+     * **Sustracción Neta Previa:** Si dentro de la ventana de gracia se aprueba una novedad en Calidad (`billing_returns` con estatus `approved`), el sistema descuenta automáticamente la cantidad y el importe de `order_items` y `orders.total`. La factura electrónica nace con el importe neto recibido, erradicando discrepancias contables.
+
+   - **Caso 2: `factura_pre_despacho` (Requerimiento de Cadenas y Grandes Superficies):**
+     * El pedido se liquida y factura electrónicamente antes de que el camión abandone el muelle, imprimiendo la Factura Electrónica DIAN para acompañar físicamente la carga.
+     * **Circuito Automático de Nota Crédito:** Cualquier novedad posterior aprobada en Control de Calidad genera de forma automática la **Nota Crédito DIAN** vinculada a la factura de venta y registra el registro contable en la cola de exportación de **World Office Desktop (57 columnas)**, garantizando la perfecta sincronización fiscal.
+
+---
+
+### 30.6 Criterios de Aceptación BDD (Gherkin)
+
+#### Escenario 123: Protocolo Canónico de Modo Manual en Cuatro Estaciones Cerradas (SDD v1.9.87)
+- **Given** una tanda de 45 pedidos B2B programados para despacho matutino en Modo Manual bajo corte oficial de las 20:00 (`cutoff_hour_admin`).
+- **When** el operador logístico ejecuta el asistente de lanzamiento (`ManualDispatchWizardModal.tsx`), el personal de piso realiza la jornada de alistamiento y compras, SAC atiende novedades y Facturación ejecuta el corte contable:
+- **Then**:
+  1. **En Estación 1 (Pedidos & Lanzamiento):**
+     - El asistente emite en ráfaga o individualmente los **7 documentos físicos oficiales**: Sábana de Alistamiento (Oficio), Compras por Sublista (Carta), Control de Llegada / Entrada a Almacén (Carta 2 cols), Conteo Físico Bodega (6 Folios Carta), Remisiones Duplicadas (Carta Duplex), Manifiesto/Rutero con control de canastillas (Carta) y Rótulos Térmicos QR (100×50mm).
+     - El neteo de compras toma como inventario inicial el último cierre oficial registrado en `daily_inventory_closings` ($\text{Col U} \rightarrow \text{Col E}$).
+     - Al confirmar el lanzamiento, los 45 pedidos transicionan a `status = 'para_compra'` con bloqueo Poka-Yoke estricto (solo-lectura) en consolas comerciales y web.
+  2. **En Estación 2 (Inventarios & Balance de Masa):**
+     - Las compras de plaza se ingresan mediante el modal rápido de transcripción (Canal A), por celda con evaluación de fórmulas (Canal B) o por importación Excel (Canal C), alimentando la **Columna G**.
+     - Al fin de turno, se transcriben los 6 folios en la **Columna T**; el sistema concilia automáticamente Faltantes (**Col V**) y Sobrantes (**Col W**), congela el saldo en `daily_inventory_closings` y asigna $\text{Col U} = T + O$ como saldo inicial ($\text{Col E}$) para la compra de la jornada siguiente.
+     - La mercancía devuelta de ruta se retiene en cuarentena de patio y solo reingresa a **Columna O** o **Columna Q** previa autorización de Calidad.
+  3. **En Estación 3 (Gestión de Calidad & SAC):**
+     - SAC radica y liquida las PQRs en la nube de inmediato durante el contacto del cliente.
+     - Las remisiones físicas firmadas se resguardan como archivo probatorio legal y fiscal ex-post.
+     - El indicador `has_physical_return` define si el producto devuelto se somete a inspección física en patio para **Col O** / **Col Q**, o si se trata de un ajuste contable sin movimiento en bodega.
+  4. **En Estación 4 (Facturación & Cierre Contable):**
+     - Los clientes con `remision_post_entrega` respetan la ventana de gracia de 2 horas (120 minutos); ante la ausencia de novedades, la factura electrónica DIAN se genera neta y sin notas crédito. Ante novedades aprobadas, se aplica la sustracción neta previa.
+     - Los clientes con `factura_pre_despacho` viajan con su factura emitida y cualquier novedad posterior genera de forma automática la Nota Crédito DIAN y la línea canónica en el plano de 57 columnas de World Office Desktop.

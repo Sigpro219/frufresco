@@ -32,6 +32,7 @@ export default function GlobalBanner() {
   const [bannerText, setBannerText] = useState<string | null>(null);
   const [customDeliveryDate, setCustomDeliveryDate] = useState<string | null>(null);
   const [cutoffEnabled, setCutoffEnabled] = useState(false);
+  const [cutoffHourPublic, setCutoffHourPublic] = useState(17);
 
   const [messageIndex, setMessageIndex] = useState(0);
   const [fadeState, setFadeState] = useState(true);
@@ -46,7 +47,7 @@ export default function GlobalBanner() {
         const { data } = await supabase
           .from('app_settings')
           .select('key, value')
-          .in('key', [locale === 'en' ? 'global_banner_en' : 'global_banner', 'enable_cutoff_rules']); 
+          .in('key', [locale === 'en' ? 'global_banner_en' : 'global_banner', 'enable_cutoff_rules', 'cutoff_hour_public']); 
         
         if (!isMounted) return;
 
@@ -54,6 +55,10 @@ export default function GlobalBanner() {
           data.forEach(s => {
             if (s.key === 'enable_cutoff_rules') {
               setCutoffEnabled(s.value === 'true');
+            }
+            if (s.key === 'cutoff_hour_public') {
+              const parsed = parseInt(s.value, 10);
+              if (!isNaN(parsed) && parsed > 0) setCutoffHourPublic(parsed);
             }
             if (s.key === (locale === 'en' ? 'global_banner_en' : 'global_banner')) {
               let text = s.value;
@@ -244,7 +249,7 @@ export default function GlobalBanner() {
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
     const bogotaNow = new Date(utc + (3600000 * -5));
     const currentHour = bogotaNow.getHours();
-    const isAfterCutoff = cutoffEnabled && currentHour >= 17;
+    const isAfterCutoff = cutoffEnabled && currentHour >= cutoffHourPublic;
 
     const daysToAdd = isAfterCutoff ? 2 : 1;
     const defaultTargetDate = new Date(bogotaNow);

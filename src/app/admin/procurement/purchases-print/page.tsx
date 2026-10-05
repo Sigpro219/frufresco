@@ -96,29 +96,59 @@ export default function PurchasesPrintPage() {
                     .eq('delivery_date', selectedDate)
             ]);
 
-            while (hasMoreStock) {
-                const { data, error } = await supabase
-                    .from('inventory_stocks')
-                    .select('product_id, quantity')
-                    .eq('status', 'available')
-                    .range(fromStock, fromStock + stepStock - 1);
-                if (error || !data || data.length === 0) {
-                    hasMoreStock = false;
-                } else {
-                    allStocks = allStocks.concat(data);
-                    if (data.length < stepStock) hasMoreStock = false;
-                    else fromStock += stepStock;
+            // SDD v1.9.87 §30.2.2: La línea base oficial de stock para neteo proviene del último Cierre Oficial de Bodega
+            const stockMap: Record<string, number> = {};
+            let hasOfficialClosing = false;
+
+            try {
+                const { data: latestClosing } = await supabase
+                    .from('daily_inventory_closings')
+                    .select('snapshot_items, closing_date')
+                    .lt('closing_date', selectedDate)
+                    .order('closing_date', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (latestClosing?.snapshot_items && Array.isArray(latestClosing.snapshot_items) && latestClosing.snapshot_items.length > 0) {
+                    latestClosing.snapshot_items.forEach((item: any) => {
+                        const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
+                            ? Number(item.bodegaPost10am)
+                            : (item.physicalCount !== null && item.physicalCount !== undefined
+                                ? Number(item.physicalCount)
+                                : Number(item.calculatedStock || 0));
+                        if (item.productId) {
+                            stockMap[item.productId] = Math.max(0, finalStock);
+                        }
+                    });
+                    hasOfficialClosing = true;
                 }
+            } catch (closeErr) {
+                console.warn('daily_inventory_closings no disponible para neteo de compras, aplicando fallback:', closeErr);
+            }
+
+            // Fallback de resiliencia operativa: si no existe cierre oficial previo, consultar inventory_stocks
+            if (!hasOfficialClosing) {
+                while (hasMoreStock) {
+                    const { data, error } = await supabase
+                        .from('inventory_stocks')
+                        .select('product_id, quantity')
+                        .eq('status', 'available')
+                        .range(fromStock, fromStock + stepStock - 1);
+                    if (error || !data || data.length === 0) {
+                        hasMoreStock = false;
+                    } else {
+                        allStocks = allStocks.concat(data);
+                        if (data.length < stepStock) hasMoreStock = false;
+                        else fromStock += stepStock;
+                    }
+                }
+                allStocks.forEach((s: any) => {
+                    stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (Number(s.quantity) || 0);
+                });
             }
 
             const ordersWithItems = ordersRes.data || [];
             const rawTasks = tasksRes.data || [];
-
-            // Stock map
-            const stockMap: Record<string, number> = {};
-            allStocks.forEach((s: any) => {
-                stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (Number(s.quantity) || 0);
-            });
 
             // Recopilar items para el motor canónico de neteo
             const itemsForNetting: NettingOrderItem[] = [];

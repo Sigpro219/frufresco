@@ -103,6 +103,7 @@ export default function PqrAuditModal({
     const [noveltyQty, setNoveltyQty] = useState(0);
     const [noveltyType, setNoveltyType] = useState<'faltante' | 'averia'>('faltante');
     const [noveltyReason, setNoveltyReason] = useState('');
+    const [hasPhysicalReturn, setHasPhysicalReturn] = useState<boolean>(false);
 
     // Order Linking State
     const [clientRecentOrders, setClientRecentOrders] = useState<any[]>([]);
@@ -795,26 +796,30 @@ export default function PqrAuditModal({
 
         setActionLoading(true);
         try {
-            const { error } = await supabase
-                .from('billing_returns')
-                .insert([{
-                    order_id: pqr.order_id,
-                    product_id: selItem.product_id,
-                    quantity_returned: noveltyQty,
-                    reason: `${noveltyType === 'faltante' ? 'Faltante en Báscula' : 'Avería / Calidad'}: ${noveltyReason || pqr.subject || 'Declarado desde PQR'}`,
-                    status: 'pending_review',
-                    defect_category_l1: rcaCategoryL1,
-                    defect_subtype_l2: rcaSubtypeL2,
-                    imputed_responsible: rcaResponsible,
-                    imputation_evidence_notes: rcaEvidenceNotes
-                }]);
+            const compositeNotes = `[RETORNO_FISICO: ${hasPhysicalReturn ? 'SI' : 'NO'}] ${rcaEvidenceNotes || ''}`.trim();
+            const payload: any = {
+                order_id: pqr.order_id,
+                product_id: selItem.product_id,
+                quantity_returned: noveltyQty,
+                reason: `${noveltyType === 'faltante' ? 'Faltante en Báscula' : 'Avería / Calidad'}: ${noveltyReason || pqr.subject || 'Declarado desde PQR'}`,
+                status: 'pending_review',
+                notes: compositeNotes,
+                has_physical_return: hasPhysicalReturn
+            };
 
-            if (error) throw error;
+            // Intentar inserción con has_physical_return, con fallback resiliente a notes si la columna aún no está en PostgREST
+            let insertRes = await supabase.from('billing_returns').insert([payload]);
+            if (insertRes.error && insertRes.error.message?.includes('has_physical_return')) {
+                delete payload.has_physical_return;
+                insertRes = await supabase.from('billing_returns').insert([payload]);
+            }
+            if (insertRes.error) throw insertRes.error;
 
             showToast('Novedad de producto registrada con éxito.', 'success');
             setSelectedItemId('');
             setNoveltyQty(0);
             setNoveltyReason('');
+            setHasPhysicalReturn(false);
             onResolved();
         } catch (e: any) {
             showToast('Error al registrar novedad: ' + e.message, 'error');
@@ -1818,6 +1823,18 @@ export default function PqrAuditModal({
                                                     <Plus size={13} />
                                                 </button>
                                             </div>
+                                        </div>
+
+                                        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '4px' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '700', color: hasPhysicalReturn ? '#0D7A57' : '#64748B', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={hasPhysicalReturn}
+                                                    onChange={e => setHasPhysicalReturn(e.target.checked)}
+                                                    style={{ width: '15px', height: '15px', accentColor: '#0D7A57', cursor: 'pointer' }}
+                                                />
+                                                📦 ¿Retorna físicamente en el camión a bodega? (Ingresa a Cuarentena de Patio)
+                                            </label>
                                         </div>
                                     </div>
                                 </div>

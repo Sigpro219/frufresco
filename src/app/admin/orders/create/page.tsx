@@ -584,7 +584,7 @@ function CreateOrderContent() {
         const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
         const bogotaNow = new Date(utc + (3600000 * -5));
         const currentHour = bogotaNow.getHours();
-        const daysToAdd = currentHour >= 17 ? 2 : 1;
+        const daysToAdd = currentHour >= 20 ? 2 : 1;
         const result = new Date(bogotaNow);
         result.setDate(bogotaNow.getDate() + daysToAdd);
         return getNextValidDeliveryDate(result, false, false).toISOString().split('T')[0];
@@ -597,9 +597,11 @@ function CreateOrderContent() {
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod']);
+                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_admin', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'max_order_hogar_cod']);
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
+                const cutoffHourAdminSetting = settingsData?.find(s => s.key === 'cutoff_hour_admin')?.value;
+                const cutoffHourAdmin = cutoffHourAdminSetting ? parseInt(cutoffHourAdminSetting, 10) : 20;
                 const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
                 const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
                 const maxCodVal = settingsData?.find(s => s.key === 'max_order_hogar_cod')?.value;
@@ -612,7 +614,7 @@ function CreateOrderContent() {
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
                 const bogotaNow = new Date(utc + (3600000 * -5));
                 const currentHour = bogotaNow.getHours();
-                const daysToAdd = (cutoffEnabled && currentHour >= 17) ? 2 : 1;
+                const daysToAdd = (cutoffEnabled && currentHour >= cutoffHourAdmin) ? 2 : 1;
 
                 const baseTarget = new Date(bogotaNow);
                 baseTarget.setDate(bogotaNow.getDate() + daysToAdd);

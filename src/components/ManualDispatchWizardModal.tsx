@@ -187,7 +187,7 @@ export default function ManualDispatchWizardModal({
     };
 
     // Guardar asignación en base de datos
-    const handleSaveSpacesToDatabase = async () => {
+    const handleSaveSpacesToDatabase = async (): Promise<boolean> => {
         setSavingSpaces(true);
         setSpacesSavedSuccess(false);
         try {
@@ -211,12 +211,27 @@ export default function ManualDispatchWizardModal({
 
             setSpacesSavedSuccess(true);
             setTimeout(() => setSpacesSavedSuccess(false), 5000);
+            return true;
         } catch (err: any) {
             console.error('Error guardando bahías de muelle:', err);
             alert(`Error al guardar bahías: ${err?.message || 'Error desconocido'}`);
+            return false;
         } finally {
             setSavingSpaces(false);
         }
+    };
+
+    // Avanzar a Paso 2 con auto-guardado atómico en base de datos
+    const handleContinueToStep2 = async () => {
+        if (assignedCount < selectedOrdersList.length) {
+            if (!confirm('⚠️ Hay pedidos sin bahía asignada. ¿Deseas continuar de todas formas?')) return;
+        }
+
+        const saved = await handleSaveSpacesToDatabase();
+        if (!saved) return;
+
+        setStep1Confirmed(true);
+        setCurrentStep(2);
     };
 
     // Refrescar bahías desde la base de datos (por si se editaron en la pestaña de muelle)
@@ -589,9 +604,9 @@ export default function ManualDispatchWizardModal({
                 {/* ========================================================================= */}
                 {currentStep === 1 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {/* Status Alert Banner */}
+                        {/* Status Alert Banner Limpio & Contextual */}
                         <div style={{
-                            backgroundColor: assignedCount === selectedOrdersList.length ? '#F0FDF4' : '#FEF3C7',
+                            backgroundColor: assignedCount === selectedOrdersList.length ? '#F0FDF4' : '#FFFBEB',
                             border: `1.5px solid ${assignedCount === selectedOrdersList.length ? '#86EFAC' : '#FCD34D'}`,
                             borderRadius: '14px',
                             padding: '12px 16px',
@@ -621,120 +636,33 @@ export default function ManualDispatchWizardModal({
                                 <button
                                     onClick={handleApplyAutoClustering}
                                     style={{
-                                        padding: '7px 12px', borderRadius: '8px', border: '1px solid #CBD5E1',
-                                        backgroundColor: '#FFFFFF', color: '#0F172A', fontWeight: '800',
-                                        fontSize: '0.74rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                        padding: '7px 14px', borderRadius: '8px',
+                                        border: assignedCount === selectedOrdersList.length ? '1px solid #86EFAC' : '1.5px solid #F59E0B',
+                                        backgroundColor: assignedCount === selectedOrdersList.length ? '#DCFCE7' : '#FEF3C7',
+                                        color: assignedCount === selectedOrdersList.length ? '#166534' : '#92400E',
+                                        fontWeight: '900', fontSize: '0.75rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                     }}
                                 >
-                                    <Sparkles size={13} color="#D97706" /> Auto-Asignar (LIFO + Clúster)
-                                </button>
-
-                                <Link
-                                    href={`/admin/logistics/staging-spaces?date=${deliveryDate}`}
-                                    target="_blank"
-                                    style={{
-                                        padding: '7px 12px', borderRadius: '8px', border: '1px solid #4F46E5',
-                                        backgroundColor: '#EEF2FF', color: '#4338CA', fontWeight: '800',
-                                        fontSize: '0.74rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                                    }}
-                                >
-                                    <Grid size={13} /> Centro de Mando Completo <ExternalLink size={11} />
-                                </Link>
-
-                                <button
-                                    onClick={() => setShowFloorGridPreview(!showFloorGridPreview)}
-                                    style={{
-                                        padding: '7px 12px', borderRadius: '8px', border: '1px solid #0284C7',
-                                        backgroundColor: showFloorGridPreview ? '#0284C7' : '#F0F9FF',
-                                        color: showFloorGridPreview ? '#FFFFFF' : '#0369A1', fontWeight: '800',
-                                        fontSize: '0.74rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                                    }}
-                                >
-                                    <Layers size={13} /> {showFloorGridPreview ? 'Ocultar Cuadrícula' : 'Ver Cuadrícula 150 Bahías'}
+                                    <Sparkles size={14} color={assignedCount === selectedOrdersList.length ? '#16A34A' : '#D97706'} />
+                                    {assignedCount === selectedOrdersList.length ? 'Re-calcular (LIFO)' : 'Auto-Asignar (LIFO + Clúster)'}
                                 </button>
 
                                 <button
                                     onClick={handleRefreshSpacesFromDB}
                                     style={{
                                         padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1',
-                                        backgroundColor: '#FFFFFF', color: '#475569', cursor: 'pointer'
+                                        backgroundColor: '#FFFFFF', color: '#475569', cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
                                     }}
-                                    title="Refrescar desde base de datos"
+                                    title="Sincronizar con base de datos"
                                 >
                                     <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-                                </button>
-
-                                <button
-                                    onClick={handleSaveSpacesToDatabase}
-                                    disabled={savingSpaces}
-                                    style={{
-                                        padding: '7px 14px', borderRadius: '8px', border: 'none',
-                                        backgroundColor: spacesSavedSuccess ? '#059669' : THEME.colors.primary,
-                                        color: '#FFFFFF', fontWeight: '900', fontSize: '0.75rem',
-                                        cursor: savingSpaces ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.3)'
-                                    }}
-                                >
-                                    {spacesSavedSuccess ? <CheckCircle2 size={13} /> : <Save size={13} />}
-                                    {savingSpaces ? 'Guardando...' : spacesSavedSuccess ? '¡Guardado!' : 'Guardar Bahías en BD'}
                                 </button>
                             </div>
                         </div>
 
-                        {/* Cuadrícula Visual Desplegable (Andon / Visual Factory) */}
-                        {showFloorGridPreview && (
-                            <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '16px', padding: '1rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                    <span style={{ fontSize: '0.76rem', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase' }}>
-                                        Plano Físico de Nave Central (Bahías 1 a 150)
-                                    </span>
-                                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.68rem', fontWeight: '700' }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{ width: '10px', height: '10px', backgroundColor: '#ECFDF5', border: '1px solid #0D7A57', borderRadius: '2px' }}></span> Asignado
-                                        </span>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{ width: '10px', height: '10px', backgroundColor: '#FFFFFF', border: '1px dashed #CBD5E1', borderRadius: '2px' }}></span> Libre
-                                        </span>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(15, 1fr)', gap: '4px', maxHeight: '200px', overflowY: 'auto', padding: '4px' }}>
-                                    {floorGrid150.map(slot => (
-                                        <div
-                                            key={slot.slotNum}
-                                            title={slot.occupiedBy 
-                                                ? `${slot.occupiedBy.customerName} (${slot.occupiedBy.totalSpaces > 1 ? `~${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.totalSpaces}]` : `${slot.occupiedBy.crates}c`} - ${Math.round(slot.occupiedBy.totalKg)} kg)` 
-                                                : 'Bahía Libre'}
-                                            style={{
-                                                padding: '4px 2px',
-                                                textAlign: 'center',
-                                                borderRadius: '4px',
-                                                border: slot.occupiedBy ? '1px solid #0D7A57' : '1px dashed #CBD5E1',
-                                                backgroundColor: slot.occupiedBy ? '#ECFDF5' : '#FFFFFF',
-                                                color: slot.occupiedBy ? '#065F46' : '#94A3B8',
-                                                fontSize: '0.62rem',
-                                                fontWeight: '800',
-                                                minHeight: '28px',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                justifyContent: 'center',
-                                                alignItems: 'center'
-                                            }}
-                                        >
-                                            <div>{slot.slotNum}</div>
-                                            {slot.occupiedBy && (
-                                                <div style={{ fontSize: '0.48rem', fontWeight: 900, color: '#047857', whiteSpace: 'nowrap' }}>
-                                                    {slot.occupiedBy.totalSpaces > 1 
-                                                        ? `${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.totalSpaces}]`
-                                                        : `${slot.occupiedBy.crates}c`}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Tabla Editable Compacta de Pedidos con Bahías */}
+                        {/* Tabla Editable Compacta de Pedidos con Bahías (PROTAGONISTA VISUAL ABOVE THE FOLD) */}
                         <div style={{ border: '1px solid #E2E8F0', borderRadius: '14px', overflow: 'hidden' }}>
                             <div style={{ maxHeight: '310px', overflowY: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
@@ -815,6 +743,99 @@ export default function ManualDispatchWizardModal({
                             </div>
                         </div>
 
+                        {/* Acordeón Desplegable para el Plano Físico de Nave Central */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowFloorGridPreview(!showFloorGridPreview)}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: showFloorGridPreview ? '#EEF2FF' : '#F8FAFC',
+                                    color: showFloorGridPreview ? '#4338CA' : '#475569',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <Layers size={13} color={showFloorGridPreview ? '#4338CA' : '#64748B'} />
+                                {showFloorGridPreview ? 'Ocultar Plano Físico de Nave (150 Bahías) ▴' : '🗺️ Inspeccionar Plano Físico de Nave Central (150 Bahías) ▾'}
+                            </button>
+
+                            <Link
+                                href={`/admin/logistics/staging-spaces?date=${deliveryDate}`}
+                                target="_blank"
+                                style={{
+                                    fontSize: '0.70rem',
+                                    fontWeight: '700',
+                                    color: '#6366F1',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                Configuración Avanzada de Muelle <ExternalLink size={10} />
+                            </Link>
+                        </div>
+
+                        {/* Cuadrícula Visual Desplegable (Andon / Visual Factory) */}
+                        {showFloorGridPreview && (
+                            <div style={{ backgroundColor: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '16px', padding: '1rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '0.76rem', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase' }}>
+                                        Plano Físico de Nave Central (Bahías 1 a 150)
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.68rem', fontWeight: '700' }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ width: '10px', height: '10px', backgroundColor: '#ECFDF5', border: '1px solid #0D7A57', borderRadius: '2px' }}></span> Asignado
+                                        </span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ width: '10px', height: '10px', backgroundColor: '#FFFFFF', border: '1px dashed #CBD5E1', borderRadius: '2px' }}></span> Libre
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(15, 1fr)', gap: '4px', maxHeight: '200px', overflowY: 'auto', padding: '4px' }}>
+                                    {floorGrid150.map(slot => (
+                                        <div
+                                            key={slot.slotNum}
+                                            title={slot.occupiedBy 
+                                                ? `${slot.occupiedBy.customerName} (${slot.occupiedBy.totalSpaces > 1 ? `~${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.totalSpaces}]` : `${slot.occupiedBy.crates}c`} - ${Math.round(slot.occupiedBy.totalKg)} kg)` 
+                                                : 'Bahía Libre'}
+                                            style={{
+                                                padding: '4px 2px',
+                                                textAlign: 'center',
+                                                borderRadius: '4px',
+                                                border: slot.occupiedBy ? '1px solid #0D7A57' : '1px dashed #CBD5E1',
+                                                backgroundColor: slot.occupiedBy ? '#ECFDF5' : '#FFFFFF',
+                                                color: slot.occupiedBy ? '#065F46' : '#94A3B8',
+                                                fontSize: '0.62rem',
+                                                fontWeight: '800',
+                                                minHeight: '28px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'center',
+                                                alignItems: 'center'
+                                            }}
+                                        >
+                                            <div>{slot.slotNum}</div>
+                                            {slot.occupiedBy && (
+                                                <div style={{ fontSize: '0.48rem', fontWeight: 900, color: '#047857', whiteSpace: 'nowrap' }}>
+                                                    {slot.occupiedBy.totalSpaces > 1 
+                                                        ? `${slot.occupiedBy.slotCrates}c [${slot.occupiedBy.slotIndex + 1}/${slot.occupiedBy.totalSpaces}]`
+                                                        : `${slot.occupiedBy.crates}c`}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Bloque de Impresión 1: Documentos de Planta */}
                         <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -840,7 +861,7 @@ export default function ManualDispatchWizardModal({
                                     }}
                                     title="Descargar Sábana de Alistamiento en formato PDF (Oficio)"
                                 >
-                                    <Download size={13} /> PDF
+                                    <Download size={13} /> Descargar PDF
                                 </Link>
                                 <Link
                                     href={`/admin/orders/alistamiento-print?orderIds=${orderIdsParam}&date=${deliveryDate}`}
@@ -867,8 +888,8 @@ export default function ManualDispatchWizardModal({
                             </div>
                         </div>
 
-                        {/* Footer de Paso 1 con Checkbox Poka-Yoke */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid #E2E8F0' }}>
+                        {/* Footer de Paso 1 con Checkbox Poka-Yoke & Auto-guardado al Avanzar */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '10px' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: '800', color: '#0F172A' }}>
                                 <input 
                                     type="checkbox" 
@@ -876,25 +897,28 @@ export default function ManualDispatchWizardModal({
                                     onChange={(e) => setStep1Confirmed(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#0D7A57', cursor: 'pointer' }}
                                 />
-                                He inspeccionado la cuadrícula gráfica de muelle y tengo la Sábana de Alistamiento impresa.
+                                He verificado las bahías de muelle y tengo la Sábana de Alistamiento impresa.
                             </label>
 
                             <button
-                                onClick={() => {
-                                    if (assignedCount < selectedOrdersList.length) {
-                                        if (!confirm('⚠️ Hay pedidos sin bahía asignada. ¿Deseas continuar de todas formas?')) return;
-                                    }
-                                    setStep1Confirmed(true);
-                                    setCurrentStep(2);
-                                }}
-                                disabled={!step1Confirmed && assignedCount === 0}
+                                onClick={handleContinueToStep2}
+                                disabled={savingSpaces || (!step1Confirmed && assignedCount === 0)}
                                 style={{
-                                    padding: '9px 18px', backgroundColor: '#0F172A', color: '#FFFFFF',
+                                    padding: '9px 20px', backgroundColor: '#0F172A', color: '#FFFFFF',
                                     border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '0.82rem',
-                                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
+                                    cursor: savingSpaces ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                    boxShadow: '0 2px 8px rgba(15, 23, 42, 0.25)'
                                 }}
                             >
-                                Continuar a Compras &amp; Recibo <ArrowRight size={14} />
+                                {savingSpaces ? (
+                                    <>
+                                        <RefreshCw size={14} className="animate-spin" /> Guardando bahías...
+                                    </>
+                                ) : (
+                                    <>
+                                        Continuar a Compras &amp; Recibo <ArrowRight size={14} />
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

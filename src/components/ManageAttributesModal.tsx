@@ -2,7 +2,24 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, X, Tag, AlertCircle, Save, Trash2, Edit3, Loader2, PlusCircle, ShieldAlert, FileSpreadsheet } from 'lucide-react';
+import { 
+    Plus, 
+    X, 
+    Tag, 
+    AlertCircle, 
+    Save, 
+    Trash2, 
+    Edit3, 
+    Loader2, 
+    PlusCircle, 
+    ShieldAlert, 
+    FileSpreadsheet,
+    Globe,
+    ClipboardList,
+    Scale,
+    Package,
+    PackageOpen
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface MasterAttribute {
@@ -103,7 +120,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             const sortedData = JSON.parse(JSON.stringify(normalizedData)).sort((a: any, b: any) => a.name.localeCompare(b.name));
             setLocalAttributes(sortedData);
         } catch (error: any) {
-            console.error('❌ Error fetching attributes:', error.message);
+            console.error('Error fetching attributes:', error.message);
         } finally {
             setLoading(false);
         }
@@ -173,11 +190,11 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
         let finalVal = val;
         if (isPresentacion && val.toLowerCase() !== 'unidad web' && val.toLowerCase() !== 'unidadweb') {
-            const grams = prompt(`⚠️ EQUIVALENCIA EN GRAMOS:\n\nIngrese la equivalencia en gramos para "${val}" (ej: 250):`);
+            const grams = prompt(`EQUIVALENCIA EN GRAMOS:\n\nIngrese la equivalencia en gramos para "${val}" (ej: 250):`);
             if (grams === null) return; // Operator clicked cancel
             const gramsNum = parseInt(grams.trim());
             if (isNaN(gramsNum) || gramsNum <= 0) {
-                alert('🛑 Error: Debe ingresar un número de gramos válido (mayor a 0).');
+                alert('Error: Debe ingresar un número de gramos válido (mayor a 0).');
                 return;
             }
             finalVal = `${val}|${gramsNum}`;
@@ -198,7 +215,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
     };
 
     const handleRemoveValueLocal = (attrId: string, valueToRemove: string) => {
-        if (!confirm(`⚠️ PRECAUCIÓN: ¿Seguro que quieres eliminar la subcategoría "${valueToRemove}"?\n\nSi hay productos usando este valor, podrían quedar inconsistentes.`)) return;
+        if (!confirm(`PRECAUCIÓN: ¿Seguro que quieres eliminar la subcategoría "${valueToRemove}"?\n\nSi hay productos usando este valor, podrían quedar inconsistentes.`)) return;
         
         setLocalAttributes(localAttributes.map(a => a.id === attrId 
             ? { ...a, suggested_values: a.suggested_values.filter(v => v !== valueToRemove) } 
@@ -207,7 +224,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
     };
 
     const handleDeleteLocal = (id: string, name: string) => {
-        const firstCheck = confirm(`🛑 ACCIÓN CRÍTICA: Estás a punto de borrar la categoría completa "${name}".\n\nEsto afectará la capacidad de crear variantes basadas en este atributo para TODOS los productos.`);
+        const firstCheck = confirm(`ACCIÓN CRÍTICA: Estás a punto de borrar la categoría completa "${name}".\n\nEsto afectará la capacidad de crear variantes basadas en este atributo para TODOS los productos.`);
         if (firstCheck) {
             const secondCheck = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO?\n\nRecomendamos NO borrar categorías que ya tengan productos vinculados.`);
             if (secondCheck) {
@@ -247,9 +264,9 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
             await fetchAttributes();
             if ((window as any).showToast) {
-                (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
+                (window as any).showToast('Gobernanza actualizada con éxito', 'success');
             } else {
-                alert('Gobernanza actualizada con éxito ✅');
+                alert('Gobernanza actualizada con éxito');
             }
             onClose(); // Cerrar el modal al guardar exitosamente
         } catch (err: any) {
@@ -461,7 +478,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 </button>
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
                                                     <label 
-                                                        title="🌐 Exclusivo Tienda Web: Los clientes ven esta opción al comprar en la página web."
+                                                        title="Exclusivo Tienda Web: Los clientes ven esta opción al comprar en la página web."
                                                         style={{ 
                                                             display: 'inline-flex', 
                                                             alignItems: 'center', 
@@ -484,11 +501,12 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                             onChange={(e) => handleToggleShowOnWeb(attr.id, e.target.checked)}
                                                             style={{ accentColor: '#10B981', cursor: 'pointer' }}
                                                         />
-                                                        <span>🌐 Web</span>
+                                                        <Globe size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                                                        <span>Web</span>
                                                     </label>
 
                                                     <label 
-                                                        title="📋 Exclusivo Montaje y Bodega: Opción para el panel de pedidos y sábana de alistamiento (bodega)."
+                                                        title="Exclusivo Montaje y Bodega: Opción para el panel de pedidos y sábana de alistamiento (bodega)."
                                                         style={{ 
                                                             display: 'inline-flex', 
                                                             alignItems: 'center', 
@@ -511,7 +529,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                             onChange={(e) => handleToggleShowInPicking(attr.id, e.target.checked)}
                                                             style={{ accentColor: '#D97706', cursor: 'pointer' }}
                                                         />
-                                                        <span>📋 Nota Alistamiento</span>
+                                                        <ClipboardList size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                                                        <span>Nota Alistamiento</span>
                                                     </label>
                                                 </div>
                                             </div>
@@ -539,7 +558,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                             const { under1kg, overOrEqual1kg, others } = groupSuggestedValues(attr.suggested_values || []);
                                             const hasWeightGroups = under1kg.length > 0 || overOrEqual1kg.length > 0;
 
-                                            const renderChip = (val: string) => {
+                                             const renderChip = (val: string) => {
                                                 const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
                                                 return (
                                                     <span key={val} style={{ 
@@ -548,8 +567,15 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                         border: isWebUnit ? '1.5px solid #10B981' : '1.5px solid #E5E7EB', 
                                                         padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
                                                         fontWeight: '700', color: isWebUnit ? '#047857' : '#374151' 
-                                                    }} title={isWebUnit ? '🌐 EXCLUSIVO PARA TIENDA WEB: Hereda unidad web y factor en Kg.' : undefined}>
-                                                        {isWebUnit ? '🏷️ Unidad Web (Dinámica SKU)' : (val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val)}
+                                                    }} title={isWebUnit ? 'Exclusivo para Tienda Web: Hereda unidad web y factor en Kg.' : undefined}>
+                                                        {isWebUnit ? (
+                                                            <>
+                                                                <Tag size={12} strokeWidth={2.5} style={{ flexShrink: 0, color: '#059669' }} />
+                                                                <span>Unidad Web (Dinámica SKU)</span>
+                                                            </>
+                                                        ) : (
+                                                            val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val
+                                                        )}
                                                         <button 
                                                             onClick={() => handleRemoveValueLocal(attr.id, val)}
                                                             style={{ background: 'none', border: 'none', color: isWebUnit ? '#059669' : '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}
@@ -572,8 +598,9 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                                     {under1kg.length > 0 && (
                                                         <div>
-                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <span>⚖️ Menos de 1 Kilo (&lt; 1000 gr)</span>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                <Scale size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                                                                <span>Menos de 1 Kilo (&lt; 1000 gr)</span>
                                                             </div>
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                                 {under1kg.map(renderChip)}
@@ -583,8 +610,9 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
                                                     {overOrEqual1kg.length > 0 && (
                                                         <div style={{ borderTop: under1kg.length > 0 ? '1px dashed #E5E7EB' : 'none', paddingTop: under1kg.length > 0 ? '6px' : '0' }}>
-                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <span>📦 1 Kilo o Más (&ge; 1 Kg / Mayorista)</span>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                <Package size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                                                                <span>1 Kilo o Más (&ge; 1 Kg / Mayorista)</span>
                                                             </div>
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                                 {overOrEqual1kg.map(renderChip)}
@@ -594,8 +622,9 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
                                                     {others.length > 0 && (
                                                         <div style={{ borderTop: '1px dashed #E5E7EB', paddingTop: '6px' }}>
-                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <span>🧺 Empaques &amp; Otras Presentaciones</span>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                <PackageOpen size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                                                                <span>Empaques &amp; Otras Presentaciones</span>
                                                             </div>
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                                 {others.map(renderChip)}

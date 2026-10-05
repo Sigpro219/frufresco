@@ -28,7 +28,8 @@ import {
     PackageCheck,
     Percent,
     CalendarX,
-    Mail
+    Mail,
+    Clock
 } from 'lucide-react';
 
 function ImageUpload({ 
@@ -280,6 +281,8 @@ export default function AdminSettingsPage() {
             { key: 'max_order_hogar_cod', value: '400000', description: 'Tope máximo para pedidos Hogar con pago Contra Entrega' },
             { key: 'min_order_institucional', value: '150000', description: 'Pedido mínimo para la Línea Institucional' },
             { key: 'enable_cutoff_rules', value: 'true', description: 'Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)' },
+            { key: 'cutoff_hour_admin', value: '20', description: 'Hora de corte para toma manual de pedidos Admin / B2B (24h)' },
+            { key: 'cutoff_hour_public', value: '17', description: 'Hora de corte para tienda web pública B2C (24h)' },
             { key: 'allow_sunday_deliveries', value: 'false', description: '¿Permitir entregas los Domingos?' },
             { key: 'allow_holiday_deliveries', value: 'false', description: '¿Permitir entregas los Días Festivos (19 Días Colombia)?' },
             { key: 'enable_b2b_lead_capture', value: 'true', description: 'Canal de registro para nuevos clientes institucionales (B2B)' },
@@ -648,7 +651,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'cutoff_hour_admin', 'cutoff_hour_public', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -670,7 +673,9 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
                                                  setting.key === 'store_status' ? 'Estado Tienda' :
                                                  setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
-                                                 setting.key === 'enable_cutoff_rules' ? 'Reglas Hora de Corte (5 PM)' :
+                                                 setting.key === 'enable_cutoff_rules' ? <><Clock size={14} style={{ color: 'var(--primary)' }} /> REGLAS HORA DE CORTE</> :
+                                                 setting.key === 'cutoff_hour_admin' ? <><Clock size={14} style={{ color: 'var(--primary)' }} /> HORA CORTE ADMIN / B2B</> :
+                                                 setting.key === 'cutoff_hour_public' ? <><Clock size={14} style={{ color: '#D97706' }} /> HORA CORTE TIENDA PÚBLICA (B2C)</> :
                                                  setting.key === 'allow_sunday_deliveries' ? <><CalendarX size={14} style={{ color: 'var(--primary)' }} /> ENTREGAS LOS DOMINGOS</> :
                                                  setting.key === 'allow_holiday_deliveries' ? <><Sparkles size={14} style={{ color: '#D97706' }} /> ENTREGAS EN FESTIVOS (19 DÍAS COLOMBIA)</> :
                                                  setting.key === 'packaging_fee_enabled' ? <><PackageCheck size={14} style={{ color: 'var(--primary)' }} /> Cobro Empaque Plástico (Checkout)</> :
@@ -721,6 +726,34 @@ export default function AdminSettingsPage() {
                                                         Los correos en Modo Pruebas se redirigirán a esta dirección.
                                                     </div>
                                                 </div>
+                                            ) : setting.key === 'cutoff_hour_admin' || setting.key === 'cutoff_hour_public' ? (
+                                                <select 
+                                                    value={setting.value || (setting.key === 'cutoff_hour_admin' ? '20' : '17')} 
+                                                    onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '8px 12px', 
+                                                        borderRadius: THEME.radius.sm, 
+                                                        border: `1px solid ${THEME.colors.borderActive}`, 
+                                                        fontWeight: '700',
+                                                        fontSize: '0.85rem',
+                                                        color: THEME.colors.textMain,
+                                                        backgroundColor: THEME.colors.surface,
+                                                        cursor: 'pointer',
+                                                        outline: 'none'
+                                                    }}
+                                                >
+                                                    <option value="14">02:00 PM (14:00)</option>
+                                                    <option value="15">03:00 PM (15:00)</option>
+                                                    <option value="16">04:00 PM (16:00)</option>
+                                                    <option value="17">05:00 PM (17:00) {setting.key === 'cutoff_hour_public' ? '— (Recomendado Tienda)' : ''}</option>
+                                                    <option value="18">06:00 PM (18:00)</option>
+                                                    <option value="19">07:00 PM (19:00)</option>
+                                                    <option value="20">08:00 PM (20:00) {setting.key === 'cutoff_hour_admin' ? '— (Recomendado Admin)' : ''}</option>
+                                                    <option value="21">09:00 PM (21:00)</option>
+                                                    <option value="22">10:00 PM (22:00)</option>
+                                                    <option value="23">11:00 PM (23:00)</option>
+                                                </select>
                                             ) : setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
                                                 <select 
                                                     value={setting.value} 
@@ -730,7 +763,7 @@ export default function AdminSettingsPage() {
                                                         padding: '8px 12px', 
                                                         borderRadius: THEME.radius.sm, 
                                                         border: `1px solid ${THEME.colors.borderActive}`, 
-                                                        fontWeight: '600',
+                                                        fontWeight: '600', 
                                                         fontSize: '0.85rem',
                                                         color: THEME.colors.textMain,
                                                         backgroundColor: THEME.colors.surface,

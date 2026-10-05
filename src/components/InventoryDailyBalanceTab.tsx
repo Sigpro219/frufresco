@@ -80,6 +80,7 @@ import InventoryWasteModal from '@/components/InventoryWasteModal';
 import InventoryPayrollModal from '@/components/InventoryPayrollModal';
 import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
 import DailyBalanceExcelImportModal from '@/components/DailyBalanceExcelImportModal';
+import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
 
 interface ProductItem {
     id: string;
@@ -279,6 +280,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
     const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
     const [isAdditionalSalesModalOpen, setIsAdditionalSalesModalOpen] = useState(false);
     const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
+    const [isFastPlazaModalOpen, setIsFastPlazaModalOpen] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
     // Estado de Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
@@ -886,6 +888,16 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
         });
 
         return families;
+    }, [dailyRows]);
+
+    const currentPurchasesMap = useMemo(() => {
+        const map: Record<string, number> = {};
+        dailyRows.forEach(r => {
+            if (r.colG_purchases > 0) {
+                map[r.productId] = r.colG_purchases;
+            }
+        });
+        return map;
     }, [dailyRows]);
 
     // Lógica de búsqueda inteligente y etiquetas (#ID, @tags, multi-búsqueda por comas)
@@ -2983,6 +2995,31 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
                                 <button
                                     type="button"
+                                    onClick={() => setIsFastPlazaModalOpen(true)}
+                                    style={{
+                                        padding: '0 0.65rem',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #0D7A57',
+                                        backgroundColor: '#0D7A57',
+                                        color: '#FFFFFF',
+                                        fontSize: '0.73rem',
+                                        fontWeight: '800',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    title="Carga Rápida de Compras Corabastos (Canal A - Teclado Primero)"
+                                >
+                                    <Zap size={13} strokeWidth={2.5} />
+                                    <span>Compras Plaza</span>
+                                </button>
+
+                                <button
+                                    type="button"
                                     onClick={() => setIsExcelImportModalOpen(true)}
                                     style={{
                                         padding: '0 0.55rem',
@@ -4087,6 +4124,15 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 onSuccess={() => loadDailyData(true)}
                 currentDate={balanceDate}
                 products={products}
+            />
+
+            <FastPlazaPurchasesModal
+                isOpen={isFastPlazaModalOpen}
+                onClose={() => setIsFastPlazaModalOpen(false)}
+                onSuccess={() => loadDailyData(true)}
+                currentDate={balanceDate}
+                products={products}
+                currentPurchasesMap={currentPurchasesMap}
             />
 
             {/* MODAL DE CIERRE DIARIO OFICIAL & CONGELACIÓN (SPEC.md v1.5.0 / ACUERDO 2 GRILL-ME) */}

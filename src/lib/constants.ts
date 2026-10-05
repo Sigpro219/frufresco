@@ -10,9 +10,10 @@ export const CATEGORY_MAP: Record<string, string> = {
     'PR': 'Procesados'
 };
 
-// Business Logic Cutoff Rules
-export const DEFAULT_CUTOFF_HOUR = 17; // 5:00 PM - Sale cut for tomorrow delivery
-export const ADMIN_EDIT_CUTOFF_HOUR = 20; // 8:00 PM - Admin edit lock for next day delivery
+// Business Logic Cutoff Rules (Valores por defecto / Fallback si no existen en app_settings)
+// Fuente de verdad canónica en caliente: app_settings ('cutoff_hour_admin' y 'cutoff_hour_public')
+export const DEFAULT_CUTOFF_HOUR = 17; // 5:00 PM - Fallback tienda web pública para entrega mañana
+export const ADMIN_EDIT_CUTOFF_HOUR = 20; // 8:00 PM - Fallback toma manual Admin / B2B para entrega mañana
 
 
 export const REVERSE_CATEGORY_MAP: Record<string, string> = {

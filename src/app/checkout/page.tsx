@@ -649,9 +649,11 @@ export default function CheckoutPage() {
                 const { data: settingsData } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+                    .in('key', ['enable_cutoff_rules', 'cutoff_hour_public', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
 
                 const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
+                const cutoffHourPublicSetting = settingsData?.find(s => s.key === 'cutoff_hour_public')?.value;
+                const cutoffHourPublic = cutoffHourPublicSetting ? parseInt(cutoffHourPublicSetting, 10) : 17;
                 const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
                 const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
 
@@ -659,7 +661,7 @@ export default function CheckoutPage() {
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
                 const bogotaNow = new Date(utc + (3600000 * -5));
                 const currentHour = bogotaNow.getHours();
-                const daysToAdd = (cutoffEnabled && currentHour >= 17) ? 2 : 1;
+                const daysToAdd = (cutoffEnabled && currentHour >= cutoffHourPublic) ? 2 : 1;
 
                 const baseTarget = new Date(bogotaNow);
                 baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
