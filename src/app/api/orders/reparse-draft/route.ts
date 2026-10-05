@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction, findBestProductMatchDetails, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
-import { isSpreadsheetFile } from '@/lib/spreadsheets';
+import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -167,6 +167,24 @@ ${csvContent}`;
                 parsedSuccessfully = true;
               }
             });
+          }
+
+          // Programmatic fallback if Gemini returned 0 items
+          if (!parsedSuccessfully || extractedData.items.length === 0) {
+            const { extractedItems: progItems } = parseSpreadsheetWorkbook(workbook, XLSX);
+            if (progItems && progItems.length > 0) {
+              progItems.forEach((it: any) => {
+                extractedData.items.push({
+                  name: it.originalName,
+                  quantity: it.quantity,
+                  unit: it.unit || 'Kg',
+                  observations: it.observations || '',
+                  source_attachment_name: att.name,
+                  attachment_index: attIdx
+                });
+                parsedSuccessfully = true;
+              });
+            }
           }
         } else if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
           const base64 = Buffer.from(fileBuf).toString('base64');

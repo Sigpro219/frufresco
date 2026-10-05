@@ -62,4 +62,48 @@ describe('Spreadsheet Detector & Formats Suite', () => {
     assert.ok(csv.includes('25'));
     assert.ok(csv.includes('LECHUGA BATAVIA'));
   });
+
+  it('parseSpreadsheetWorkbook parses sheets without headers (El Corral ODS pattern)', async () => {
+    const { parseSpreadsheetWorkbook } = await import('../src/lib/spreadsheets');
+    const wb = XLSX.utils.book_new();
+    const wsData = [
+      [null, 46299.79],
+      ['Albacom gramos', 300],
+      ['Aji chivato kilo'],
+      ['Banano unidades'],
+      ['cebolla cabezona kilo', 40],
+      ['Plàtano Verde unidades', '15 muy verde'],
+      ['Aguacate papelillo kg', '10 pinton']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'PLANILLA PDV');
+
+    const result = parseSpreadsheetWorkbook(wb, XLSX);
+    assert.strictEqual(result.parsedSheets.length, 1);
+    const sheet = result.parsedSheets[0];
+    assert.strictEqual(sheet.sheetName, 'PLANILLA PDV');
+    assert.strictEqual(sheet.nameCol, 0);
+    assert.strictEqual(sheet.qtyCol, 1);
+    assert.strictEqual(sheet.headerRowIdx, -1);
+    assert.strictEqual(sheet.countWithQty, 4); // Albacom, cebolla, platano, aguacate
+
+    assert.strictEqual(result.extractedItems.length, 4);
+    assert.strictEqual(result.extractedItems[0].originalName, 'Albacom');
+    assert.strictEqual(result.extractedItems[0].quantity, 300);
+    assert.strictEqual(result.extractedItems[0].unit, 'gramos');
+    
+    assert.strictEqual(result.extractedItems[1].originalName, 'cebolla cabezona');
+    assert.strictEqual(result.extractedItems[1].quantity, 40);
+    assert.strictEqual(result.extractedItems[1].unit, 'kilo');
+
+    assert.strictEqual(result.extractedItems[2].originalName, 'Plàtano Verde');
+    assert.strictEqual(result.extractedItems[2].quantity, 15);
+    assert.strictEqual(result.extractedItems[2].unit, 'unidades');
+    assert.strictEqual(result.extractedItems[2].observations, 'muy verde');
+
+    assert.strictEqual(result.extractedItems[3].originalName, 'Aguacate papelillo');
+    assert.strictEqual(result.extractedItems[3].quantity, 10);
+    assert.strictEqual(result.extractedItems[3].unit, 'kg');
+    assert.strictEqual(result.extractedItems[3].observations, 'pinton');
+  });
 });

@@ -17,8 +17,7 @@ import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
-import { useAuth } from '@/lib/authContext';
-import { isSpreadsheetFile } from '@/lib/spreadsheets';
+import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -834,6 +833,52 @@ const GmailMessageViewer = ({
         </div>
       </div>
 
+      {/* Document Notice Banner in Gmail viewer */}
+      {(() => {
+        const docAtt = (attachments || []).find((a: any) => isSpreadsheetFile(a.name) || (a.name || '').toLowerCase().endsWith('.pdf'));
+        if (!docAtt) return null;
+        const isSheet = isSpreadsheetFile(docAtt.name);
+        const docIdx = attachments.indexOf(docAtt);
+        return (
+          <div style={{
+            margin: '12px 20px 0 20px',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            backgroundColor: isSheet ? '#ECFDF5' : '#EFF6FF',
+            border: `1px solid ${isSheet ? '#A7F3D0' : '#BFDBFE'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: isSheet ? '#065F46' : '#1E40AF', fontWeight: 700 }}>
+              <FileText size={16} color={isSheet ? '#059669' : '#2563EB'} />
+              <span>Este pedido incluye el documento original adjunto: <strong>{docAtt.name}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSwitchToAttachment && onSwitchToAttachment(docIdx !== -1 ? docIdx : 0)}
+              style={{
+                padding: '5px 12px',
+                borderRadius: '6px',
+                backgroundColor: isSheet ? '#059669' : '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '0.74rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              Ver Hoja en Pantalla →
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Gmail Message Body Area */}
       <div className="premium-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', backgroundColor: '#FFFFFF' }}>
         {resolvedHtml ? (
@@ -1393,7 +1438,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
 
   useEffect(() => {
-    setActiveTab('email');
     setAttachmentHtml(null);
     setExcelSheetsData([]);
     setSelectedExcelSheetIndex(0);
@@ -1405,21 +1449,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setIsFloatingExpanded(false);
     
     let defaultIndex = 0;
+    let shouldDefaultToAttachment = false;
+
     if (selectedDraft) {
       const metadata = getDraftMetadata(selectedDraft);
-      if (metadata.attachments && Array.isArray(metadata.attachments)) {
-        const firstWithItems = metadata.attachments.findIndex((att: any) => att.items && Array.isArray(att.items) && att.items.length > 0 && att.processed !== true);
+      const attachments = (metadata.attachments && Array.isArray(metadata.attachments)) 
+        ? metadata.attachments 
+        : (metadata.attachmentUrl ? [{ name: metadata.attachmentName || 'documento.xlsx', url: metadata.attachmentUrl }] : []);
+
+      if (attachments.length > 0) {
+        const firstWithItems = attachments.findIndex((att: any) => att.items && Array.isArray(att.items) && att.items.length > 0 && att.processed !== true);
         if (firstWithItems !== -1) {
           defaultIndex = firstWithItems;
         } else {
-          const firstUnprocessed = metadata.attachments.findIndex((att: any) => att.processed !== true);
-          if (firstUnprocessed !== -1) {
-            defaultIndex = firstUnprocessed;
+          const firstSpreadsheet = attachments.findIndex((att: any) => isSpreadsheetFile(att.name));
+          if (firstSpreadsheet !== -1) {
+            defaultIndex = firstSpreadsheet;
+          } else {
+            const firstUnprocessed = attachments.findIndex((att: any) => att.processed !== true);
+            if (firstUnprocessed !== -1) {
+              defaultIndex = firstUnprocessed;
+            }
           }
+        }
+
+        const selectedAttName = attachments[defaultIndex]?.name || metadata.attachmentName || '';
+        const isSpreadsheet = isSpreadsheetFile(selectedAttName);
+        const isPdf = selectedAttName.toLowerCase().endsWith('.pdf');
+        const emailBody = (selectedDraft.email_body || metadata.rawText || '').trim();
+        const isForwardOrBrief = emailBody.length < 80 || emailBody.includes('Gráfico / Firma inline no disponible') || emailBody.includes('Consulta la pestaña Adjunto');
+
+        if (isSpreadsheet || isPdf || isForwardOrBrief) {
+          shouldDefaultToAttachment = true;
         }
       }
     }
     
+    setActiveTab(shouldDefaultToAttachment ? 'attachment' : 'email');
     setSelectedAttachmentIndex(defaultIndex);
     setAttachmentFilterIndex('all');
     setIsAttachmentZoomed(false);
@@ -1443,7 +1509,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   }, [selectedAttachmentIndex]);
 
   useEffect(() => {
-    if (!selectedDraft || activeTab !== 'attachment') return;
+    if (!selectedDraft) return;
     const metadata = getDraftMetadata(selectedDraft);
     
     // Choose correct attachment URL and Name based on selectedAttachmentIndex
@@ -1478,208 +1544,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .then(async buffer => {
           const XLSX = await import('xlsx');
           const workbook = XLSX.read(buffer, { type: 'array' });
-          const parsedSheets: any[] = [];
-          
-          workbook.SheetNames.forEach((sheetName) => {
-            const worksheet = workbook.Sheets[sheetName];
-            const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-            const validRows = rawData.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''));
-            
-            if (validRows.length === 0) return;
-
-            // 1. Score each row to find the true header row
-            let headerRowIdx = 0;
-            let bestHeaderScore = -1;
-            for (let r = 0; r < Math.min(15, validRows.length); r++) {
-              let score = 0;
-              const row = validRows[r];
-              row.forEach((cell: any) => {
-                const s = String(cell || '').toLowerCase().trim();
-                if (s.includes('plu') || s.includes('codigo') || s.includes('cod')) score += 3;
-                if (s.includes('descrip') || s.includes('prod') || s.includes('articulo') || s.includes('item') || s.includes('nombre')) score += 3;
-                if (s.includes('present') || s.includes('ubm') || s.includes('unidad') || s.includes('medida')) score += 3;
-                if (s.includes('cant') || s.includes('qty') || s.includes('pedido') || s.includes('total')) score += 3;
-              });
-              if (score > bestHeaderScore) {
-                bestHeaderScore = score;
-                headerRowIdx = r;
-              }
-            }
-
-            const maxCols = Math.max(...validRows.map(r => r.length));
-            const activeCols: number[] = [];
-            for (let c = 0; c < maxCols; c++) {
-              for (let r = 0; r < validRows.length; r++) {
-                const val = validRows[r][c];
-                if (val !== null && val !== undefined && String(val).trim() !== '') {
-                  activeCols.push(c);
-                  break;
-                }
-              }
-            }
-
-            const headerRow = validRows[headerRowIdx] || [];
-            let nameCol = -1;
-            let unitCol = -1;
-            let pluCol = -1;
-            const qtyCandidates: number[] = [];
-
-            headerRow.forEach((cellVal: any, colIdx: number) => {
-              const s = String(cellVal || '').toLowerCase().trim();
-              if (s.includes('plu') || s === 'id' || s.includes('codigo') || s.includes('cod') || s.includes('ref')) {
-                pluCol = colIdx;
-              } else if (s.includes('present') || s.includes('ubm') || s.includes('unidad') || s.includes('und') || s.includes('medida') || s.includes('uom') || s.includes('empaque')) {
-                unitCol = colIdx;
-              } else if (s.includes('descrip') || s.includes('prod') || s.includes('articulo') || s.includes('item') || s.includes('nombre')) {
-                nameCol = colIdx;
-              } else if (s.includes('cant') || s === 'qty' || s === 'pedido' || s.includes('total') || s.includes('solic') || s.includes('requer')) {
-                qtyCandidates.push(colIdx);
-              }
-            });
-
-            // If nameCol not found from header keywords, scan columns for highest text frequency (not pure numbers)
-            if (nameCol === -1) {
-              let bestTextRatio = -1;
-              activeCols.forEach(colIdx => {
-                if (colIdx === pluCol || colIdx === unitCol) return;
-                let textCount = 0;
-                let totalData = 0;
-                for (let r = headerRowIdx + 1; r < validRows.length; r++) {
-                  const val = validRows[r]?.[colIdx];
-                  if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    totalData++;
-                    const s = String(val).trim();
-                    if (isNaN(Number(s.replace(',', '.'))) && s.length > 2) {
-                      textCount++;
-                    }
-                  }
-                }
-                const ratio = totalData > 0 ? textCount / totalData : 0;
-                if (ratio > 0.6 && textCount > bestTextRatio) {
-                  bestTextRatio = textCount;
-                  nameCol = colIdx;
-                }
-              });
-            }
-
-            // Find qtyCol: column with the highest count of pure numeric quantities (>0 and <50000)
-            let qtyCol = -1;
-            let bestQtyCount = -1;
-            activeCols.forEach(colIdx => {
-              if (colIdx === pluCol || colIdx === nameCol || colIdx === unitCol) return;
-              let numericCount = 0;
-              for (let r = headerRowIdx + 1; r < validRows.length; r++) {
-                const val = validRows[r]?.[colIdx];
-                if (val !== undefined && val !== null && String(val).trim() !== '') {
-                  const s = String(val).trim().replace(',', '.');
-                  const num = Number(s);
-                  if (!isNaN(num) && num > 0 && num < 50000) {
-                    numericCount++;
-                  }
-                }
-              }
-              if (numericCount > bestQtyCount && numericCount > 0) {
-                bestQtyCount = numericCount;
-                qtyCol = colIdx;
-              }
-            });
-
-            if (qtyCol !== -1 && !qtyCandidates.includes(qtyCol)) {
-              qtyCandidates.push(qtyCol);
-            }
-
-            const parsedRows = validRows.map((row, rIdx) => {
-              const isHeader = rIdx === headerRowIdx;
-              const isMeta = rIdx < headerRowIdx;
-              
-              let qtyNum: number | null = null;
-              if (!isHeader && !isMeta) {
-                // 1. Try primary qtyCol
-                if (qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
-                  const s = String(row[qtyCol]).trim().replace(',', '.');
-                  const parsed = Number(s);
-                  if (!isNaN(parsed) && parsed > 0 && parsed <= 50000) {
-                    qtyNum = parsed;
-                  }
-                }
-
-                // 2. Fallback to any qty candidate column if primary was empty
-                if (qtyNum === null) {
-                  for (const candCol of qtyCandidates) {
-                    if (candCol === qtyCol) continue;
-                    const cVal = row[candCol];
-                    if (cVal !== undefined && cVal !== null && String(cVal).trim() !== '') {
-                      const s = String(cVal).trim().replace(',', '.');
-                      const parsed = Number(s);
-                      if (!isNaN(parsed) && parsed > 0 && parsed <= 50000) {
-                        qtyNum = parsed;
-                        break;
-                      }
-                    }
-                  }
-                }
-              }
-
-              const rowName = nameCol !== -1 ? String(row[nameCol] || '').trim() : '';
-              const rowUnit = unitCol !== -1 ? String(row[unitCol] || '').trim() : 'Kg';
-              const rowPlu = pluCol !== -1 ? String(row[pluCol] || '').trim() : '';
-
-              // Filter out metadata rows (like "DESCRIPCION", "FECHA DE CONSUMO", etc.)
-              const isMetaRowText = ['descripcion', 'descripción', 'fecha', 'plu', 'presentacion', 'presentación'].includes(rowName.toLowerCase());
-
-              const isDateRow = row.some(cell => {
-                const s = String(cell || '').toLowerCase();
-                return s.includes('fecha') || s.includes('solicitud') || s.includes('entrega');
-              });
-
-              return {
-                rowIndex: rIdx + 1,
-                isHeader,
-                isMeta: isMeta || isMetaRowText,
-                hasQty: !isMetaRowText && qtyNum !== null && qtyNum > 0,
-                qtyVal: isMetaRowText ? null : qtyNum,
-                nameVal: isMetaRowText ? '' : rowName,
-                unitVal: rowUnit,
-                pluVal: rowPlu,
-                cells: activeCols.map(c => {
-                  const v = row[c];
-                  if (v === null || v === undefined) return '';
-                  const s = String(v).trim();
-                  const num = Number(s);
-                  if (!isNaN(num) && (isDateRow || (num >= 35000 && num <= 60000 && Number.isInteger(num)))) {
-                    try {
-                      const utc_days = Math.floor(num - 25569);
-                      const utc_value = utc_days * 86400;
-                      const date_info = new Date(utc_value * 1000);
-                      const day = String(date_info.getUTCDate()).padStart(2, '0');
-                      const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
-                      const year = date_info.getUTCFullYear();
-                      if (year >= 2020 && year <= 2035) {
-                        return `${day}/${month}/${year}`;
-                      }
-                    } catch {}
-                  }
-                  return s;
-                })
-              };
-            });
-
-            const countWithQty = parsedRows.filter(r => r.hasQty).length;
-
-            parsedSheets.push({
-              sheetName,
-              activeCols,
-              headerRowIdx,
-              qtyCol: qtyCol !== -1 ? qtyCol : 0,
-              nameCol,
-              unitCol,
-              pluCol,
-              countWithQty,
-              totalRows: parsedRows.filter(r => !r.isHeader && !r.isMeta).length,
-              rows: parsedRows
-            });
-          });
-
+          const { parsedSheets } = parseSpreadsheetWorkbook(workbook, XLSX);
           setExcelSheetsData(parsedSheets);
           setAttachmentHtml(parsedSheets.length > 0 ? 'parsed' : null);
         })
@@ -2613,8 +2478,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }, 50);
   };
 
-  const handleOpenExcelInNewTab = (currentUrl: string, currentName: string) => {
-    if (!excelSheetsData || excelSheetsData.length === 0) {
+  const handleOpenExcelInNewTab = async (currentUrl: string, currentName: string) => {
+    let sheetsToRender = excelSheetsData;
+
+    if (!sheetsToRender || sheetsToRender.length === 0) {
+      try {
+        const res = await fetch(currentUrl);
+        if (res.ok) {
+          const buffer = await res.arrayBuffer();
+          const XLSX = await import('xlsx');
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const { parsedSheets } = parseSpreadsheetWorkbook(workbook, XLSX);
+          sheetsToRender = parsedSheets;
+          setExcelSheetsData(parsedSheets);
+          setAttachmentHtml(parsedSheets.length > 0 ? 'parsed' : null);
+        }
+      } catch (err) {
+        console.error("Error parsing spreadsheet for new tab:", err);
+      }
+    }
+
+    if (!sheetsToRender || sheetsToRender.length === 0) {
       window.open(currentUrl, '_blank');
       return;
     }
@@ -2626,7 +2510,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     const clientName = selectedDraft?.client_detected_name || 'Cliente';
-    const sheetHtml = excelSheetsData.map((sheet: any, sIdx: number) => {
+    const sheetHtml = sheetsToRender.map((sheet: any, sIdx: number) => {
       return `
         <div class="sheet-container" id="sheet-${sIdx}" style="${sIdx > 0 ? 'display: none;' : ''}">
           <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
@@ -2704,9 +2588,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <a class="btn btn-white" href="${currentUrl}" download="${currentName}">⬇️ Descargar .xlsx Original</a>
           </div>
         </div>
-        ${excelSheetsData.length > 1 ? `
+        ${sheetsToRender.length > 1 ? `
           <div class="tabs-bar">
-            ${excelSheetsData.map((s: any, idx: number) => `
+            ${sheetsToRender.map((s: any, idx: number) => `
               <button class="tab-btn ${idx === 0 ? 'active' : ''}" onclick="showSheet(${idx})">📄 ${s.sheetName} (${s.countWithQty} pedidos)</button>
             `).join('')}
           </div>
@@ -4772,8 +4656,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return directItems;
     }
     const meta = raw.find((i: any) => i.isMetadata);
-    if (meta?.attachments && meta.attachments[0]?.items && meta.attachments[0].items.length > 0) {
-      return meta.attachments[0].items;
+    if (meta?.attachments && Array.isArray(meta.attachments)) {
+      if (typeof selectedAttachmentIndex === 'number' && meta.attachments[selectedAttachmentIndex]?.items?.length > 0) {
+        return meta.attachments[selectedAttachmentIndex].items;
+      }
+      const attWithItems = meta.attachments.find((att: any) => att?.items && Array.isArray(att.items) && att.items.length > 0);
+      if (attWithItems) {
+        return attWithItems.items;
+      }
     }
     return [];
   };

@@ -1,8 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import https from 'https';
 import * as XLSX from 'xlsx';
-import { isSpreadsheetFile, resolveSpreadsheetMimeType } from '@/lib/spreadsheets';
+import { isSpreadsheetFile, resolveSpreadsheetMimeType, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -703,7 +702,7 @@ export async function POST(req: Request) {
     let attachmentUrl: string | null = null;
     let attachmentName: string | null = null;
 
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'Gemini API Key is missing' }, { status: 500 });
     }
@@ -867,7 +866,16 @@ export async function POST(req: Request) {
               csvContent += XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
             }
             attExcelTextContext = csvContent;
-            console.log(`[Email Inbound] Excel attachment ${attFileName} converted to CSV (${csvContent.length} chars) for Gemini parsing.`);
+
+            const { extractedItems: progItems } = parseSpreadsheetWorkbook(workbook, XLSX);
+            attProgrammaticExcelItems = (progItems || []).map(p => ({
+              originalName: p.originalName,
+              quantity: p.quantity,
+              unit: p.unit || 'Kg',
+              observations: p.observations || ''
+            }));
+
+            console.log(`[Email Inbound] Excel attachment ${attFileName} converted to CSV (${csvContent.length} chars) and extracted ${attProgrammaticExcelItems.length} programmatic items.`);
           } catch (err) {
             console.error('[Email Inbound] Error reading Excel buffer:', err);
           }
