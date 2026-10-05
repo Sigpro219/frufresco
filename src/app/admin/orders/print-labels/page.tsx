@@ -666,7 +666,7 @@ export default function BulkOrderPrintLabelsPage() {
                                 overflow: 'hidden'
                             }}>
                                 {/* Left Column: Information */}
-                                <div style={{ width: '70mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div style={{ width: '66mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '2mm' }}>
                                     <div>
                                         <div style={{ fontSize: '11.5pt', fontWeight: '900', color: '#000000', lineHeight: '1.15', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {lbl.name}
@@ -689,8 +689,8 @@ export default function BulkOrderPrintLabelsPage() {
                                 </div>
 
                                 {/* Right Column: Logo & Codes */}
-                                <div style={{ width: '24mm', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '2mm', boxSizing: 'border-box', borderLeft: '1px solid #000000' }}>
-                                    <div style={{ width: '18mm', height: '18mm', position: 'relative' }}>
+                                <div style={{ width: '27mm', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '2mm', boxSizing: 'border-box', borderLeft: '1px solid #000000' }}>
+                                    <div style={{ width: '24mm', height: '23mm', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <img 
                                             src="/logo-investments.png" 
                                             alt="Investments Cortés Logo" 

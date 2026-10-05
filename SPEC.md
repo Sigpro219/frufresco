@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.90 (Alineación Gemba Paso 4: Erradicación de Ficción QR Canastillas y Formalización Estricta de Etiquetas Térmicas Solo para SKUs con requires_label = true)
+> **Versión:** 1.9.91 (Alineación Gemba Paso 4: Calibración Visual de Etiquetas Térmicas de Producto 100×50mm, Logo Ampliado Investments Cortés y Especificación Canónica de SKUs con requires_label = true)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -3098,13 +3098,15 @@ sequenceDiagram
   2. El Pedido C genera una línea de compra separada por 14 kg con especificación `und de 2 kg; Pintón`.
   3. En la Sábana de Alistamiento, cada cliente visualiza en Fila 1 sus kilos netos (`24 KG`, `10 KG`, `14 KG`) y en Fila 2 su respectiva instrucción física.
 
-#### Escenario 32: Integridad del Rótulo Térmico de Canastilla 100x50mm con Código QR Canónico
-- **Given** un pedido aprobado para el cliente "Restaurante Monserrate" con fecha de entrega "2026-09-24", peso total facturable de 38 kg y asignado a la bahía de muelle #12.
-- **When** el despachador emite los rótulos de canastilla desde `/admin/orders/print-labels` o desde el Kit de Contingencia.
+#### Escenario 32: Integridad de la Etiqueta Térmica de Producto (100×50mm) para SKUs Marcados (`requires_label = true`)
+- **Given** un pedido aprobado donde se solicitó un SKU que tiene la bandera `requires_label = true` en el catálogo maestro (ej: "Raiz china" 3 kg o "Habichuela picada" 5 kg).
+- **When** el despachador o alistador emite los rótulos desde `/admin/orders/print-labels` o desde el Paso 4 del Asistente Guiado de Despacho.
 - **Then**:
-  1. El sistema calcula $N = \lceil 38 / 12.5 \rceil = 4$ rótulos térmicos en formato 100 mm × 50 mm.
-  2. Cada rótulo imprime el Friendly ID `2409_XXXX`, el número de bahía `#12` y el numerador fraccionado `Canastilla 1 de 4` hasta `Canastilla 4 de 4`.
-  3. El código QR contiene el payload estructurado canónico con el delimitador `|`.
+  1. El sistema filtra exclusivamente los SKUs que tienen `requires_label = true` en la base de datos, descartando automáticamente los productos a granel o frescos estándar de plaza.
+  2. Genera las etiquetas térmicas bromatológicas calibradas en formato 100 mm × 50 mm para rollo continuo en impresora Zebra / Xprinter.
+  3. Cada etiqueta imprime:
+     - Columna izquierda (66mm): Nombre del producto en mayúsculas (11.5pt negrita), Lote del día (`DD-MM-AA`), Cantidad/Peso (`1 KG`), Fecha de vencimiento (+7 días), Razón Social del Cliente y Sucursal, y Declaración legal bromatológica de conservación.
+     - Columna derecha (27mm): Logo oficial ampliado de *Investments Cortés S.A.S.* (24mm × 23mm) de alta nitidez visual para muelle y cliente, Código Contable (`ID: [accounting_id]`) y Consecutivo del Pedido (`#[Friendly ID / sequence_id]`).
 
 #### Escenario 33: Aislamiento End-to-End de Atributos Redundantes en Toda la Cadena Operativa
 - **Given** un pedido de cliente donde se ordenó el SKU "Plátano maduro" con cantidad 20 kg.
@@ -5116,7 +5118,9 @@ flowchart TD
    - **Pieza 4 — Planilla de Conteo Físico de Bodega / 6 Folios Carta ([`/admin/inventory/physical-count-print`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/inventory/physical-count-print/page.tsx)):** Formato Carta de seis folios agrupados por familias de bodega para el levantamiento de inventario físico remanente al cierre de turno (**Columna T** de la Sábana).
    - **Pieza 5 — Juegos de Remisión Duplicadas ([`/admin/orders/contingency-print?mode=remissions`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)):** Formato Carta duplex continuo (`[ORIGINAL - CLIENTE]` e impar `[COPIA - ARCHIVO Y CONTABILIDAD]`) con membrete legal de *Investments Cortés S.A.S.*, recuadro de Bahía de Muelle estampada, casillas manuscritas para kilogramos/unidades recibidas, firmas, cédula, sello húmedo y control de comodato de canastillas plásticas.
    - **Pieza 6 — Manifiesto de Despacho & Balance de Canastillas / El Rutero ([`/admin/orders/contingency-print?mode=dispatch`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)):** Formato Carta por vehículo y conductor con placa, ruta de entrega, relación de remisiones asociadas, peso total transportado, saldo de canastillas plásticas entregadas vs devueltas y firmas de portería.
-   - **Pieza 7 — Etiquetas Térmicas de Producto / SKUs Procesados ([`/admin/orders/print-labels`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/print-labels/page.tsx)):** Formato Rollo Térmico 100mm × 50mm para impresora Zebra/Xprinter. Se emiten **exclusiva y estrictamente para los SKUs del catálogo maestro que tienen activada la bandera `requires_label = true`** en la base de datos (productos procesados, empacados, porcionados, quesos, habichuela picada, raíz china, etc.). Cada etiqueta imprime: Nombre del producto, Lote del día (DD-MM-AA), Cantidad/Peso, Fecha de vencimiento, Razón Social del Cliente, Consecutivo del pedido y Código Contable / SKU. Los productos a granel estándar de plaza NO generan etiquetas térmicas.
+   - **Pieza 7 — Etiquetas Térmicas de Producto / SKUs Procesados ([`/admin/orders/print-labels`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/admin/orders/print-labels/page.tsx)):** Formato Rollo Térmico 100mm × 50mm para impresora Zebra/Xprinter. Se emiten **exclusiva y estrictamente para los SKUs del catálogo maestro que tienen activada la bandera `requires_label = true`** en la base de datos (productos procesados, empacados, porcionados, quesos, habichuela picada, raíz china, etc.).
+     - *Columna Izquierda (66mm):* Nombre del producto en mayúsculas (11.5pt negrita), Lote del día (`DD-MM-AA`), Cantidad/Peso (`1 KG`), Fecha de vencimiento (+7 días), Razón Social del Cliente y Sucursal, y Declaración bromatológica legal de conservación y empaque por *Investments Cortés S.A.S.*
+     - *Columna Derecha (27mm):* Logo oficial ampliado de *Investments Cortés S.A.S.* (24mm × 23mm) de alta nitidez visual para muelle y cliente, Código Contable (`ID: [accounting_id]`) y Consecutivo del Pedido (`#[Friendly ID / sequence_id]`). Los productos a granel estándar de plaza NO generan etiquetas térmicas.
    - *Dataset Digital Complementario:* Exportación del **Excel Maestro de 11 Columnas** (`compras_YYYY-MM-DD.xlsx`) con anchos pre-calibrados para la dirección de compras y precarga en World Office.
 
 4. **Bloqueo Poka-Yoke de Sello de Tanda:**
