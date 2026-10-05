@@ -14,6 +14,35 @@ export const getFriendlyOrderId = (order: { created_at: string; sequence_id?: nu
 };
 
 /**
+ * Formats a quantity with up to 3 decimals according to es-CO locale.
+ * Preserves clean integers (e.g. 1 -> "1", 2.5 -> "2,5", 0.125 -> "0,125").
+ */
+export const formatQuantity = (val: number | string | null | undefined): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
+    if (isNaN(num)) return '';
+    const rounded = Math.round(num * 1000) / 1000;
+    return rounded.toLocaleString('es-CO', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3
+    });
+};
+
+/**
+ * Formats weights in kilograms with up to 3 decimal places (down to 1 gram = 0.001 kg).
+ * Prevents precision loss on products configured with fractional weights (e.g., 0.125 kg, 0.015 kg).
+ */
+export const formatWeightKg = (val: number | null | undefined): string => {
+    if (val === null || val === undefined || isNaN(val)) return '0';
+    const num = Number(val);
+    const rounded = Math.round(num * 1000) / 1000;
+    return rounded.toLocaleString('es-CO', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3
+    });
+};
+
+/**
  * Sanitizes any physical instruction string to ensure the word "estándar"
  * is strictly eliminated per contract SDD v1.8.5.
  */
@@ -268,7 +297,7 @@ export const getStructuredSpecKey = (item: StructuredSpecItemInput): string => {
     if (unitWeightGr && Number(unitWeightGr) > 0) {
         const gr = Number(unitWeightGr);
         const weightStr = gr >= 1000 
-            ? ((gr / 1000) % 1 === 0 ? (gr / 1000).toString() : (gr / 1000).toFixed(1)) + ' kg'
+            ? ((gr / 1000) % 1 === 0 ? (gr / 1000).toString() : Number((gr / 1000).toFixed(3)).toString()) + ' kg'
             : `${gr} gr`;
         unitWeightPart = `und de ${weightStr}`;
     } else {
@@ -348,7 +377,7 @@ export const formatStructuredSpecification = (item: StructuredSpecItemInput): st
         let weightStr = '';
         if (unitWeightGr >= 1000) {
             const kg = unitWeightGr / 1000;
-            weightStr = (kg % 1 === 0 ? kg.toString() : kg.toFixed(1)) + ' kg';
+            weightStr = (kg % 1 === 0 ? kg.toString() : Number(kg.toFixed(3)).toString()) + ' kg';
         } else {
             weightStr = `${unitWeightGr} gr`;
         }

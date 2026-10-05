@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.95 (Diagnóstico Forense OPS: Deudas Técnicas 19 y 20, Bimodalidad en Cierre de Inventario, Ingesta por Regex y Acople Cuentas por Pagar)
+> **Versión:** 1.9.97 (Motor Universal de Hojas de Cálculo Polimórficas, Resiliencia Multiformato ODS/Excel, Auto-Switch de Pestañas y Extracción Resiliente Poka-Yoke)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -6302,6 +6302,136 @@ La Consola Central de Compras 360 es el punto neurálgico de gobernanza donde co
   2. Genera las páginas en formato 2 columnas A-Z con paginación estricta y membrete oficial.
   3. Abre la ventana de impresión limpia con configuración de tamaño Letter/Oficio.
   4. La planilla física permite a los operarios en muelle chequear cada canastilla y registrar diferencias de pesaje directamente contra el manifiesto.
+
+---
+
+## 32. Especificación Canónica del Motor Universal de Hojas de Cálculo Polimórficas & Resiliencia en Ingesta ODS/Excel (§32)
+
+### 32.1 Misión & Taxonomía de Formatos Tabulares Admitidos
+El subsistema de Ingesta Inteligente de FruFresco (`IDP-AI Engine`) procesa de manera diaria órdenes de compra transmitidas por clientes corporativos B2B en una multiplicidad de formatos de hoja de cálculo propietarios y de estándares abiertos.
+Para garantizar la equivalencia operativa omnicanal (§1) y erradicar rechazos falsos por extensión o codificación de archivo, el sistema adopta formalmente el estándar polimórfico de hojas de cálculo gobernado por `src/lib/spreadsheets.ts`:
+
+1. **Taxonomía de Formatos Oficialmente Soportados:**
+   - `.xlsx`: Microsoft Excel OpenXML Spreadsheet.
+   - `.xls`: Microsoft Excel 97-2004 Workbook (OLE2 / BIFF8).
+   - `.ods`: OpenDocument Spreadsheet (Estándar OASIS / LibreOffice / Apache OpenOffice), comúnmente remitido por terminales de punto de venta (PDV) y sistemas ERP de cadenas de restaurantes como El Corral / IRCC Nutresa.
+   - `.csv`: Comma-Separated Values (RFC 4180) con autodetección de delimitadores (`,` y `;`).
+   - `.tsv`: Tab-Separated Values.
+   - `.xlsm`: Microsoft Excel Macro-Enabled Workbook.
+   - `.xlsb`: Microsoft Excel Binary Spreadsheet.
+2. **Resiliencia ante Nombres de Archivo Mutados (Mangled Filenames):**
+   - El motor no depende exclusivamente de una extensión canónica final. Admite nombres alterados generados por clientes de correo o descargas sucesivas (ej: `FORMATO SUMINISTROS UNICO.xls_1 (1) (4) (3).ods`, `ORDEN_COMPRA.xls_1`, `LISTA.xlsx.backup`).
+   - Identificación complementaria por tipo MIME oficial (`resolveSpreadsheetMimeType`):
+     - `application/vnd.oasis.opendocument.spreadsheet`
+     - `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+     - `application/vnd.ms-excel`
+     - `text/csv`
+
+### 32.2 Arquitectura del Motor de Parsing Universal (`src/lib/spreadsheets.ts`)
+El motor expone la función canónica pura:
+$$\text{parseSpreadsheetWorkbook}(workbook, XLSX) \to \{ parsedSheets, extractedItems \}$$
+Diseñada para desacoplar el procesamiento tabular del renderizado en interfaz, operando tanto en Serverless Functions de Node.js (Edge/App Router) como en el cliente web mediante dynamic import de `xlsx`:
+
+```typescript
+export interface ParsedSpreadsheetRow {
+  rowIndex: number;
+  isHeader: boolean;
+  isMeta: boolean;
+  hasQty: boolean;
+  qtyVal: number | null;
+  nameVal: string;
+  unitVal: string;
+  pluVal: string;
+  noteVal?: string;
+  cells: string[];
+}
+
+export interface ParsedSpreadsheetSheet {
+  sheetName: string;
+  activeCols: number[];
+  headerRowIdx: number;
+  qtyCol: number;
+  nameCol: number;
+  unitCol: number;
+  pluCol: number;
+  countWithQty: number;
+  totalRows: number;
+  rows: ParsedSpreadsheetRow[];
+}
+```
+
+### 32.3 Algoritmo Poka-Yoke de Detección de Cabeceras vs Hojas Crudas sin Encabezados
+Un defecto crítico en pipelines tradicionales de ingestión es asumir que toda planilla contiene encabezados formales en las primeras filas. El caso canónico de El Corral Titán Plaza demostró que los sistemas PDV envían plantillas donde la Fila 0 corresponde directamente al primer producto (`Albacom gramos | 300`), careciendo por completo de cabecera.
+
+1. **Scoring de Cabeceras Multi-Criterio:**
+   - Para evitar falsos positivos causados por productos que contienen palabras clave en su nombre (ej: *"Banano unidades"* en la fila 10 no debe ser tomado como cabecera), el algoritmo exige un puntaje compuesto estricto:
+     $$\text{score} \ge 6 \quad \land \quad ((\text{hasNameKw} \land \text{hasQtyKw}) \lor (\text{hasPluKw} \land \text{hasQtyKw}) \lor (\text{hasNameKw} \land \text{hasPluKw}) \lor (\text{hasUnitKw} \land \text{hasQtyKw}))$$
+     Se exige la coincidencia de al menos dos (2) conceptos de dominio independientes (Descripción + Cantidad, PLU + Cantidad, o Unidad + Cantidad).
+2. **Modo Resiliente para Hojas sin Encabezados (`headerRowIdx = -1`):**
+   - Si ninguna fila alcanza el umbral de cabecera, el motor activa el escaneo de distribución de densidad:
+     - **Columna de Nombres (`nameCol`):** Columna activa con la mayor frecuencia de cadenas de texto alfabéticas de más de 2 caracteres (`textCount`).
+     - **Columna de Cantidades (`qtyCol`):** Columna activa con la mayor frecuencia de valores numéricos de pedido (`numCount`), excluyendo deliberadamente la columna de nombres.
+3. **Condición Innegociable de Fila Válida (`hasQty`):**
+   - Una fila únicamente califica como ítem de pedido si satisface la conjunción:
+     $$\text{hasQty} \iff \neg\text{isMetaRowText} \land \text{Boolean}(\text{rowName}) \land (\text{qtyNum} > 0)$$
+     Erradica la captura de celdas huérfanas, fechas flotantes o totales sin descripción.
+
+### 32.4 Normalización de Cantidades Cualitativas y Extracción de Unidades Sufijadas
+1. **Filtro Anti-Colisión de Fechas Seriales de Excel:**
+   - Las fechas en Microsoft Excel se almacenan internamente como números flotantes secuenciales (ej: `46299.79` corresponde al 05 de octubre de 2026).
+   - `parseQuantityCell` excluye taxativamente todo valor entre $35.000$ y $65.000$ (rango temporal 1995–2078) para evitar que una celda de fecha sea interpretada erróneamente como un pedido masivo de kilogramos.
+2. **Extracción de Cantidad con Notas Cualitativas:**
+   - La función admite formatos informales comunes en restaurantes donde la maduración o corte se indica junto al número:
+     - `"15 muy verde"` $\to$ `quantity: 15`, `note: "muy verde"`
+     - `"10 pinton"` $\to$ `quantity: 10`, `note: "pinton"`
+     - `"0.5"` o `"0,5"` $\to$ `quantity: 0.5`
+3. **Separación de Unidades Sufijadas en el Nombre:**
+   - Si la hoja carece de columna explícita de unidad, el motor aplica expresiones regulares para separar unidades del nombre comercial:
+     - `"Albacom gramos"` $\to$ `name: "Albacom"`, `unit: "gramos"`
+     - `"Tomate Cherry kilo"` $\to$ `name: "Tomate Cherry"`, `unit: "kilo"`
+     - `"Plàtano Verde unidades"` $\to$ `name: "Plàtano Verde"`, `unit: "unidades"`
+
+### 32.5 Visor Polimórfico Interactivo y Auto-Switch de Pestañas en Mesa de Trabajo (`EmailDraftsModule.tsx`)
+1. **Conmutación Inteligente por Defecto (Smart Auto-Switch):**
+   - Al seleccionar un borrador en `/admin/orders/loading`, el sistema evalúa la presencia de documentos adjuntos:
+     - Si el borrador cuenta con una hoja de cálculo (`isSpreadsheetFile`) o un archivo PDF vectorial, o si el cuerpo del correo es un reenvío breve / sin texto explicativo ($< 80$ caracteres o *"Consulta la pestaña Adjunto"*), el visor conmuta inmediatamente a:
+       $$\text{activeTab} = \text{'attachment'}$$
+     - Evita que el operador se enfrente a un cuerpo de correo en blanco y le presenta de inmediato la tabla del pedido.
+2. **Banner de Telemetría en Visor de Correo:**
+   - Si el operador decide regresar a la pestaña de correo, se renderiza un banner informativo prominente con botón de acción inmediata:
+     > *"Este pedido incluye el documento original adjunto: [nombre_archivo.ods] -> [ Ver Hoja en Pantalla → ]"*
+3. **Precarga Transparente en Segundo Plano:**
+   - Se elimina la condición de bloqueo que impedía ejecutar `fetch(currentUrl)` si la pestaña no estaba activa. Los datos de las hojas de cálculo se parsean y persisten en `excelSheetsData` en memoria, garantizando transiciones instantáneas ($< 10\text{ms}$) entre pestañas sin recargas de red.
+4. **Visor de Pestaña Completa (`handleOpenExcelInNewTab`):**
+   - El botón *Abrir Pestaña Completa ↗* no redirige a una descarga cruda inútil si el archivo es `.ods`. En su lugar, si la hoja no ha finalizado de cargar en el state, la procesa al vuelo vía `parseSpreadsheetWorkbook` y despliega una aplicación web standalone con pestañas por hoja, búsqueda rápida, resaltado verde de ítems con cantidad e impresión directa optimizada.
+
+### 32.6 Fallback Transaccional en Ingesta Automática (`email-ingest`) y Re-Parseo (`reparse-draft`)
+1. **Doble Red de Seguridad IA + Motor Tabular:**
+   - En `/api/orders/email-ingest` y `/api/orders/reparse-draft`, el archivo de hoja de cálculo se somete primero a Gemini 3.8 Flash para extracción semántica y resolución contextual del cliente.
+   - Si Gemini experimenta timeout, devuelve JSON vacío o no detecta productos debido a anomalías estructurales en el formato de la hoja, entra en ejecución **inmediata y obligatoria** el fallback de `parseSpreadsheetWorkbook`.
+   - Garantía Contractual: **Ningún borrador con archivo Excel/ODS adjunto válido terminará con 0/0 SKUs detectados**.
+
+---
+
+#### Escenario 136: Ingesta, Visualización y Extracción Polimórfica de Pedido ODS sin Encabezados (Caso El Corral Titán Plaza - SDD v1.9.97)
+- **Given** una orden de compra enviada por El Corral Gourmet Titán Plaza en archivo OpenDocument `.ods` (`FORMATO SUMINISTROS UNICO.xls_1 (1) (4) (3).ods`), cuya estructura carece de fila de encabezados y posee 30 filas con formato `[Nombre Producto Unidad, Cantidad Nota]`.
+- **When** el webhook `/api/orders/email-ingest` recibe el correo o el operador invoca la re-extracción en `/api/orders/reparse-draft`:
+- **Then**:
+  1. `isSpreadsheetFile` detecta la extensión `.ods` y el MIME `application/vnd.oasis.opendocument.spreadsheet`.
+  2. `parseSpreadsheetWorkbook` detecta `headerRowIdx = -1`, asigna `nameCol = 0` y `qtyCol = 1` mediante escaneo de densidad de datos.
+  3. `parseQuantityCell` procesa cantidades complejas como `"15 muy verde"` extrayendo cantidad 15 y nota `"muy verde"`, e ignora el número de fecha serial `46299.79`.
+  4. Extrae exitosamente los 30 productos con sus cantidades correspondientes y vincula el borrador en `order_drafts`.
+  5. Al abrir el borrador en `/admin/orders/loading`, la interfaz activa automáticamente la pestaña **[ Adjunto ]** y dibuja la tabla completa interactiva con los 30 productos resaltados en verde.
+
+---
+
+#### Escenario 137: Apertura Instantánea en Pestaña Completa y Botón de Respaldo Poka-Yoke (SDD v1.9.97)
+- **Given** un operador logístico en la mesa de control de borradores que desea inspeccionar en pantalla grande la hoja de cálculo original de un cliente.
+- **When** pulsa el botón *Abrir Pestaña Completa ↗* en la cabecera del visor:
+- **Then**:
+  1. Si `excelSheetsData` ya está en memoria, genera de forma inmediata el HTML de alta fidelidad con selector de hojas.
+  2. Si la hoja no se encontraba en memoria, la función `handleOpenExcelInNewTab` descarga el buffer y la compila al vuelo mediante `parseSpreadsheetWorkbook` sin forzar la descarga de un binario no deseado.
+  3. Abre una nueva ventana del navegador con diseño industrial *Swiss Precision Slate*, permitiendo buscar por SKU, filtrar solo filas con pedido o imprimir la hoja en formato físico.
 
 
 

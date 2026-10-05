@@ -213,10 +213,10 @@ const getParsedWeight = (text: string): number | null => {
 export const formatWeightKg = (val: number | null | undefined): string => {
     if (val === null || val === undefined || isNaN(val)) return '0';
     const num = Number(val);
-    const rounded = Math.round(num * 100) / 100;
+    const rounded = Math.round(num * 1000) / 1000;
     return rounded.toLocaleString('es-CO', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 3
     });
 };
 
@@ -323,11 +323,11 @@ function CreateOrderContent() {
 
         if (isNaN(num)) return String(qtyStr);
 
-        // Strict 2-decimal constraint: maximum 2 digits after comma
-        const rounded = Math.round(num * 100) / 100;
+        // Decimal precision: up to 3 digits after comma (supports 0.125 kg, etc.)
+        const rounded = Math.round(num * 1000) / 1000;
         return rounded.toLocaleString('es-CO', {
             minimumFractionDigits: 0,
-            maximumFractionDigits: 2
+            maximumFractionDigits: 3
         });
     };
 

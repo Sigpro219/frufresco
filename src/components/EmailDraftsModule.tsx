@@ -307,10 +307,10 @@ const evaluateMathExpression = (val: string | number | null | undefined): number
 const formatWeightKg = (val: number | null | undefined): string => {
     if (val === null || val === undefined || isNaN(val)) return '0';
     const num = Number(val);
-    const rounded = Math.round(num * 100) / 100;
+    const rounded = Math.round(num * 1000) / 1000;
     return rounded.toLocaleString('es-CO', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 3
     });
 };
 
@@ -2003,10 +2003,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (val === undefined || val === null || val === '') return '';
     const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
     if (isNaN(num)) return '';
-    const rounded = Math.round(num * 100) / 100;
+    const rounded = Math.round(num * 1000) / 1000;
     return rounded.toLocaleString('es-CO', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 3
     });
   };
 
@@ -2169,7 +2169,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
     }
 
-    setVariantQuantity(item.quantity ? Number(Number(item.quantity).toFixed(2)).toString().replace('.', ',') : '1');
+    setVariantQuantity(item.quantity ? Number(Number(item.quantity).toFixed(3)).toString().replace('.', ',') : '1');
     setSelectedUnit(item.unit || freshProduct.unit_of_measure || 'Kg');
     setSelectedConversionFactor(item.conversion_factor || 1);
     setSelectedOptions(opts);
@@ -2423,11 +2423,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
     const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
-    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(3));
     
     const factor = newEdits[duplicateIndex].conversion_factor || 1;
     newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
-    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(2));
+    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(3));
     newEdits[duplicateIndex].isConfirmed = true;
     
     newEdits[rowIndex].isDeleted = true;
@@ -3098,9 +3098,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const currQtyNum = Number(item.quantity);
     let initialQtyStr = '1';
     if (!isNaN(currQtyNum) && currQtyNum > 0) {
-      initialQtyStr = Number(currQtyNum.toFixed(2)).toString().replace('.', ',');
+      initialQtyStr = Number(currQtyNum.toFixed(3)).toString().replace('.', ',');
     } else if (!isNaN(origQtyNum) && origQtyNum > 0) {
-      initialQtyStr = Number(origQtyNum.toFixed(2)).toString().replace('.', ',');
+      initialQtyStr = Number(origQtyNum.toFixed(3)).toString().replace('.', ',');
     }
     const defaultUnit = freshProduct.unit_of_measure || 'Kg';
     const isKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
@@ -3220,11 +3220,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const { rowIndex, product, options, quantity, unit, factor } = customizingModalItem;
     const evaluatedQty = evaluateMathExpression(quantity);
     const parsedQty = evaluatedQty > 0 ? evaluatedQty : (parseFloat(String(quantity).replace(',', '.')) || 1);
-    const cleanQty = parseFloat(parsedQty.toFixed(2));
+    const cleanQty = parseFloat(parsedQty.toFixed(3));
     
     // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
     const minAllowedKg = getProductMinSaleKg(product);
-    const baseQty = parseFloat((cleanQty * factor).toFixed(2));
+    const baseQty = parseFloat((cleanQty * factor).toFixed(3));
     if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
       showToast(`La cantidad mínima de venta para ${product.name} es de ${formatWeightKg(minAllowedKg)} kg`, 'error');
       const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
@@ -4412,7 +4412,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           ? Number(item.originalQuantity)
           : initialQty;
 
-        let finalQty = parseFloat((baseQty * conversionFactor).toFixed(2));
+        let finalQty = parseFloat((baseQty * conversionFactor).toFixed(3));
 
         const minSaleKg = getProductMinSaleKg(prod);
         let defaultDualPresVal: string | null = null;
@@ -9231,7 +9231,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 id={`draft-qty-input-${i}`}
                                 disabled={isApprovedDraft || item.isDeleted}
                                 readOnly={isApprovedDraft}
-                                value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : (item.quantity !== undefined && item.quantity !== null ? Number(Number(item.quantity).toFixed(2)).toString().replace('.', ',') : '')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : (item.quantity !== undefined && item.quantity !== null ? Number(Number(item.quantity).toFixed(3)).toString().replace('.', ',') : '')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
                                 onFocus={(e) => {
                                   if (isApprovedDraft) return;
                                   setFocusedRowIndex(i);
@@ -11854,8 +11854,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <Scale size={13} style={{ color: '#059669' }} />
                           <span>
                             {pieceWeightGr > 0 && isPresKg
-                              ? `Total: ${calcTotalKg.toFixed(2)} kg (~${approxUnits} und de ${pieceWeightGr} gr)`
-                              : `Total: ${calcTotalKg.toFixed(2)} kg`}
+                              ? `Total: ${formatWeightKg(calcTotalKg)} kg (~${approxUnits} und de ${pieceWeightGr} gr)`
+                              : `Total: ${formatWeightKg(calcTotalKg)} kg`}
                           </span>
                         </span>
                       );
