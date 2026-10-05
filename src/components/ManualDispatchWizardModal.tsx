@@ -25,7 +25,11 @@ import {
     X,
     Layers,
     Download,
-    ClipboardList
+    ClipboardList,
+    Package,
+    AlertTriangle,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import Link from 'next/link';
@@ -267,7 +271,7 @@ export default function ManualDispatchWizardModal({
     // Avanzar a Paso 2 con auto-guardado atómico en base de datos
     const handleContinueToStep2 = async () => {
         if (assignedCount < selectedOrdersList.length) {
-            if (!confirm('⚠️ Hay pedidos sin bahía asignada. ¿Deseas continuar de todas formas?')) return;
+            if (!confirm('Hay pedidos sin bahía asignada. ¿Deseas continuar de todas formas?')) return;
         }
 
         const saved = await handleSaveSpacesToDatabase();
@@ -357,12 +361,12 @@ export default function ManualDispatchWizardModal({
 
             if (error) throw error;
 
-            alert('✅ Tanda sellada y enviada a Proceso Logístico con éxito (status: PARA COMPRA).');
+            alert('Tanda sellada y enviada a Proceso Logístico con éxito (status: PARA COMPRA).');
             onSuccess();
             onClose();
         } catch (err: any) {
             console.error('Error al finalizar tanda:', err);
-            alert(`❌ Error al sellar tanda: ${err?.message || 'Error desconocido'}`);
+            alert(`Error al sellar tanda: ${err?.message || 'Error desconocido'}`);
         } finally {
             setFinalizingLoading(false);
         }
@@ -764,9 +768,13 @@ export default function ManualDispatchWizardModal({
                                                                 padding: '2px 8px',
                                                                 borderRadius: '6px',
                                                                 border: '1px solid #BFDBFE',
-                                                                whiteSpace: 'nowrap'
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
                                                             }}>
-                                                                📦 {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
+                                                                <Package size={13} color="#1D4ED8" />
+                                                                {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
                                                             </span>
                                                             <span style={{ fontSize: '0.56rem', color: '#64748B', marginTop: '1px', fontWeight: '600' }}>
                                                                 ({item.estimated_crates}c / 36)
@@ -801,20 +809,21 @@ export default function ManualDispatchWizardModal({
                                                             }}
                                                         />
                                                         {currentSpaces.length === item.spaces_needed && (
-                                                            <div style={{ fontSize: '0.56rem', color: '#059669', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
-                                                                ✅ {currentSpaces.length} de {item.spaces_needed} asignados
+                                                            <div style={{ fontSize: '0.56rem', color: '#059669', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                                                <CheckCircle2 size={10} color="#059669" /> {currentSpaces.length} de {item.spaces_needed} asignados
                                                             </div>
                                                         )}
                                                         {currentSpaces.length > 0 && currentSpaces.length !== item.spaces_needed && (
-                                                            <div style={{ fontSize: '0.56rem', color: '#B45309', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ fontSize: '0.56rem', color: '#B45309', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                                                <AlertTriangle size={10} color="#B45309" />
                                                                 {currentSpaces.length > item.spaces_needed 
-                                                                    ? `⚠️ Sobran (${currentSpaces.length} de ${item.spaces_needed})` 
-                                                                    : `⚠️ Faltan (${currentSpaces.length} de ${item.spaces_needed})`}
+                                                                    ? `Sobran (${currentSpaces.length} de ${item.spaces_needed})` 
+                                                                    : `Faltan (${currentSpaces.length} de ${item.spaces_needed})`}
                                                             </div>
                                                         )}
                                                         {currentSpaces.length === 0 && (
-                                                            <div style={{ fontSize: '0.56rem', color: '#DC2626', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
-                                                                ⚠️ Requiere {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
+                                                            <div style={{ fontSize: '0.56rem', color: '#DC2626', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                                                <AlertTriangle size={10} color="#DC2626" /> Requiere {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
                                                             </div>
                                                         )}
                                                     </td>
@@ -846,7 +855,8 @@ export default function ManualDispatchWizardModal({
                                 }}
                             >
                                 <Layers size={13} color={showFloorGridPreview ? '#4338CA' : '#64748B'} />
-                                {showFloorGridPreview ? 'Ocultar Plano Físico de Nave (150 Bahías) ▴' : '🗺️ Inspeccionar Plano Físico de Nave Central (150 Bahías) ▾'}
+                                <span>{showFloorGridPreview ? 'Ocultar Plano Físico de Nave (150 Bahías)' : 'Inspeccionar Plano Físico de Nave Central (150 Bahías)'}</span>
+                                {showFloorGridPreview ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                             </button>
 
                             <Link
