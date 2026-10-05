@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.91 (Alineación Gemba Paso 4: Calibración Visual de Etiquetas Térmicas de Producto 100×50mm, Logo Ampliado Investments Cortés y Especificación Canónica de SKUs con requires_label = true)
+> **Versión:** 1.9.92 (Principio Canónico de Isomorfismo Operativo: Fuente Única de Verdad SSOT entre Modo Manual de Piso y Modo Digital Nube / Portal OPS)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -5218,3 +5218,38 @@ flowchart TD
   4. **En Estación 4 (Facturación & Cierre Contable):**
      - Los clientes con `remision_post_entrega` respetan la ventana de gracia de 2 horas (120 minutos); ante la ausencia de novedades, la factura electrónica DIAN se genera neta y sin notas crédito. Ante novedades aprobadas, se aplica la sustracción neta previa.
      - Los clientes con `factura_pre_despacho` viajan con su factura emitida y cualquier novedad posterior genera de forma automática la Nota Crédito DIAN y la línea canónica en el plano de 57 columnas de World Office Desktop.
+
+
+---
+
+### 30.7 Principio Canónico de Isomorfismo Operativo & Fuente Única de Verdad (SSOT: Modo Manual vs Modo Digital OPS)
+
+1. **Invarianza de Lógica de Negocio y Prevalencia del Gemba:**
+   Toda regla de negocio, fórmula matemática (ecuación de neteo JIT, deducción de inventario de cierre oficial, stock de seguridad, factores de conversión por producto), agrupación canónica de características (calibres, maduraciones) y estructura de datos validada y probada en el **Modo Manual de Piso**, es de carácter vinculante, prioritario y obligatorio para el **Modo Digital en la Nube (Portal OPS)**.
+
+2. **Arquitectura de Doble Proyección (Prohibición Estricta de Lógica Ad-Hoc):**
+   Queda terminantemente prohibido implementar motores matemáticos paralelos, bucles de cálculo divergentes o agregaciones independientes en las pantallas de `/ops/*`. Todo módulo digital operativo es conceptual y funcionalmente la proyección interactiva exacta de su documento físico homólogo:
+   - **`/ops/compras` & `/ops/recogida`:** Proyección digital interactiva de la **Planilla de Compras** (`purchases-print`), compartiendo exactamente la misma tabla, el mismo catálogo de productos agrupados, el mismo stock de cierre de bodega y los mismos kilogramos netos a comprar.
+   - **`/ops/recepcion` & `/ops/recepcion/supervisor`:** Proyección digital interactiva de la **Planilla de Entrada a Almacén** (`receiving-print`), vinculando el pesaje de báscula directamente a la Columna F (Compras) del Balance de Masa.
+   - **`/ops/picking` & `/ops/picking/terminal`:** Proyección digital interactiva de la **Sábana de Alistamiento por Células** (`alistamiento-print`), respetando la misma matriz de células, bahías de piso (1 a 150), instrucciones físicas de fruto entero (ej. `1 Unidad 2000 gr`) y notas oficiales de calibre (`Cero`, `Mediana`, `Richy`).
+   - **`/ops/rectificacion/[routeId]`:** Proyección digital interactiva del **Manifiesto de Despacho LIFO**, auditando canastillas físicas por pedido antes del precintado del vehículo.
+   - **`/ops/driver/route` & `/ops/driver/delivery/[id]`:** Proyección digital interactiva de la **Remisión Oficial de Entrega**, mostrando exactamente los mismos ítems, calculando novedades de devolución con soporte fotográfico (POD) y alimentando la Columna O de patio.
+
+3. **Paridad de Decisión Operativa (Switch Cero-Fricción entre Papel y Nube):**
+   A la hora de corte logístico, la elección entre operar en Modo Manual (contingencia en papel) o Modo Digital (pantallas en la nube) es una decisión puramente de interfaz y medio físico. La empresa garantiza que los destinatarios, las cifras de compra mayorista, los kilogramos alistados, las deducciones de merma y el balance de masa final sean matemáticamente idénticos e indistinguibles sin importar el camino seleccionado.
+
+4. **Regla de Impresión en Modo Digital Nube (Exclusión de Proceso Interno):**
+   Cuando la planta opera en Modo Digital Nube, se suprime por diseño la impresión física de documentos de proceso interno (compras, alistamiento, recepción, ruteros), dado que los operarios interactúan directamente con tablets y terminales. En dicho modo, **únicamente se imprimen las dos (2) piezas que acompañan físicamente la carga hacia el cliente final**:
+   - **Remisiones Oficiales Duplicadas y Guías de Transporte** (soporte legal, comercial y fiscal de viaje).
+   - **Rótulos Térmicos de Producto 100×50mm** exclusivamente para los SKUs que tengan parametrizado `requires_label = true`.
+
+---
+
+#### Escenario 124: Isomorfismo Operativo Estricto entre Planilla Física de Compras y Módulo Digital /ops/compras (SDD v1.9.92)
+- **Given** una tanda de pedidos aprobados para despacho matutino con fecha de entrega mañana.
+- **When** el jefe de compras consulta la Planilla de Compras impresa (`/admin/procurement/purchases-print`) y concurrentemente el comprador mayorista abre el Portal Operativo en Corabastos (`/ops/compras`):
+- **Then**:
+  1. Ambos canales presentan exactamente los mismos registros consolidados bajo la clave canónica `product_id + "__" + canonical_spec`.
+  2. La cifra de **Stock INV / Bodega** en la pantalla digital coincide al 100% con la cifra de la planilla impresa, deduciéndose de la misma fuente de verdad (último cierre oficial en `daily_inventory_closings`).
+  3. La **Meta Neta A Comprar** es matemáticamente idéntica en ambos medios, calculada por el mismo motor centralizado `calculateProcurementNetting` sin discrepancias de redondeo ni duplicación de código.
+  4. Cualquier compra registrada en `/ops/compras` o transcrita manualmente desde la planilla impresa en `/admin/commercial/inventory` (Canal A / FastPlazaPurchasesModal) actualiza de forma homogénea e idéntica la Columna G del Balance de Masa de 24 columnas.
