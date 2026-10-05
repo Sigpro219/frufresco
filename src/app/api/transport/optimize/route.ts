@@ -187,6 +187,9 @@ export async function POST(request: Request) {
             }
         };
 
+        // Check if fleet actually has certified refrigerated vehicles
+        const hasRefrigeratedFleet = vehicles.some((v: any) => v.is_refrigerated === true || v.refrigerated === true);
+
         const gcpRequest = {
             model: {
                 globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
@@ -199,7 +202,11 @@ export async function POST(request: Request) {
                     const sanitizedWeight = Math.max(1, Math.ceil(isNaN(rawWeight) || rawWeight <= 0 ? 1 : rawWeight));
                     const cratesCount = o.crates || Math.max(1, Math.ceil(sanitizedWeight / avg_kg_per_crate));
                     
-                    const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount);
+                    // Cash-on-delivery dwell delta (+5 mins for cash collection and verification)
+                    const isCashOnDelivery = o.payment_method === 'cash_on_delivery' || o.payment_type === 'cash_on_delivery' || o.payment_method === 'contraentrega';
+                    const cashDwellDelta = isCashOnDelivery ? 5 : 0;
+
+                    const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount) + cashDwellDelta;
                     // Cap the maximum delivery service duration at a realistic operational limit (max 60 minutes, min 5 minutes)
                     const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 60));
                     
@@ -214,6 +221,14 @@ export async function POST(request: Request) {
                         rawLng = -74.160647;
                     }
  
+                    const demands: Record<string, { amount: string }> = {
+                        "weight": { "amount": String(sanitizedWeight) },
+                        "crates": { "amount": String(cratesCount) }
+                    };
+                    if (hasRefrigeratedFleet) {
+                        demands["refrigerated"] = { "amount": isRefrigerated ? "1" : "0" };
+                    }
+
                     return {
                         pickups: [
                             // Depot location (Bodega Principal)
@@ -229,26 +244,30 @@ export async function POST(request: Request) {
                                 duration: `${unloadingTime * 60}s`
                             }
                         ],
-                        loadDemands: {
-                            "weight": { "amount": String(sanitizedWeight) },
-                            "crates": { "amount": String(cratesCount) },
-                            "refrigerated": { "amount": isRefrigerated ? "1" : "0" }
-                        },
+                        loadDemands: demands,
                         // Strategic Pareto Priority: High penalty for B2B accounts, standard for B2C
                         penaltyCost: isB2B ? 500000 : 1000,
                         label: String(o.id)
                     };
                 }),
                 vehicles: vehicles.map((v: any) => {
-                    const breakRule = getVehicleBreakRule(targetDate, fleet_start, driver_break_mins);
+                    // Suppress mandatory pause on morning sprint routes (< 4h) to avoid dropping restaurant breakfast windows
+                    const shiftDurationMins = parseTimeStr(fleet_end) - parseTimeStr(fleet_start);
+                    const effectiveBreakMins = shiftDurationMins < 240 ? 0 : driver_break_mins;
+                    const breakRule = getVehicleBreakRule(targetDate, fleet_start, effectiveBreakMins);
+
+                    const limits: Record<string, { maxLoad: string }> = {
+                        "weight": { "maxLoad": String(v.capacity_kg) },
+                        "crates": { "maxLoad": String(v.max_crates_capacity || 483) }
+                    };
+                    if (hasRefrigeratedFleet) {
+                        limits["refrigerated"] = { "maxLoad": v.is_refrigerated ? String(v.max_crates_capacity || 483) : "0" };
+                    }
+
                     const vehicleObj: any = {
                         startLocation: { latitude: 4.633653, longitude: -74.160647 },
                         endLocation: { latitude: 4.633653, longitude: -74.160647 },
-                        loadLimits: {
-                            "weight": { "maxLoad": String(v.capacity_kg) },
-                            "crates": { "maxLoad": String(v.max_crates_capacity || 483) },
-                            "refrigerated": { "maxLoad": "999" } // Permitir capacidad refrigerada para que Google no descarte pedidos con refrigerados
-                        },
+                        loadLimits: limits,
                         fixedCost: vehicleFixedCost,
                         startTimeWindows: [
                             {
@@ -273,8 +292,7 @@ export async function POST(request: Request) {
                     return vehicleObj;
                 })
             },
-            // Minimize active vehicles to see surplus as requested
-            searchMode: "CONSUME_ALL_AVAILABLE_TIME",
+            // Standard fast heuristic mode (<5s) to avoid Vercel serverless function timeouts
             considerRoadTraffic: true
         };
 

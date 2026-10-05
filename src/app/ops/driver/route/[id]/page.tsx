@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Package, Check, Navigation, Info } from 'lucide-react';
+import { ArrowLeft, Package, Check, Navigation, Info, Lock, Zap, ShieldAlert } from 'lucide-react';
 
 interface RouteStop {
     id: string;
@@ -32,6 +32,9 @@ export default function LoadVerificationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [loadedStops, setLoadedStops] = useState<Set<string>>(new Set());
+    const [routeStatus, setRouteStatus] = useState<string>('loading');
+    const [isCertified, setIsCertified] = useState<boolean>(false);
+    const [canBypass, setCanBypass] = useState<boolean>(false);
     const isMounted = useRef(true);
 
     const toggleStop = (id: string) => {
@@ -100,10 +103,40 @@ export default function LoadVerificationPage() {
                     }
                 ];
                 setStops(mockStops);
+                setRouteStatus('rectified');
+                setIsCertified(true);
+                setCanBypass(true);
                 setLoading(false);
                 return;
             }
 
+            // 1. Fetch Route Header Info
+            const { data: routeInfo } = await supabase
+                .from('routes')
+                .select('id, status, is_certified_complete')
+                .eq('id', id)
+                .maybeSingle();
+
+            if (routeInfo) {
+                setRouteStatus(routeInfo.status || 'loading');
+                setIsCertified(Boolean(routeInfo.is_certified_complete || routeInfo.status === 'rectified'));
+            }
+
+            // 2. Check Sandbox / Dev Bypass permissions
+            const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            let isAdmin = false;
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user?.id) {
+                    const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+                    if (prof?.role === 'admin' || prof?.role === 'sys_admin' || prof?.role === 'logistic_admin') {
+                        isAdmin = true;
+                    }
+                }
+            } catch (_) {}
+            setCanBypass(isAdmin || isDev);
+
+            // 3. Fetch Route Stops
             const { data, error } = await supabase
                 .from('route_stops')
                 .select(`
@@ -160,10 +193,21 @@ export default function LoadVerificationPage() {
         return () => { isMounted.current = false; };
     }, [id, fetchRouteData]);
 
-    const handleConfirmLoading = async () => {
-        if (loadedStops.size < stops.length) {
+    const handleConfirmLoading = async (isBypass: boolean = false) => {
+        if (!isBypass && loadedStops.size < stops.length) {
             alert('Por favor valida todos los pedidos antes de iniciar.');
             return;
+        }
+
+        if (!isBypass && !isCertified && routeStatus !== 'rectified') {
+            alert('🔒 VETO DE DESPACHO: La ruta no ha sido certificada ni precintada en muelle de salida (/ops/rectificacion).');
+            return;
+        }
+
+        if (isBypass) {
+            if (!confirm('⚡ MODO PRUEBAS / SANDBOX:\n¿Deseas forzar el inicio de la ruta sin esperar la certificación física en muelle? Esta acción quedará registrada en auditoría.')) {
+                return;
+            }
         }
 
         try {
@@ -175,12 +219,31 @@ export default function LoadVerificationPage() {
             }
 
             // Update route status to 'in_transit'
+            const updatePayload: Record<string, any> = {
+                status: 'in_transit',
+                start_time: new Date().toISOString()
+            };
+            if (isBypass) {
+                updatePayload.is_certified_complete = true;
+            }
+
             const { error: routeErr } = await supabase
                 .from('routes')
-                .update({ status: 'in_transit', start_time: new Date().toISOString() })
+                .update(updatePayload)
                 .eq('id', id);
             
             if (routeErr) throw routeErr;
+
+            if (isBypass) {
+                try {
+                    await supabase.from('audit_logs').insert([{
+                        action: 'TEST_MODE_BYPASS_RECTIFICATION',
+                        table_name: 'routes',
+                        record_id: String(id),
+                        notes: 'Inicio de ruta forzado por bypass en modo de pruebas / sandbox'
+                    }]);
+                } catch (_) {}
+            }
 
             // Sincronización oficial de Pedidos a 'in_transit'
             const orderIds = stops.map(s => s.orders?.id).filter(Boolean);
@@ -235,6 +298,28 @@ export default function LoadVerificationPage() {
                     </h1>
                 </div>
                 
+                {!isCertified && routeStatus !== 'rectified' && (
+                    <div style={{ 
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)', 
+                        color: '#FCA5A5', 
+                        padding: '0.9rem 1.2rem', 
+                        borderRadius: '16px', 
+                        fontSize: '0.85rem', 
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        display: 'flex', 
+                        gap: '12px', 
+                        alignItems: 'center', 
+                        marginBottom: '1rem',
+                        lineHeight: '1.4'
+                    }}>
+                        <Lock size={22} style={{ color: '#EF4444', flexShrink: 0 }} />
+                        <div>
+                            <div style={{ fontWeight: '800', color: '#F87171', marginBottom: '2px' }}>🔒 VETO DE DESPACHO EN MUELLE</div>
+                            <div style={{ opacity: 0.9 }}>Ruta pendiente de rectificación física y precinto numerado de seguridad (/ops/rectificacion).</div>
+                        </div>
+                    </div>
+                )}
+
                 <div style={{ 
                     backgroundColor: 'rgba(30, 58, 138, 0.25)', 
                     color: '#93C5FD', 
@@ -363,27 +448,62 @@ export default function LoadVerificationPage() {
                 zIndex: 101, 
                 boxShadow: '0 -10px 30px rgba(0,0,0,0.6)'
             }}>
+                {canBypass && (!isCertified && routeStatus !== 'rectified') && (
+                    <button 
+                        onClick={() => handleConfirmLoading(true)}
+                        disabled={saving}
+                        style={{ 
+                            width: '100%', 
+                            padding: '0.75rem', 
+                            borderRadius: '12px', 
+                            border: '1px dashed #F59E0B', 
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)', 
+                            color: '#FBBF24', 
+                            fontWeight: '800', 
+                            fontSize: '0.85rem',
+                            marginBottom: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                        }}
+                    >
+                        <Zap size={16} />
+                        <span>⚡ FORZAR INICIO DE RUTA (BYPASS MODO PRUEBAS)</span>
+                    </button>
+                )}
+
                 <button 
-                    onClick={handleConfirmLoading}
-                    disabled={saving || !allLoaded}
+                    onClick={() => handleConfirmLoading(false)}
+                    disabled={saving || !allLoaded || (!isCertified && routeStatus !== 'rectified')}
                     style={{ 
                         width: '100%', 
                         padding: '1.1rem', 
                         borderRadius: '16px', 
                         border: 'none', 
-                        backgroundColor: allLoaded ? '#059669' : 'rgba(255, 255, 255, 0.05)', 
-                        color: allLoaded ? 'white' : '#9CA3AF', 
+                        backgroundColor: (!isCertified && routeStatus !== 'rectified')
+                            ? 'rgba(239, 68, 68, 0.15)'
+                            : allLoaded ? '#059669' : 'rgba(255, 255, 255, 0.05)', 
+                        color: (!isCertified && routeStatus !== 'rectified')
+                            ? '#FCA5A5'
+                            : allLoaded ? 'white' : '#9CA3AF', 
                         fontWeight: '800', 
-                        fontSize: '1.1rem',
-                        boxShadow: allLoaded ? '0 4px 20px rgba(5, 150, 105, 0.3)' : 'none',
+                        fontSize: '1.05rem',
+                        boxShadow: (allLoaded && (isCertified || routeStatus === 'rectified')) ? '0 4px 20px rgba(5, 150, 105, 0.3)' : 'none',
                         transition: 'all 0.3s ease',
-                        cursor: allLoaded ? 'pointer' : 'not-allowed',
+                        cursor: (allLoaded && (isCertified || routeStatus === 'rectified')) ? 'pointer' : 'not-allowed',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px'
                     }}>
-                    {saving ? 'PROCESANDO...' : allLoaded ? (
+                    {saving ? 'PROCESANDO...' : (!isCertified && routeStatus !== 'rectified') ? (
+                        <>
+                            <Lock size={18} />
+                            <span>BLOQUEADO: ESPERANDO PRECINTO DE RECTIFICACIÓN</span>
+                        </>
+                    ) : allLoaded ? (
                         <>
                             <span>CONFIRMAR Y SALIR A RUTA</span>
                             <Navigation size={18} style={{ transform: 'rotate(45deg)' }} />

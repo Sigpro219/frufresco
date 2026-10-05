@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.94 (Acople Transaccional TMS [/admin/transport] ⟷ WMS/OPS [/ops/*], Ecosistema Google Maps, Gobernanza de 150 Bahías y Modo Sandbox de Pruebas)
+> **Versión:** 1.9.95 (Diagnóstico Forense OPS: Deudas Técnicas 19 y 20, Bimodalidad en Cierre de Inventario, Ingesta por Regex y Acople Cuentas por Pagar)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -271,6 +271,31 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
     1. Incorporar el factor `density_factor_kg_per_crate` en la tabla maestra `products` para familias botánicas específicas.
     2. Modelar un mecanismo de liberación por olas (*Wave Picking*) condicionado a la llegada del 100% de la sublista a muelle.
     3. Establecer alerta preventiva en el panel de bahías de despacho si una asignación supera 24 canastillas (4 niveles sobre footprint estándar).
+
+### ⏳ DEUDA TÉCNICA 19: Ingesta Frágil de Columna T por Expresión Regular y Bimodalidad de Cierre de Inventario (OPS vs Comercial)
+- **Diagnóstico Forense de Integración:**
+  1. **Persistencia No Estructurada en Bodega (`/ops/inventory`):** En `src/app/ops/inventory/page.tsx:668`, los operarios de piso registran los conteos ciegos de fin de turno por célula de trabajo (`DEFAULT_WORK_CELLS`). Al guardar, el módulo inserta un movimiento en `inventory_movements` con `reference_type: 'blind_count_shift_close'`, incrustando el valor físico contado dentro de una cadena de texto libre en `notes`:
+     `notes: "Cruce a ciegas fin de turno | Célula: ... | Operador: ... | Stock anterior: X -> Contado: Y (Dif: Z) ..."`
+  2. **Cable Frágil de Ingesta por Regex en Torre de Control (`InventoryDailyBalanceTab.tsx`):** En `src/components/InventoryDailyBalanceTab.tsx:714` (el Balance Diario de 24 Columnas de la Dirección Comercial), la **Columna T (Inventario Físico Agregado)** reconstruye el inventario contado parseando la nota mediante una expresión regular:
+     `const match = (m.notes || '').match(/Contado:\s*([0-9.,]+)/i);`
+     Si el operario altera manualmente la nota, si cambia el formato del texto o si se traduce la etiqueta en UI, la regex falla silenciosamente y recurre al fallback de tomar el stock teórico calculado (`physicalCount = currentStock`), enmascarando cualquier descuadre físico real en bodega.
+  3. **Bimodalidad y Asimetría de Roles en Cierre Contable:** La interfaz móvil/tablet de bodega (`/ops/inventory`) es una **estación de captura de conteo físico ciego**, pero carece de autorización para congelar el cierre oficial. El congelamiento vinculante e inmutable en `daily_inventory_closings` ($\text{Col U} \to \text{Col E}_{D+1}$) es potestad exclusiva de la Dirección Comercial/Operativa en `/admin/commercial/inventory` (`InventoryDailyBalanceTab.tsx`), exigiendo el rol con permiso `canSupervise`.
+- **Plan de Acción & Criterios de Aceptación para la Corrección Definitiva:**
+  1. Migrar la persistencia de `blind_count_shift_close` para registrar la cantidad contada en un atributo tipado JSONB (`metadata->>'counted_quantity'`) o en una columna numérica dedicada en `inventory_movements`.
+  2. Sustituir la expresión regular de `InventoryDailyBalanceTab.tsx` por la lectura directa y tipada de la propiedad estructurada.
+  3. Formalizar en la UI de `/ops/inventory` el badge de estatus *"Conteo Enviado a Auditoría Comercial - Pendiente Cierre Oficial"*, clarificando la jerarquía bimodal.
+
+### ⏳ DEUDA TÉCNICA 20: Desacople entre Dictámenes del Supervisor de Recepción (/ops/recepcion/supervisor) y Cuentas por Pagar (Compras/Finanzas)
+- **Diagnóstico Forense de Integración:**
+  1. **Auditoría Física en Muelle de Entrada:** En `src/app/ops/recepcion/supervisor/page.tsx`, el Supervisor de Recepción audita los lotes con compras en estado `received_review` y las novedades de báscula en `weight_discrepancies` (`status = 'pending_approval'`).
+  2. **Resolución Física vía RPC (`handle_inventory_movement`):** El supervisor aprueba o rechaza mediante transacciones atómicas de inventario:
+     - **Aprobación de Lote:** Transfiere la masa física de `in_process` a `available`.
+     - **Rechazo de Lote:** Descarga la masa física de `in_process` con `type = 'exit'` y sube el voucher de evidencia a Supabase Storage (`purchases.voucher_image_url`).
+     - **Aprobación de Excedente de Peso:** Actualiza `purchases.picked_up_quantity = received_quantity` y transfiere el excedente a `available`.
+  3. **Fisura Contable con Cuentas por Pagar (Finanzas):** Aunque el balance físico en bodega queda perfectamente nivelado, el módulo **NO dispara ningún webhook ni asiento contable hacia Cuentas por Pagar ni a la facturación de proveedores**. Si se autorizan 50 kg de más recibidos en báscula o si se rechaza el 40% de un camión por calidad deficiente, el valor a pagar al proveedor en Finanzas conserva el monto pactado originalmente a menos que un analista modifique manualmente la orden de compra en la mesa comercial tras una llamada telefónica.
+- **Plan de Acción & Criterios de Aceptación para la Corrección Definitiva:**
+  1. Diseñar un disparador transaccional o evento de dominio (`purchase_discrepancy_resolved`) que actualice el saldo por pagar del proveedor o emita una Nota Débito/Crédito comercial automática según el dictamen del supervisor.
+  2. Implementar una bandeja de conciliación en el módulo de compras/finanzas que resalte los lotes donde la cantidad recibida difirió de la pactada (`quantity !== picked_up_quantity`) para autorización de pago.
 
 ---
 
@@ -5399,10 +5424,13 @@ El Portal Operativo de FruFresco (`/ops/*`) constituye el sistema de ejecución 
 - **Conexión & Balance:** Constituye la **Carga Oficial de Inventario en Bodega** $\to$ Alimenta la **Columna F (Compras Directas)** del Balance Diario de Masa.
 
 #### 4. Módulo de Supervisión de Recepción (`/ops/recepcion/supervisor` - `src/app/ops/recepcion/supervisor/page.tsx`)
-- **Propósito del Negocio:** Dictamen de calidad de entrada por el Supervisor de Recepción y Control de Calidad.
-- **Entrada (Input):** Lotes pesados en báscula de entrada pendientes de inspección organoléptica.
-- **Salida (Output):** Aprobación de lote, veto de entrada (rechazo total devuelto al proveedor) o deducción de merma directa en compra asentada en `purchases.rejected_qty`.
-- **Conexión & Balance:** Compuerta Poka-Yoke de entrada. Previene el ingreso de producto descompuesto al piso de alistamiento.
+- **Propósito del Negocio:** Auditoría organoléptica, control de calidad y resolución de discrepancias de peso en muelle de descarga por el Supervisor de Recepción.
+- **Entrada (Input):** Lotes en cuarentena inicial (`purchases` con `status = 'received_review'`) y discrepancias volumétricas/peso (`weight_discrepancies` con `status = 'pending_approval'`) levantadas por la báscula de entrada.
+- **Salida (Output):**
+  * **Aprobación de Lote:** Transiciona compra a `received_ok`, resuelve novedades de proveedor (`provider_novelties`) y ejecuta RPC `handle_inventory_movement` transfiriendo la masa física de `in_process` a `available`.
+  * **Rechazo de Lote:** Transiciona a `received_rejected`, registra motivo y observaciones, sube acta fotográfica a Supabase Storage (`voucher_image_url`), reabre la tarea de compra (`procurement_tasks`) y ejecuta RPC `handle_inventory_movement` con `type = 'exit'` descargando la masa de `in_process`.
+  * **Aprobación de Excedente de Peso:** Actualiza `purchases.picked_up_quantity` al peso total recibido y transfiere el excedente a `available`.
+- **Conexión & Balance:** Compuerta Poka-Yoke de entrada. Previene el ingreso de producto descompuesto al piso de alistamiento. *(Deuda Técnica 20: El módulo equilibra el inventario físico, pero carece de acople automático hacia Cuentas por Pagar en Finanzas).*
 
 #### 5. Módulo de Alistamiento y Terminal de Báscula (`/ops/picking` & `terminal/page.tsx`)
 - **Propósito del Negocio:** Estaciones de pesaje neto y empaque en las 6 células especializadas de bodega.
@@ -5428,9 +5456,13 @@ El Portal Operativo de FruFresco (`/ops/*`) constituye el sistema de ejecución 
 - **Conexión & Balance:** Actualiza `orders.status = 'delivered'`, actualiza el saldo de canastillas en `profiles.crate_balance` y registra el movimiento de retorno físico hacia la **Columna O (Cuarentena de Patio)**.
 
 #### 9. Módulo de Inventario y Balance de Masa (`/ops/inventory` - `src/app/ops/inventory/page.tsx`)
-- **Propósito del Negocio:** Torre de control de balance de masa de 24 columnas, liquidación de patio y cierre oficial de turno.
-- **Entrada (Input):** Entradas por muelle (Col F), compras plaza (Col G), salidas comerciales despachadas (Cols H/I/J), mermas operativas (Cols P/Q/R), mercancía devuelta en cuarentena (Col O) y transcripción del conteo ciego (Col T).
-- **Salida (Output):** Conciliación automática de Faltantes (Col V) y Sobrantes (Col W), congelamiento inmutable en `daily_inventory_closings` ($\text{Col U} \to \text{Col E}_{D+1}$) y liquidación de inventario de canastillas (`warehouse_crate_stock`).
+- **Propósito del Negocio:** Captura de conteo ciego de fin de turno en bodega, reingreso de canastillas devueltas en patio y gestión de cuarentena de devoluciones de ruta.
+- **Entrada (Input):** Células de conteo ciego (`DEFAULT_WORK_CELLS`), devoluciones físicas de furgones en patio y balance de canastillas en calle (`profiles.crate_balance`).
+- **Salida (Output):**
+  * **Conteo Ciego de Cierre:** Inserción en `inventory_movements` con `reference_type: 'blind_count_shift_close'` y nota formateada con el conteo (`notes: "... Stock anterior: X -> Contado: Y ..."`).
+  * **Retorno de Canastillas en Patio:** Incremento directo del stock de activos en `app_settings.warehouse_crate_stock`, deducción del saldo deudor en `profiles.crate_balance` y registro auditable en `asset_movements` (`type = 'yard_return'`).
+  * **Cuarentena de Patio:** Dictamen de calidad sobre productos devueltos para imputar a **Columna O (Reingreso)** o **Columna Q (Avería)**.
+- **Conexión & Balance:** Alimenta la **Columna T** del Balance Diario de Masa. *(Deuda Técnica 19: La interfaz de piso captura el conteo ciego; el congelamiento vinculante e inmutable en `daily_inventory_closings` de $\text{Col U} \to \text{Col E}_{D+1}$ es potestad exclusiva de la Dirección en `/admin/commercial/inventory`)*.
 
 #### 10. Tablero de Operaciones Estilo Aeropuerto (`AirportBoard / FIDS` - `src/components/ops/AirportBoard.tsx`)
 - **Propósito del Negocio:** Visualizador de alta visibilidad para monitores industriales de 65" suspendidos en planta.
