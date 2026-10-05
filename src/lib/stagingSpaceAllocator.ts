@@ -104,7 +104,11 @@ export function formatSpaceLabel(spaces: number[]): string {
     if (!spaces || spaces.length === 0) return 'S/A';
     if (spaces.length === 1) return `${spaces[0]}`;
     const sorted = [...spaces].sort((a, b) => a - b);
-    return `${sorted[0]}-${sorted[sorted.length - 1]}`;
+    const isContiguous = sorted.every((val, idx) => idx === 0 || val === sorted[idx - 1] + 1);
+    if (isContiguous) {
+        return `${sorted[0]}-${sorted[sorted.length - 1]}`;
+    }
+    return sorted.join(', ');
 }
 
 /**

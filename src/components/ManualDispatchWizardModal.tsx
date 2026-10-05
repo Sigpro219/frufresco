@@ -62,6 +62,8 @@ export default function ManualDispatchWizardModal({
 
     // Mapeo local de bahías: { [orderId]: number[] }
     const [manualSpacesMap, setManualSpacesMap] = useState<Record<string, number[]>>({});
+    // Mapeo de texto crudo en inputs para permitir escribir libremente comas ("4, 5, 6"): { [orderId]: string }
+    const [spaceInputTexts, setSpaceInputTexts] = useState<Record<string, string>>({});
     
     // Toggle para previsualizar la cuadrícula de 150 bahías en el paso 1
     const [showFloorGridPreview, setShowFloorGridPreview] = useState<boolean>(false);
@@ -114,6 +116,13 @@ export default function ManualDispatchWizardModal({
         }
 
         setManualSpacesMap(initialMap);
+        const initialTextMap: Record<string, string> = {};
+        Object.entries(initialMap).forEach(([orderId, spaces]) => {
+            if (Array.isArray(spaces) && spaces.length > 0) {
+                initialTextMap[orderId] = spaces.join(', ');
+            }
+        });
+        setSpaceInputTexts(initialTextMap);
     }, [isOpen, selectedOrdersList]);
 
     // Enriquecer pedidos para el algoritmo de asignación
@@ -151,39 +160,73 @@ export default function ManualDispatchWizardModal({
     // Aplicar asignación automática
     const handleApplyAutoClustering = () => {
         const newMap: Record<string, number[]> = {};
+        const newTextMap: Record<string, string> = {};
         autoAllocations.forEach(a => {
             newMap[a.order_id] = a.assigned_spaces;
+            if (Array.isArray(a.assigned_spaces) && a.assigned_spaces.length > 0) {
+                newTextMap[a.order_id] = a.assigned_spaces.join(', ');
+            }
         });
         setManualSpacesMap(newMap);
+        setSpaceInputTexts(newTextMap);
         setSpacesSavedSuccess(false);
     };
 
-    // Cambiar manualmente el espacio de una orden
-    const handleManualSpaceChange = (orderId: string, valueStr: string) => {
-        const cleaned = valueStr.replace(/[^0-9,-]/g, '');
-        let spaces: number[] = [];
-
-        if (cleaned.includes('-')) {
-            const parts = cleaned.split('-').map(p => parseInt(p.trim())).filter(p => !isNaN(p));
-            if (parts.length === 2 && parts[0] <= parts[1]) {
-                for (let i = parts[0]; i <= parts[1]; i++) {
-                    if (i >= 1 && i <= 150) spaces.push(i);
+    // Parser ultra-resiliente que soporta:
+    // - Comas: "4, 5, 6", "4,5,6"
+    // - Guiones de rango: "4-6" -> [4, 5, 6]
+    // - Espacios o puntos y comas: "4 5 6", "4; 5; 6"
+    // - Mixtos: "1-2, 5" -> [1, 2, 5]
+    const parseSpacesInput = (text: string): number[] => {
+        if (!text || !text.trim()) return [];
+        const spacesSet = new Set<number>();
+        const tokens = text.split(/[,;\s]+/).map(t => t.trim()).filter(Boolean);
+        for (const token of tokens) {
+            if (token.includes('-')) {
+                const parts = token.split('-').map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p));
+                if (parts.length === 2 && parts[0] <= parts[1]) {
+                    for (let i = parts[0]; i <= parts[1]; i++) {
+                        if (i >= 1 && i <= 150) spacesSet.add(i);
+                    }
+                }
+            } else {
+                const num = parseInt(token, 10);
+                if (!isNaN(num) && num >= 1 && num <= 150) {
+                    spacesSet.add(num);
                 }
             }
-        } else if (cleaned.includes(',')) {
-            spaces = cleaned.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p >= 1 && p <= 150);
-        } else {
-            const num = parseInt(cleaned);
-            if (!isNaN(num) && num >= 1 && num <= 150) {
-                spaces = [num];
-            }
         }
+        return Array.from(spacesSet).sort((a, b) => a - b);
+    };
 
+    // Cambiar manualmente el espacio de una orden permitiendo escribir libremente comas y espacios
+    const handleManualSpaceChange = (orderId: string, valueStr: string) => {
+        // 1. Guardar el texto crudo para que el input no trague comas o espacios mientras el usuario escribe
+        setSpaceInputTexts(prev => ({
+            ...prev,
+            [orderId]: valueStr
+        }));
+
+        // 2. Parsear el array de bahías para actualizar el mapa numérico y las validaciones
+        const spaces = parseSpacesInput(valueStr);
         setManualSpacesMap(prev => ({
             ...prev,
             [orderId]: spaces
         }));
         setSpacesSavedSuccess(false);
+    };
+
+    // Al perder el foco (onBlur), formatear amigablemente como lista limpia ("4, 5, 6")
+    const handleManualSpaceBlur = (orderId: string) => {
+        const raw = spaceInputTexts[orderId];
+        if (raw !== undefined) {
+            const parsed = parseSpacesInput(raw);
+            const formatted = parsed.length > 0 ? parsed.join(', ') : '';
+            setSpaceInputTexts(prev => ({
+                ...prev,
+                [orderId]: formatted
+            }));
+        }
     };
 
     // Guardar asignación en base de datos
@@ -245,12 +288,15 @@ export default function ManualDispatchWizardModal({
             
             if (error) throw error;
             const freshMap: Record<string, number[]> = {};
+            const freshTextMap: Record<string, string> = {};
             (data || []).forEach(o => {
                 if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
                     freshMap[o.id] = o.warehouse_spaces;
+                    freshTextMap[o.id] = o.warehouse_spaces.join(', ');
                 }
             });
             setManualSpacesMap(freshMap);
+            setSpaceInputTexts(freshTextMap);
             setSpacesSavedSuccess(true);
             setTimeout(() => setSpacesSavedSuccess(false), 2000);
         } catch (err: any) {
@@ -668,19 +714,22 @@ export default function ManualDispatchWizardModal({
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
                                     <thead style={{ position: 'sticky', top: 0, backgroundColor: '#0F172A', color: '#FFFFFF', zIndex: 10 }}>
                                         <tr>
-                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '5%' }}>#Seq</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '28%' }}>Cliente / Sede</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '22%' }}>Dirección / Zona</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '15%' }}>Ventana Entrega</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'right', width: '10%' }}>Kilos</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '8%' }}>Can.</th>
-                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '12%', backgroundColor: '#1E293B' }}>Bahía (1-150)</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '4%' }}>#Seq</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '25%' }}>Cliente / Sede</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'left', width: '20%' }}>Dirección / Zona</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '13%' }}>Ventana Entrega</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'right', width: '9%' }}>Kilos</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '7%' }}>Can.</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '10%', backgroundColor: '#1E293B' }}>Muelles Req.</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'center', width: '12%', backgroundColor: '#0F172A' }}>Bahía (1-150)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {autoAllocations.map((item, idx) => {
                                             const currentSpaces = manualSpacesMap[item.order_id] || item.assigned_spaces || [];
-                                            const currentLabel = formatSpaceLabel(currentSpaces);
+                                            const displayValue = spaceInputTexts[item.order_id] !== undefined
+                                                ? spaceInputTexts[item.order_id]
+                                                : (currentSpaces.length > 0 ? currentSpaces.join(', ') : '');
                                             return (
                                                 <tr key={item.order_id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
                                                     <td style={{ padding: '6px 10px', fontWeight: '800', color: '#64748B' }}>#{item.sequence_id || idx + 1}</td>
@@ -704,16 +753,38 @@ export default function ManualDispatchWizardModal({
                                                     <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: '800', color: '#D97706' }}>
                                                         {item.estimated_crates}
                                                     </td>
+                                                    {/* Muelles Necesarios Calculados Explícitamente */}
+                                                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                            <span style={{
+                                                                backgroundColor: '#EFF6FF',
+                                                                color: '#1D4ED8',
+                                                                fontWeight: '900',
+                                                                fontSize: '0.74rem',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '6px',
+                                                                border: '1px solid #BFDBFE',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                📦 {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.56rem', color: '#64748B', marginTop: '1px', fontWeight: '600' }}>
+                                                                ({item.estimated_crates}c / 36)
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    {/* Input Editable de Bahías con soporte para comas: "4, 5, 6" */}
                                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                                         <input
                                                             type="text"
-                                                            value={currentLabel === 'S/A' ? '' : currentLabel}
-                                                            placeholder="ej. 4-5"
+                                                            value={displayValue}
+                                                            placeholder="ej. 4, 5, 6"
                                                             onChange={(e) => handleManualSpaceChange(item.order_id, e.target.value)}
+                                                            onBlur={() => handleManualSpaceBlur(item.order_id)}
                                                             style={{
-                                                                width: '65px',
-                                                                padding: '3px 6px',
-                                                                fontSize: '0.74rem',
+                                                                width: '100px',
+                                                                padding: '4px 8px',
+                                                                fontSize: '0.78rem',
                                                                 fontWeight: '900',
                                                                 textAlign: 'center',
                                                                 borderRadius: '6px',
@@ -729,9 +800,21 @@ export default function ManualDispatchWizardModal({
                                                                 outline: 'none'
                                                             }}
                                                         />
+                                                        {currentSpaces.length === item.spaces_needed && (
+                                                            <div style={{ fontSize: '0.56rem', color: '#059669', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                                                ✅ {currentSpaces.length} de {item.spaces_needed} asignados
+                                                            </div>
+                                                        )}
                                                         {currentSpaces.length > 0 && currentSpaces.length !== item.spaces_needed && (
-                                                            <div style={{ fontSize: '0.55rem', color: '#B45309', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
-                                                                {currentSpaces.length > item.spaces_needed ? `Sobran (${currentSpaces.length} vs ${item.spaces_needed})` : `Faltan (${currentSpaces.length} vs ${item.spaces_needed})`}
+                                                            <div style={{ fontSize: '0.56rem', color: '#B45309', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                                                {currentSpaces.length > item.spaces_needed 
+                                                                    ? `⚠️ Sobran (${currentSpaces.length} de ${item.spaces_needed})` 
+                                                                    : `⚠️ Faltan (${currentSpaces.length} de ${item.spaces_needed})`}
+                                                            </div>
+                                                        )}
+                                                        {currentSpaces.length === 0 && (
+                                                            <div style={{ fontSize: '0.56rem', color: '#DC2626', fontWeight: 800, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                                                ⚠️ Requiere {item.spaces_needed} {item.spaces_needed === 1 ? 'muelle' : 'muelles'}
                                                             </div>
                                                         )}
                                                     </td>
