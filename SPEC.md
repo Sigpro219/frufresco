@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.97 (Motor Universal de Hojas de Cálculo Polimórficas, Resiliencia Multiformato ODS/Excel, Auto-Switch de Pestañas y Extracción Resiliente Poka-Yoke)
+> **Versión:** 1.9.98 (Protocolo de Precisión de Pesaje y Cantidad a Tres Decimales: Estándar 1 Gramo = 0.001 kg, Erradicación de Truncamiento en Modales y Paridad de Cálculo Omnicanal)
 > **Fecha:** 05 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
@@ -6432,6 +6432,82 @@ Un defecto crítico en pipelines tradicionales de ingestión es asumir que toda 
   1. Si `excelSheetsData` ya está en memoria, genera de forma inmediata el HTML de alta fidelidad con selector de hojas.
   2. Si la hoja no se encontraba en memoria, la función `handleOpenExcelInNewTab` descarga el buffer y la compila al vuelo mediante `parseSpreadsheetWorkbook` sin forzar la descarga de un binario no deseado.
   3. Abre una nueva ventana del navegador con diseño industrial *Swiss Precision Slate*, permitiendo buscar por SKU, filtrar solo filas con pedido o imprimir la hoja en formato físico.
+
+---
+
+## 33. Protocolo de Precisión de Pesaje y Cantidad a Tres Decimales (Estándar 1 Gramo = 0.001 kg)
+
+### 33.1 Principio de Fidelidad Física del Gemba: El Peso Gramatical en Kilogramos
+En el sector agro-logístico e institucional (HORECA y retail de alta gama), coexisten productos a granel de alto volumen (papas, cebollas en bultos de 50 kg) junto con ítems de ultra-precisión o presentaciones dosificadas en pequeñas bandejas, clamshells o porciones individuales:
+- **Arándano institucional / Gourmet:** Bandeja o unidad de 125 gramos ($0.125\text{ kg}$).
+- **Hierbas finas y microgreens (romero, tomillo, albahaca):** Paquetes de 15 gramos ($0.015\text{ kg}$) o 50 gramos ($0.050\text{ kg}$).
+- **Brotes y germinados:** Clamshells de 80 gramos ($0.080\text{ kg}$).
+
+Dado que la unidad base canónica de facturación e inventario para productos pesables en FruFresco es el **Kilogramo (`Kg`)**, la unidad física de resolución mínima requerida por el Gemba es exactamente **un gramo ($1\text{ gr} = 0.001\text{ kg}$)**.  
+Cualquier truncamiento o redondeo forzado a dos decimales ($\text{toFixed}(2)$ o `maximumFractionDigits: 2`) genera una distorsión sistemática inaceptable:
+$$0.125\text{ kg} \xrightarrow{\text{round to 2 dec}} 0.13\text{ kg} \quad (+4.00\% \text{ de sobrecosto / error numérico})$$
+
+### 33.2 Erradicación de la Pérdida de Información por Redondeo Prematuro
+Queda formalmente prohibido en todo el pipeline de pedidos aplicar redondeos a 2 decimales sobre cantidades operativas, factores de conversión y pesos unitarios.
+
+1. **Paridad de Decimales en Memoria y Estado:**
+   - En `EmailDraftsModule.tsx`:
+     - `cleanQty` y `baseQty` deben resolverse mediante `parseFloat(qty.toFixed(3))`.
+     - `sumOriginalQty` y la consolidación de filas duplicadas deben calcularse a 3 decimales (`toFixed(3)`).
+     - La apertura del modal de personalización (`openCustomizingModal`) debe inicializar `initialQtyStr` con `toFixed(3)` para no convertir una cantidad de $0.125$ en $0,13$ al abrir la ventana.
+   - En `src/app/admin/orders/create/page.tsx`:
+     - `calculatedQty` del carrito y el factor de conversión deben soportar 3 decimales (`toFixed(3)` y `step="0.001"`).
+     - La acumulación de peso total de la orden (`total_weight_kg`) debe preservarse con `toFixed(3)`.
+   - En `/api/orders/email-drafts/approve/route.ts`:
+     - `roundedWeight` en cabecera de la orden debe computarse como:
+       $$\text{roundedWeight} = \frac{\text{Math.round}(\text{totalWeightKg} \times 1000)}{1000}$$
+
+### 33.3 Normalización y Formateo Canónico (`formatQuantity` y `formatWeightKg`)
+Para mantener el estándar de diseño industrial *Swiss Precision Slate* sin ensuciar la interfaz con ceros redundantes a la derecha pero garantizando resolución completa cuando existen decimales de gramaje, se establecen como funciones de referencia en `src/lib/orderUtils.ts`:
+
+1. **`formatWeightKg(val)`:**
+   - Calcula `Math.round(Number(val) * 1000) / 1000`.
+   - Formatea con `toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 3 })`.
+   - **Comportamiento esperado:**
+     - $1\text{ kg} \to \text{"1 kg"}$ (sin decimales innecesarios)
+     - $0.5\text{ kg} \to \text{"0,5 kg"}$
+     - $0.25\text{ kg} \to \text{"0,25 kg"}$
+     - $0.125\text{ kg} \to \text{"0,125 kg"}$ (precisión exacta de 125 gramos)
+     - $0.015\text{ kg} \to \text{"0,015 kg"}$ (precisión exacta de hierbas)
+2. **`formatQuantity(val)`:**
+   - Idéntica regla para cantidades en celdas de tabla e inputs de pedido.
+   - En `/admin/orders/loading`, la visualización en la tarjeta de ítem migra de `formatNumber(item.quantity, 1)` a `formatQuantity(item.quantity)`.
+
+### 33.4 Paridad de Cálculo Financiero y Prevención de Distorsión en Facturación
+1. **Inmutabilidad de la Cantidad en la Celda de Edición:**
+   - Al enfocar (`onFocus`) la celda de cantidad en la tabla de borradores, el valor transitorio no puede ser truncado con `Number(item.quantity).toFixed(2)`. Debe usar `toFixed(3)`.
+   - Esto evita que el simple hecho de navegar con teclado sobre la fila altere la cantidad almacenada de $0.125$ a $0.13$.
+2. **Cálculo de Subtotales e Impuestos:**
+   - Al preservarse la cantidad pura de $0.125\text{ kg}$ a un precio de $\$40.000/\text{kg}$, el subtotal calculado es exactamente:
+     $$\text{Subtotal} = 0.125 \times 40.000 = \$5.000$$
+   - Se erradica el error que producía un subtotal de $\$5.200$ ($0.13 \times 40.000$).
+
+---
+
+#### Escenario 138: Configuración, Presentación y Aprobación de SKU con Gramaje Fraccional (Arándano 125 gr = 0.125 kg - SDD v1.9.98)
+- **Given** un SKU maestro configurado con unidad de medida `Kg` y una presentación de venta de `Unidad 125 gr` o peso unitario `weight_kg = 0.125` (ej: Arándano Institucional SKU `F-RND-K4`).
+- **When** el operador logístico abre el modal de personalización en la mesa de control de borradores de correo (`EmailDraftsModule.tsx`) o en la mesa manual (`create/page.tsx`):
+- **Then**:
+  1. El badge de cantidad mínima superior muestra exactamente: `Mínimo: 0,125 kg`.
+  2. El badge de mínimo de cantidad junto al campo numérico muestra: `Mín. 0,125 kg`.
+  3. Al seleccionar cantidad `1` en presentación `Unidad 125 gr`, el badge de peso acumulado muestra: `Total: 0,125 kg`.
+  4. Al pulsar `Agregar` o presionar `Enter`, `saveCustomizingModal` valida que $1 \times 0.125 \ge 0.125$, autoriza la inserción sin falsos positivos de cantidad mínima y persiste `quantity: 0.125`.
+  5. En la tabla del pedido, el subtotal refleja exactamente el valor para $0.125\text{ kg}$ sin sobrecosto de redondeo.
+
+---
+
+#### Escenario 139: Inmutabilidad Numérica en Edición de Fila y Prevención de Sobrecosto por Truncamiento (SDD v1.9.98)
+- **Given** un borrador de pedido con un ítem cuya cantidad facturable es `0.125 kg`.
+- **When** el operador navega por la tabla con el teclado y enfoca (`onFocus`) o desenfoca (`onBlur`) la celda de cantidad del producto:
+- **Then**:
+  1. El input recibe y muestra la cadena `"0,125"` sin truncar a `"0,13"`.
+  2. Al presionar `Enter` o cambiar el foco, `newEdits[i].quantity` permanece estrictamente como `0.125`.
+  3. Al invocar el endpoint `/api/orders/email-drafts/approve`, la orden creada en `orders` y sus registros en `order_items` preservan `quantity: 0.125` y el peso total acumulado en `total_weight_kg` se persiste con fidelidad milimétrica.
 
 
 
