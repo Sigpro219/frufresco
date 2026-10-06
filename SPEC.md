@@ -1,8 +1,8 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.98 (Protocolo de Precisión de Pesaje y Cantidad a Tres Decimales: Estándar 1 Gramo = 0.001 kg, Erradicación de Truncamiento en Modales y Paridad de Cálculo Omnicanal)
-> **Fecha:** 05 de Octubre, 2026  
+> **Versión:** 1.9.99 (Estandarización Omnicanal: Visualización de Precios Unitarios y Subtotales en Mesa de Trabajo de Pedidos Manuales)
+> **Fecha:** 06 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Financiera, Mesa de Control Logística, Facturación & Operaciones
 
@@ -99,6 +99,7 @@ El Módulo de Pedidos de FruFresco centraliza la recepción, interpretación, va
 | **Rechazo / Descarte** | Modal de rechazo con notificación email | Botón "Cancelar / Limpiar" | 🟢 Paridad por Diseño |
 | **Transaccionalidad ACID** | Rollback de cabecera si falla detalle | Rollback atómico client-side si falla inserción | 🟢 **Resuelto (Paridad 100%)** |
 | **Persistencia Documental (`document_url`)** | Vincula adjunto del borrador a `orders.document_url` | Sube a Storage y vincula a `orders.document_url` | 🟢 **Resuelto (Paridad 100%)** |
+| **Visualización de Precios y Subtotales** | Píldora verde de tarifa unitaria + tooltip de subtotal en cada fila | Píldora verde de tarifa unitaria + tooltip de subtotal en cada fila | 🟢 **Resuelto (Paridad 100%)** |
 
 ---
 
@@ -6508,6 +6509,34 @@ Para mantener el estándar de diseño industrial *Swiss Precision Slate* sin ens
   1. El input recibe y muestra la cadena `"0,125"` sin truncar a `"0,13"`.
   2. Al presionar `Enter` o cambiar el foco, `newEdits[i].quantity` permanece estrictamente como `0.125`.
   3. Al invocar el endpoint `/api/orders/email-drafts/approve`, la orden creada en `orders` y sus registros en `order_items` preservan `quantity: 0.125` y el peso total acumulado en `total_weight_kg` se persiste con fidelidad milimétrica.
+
+---
+
+## 34. Estandarización Omnicanal: Visualización de Precios Unitarios y Subtotales en Mesa de Trabajo Manual (SDD v1.9.99)
+
+### 34.1 Principio de Simetría Operativa
+El operador de FruFresco debe disponer de la misma visibilidad financiera y ergonómica independientemente de si la orden ingresa por ingesta automatizada de correos (`EmailDraftsModule.tsx`) o mediante la Mesa de Trabajo de carga manual de documentos (`src/app/admin/orders/create/page.tsx`).
+
+### 34.2 Píldora de Precio Unitario y Subtotal por Ítem
+En la columna `CANT. / PRECIO` de la tabla de staging (`stagedItems`):
+1. **Píldora Verde de Tarifa Unitaria:** Muestra el precio unitario resuelto del SKU (`formatMoney(resolvedUnitPrice)`), calculado a partir de:
+   - Contrato o Acuerdo Comercial del cliente (`contractPrices[p.id]`).
+   - Modelo de Precios activo (ej. Clientes B2B con IVA desagregado, Clientes Hogar o General Institucional).
+   - Precio base del catálogo de productos (`p.base_price`).
+2. **Badge de Alerta "SIN PRECIO":** Si el producto enlazado carece de tarifa en catálogo y contrato (`$0`), se despliega una píldora roja `SIN PRECIO` para prevenir pedidos con valor cero.
+3. **Tooltip de Subtotal Dinámico:** El atributo `title` de la píldora despliega en tiempo real: `Precio unitario: $X | Subtotal: $Y` calculando `resolvedUnitPrice * qtyNum`.
+4. **Telemetría Totalizadora en Footer:** El pie de la Mesa de Trabajo presenta el número de ítems auditados junto con el monto total estimado acumulado (`• $Total`).
+
+---
+
+#### Escenario 140: Visualización de Precio Unitario y Subtotal en Mesa de Trabajo de Pedidos Manuales (SDD v1.9.99)
+- **Given** un cliente seleccionado con acuerdos comerciales o modelo de precios asignado en `/admin/orders/create`.
+- **When** se cargan o digitan productos en la Mesa de Trabajo (staging gallery) y un ítem tiene un SKU asignado (ej. Aguacate SKU 211, Tarifa $11.990/Kg, Cantidad 20 Kg):
+- **Then**:
+  1. La cabecera de la tabla titula la columna como `CANT. / PRECIO`.
+  2. Junto al campo de entrada de cantidad se visualiza la unidad de medida (`Kg`) y, verticalmente alineada, una píldora verde estilizada con el valor unitario (`$11.990`).
+  3. Al posicionar el cursor sobre la píldora, el tooltip informa `Precio unitario: $11.990 | Subtotal: $239.800`.
+  4. En el pie de la Mesa de Trabajo, el resumen de control muestra `Items / Total Estimado: X productos • $Total Estimado`.
 
 
 

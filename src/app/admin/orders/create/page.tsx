@@ -6920,7 +6920,7 @@ function CreateOrderContent() {
                                                                 style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                             />
                                                         </th>
-                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '32%' }}>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '30%' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                 <span>NOMBRE EN DOCUMENTO</span>
                                                                 <button
@@ -6941,10 +6941,10 @@ function CreateOrderContent() {
                                                                 </button>
                                                             </div>
                                                         </th>
-                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
-                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '42%' }}>TU PRODUCTO (ID)</th>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '28%' }}>
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
-                                                                <span>CANT.</span>
+                                                                <span>CANT. / PRECIO</span>
                                                                 <div 
                                                                     style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
                                                                     onMouseEnter={() => setShowFormulaTooltip(true)}
@@ -7053,7 +7053,7 @@ function CreateOrderContent() {
                                                                         style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                                     />
                                                                 </td>
-                                                                <td style={{ padding: '0.8rem 1.25rem', width: '32%' }}>
+                                                                <td style={{ padding: '0.8rem 1.25rem', width: '30%' }}>
                                                                     <div 
                                                                         onClick={() => item.suggestedProduct && openModalForStagedItem(
                                                                             item.id, 
@@ -7160,7 +7160,7 @@ function CreateOrderContent() {
                                                                         )}
                                                                     </div>
                                                                 </td>
-                                                                <td style={{ padding: '0.45rem 0.85rem', position: 'relative', width: '45%' }}>
+                                                                <td style={{ padding: '0.45rem 0.85rem', position: 'relative', width: '42%' }}>
                                                                     <input 
                                                                         ref={el => { stagedProductInputRefs.current[idx] = el; }}
                                                                         type="text"
@@ -7464,8 +7464,8 @@ function CreateOrderContent() {
                                                                         );
                                                                     })()}
                                                                 </td>
-                                                                <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                                <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '28%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                                                         <input 
                                                                             type="text"
                                                                             id={`staged-qty-input-${idx}`}
@@ -7513,9 +7513,85 @@ function CreateOrderContent() {
                                                                                 backgroundColor: 'white'
                                                                             }}
                                                                         />
-                                                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '40px', textAlign: 'left' }}>
-                                                                            {item.suggestedProduct?.unit_of_measure || item.originalUnit || 'Kg'}
-                                                                        </span>
+
+                                                                        {/* Unit & Unit Price Display (Parity with EmailDraftsModule) */}
+                                                                        {(() => {
+                                                                            const matchedProd = item.suggestedProduct;
+                                                                            const resolvedUnitPrice = matchedProd 
+                                                                                ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null && contractPrices[matchedProd.id] > 0 
+                                                                                    ? contractPrices[matchedProd.id] 
+                                                                                    : (item.price || (clientType === 'B2B' && matchedProd.base_price ? Math.ceil((matchedProd.base_price / 1.19) / 50) * 50 : (matchedProd.base_price || 0))))
+                                                                                : (item.price || 0);
+                                                                            const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0') || 0;
+                                                                            const lineSubtotal = resolvedUnitPrice * qtyNum;
+
+                                                                            return (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '65px', maxWidth: '110px', overflow: 'hidden' }}>
+                                                                                    <span style={{ fontSize: '0.80rem', fontWeight: '800', color: '#334155', lineHeight: '1.1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                        {(() => {
+                                                                                            const rawUnit = (item.originalUnit || item.unit || '').trim();
+                                                                                            const rawLower = rawUnit.toLowerCase();
+                                                                                            const isGenericUnit = !rawUnit || rawLower === 'unidad' || rawLower === 'und' || rawLower === 'uds' || rawLower === 'unidades' || rawLower === 'u';
+                                                                                            if (matchedProd) {
+                                                                                                if (item.conversion_factor && item.conversion_factor !== 1) {
+                                                                                                    return item.originalUnit || item.unit || matchedProd.unit_of_measure || 'Kg';
+                                                                                                }
+                                                                                                if (isGenericUnit || matchedProd.unit_of_measure) {
+                                                                                                    return matchedProd.unit_of_measure || 'Kg';
+                                                                                                }
+                                                                                            }
+                                                                                            return item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg');
+                                                                                        })()}
+                                                                                    </span>
+                                                                                    {matchedProd ? (
+                                                                                        resolvedUnitPrice > 0 ? (
+                                                                                            <span 
+                                                                                                style={{ 
+                                                                                                    fontSize: '0.68rem', 
+                                                                                                    fontWeight: '800', 
+                                                                                                    color: '#15803D', 
+                                                                                                    backgroundColor: '#F0FDF4', 
+                                                                                                    border: '1px solid #BBF7D0',
+                                                                                                    padding: '1px 5px', 
+                                                                                                    borderRadius: '4px', 
+                                                                                                    marginTop: '2px', 
+                                                                                                    whiteSpace: 'nowrap', 
+                                                                                                    display: 'inline-flex', 
+                                                                                                    alignItems: 'center', 
+                                                                                                    gap: '2px',
+                                                                                                    cursor: 'default'
+                                                                                                }} 
+                                                                                                title={`Precio unitario: ${formatMoney(resolvedUnitPrice)} | Subtotal: ${formatMoney(lineSubtotal)}`}
+                                                                                            >
+                                                                                                {formatMoney(resolvedUnitPrice)}
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span 
+                                                                                                style={{ 
+                                                                                                    fontSize: '0.65rem', 
+                                                                                                    fontWeight: '800', 
+                                                                                                    color: '#DC2626', 
+                                                                                                    backgroundColor: '#FEF2F2', 
+                                                                                                    border: '1px solid #FECACA', 
+                                                                                                    padding: '1px 4px', 
+                                                                                                    borderRadius: '4px', 
+                                                                                                    marginTop: '2px', 
+                                                                                                    whiteSpace: 'nowrap', 
+                                                                                                    cursor: 'default'
+                                                                                                }} 
+                                                                                                title="Este producto no tiene precio asignado en catálogo ni acuerdo contractual ($0)"
+                                                                                            >
+                                                                                                SIN PRECIO
+                                                                                            </span>
+                                                                                        )
+                                                                                    ) : (
+                                                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '600', marginTop: '2px' }}>
+                                                                                            -
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 </td>
                                                             </tr>
@@ -7588,8 +7664,26 @@ function CreateOrderContent() {
                                         </button>
                                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                                             <div style={{ textAlign: 'right', marginRight: '1rem' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Items Auditados</div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B' }}>{stagedItems.length} productos</div>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Items / Total Estimado</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                                                    <span>{stagedItems.length} productos</span>
+                                                    {(() => {
+                                                        const stagedTotalEstimated = stagedItems.reduce((acc, it) => {
+                                                            const p = it.suggestedProduct;
+                                                            if (!p) return acc;
+                                                            const price = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
+                                                                ? contractPrices[p.id]
+                                                                : (it.price || (clientType === 'B2B' && p.base_price ? Math.ceil((p.base_price / 1.19) / 50) * 50 : (p.base_price || 0)));
+                                                            const q = parseFloat(it.quantity?.toString().replace(',', '.') || '0') || 0;
+                                                            return acc + (price * q);
+                                                        }, 0);
+                                                        return stagedTotalEstimated > 0 ? (
+                                                            <span style={{ color: '#059669', fontSize: '0.92em', backgroundColor: '#ECFDF5', padding: '1px 8px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                                                                {formatMoney(stagedTotalEstimated)}
+                                                            </span>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
                                             </div>
                                             {stagedItems.some(i => i.deliverySchedule) && (
                                                 <button 
