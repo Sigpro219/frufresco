@@ -18,6 +18,7 @@ import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
+import { useAuth } from '@/lib/authContext';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -1476,7 +1477,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const selectedAttName = attachments[defaultIndex]?.name || metadata.attachmentName || '';
         const isSpreadsheet = isSpreadsheetFile(selectedAttName);
         const isPdf = selectedAttName.toLowerCase().endsWith('.pdf');
-        const emailBody = (selectedDraft.email_body || metadata.rawText || '').trim();
+        const emailBody = (selectedDraft.email_body || (metadata as any).rawText || '').trim();
         const isForwardOrBrief = emailBody.length < 80 || emailBody.includes('Gráfico / Firma inline no disponible') || emailBody.includes('Consulta la pestaña Adjunto');
 
         if (isSpreadsheet || isPdf || isForwardOrBrief) {

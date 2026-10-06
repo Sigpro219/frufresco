@@ -82,6 +82,7 @@ export interface ParsedSpreadsheetRow {
   nameVal: string;
   unitVal: string;
   pluVal: string;
+  noteVal?: string;
   cells: string[];
 }
 
