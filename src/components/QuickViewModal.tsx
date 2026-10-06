@@ -499,7 +499,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
 
                     const currentQty = Number(existingInCart.quantity || 0);
                     const addedNum = Number(quantity) || 0;
-                    const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
+                    const newTotal = Math.round((currentQty + addedNum) * 1000) / 1000;
                     const productName = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name);
                     const unitLabel = existingInCart.unit || activeUnit;
 
