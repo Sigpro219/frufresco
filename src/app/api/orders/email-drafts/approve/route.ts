@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     const subtotal = Math.round((totalGross - taxes) * 100) / 100;
     const shippingFee = 0;
     const totalAmount = totalGross + shippingFee;
-    const roundedWeight = Math.round(totalWeightKg * 100) / 100;
+    const roundedWeight = Math.round(totalWeightKg * 1000) / 1000;
 
     // 2. Insert order header into 'orders' table
     const orderData: any = {
