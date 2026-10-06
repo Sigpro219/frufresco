@@ -1311,9 +1311,10 @@ const ClientSearchCombobox = React.memo(function ClientSearchCombobox({
 
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
+  topOffset?: number;
 }
 
-export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleProps = {}) {
+export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDraftsModuleProps = {}) {
   const { user } = useAuth();
   const [drafts, setDrafts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -1323,6 +1324,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const matchCacheRef = useRef<Record<string, any>>({});
   const searchQueryCacheRef = useRef<Map<string, any[]>>(new Map());
+
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const [bannerHeight, setBannerHeight] = useState(85);
+
+  useEffect(() => {
+    if (!bannerRef.current) return;
+    const updateH = () => {
+      if (bannerRef.current) {
+        setBannerHeight(bannerRef.current.offsetHeight);
+      }
+    };
+    updateH();
+    const ro = new ResizeObserver(updateH);
+    ro.observe(bannerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const [showMapModal, setShowMapModal] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
@@ -6257,41 +6274,45 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const { activeItems, subtotal, totalTax, totalPayable, hasUnmatchedItems } = activeEditableTotals;
   const totalValue = totalPayable;
+  const theadTop = `${(topOffset || 133) + bannerHeight}px`;
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
-      {/* Sticky Banner: Pedidos por Procesar + Barra de Filtros (Fijado debajo del Navbar a top: 85px) */}
-      <div style={{
-        position: 'sticky',
-        top: '85px',
-        zIndex: 40,
-        backgroundColor: '#FFFFFF',
-        padding: '1rem 1.25rem',
-        borderRadius: '16px',
-        border: '1px solid #E2E8F0',
-        boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.06)',
-        marginBottom: '1.25rem'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+      {/* Sticky Banner: Pedidos por Procesar + Barra de Filtros (Fijado magnéticamente debajo del dock de tabs) */}
+      <div 
+        ref={bannerRef}
+        style={{
+          position: 'sticky',
+          top: topOffset ? `${topOffset}px` : '133px',
+          zIndex: 40,
+          backgroundColor: '#FFFFFF',
+          padding: '0.65rem 1rem',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.06)',
+          marginBottom: '0.5rem'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Mail size={20} style={{ color: THEME.colors.primary }} /> Pedidos por Procesar (Email Inbound)
+          <h1 style={{ fontSize: '1.05rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Mail size={18} style={{ color: THEME.colors.primary }} /> Pedidos por Procesar (Email Inbound)
           </h1>
         </div>
         <button 
           onClick={() => fetchDrafts()}
           title="Alt+A"
           style={{
-            padding: '0.5rem 1rem',
+            padding: '0.35rem 0.8rem',
             backgroundColor: 'white',
             border: `1px solid ${THEME.colors.border}`,
             borderRadius: THEME.radius.md,
             fontWeight: '600',
             cursor: 'pointer',
-            fontSize: '0.85rem'
+            fontSize: '0.78rem'
           }}
         >
-          Actualizar Bandeja <span style={{ opacity: 0.4, fontSize: '0.75rem', marginLeft: '0.3rem' }}>(Alt+A)</span>
+          Actualizar Bandeja <span style={{ opacity: 0.4, fontSize: '0.72rem', marginLeft: '0.3rem' }}>(Alt+A)</span>
         </button>
       </div>
 
@@ -6353,7 +6374,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       )}
 
       {/* Filter Bar */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', minHeight: '42px' }}>
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0', flexWrap: 'wrap', alignItems: 'center', minHeight: '38px' }}>
         {selectedDraftIds.length > 0 ? (
           <div style={{
             flex: 1,
@@ -6907,11 +6928,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       ) : viewMode === 'list' ? (
         <>
-          <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative', overflow: 'visible' }}>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '40px', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '40px', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>
                     <input
                       type="checkbox"
                       checked={sortedFilteredDrafts.length > 0 && selectedDraftIds.length === sortedFilteredDrafts.length}
@@ -6925,13 +6946,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
                     />
                   </th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '38%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ASUNTO / FECHA & REMITENTE</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '20%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>CLIENTE / CANAL</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '17%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '9%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ITEMS / PESO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '10%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>VALOR</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '6%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ESTADO</th>
-                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.75rem 0.5rem', width: '3%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}></th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '38%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ASUNTO / FECHA & REMITENTE</th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '20%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>CLIENTE / CANAL</th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '17%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '9%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ITEMS / PESO</th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '10%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>VALOR</th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '6%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ESTADO</th>
+                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.5rem', width: '3%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}></th>
                 </tr>
               </thead>
             <tbody>

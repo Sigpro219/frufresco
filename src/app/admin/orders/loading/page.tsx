@@ -2743,8 +2743,8 @@ function OrderLoadingContent() {
                         top: '85px',
                         zIndex: 45,
                         backgroundColor: '#F8FAFC',
-                        padding: '0.5rem 0.8rem 0.6rem 0.8rem',
-                        marginBottom: '0.5rem',
+                        padding: activeTab === 'orders' ? '0.5rem 0.8rem 0.6rem 0.8rem' : '0.35rem 0.8rem 0.35rem 0.8rem',
+                        marginBottom: activeTab === 'orders' ? '0.5rem' : '0',
                         borderBottom: '1px solid #E2E8F0',
                         boxShadow: '0 4px 8px rgba(0, 0, 0, 0.04)'
                     }}
@@ -2758,7 +2758,7 @@ function OrderLoadingContent() {
                         backgroundColor: '#E2E8F0',
                         padding: '4px',
                         borderRadius: '10px',
-                        marginBottom: activeTab === 'orders' ? '0.6rem' : '0.4rem', 
+                        marginBottom: activeTab === 'orders' ? '0.6rem' : '0', 
                         border: '1px solid #CBD5E1'
                     }}>
                         <button 
@@ -7121,11 +7121,11 @@ function OrderLoadingContent() {
                 )}
                     </>
                 ) : activeTab === 'emails' ? (
-                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
-                        <EmailDraftsModule onDraftsChange={(count) => setPendingEmailCount(count)} />
+                    <div style={{ marginTop: '0.35rem' }}>
+                        <EmailDraftsModule onDraftsChange={(count) => setPendingEmailCount(count)} topOffset={85 + dockHeight} />
                     </div>
                 ) : (
-                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
+                    <div style={{ marginTop: '0.35rem' }}>
                         <EmailOutboxModule onOutboxChange={(count) => setSentEmailCount(count)} />
                     </div>
                 )}
