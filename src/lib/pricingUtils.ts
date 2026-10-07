@@ -219,13 +219,8 @@ export async function recalculateAndSyncProductPrices(
             if (pmpErr) console.error('PMP Upsert error:', pmpErr);
         }
 
-        if (hogarFinalPrice && hogarFinalPrice > 0) {
-            const { error: pUpErr } = await supabaseClient
-                .from('products')
-                .update({ base_price: hogarFinalPrice })
-                .eq('id', productId);
-            if (pUpErr) console.error('Product base_price update error:', pUpErr);
-        }
+        // SPEC.md §7.2: Se suprime la actualización del campo legado products.base_price.
+        // La fuente de verdad canónica para Clientes Hogar y todos los modelos reside exclusivamente en pricing_model_prices.
 
         return { success: true, hogarPrice: hogarFinalPrice, updatesCount: pmpUpdates.length };
     } catch (err: any) {
@@ -408,13 +403,7 @@ export async function batchRecalculateAndSyncPrices(
             await supabaseClient.from('pricing_model_prices').upsert(chunk, { onConflict: 'model_id,product_id' });
         }
 
-        // Update products.base_price in parallel chunks
-        for (let i = 0; i < productUpdates.length; i += 25) {
-            const chunk = productUpdates.slice(i, i + 25);
-            await Promise.all(chunk.map((pu) =>
-                supabaseClient.from('products').update({ base_price: pu.base_price }).eq('id', pu.id)
-            ));
-        }
+        // SPEC.md §7.2: Supresión total de escritura a products.base_price en sincronización masiva.
 
         return { success: true, processed };
     } catch (err: any) {

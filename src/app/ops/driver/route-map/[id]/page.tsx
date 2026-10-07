@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
 import ActivityLog from '@/components/ActivityLog';
-import { ArrowLeft, MapPin, Check, X, Map, CheckCircle2, Navigation } from 'lucide-react';
+import { ArrowLeft, MapPin, Check, X, Map, CheckCircle2, Navigation, Smartphone } from 'lucide-react';
+import { useMobileGpsTracker } from '@/components/telemetry/MobileGpsTracker';
 
 interface RouteStop {
     id: string;
@@ -26,6 +27,12 @@ export default function RouteExecutionPage() {
     const [loading, setLoading] = useState(true);
     const [plate, setPlate] = useState<string>('');
     const isMounted = useRef(true);
+
+    // Baliza GPS Móvil: Transmite telemetría continua para camiones alquilados o sin hardware Apps-360
+    const { isTracking, queueSize } = useMobileGpsTracker({
+        plate,
+        enabled: Boolean(plate && plate.trim().length > 0)
+    });
 
     useEffect(() => {
         isMounted.current = true;
@@ -140,9 +147,18 @@ export default function RouteExecutionPage() {
                     >
                         <ArrowLeft size={18} />
                     </button>
-                    <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, letterSpacing: '-0.3px' }}>
-                        Ruta en <span style={{ color: '#059669' }}>Curso</span>
-                    </h1>
+                    <div>
+                        <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, letterSpacing: '-0.3px' }}>
+                            Ruta en <span style={{ color: '#059669' }}>Curso</span>
+                        </h1>
+                        {plate && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px', fontSize: '0.72rem', color: isTracking ? '#34D399' : '#94A3B8' }}>
+                                <Smartphone size={12} />
+                                <span>GPS {plate} • {isTracking ? 'Baliza en Vivo' : 'Inactiva'}</span>
+                                {queueSize > 0 && <span style={{ color: '#F59E0B' }}>({queueSize} en cola)</span>}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div style={{ 
                     backgroundColor: 'rgba(5, 150, 105, 0.08)', 

@@ -4018,8 +4018,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }
 
     if (!foundBase) {
-      const prod = products.find(p => p.id === productId);
-      basePrice = prod?.base_price || 0;
+      const genInstModel = pricingModels.find(m => m.name === 'General Institucional');
+      if (genInstModel && allModelPrices[genInstModel.id]?.[productId] !== undefined) {
+        basePrice = allModelPrices[genInstModel.id][productId];
+      } else {
+        basePrice = 0;
+      }
     }
 
     // SPEC.md Secc. 7.2: Inmunidad Contractual - Campañas aplican a catálogo/modelos, NO a SKUs congelados en Acuerdo Comercial
@@ -4164,7 +4168,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             return {
               productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
               quantity: itm.quantity,
-              unitPrice: mProd ? mProd.base_price : 0,
+              unitPrice: mProd ? (contractPrices[mProd.id] || 0) : 0,
               unitOfMeasure: itm.unit || (mProd ? mProd.unit_of_measure : 'und')
             };
           });
@@ -5893,7 +5897,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
             const isContractPriceDefined = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null;
-            const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : (Number(prod.base_price) || 0);
+            const resolvedPrice = isContractPriceDefined ? Number(contractPrices[prod.id]) : 0;
             const isExplicitContractZero = isContractPriceDefined && resolvedPrice === 0;
 
             if (isExplicitContractZero) {
@@ -6300,7 +6304,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       if (!item.matched_product_id) unmatched = true;
       const prod = products.find(p => p.id === item.matched_product_id);
       const qty = Number(item.quantity) || 0;
-      const price = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0)) : 0;
+      const price = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : 0) : 0;
       const lineSub = qty * price;
       const iva = prod?.iva_rate ? (Number(prod.iva_rate) / 100) : 0;
       sub += lineSub;

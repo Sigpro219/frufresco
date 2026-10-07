@@ -733,7 +733,8 @@ export default function CommercialAgreementsModule() {
             if (data && data.length > 0) {
                 data.forEach(p => {
                     // Use official Costo Base FruFresco from commercial_cost_matrix or purchases fallback
-                    const officialCost = costMatrixMap[p.id] || purchaseFallbackMap[p.id] || p.base_price || 0;
+                    const officialCost = costMatrixMap[p.id] || purchaseFallbackMap[p.id] || 0;
+                    p.cost_basis = officialCost;
                     p.base_price = officialCost;
                     productMap[p.id] = p;
                     if (p.accounting_id) {
@@ -1119,7 +1120,7 @@ export default function CommercialAgreementsModule() {
                 unit: p.unit_of_measure || 'Kg',
                 unit_price: 0,
                 matched_product: p,
-                cost_basis: Number(p.base_price) || 0,
+                cost_basis: (productMap[p.id]?.cost_basis !== undefined ? Number(productMap[p.id].cost_basis) : 0),
                 margin_percent: 0,
                 iva_rate: Number(p.iva_rate) || 0,
                 confidence: 'high' as const,
@@ -1216,7 +1217,7 @@ export default function CommercialAgreementsModule() {
                         matchedCount++;
                         const isInactive = dbProduct.is_active === false;
                         if (isInactive) inactiveCount++;
-                        const costBasis = dbProduct.base_price || 0;
+                        const costBasis = dbProduct.cost_basis || 0;
                         const margin = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
                         const ivaRate = dbProduct.iva_rate || 0;
                         totalMargin += margin;
@@ -1980,7 +1981,7 @@ export default function CommercialAgreementsModule() {
 
                 const enriched = data.map(p => ({
                     ...p,
-                    cost_basis: costMap[p.id] || Number(p.base_price) || 0
+                    cost_basis: costMap[p.id] || 0
                 }));
                 setAddProductResults(enriched);
             } else {
@@ -1999,7 +2000,7 @@ export default function CommercialAgreementsModule() {
         if (existing) {
             setNewProductPrice(String(existing.unit_price || ''));
         } else {
-            const suggested = Number(product.base_price) || Number(product.cost_basis) || '';
+            const suggested = Number(product.cost_basis) || '';
             setNewProductPrice(suggested ? String(suggested) : '');
         }
     };
@@ -2014,7 +2015,7 @@ export default function CommercialAgreementsModule() {
 
         setIsSavingNewProduct(true);
         try {
-            const costBasis = Number(selectedAddProduct.cost_basis) || Number(selectedAddProduct.base_price) || 0;
+            const costBasis = Number(selectedAddProduct.cost_basis) || 0;
             const marginPercent = priceNum > 0 ? Math.round(((priceNum - costBasis) / priceNum) * 10000) / 100 : 0;
             const ivaRate = Number(selectedAddProduct.iva_rate) || 0;
             const ivaAmount = priceNum * (ivaRate / 100);
@@ -2326,7 +2327,7 @@ export default function CommercialAgreementsModule() {
     const handleAssignProductToRow = (rowIdx: number, product: any) => {
         if (!excelPreviewData) return;
         const currentItem = excelPreviewData.items[rowIdx];
-        const costBasis = product.base_price || 0;
+        const costBasis = product.cost_basis || 0;
         const margin = currentItem.unit_price > 0
             ? Math.round(((currentItem.unit_price - costBasis) / currentItem.unit_price) * 10000) / 100
             : 0;
@@ -2454,7 +2455,7 @@ export default function CommercialAgreementsModule() {
                     accounting_id: nextAccId,
                     category: quickProductCategory,
                     unit_of_measure: quickProductUnit || 'Kg',
-                    base_price: rawCost,
+                    base_price: 0,
                     iva_rate: quickProductIvaRate,
                     is_active: true,
                     show_on_web: true,
@@ -2473,6 +2474,7 @@ export default function CommercialAgreementsModule() {
                 }, { onConflict: 'product_id' } as any).catch((e: any) => console.warn('Cost matrix notice:', e));
             }
 
+            newProd.cost_basis = rawCost;
             setCatalogProducts(prev => [newProd, ...prev]);
 
             if (quickProductRowIdx !== null) {
@@ -2545,7 +2547,7 @@ export default function CommercialAgreementsModule() {
                     if (dbProduct.is_active === false || item.is_inactive) {
                         inactiveProducts.push(dbProduct);
                     }
-                    const basePrice = item.cost_basis || dbProduct.base_price || 0;
+                    const basePrice = item.cost_basis || dbProduct.cost_basis || 0;
                     const negotiatedPrice = item.unit_price;
                     const marginPercent = item.margin_percent !== undefined ? item.margin_percent : (negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0);
                     
@@ -2831,7 +2833,7 @@ export default function CommercialAgreementsModule() {
                         matchCount++;
                         const isInactive = matched.is_active === false;
                         if (isInactive) inactiveCount++;
-                        const costBasis = matched.base_price || 0;
+                        const costBasis = matched.cost_basis || 0;
                         const marginPercent = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
                         totalMarginSum += marginPercent;
                         totalSubtotal += item.unit_price;
@@ -2975,7 +2977,7 @@ export default function CommercialAgreementsModule() {
                     const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
                     if (dbProduct) {
                         matchCount++;
-                        const basePrice = dbProduct.base_price || 0;
+                        const basePrice = dbProduct.cost_basis || 0;
                         const negotiatedPrice = item.unit_price;
                         const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
                         
@@ -4918,7 +4920,7 @@ export default function CommercialAgreementsModule() {
                                                             {p.name}
                                                         </div>
                                                         <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                                                            Cód: {p.accounting_id || 'S/C'} • U.M: {p.unit_of_measure || 'Kg'} • Costo Base: ${formatNumber(p.cost_basis || p.base_price || 0)}
+                                                            Cód: {p.accounting_id || 'S/C'} • U.M: {p.unit_of_measure || 'Kg'} • Costo Base: ${formatNumber(p.cost_basis || 0)}
                                                         </div>
                                                     </div>
                                                     {alreadyInAgreement && (
@@ -4970,7 +4972,7 @@ export default function CommercialAgreementsModule() {
                                         <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                                             <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>Costo Base Referencia</div>
                                             <div style={{ fontSize: '1rem', fontWeight: '800', color: '#334155', marginTop: '2px' }}>
-                                                ${formatNumber(selectedAddProduct.cost_basis || selectedAddProduct.base_price || 0)}
+                                                ${formatNumber(selectedAddProduct.cost_basis || 0)}
                                             </div>
                                         </div>
 
@@ -5002,7 +5004,7 @@ export default function CommercialAgreementsModule() {
 
                                     {/* Margin Live Indicator */}
                                     {(() => {
-                                        const cost = Number(selectedAddProduct.cost_basis) || Number(selectedAddProduct.base_price) || 0;
+                                        const cost = Number(selectedAddProduct.cost_basis) || 0;
                                         const price = Number(newProductPrice) || 0;
                                         if (price <= 0) return null;
                                         const margin = Math.round(((price - cost) / price) * 1000) / 10;
@@ -7710,7 +7712,7 @@ export default function CommercialAgreementsModule() {
                                                                                                                 </span>
                                                                                                             </div>
                                                                                                             <span style={{ color: '#0D7A57', fontWeight: 'bold', fontSize: '0.72rem' }}>
-                                                                                                                Base: {formatMoney(cand.base_price || 0)}
+                                                                                                                Base: {formatMoney(cand.cost_basis || 0)}
                                                                                                             </span>
                                                                                                         </div>
                                                                                                     );

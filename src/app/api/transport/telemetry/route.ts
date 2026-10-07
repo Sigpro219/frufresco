@@ -79,10 +79,37 @@ export async function POST(req: NextRequest) {
                 throw updateErr;
             }
 
+            let targetVehicleId: string | null = (updatedVehicles && updatedVehicles.length > 0) ? updatedVehicles[0].id : null;
+
+            // Auto-aprovisionamiento para camión alquilado o tercerizado
+            if (!targetVehicleId) {
+                const { data: insertedVehicle, error: insErr } = await supabaseAdmin
+                    .from('fleet_vehicles')
+                    .insert({
+                        plate,
+                        brand: 'Tercerizado / Alquilado',
+                        vehicle_type: 'Alquilado',
+                        status: 'on_route',
+                        last_latitude: ping.latitude,
+                        last_longitude: ping.longitude,
+                        speed: ping.speed,
+                        heading: ping.heading,
+                        ignition_status: ping.ignition_status,
+                        last_gps_sync: now,
+                        tracking_source: ping.tracking_source
+                    })
+                    .select('id, plate')
+                    .maybeSingle();
+
+                if (!insErr && insertedVehicle) {
+                    targetVehicleId = insertedVehicle.id;
+                }
+            }
+
             // Historial miga de pan no-bloqueante
-            if (updatedVehicles && updatedVehicles.length > 0) {
+            if (targetVehicleId) {
                 supabaseAdmin.from('vehicle_gps_logs').insert({
-                    vehicle_id: updatedVehicles[0].id,
+                    vehicle_id: targetVehicleId,
                     plate,
                     latitude: ping.latitude,
                     longitude: ping.longitude,

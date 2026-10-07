@@ -526,9 +526,7 @@ function CreateOrderContent() {
                 const p = item.product;
                 const rePrice = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
                     ? contractPrices[p.id]
-                    : (clientType === 'B2B' && p.base_price
-                        ? Math.ceil((p.base_price / 1.19) / 50) * 50
-                        : (p.base_price || 0));
+                    : 0;
                 return {
                     ...item,
                     price: rePrice
@@ -1561,7 +1559,7 @@ function CreateOrderContent() {
             setCart(prev => prev.map(item => {
                 const resolvedPrice = (contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null)
                     ? contractPrices[item.product.id]
-                    : (item.product.base_price || 0);
+                    : 0;
                 return {
                     ...item,
                     price: resolvedPrice
@@ -1880,7 +1878,7 @@ function CreateOrderContent() {
                             originalQty: qtyNum,
                             originalUnit: baseUnit,
                             conversion_factor: 1,
-                            price: isReplacement ? 0 : (matchedProd.base_price || 0),
+                            price: isReplacement ? 0 : (contractPrices[matchedProd.id] || 0),
                             observations: isReplacement ? `Reposición por PQR #${paramPqrId ? paramPqrId.substring(0, 8) : ''}` : ''
                         }];
                     });
@@ -2044,9 +2042,7 @@ function CreateOrderContent() {
             ? 0
             : ((contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
                 ? contractPrices[product.id]
-                : (clientType === 'B2B' && product.base_price
-                    ? Math.ceil((product.base_price / 1.19) / 50) * 50
-                    : (product.base_price || 0)));
+                : 0);
 
         const defaultObservations = orderNature === 'replacement'
             ? (parentOrderFriendlyId ? `Reposición de garantía (Ampara #${parentOrderFriendlyId})` : 'Reposición de garantía ($0 COP)')
@@ -2158,7 +2154,7 @@ function CreateOrderContent() {
 
                 const resolvedUnit = item.unit || prod.unit_of_measure || 'Kg';
                 // For B2C existing clients, item.price comes directly with today's B2C model price from API
-                const resolvedPrice = item.price > 0 ? item.price : (contractPrices[prod.id] || prod.base_price || 0);
+                const resolvedPrice = item.price > 0 ? item.price : (contractPrices[prod.id] || 0);
 
                 itemsToInject.push({
                     product: prod,
@@ -2855,7 +2851,7 @@ function CreateOrderContent() {
         if (orderNature === 'replacement') return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-            const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
+            const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
             return acc + (unitPrice * qtyNum);
         }, 0);
     };
@@ -2885,7 +2881,7 @@ function CreateOrderContent() {
         if (orderNature === 'replacement') return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-            const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
+            const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
             const rate = item.product.iva_rate !== null && item.product.iva_rate !== undefined ? Number(item.product.iva_rate) : 19;
             const itemTotal = unitPrice * qtyNum;
             return acc + (itemTotal * (rate / (100 + rate)));
@@ -3897,7 +3893,7 @@ function CreateOrderContent() {
                 const prodId = prod.id;
                 const unitPrice = (clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                     ? contractPrices[prodId]
-                    : (item.price || prod.base_price || 0);
+                    : (item.price || (prodId && contractPrices[prodId]) || 0);
 
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
                 const itemTotal = unitPrice * qtyNum;
@@ -4060,12 +4056,16 @@ function CreateOrderContent() {
             const customerEmail = clientDetails?.email || '';
             const customerName = clientDetails?.company_name || clientDetails?.contact_name || 'Cliente';
             if (customerEmail) {
-                const formattedItems = stagedItems.map(item => ({
-                    name: item.suggestedProduct?.name || item.originalName,
-                    quantity: item.quantity,
-                    unit_price: item.price || item.suggestedProduct?.base_price || 0,
-                    total: (item.quantity || 1) * (item.price || item.suggestedProduct?.base_price || 0)
-                }));
+                const formattedItems = stagedItems.map(item => {
+                    const prodId = item.suggestedProduct?.id;
+                    const uPrice = item.price || (prodId && contractPrices[prodId]) || 0;
+                    return {
+                        name: item.suggestedProduct?.name || item.originalName,
+                        quantity: item.quantity,
+                        unit_price: uPrice,
+                        total: (item.quantity || 1) * uPrice
+                    };
+                });
                 fetch('/api/orders/send-confirmation', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -4183,12 +4183,12 @@ function CreateOrderContent() {
                     const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
                     const prodId = item.suggestedProduct?.id;
 
-                    // En Hogar (B2C) aplican precios minoristas (base_price o precio del documento); en B2B aplican precios contractuales
+                    // En Hogar (B2C) aplican precios de lista minorista; en B2B aplican precios contractuales / General Institucional
                     const resolvedPrice = clientType === 'B2C'
-                        ? (item.price || item.suggestedProduct?.base_price || 1000)
+                        ? (item.price || (prodId && contractPrices[prodId]) || 0)
                         : ((prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                             ? contractPrices[prodId]
-                            : (item.price || item.suggestedProduct?.base_price || 1000));
+                            : (item.price || (prodId && contractPrices[prodId]) || 0));
 
                     return {
                         product: item.suggestedProduct,
@@ -4348,7 +4348,7 @@ function CreateOrderContent() {
                     const prodId = item.suggestedProduct.id;
                     const unitPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
                         ? contractPrices[prodId]
-                        : (item.price || item.suggestedProduct.base_price || 1000);
+                        : (item.price || (prodId && contractPrices[prodId]) || 0);
 
                     const qty = item.quantity;
                     const itemSubtotal = unitPrice * qty;
@@ -4874,7 +4874,7 @@ function CreateOrderContent() {
 
             const itemsData = cart.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                const unitPrice = orderNature === 'replacement' ? 0 : (item.price !== undefined && item.price !== null ? item.price : item.product.base_price);
+                const unitPrice = orderNature === 'replacement' ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -4929,7 +4929,7 @@ function CreateOrderContent() {
                 console.log(`[Outbound Mail] Enqueueing confirmation email to ${customerEmail}`);
                 const formattedItems = cart.map(item => {
                     const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                    const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product.base_price || 0);
+                    const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0);
                     return {
                         name: item.product.name + (item.variant_label ? ` (${item.variant_label})` : ''),
                         quantity: qtyNum,
@@ -7849,7 +7849,7 @@ function CreateOrderContent() {
                                                                                     const isScarcityLocked = Boolean(scarcityLockedMap[p.id]);
                                                                                     const resolvedPrice = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
                                                                                         ? contractPrices[p.id]
-                                                                                        : (p.base_price || 0);
+                                                                                        : 0;
 
                                                                                     return (
                                                                                         <div
@@ -8048,7 +8048,7 @@ function CreateOrderContent() {
                                                                             const resolvedUnitPrice = matchedProd 
                                                                                 ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null && contractPrices[matchedProd.id] > 0 
                                                                                     ? contractPrices[matchedProd.id] 
-                                                                                    : (item.price || (clientType === 'B2B' && matchedProd.base_price ? Math.ceil((matchedProd.base_price / 1.19) / 50) * 50 : (matchedProd.base_price || 0))))
+                                                                                    : (item.price || 0))
                                                                                 : (item.price || 0);
                                                                             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0') || 0;
                                                                             const lineSubtotal = resolvedUnitPrice * qtyNum;
@@ -8201,7 +8201,7 @@ function CreateOrderContent() {
                                                             if (!p) return acc;
                                                             const price = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
                                                                 ? contractPrices[p.id]
-                                                                : (it.price || (clientType === 'B2B' && p.base_price ? Math.ceil((p.base_price / 1.19) / 50) * 50 : (p.base_price || 0)));
+                                                                : (it.price || 0);
                                                             const q = parseFloat(it.quantity?.toString().replace(',', '.') || '0') || 0;
                                                             return acc + (price * q);
                                                         }, 0);
@@ -8642,9 +8642,7 @@ function CreateOrderContent() {
                                                 {(() => {
                                                     const resolvedDisplayPrice = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
                                                         ? contractPrices[p.id]
-                                                        : (clientType === 'B2B' && p.base_price
-                                                            ? Math.ceil((p.base_price / 1.19) / 50) * 50
-                                                            : (p.base_price || 0));
+                                                        : 0;
                                                     const isZero = !resolvedDisplayPrice || resolvedDisplayPrice <= 0;
 
                                                     return (
@@ -8868,7 +8866,7 @@ function CreateOrderContent() {
                                                                         </span>
                                                                     );
                                                                 }
-                                                            })() : (item.price && item.price > 0) || (item.product?.base_price && item.product.base_price > 0) ? (
+                                                            })() : (item.price && item.price > 0) ? (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#FFFBEB' : '#F1F5F9') : '#FFF7ED', color: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#B45309' : '#475569') : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', border: `1px solid ${isContractExpired ? '#FDE68A' : '#E2E8F0'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                     {(clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? <><AlertTriangle size={11} strokeWidth={2} /> General Institucional (Acuerdo Vencido)</> : <><Building2 size={11} strokeWidth={2} /> General Institucional</>) : <><Tag size={11} strokeWidth={2} /> Tarifa B2C</>}
                                                                 </span>
@@ -11697,7 +11695,7 @@ function CreateOrderContent() {
                     return items.reduce((acc, it) => {
                         const price = (it.suggestedProduct?.id && contractPrices[it.suggestedProduct.id]) 
                             ? contractPrices[it.suggestedProduct.id] 
-                            : (it.price || it.suggestedProduct?.base_price || 1000);
+                            : (it.price || 0);
                         return acc + (price * it.quantity);
                     }, 0);
                 };

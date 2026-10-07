@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { z } from 'zod';
 import { 
     extractCleanPlate, 
     parseTelemetryDate, 
@@ -116,6 +117,90 @@ describe('🛰️ Hybrid Telemetry & GPS Ingestion Engine', () => {
             const result = normalizeApps360Device(stoppedDevice);
             assert.ok(result !== null);
             assert.strictEqual(result.ignition_status, false);
+        });
+    });
+
+    describe('4. Camiones Alquilados y Baliza Móvil PWA (Mobile App Tracker)', () => {
+        const PingItemSchema = z.object({
+            plate: z.string().min(3).max(10),
+            latitude: z.number().min(-90).max(90),
+            longitude: z.number().min(-180).max(180),
+            speed: z.number().min(0).max(250).optional().default(0),
+            heading: z.number().min(0).max(360).optional().default(0),
+            accuracy: z.number().optional(),
+            battery_level: z.number().min(0).max(100).optional(),
+            ignition_status: z.boolean().optional().default(true),
+            tracking_source: z.enum(['hardware_gps', 'mobile_app']).optional().default('mobile_app'),
+            timestamp: z.string().optional()
+        });
+
+        const TelemetryPayloadSchema = z.union([
+            PingItemSchema,
+            z.array(PingItemSchema).min(1)
+        ]);
+
+        it('debe validar y etiquetar exitosamente un ping emitido desde celular de conductor de camión alquilado', () => {
+            const mobilePing = {
+                plate: 'ALQ-777',
+                latitude: 4.6725,
+                longitude: -74.0558,
+                speed: 42,
+                heading: 90,
+                accuracy: 12,
+                battery_level: 84,
+                tracking_source: 'mobile_app' as const,
+                timestamp: new Date().toISOString()
+            };
+
+            const parsed = PingItemSchema.safeParse(mobilePing);
+            assert.strictEqual(parsed.success, true);
+            if (parsed.success) {
+                assert.strictEqual(parsed.data.plate, 'ALQ-777');
+                assert.strictEqual(parsed.data.tracking_source, 'mobile_app');
+                assert.strictEqual(parsed.data.battery_level, 84);
+                assert.strictEqual(parsed.data.accuracy, 12);
+            }
+        });
+
+        it('debe admitir ráfagas de pings acumulados offline cuando el camión sale de zona muerta sin señal', () => {
+            const burstQueue = [
+                { plate: 'ALQ-777', latitude: 4.670, longitude: -74.050, speed: 30, tracking_source: 'mobile_app' as const },
+                { plate: 'ALQ-777', latitude: 4.672, longitude: -74.052, speed: 35, tracking_source: 'mobile_app' as const },
+                { plate: 'ALQ-777', latitude: 4.675, longitude: -74.055, speed: 40, tracking_source: 'mobile_app' as const }
+            ];
+
+            const parsed = TelemetryPayloadSchema.safeParse(burstQueue);
+            assert.strictEqual(parsed.success, true);
+            if (parsed.success && Array.isArray(parsed.data)) {
+                assert.strictEqual(parsed.data.length, 3);
+                assert.strictEqual(parsed.data[2].speed, 40);
+            }
+        });
+
+        it('debe rechazar niveles de batería inválidos menores a 0 o superiores a 100', () => {
+            const corruptPing = {
+                plate: 'ALQ-777',
+                latitude: 4.670,
+                longitude: -74.050,
+                battery_level: 150 // Imposible > 100%
+            };
+
+            const parsed = PingItemSchema.safeParse(corruptPing);
+            assert.strictEqual(parsed.success, false);
+        });
+
+        it('debe aplicar tracking_source = mobile_app por defecto si no es provisto por el celular', () => {
+            const simplePing = {
+                plate: 'ALQ-999',
+                latitude: 4.61,
+                longitude: -74.08
+            };
+
+            const parsed = PingItemSchema.safeParse(simplePing);
+            assert.strictEqual(parsed.success, true);
+            if (parsed.success) {
+                assert.strictEqual(parsed.data.tracking_source, 'mobile_app');
+            }
         });
     });
 

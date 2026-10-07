@@ -1,12 +1,12 @@
 # FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
 ## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
 
-> **Versión:** 1.9.168 (Blindaje Canónico Dominio 6 - TMS: Georreferenciación Híbrida Google Maps + Apps-360 / Traccar, Poka-Yoke de Coordenadas Null Island y Sanidad Temporal — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.169 (Blindaje Canónico Dominio 6 - TMS: Baliza GPS Móvil PWA, Resiliencia para Flota Alquilada/Tercerizada, Auto-Aprovisionamiento y Cola Offline — 76/76 Pantallas Certificadas)  
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 204 Escenarios BDD Ininterrumpidos (1..204)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 205 Escenarios BDD Ininterrumpidos (1..205)
 
 ---
 
@@ -21,7 +21,7 @@
 | **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
-| **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 (§38.1 - §38.7) | 🟢 100% |
+| **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
@@ -8528,6 +8528,44 @@ La arquitectura de rastreo y monitoreo de flota de FruFresco desacopla formalmen
   3. Para coordenadas válidas en Bogotá/Sabana, la placa se limpia (`extractCleanPlate`), se extrae el estado de ignición (`ignition_status = true/false` vía sensor ACC) y el odómetro acumulado.
   4. Los registros se actualizan de forma concurrente en `fleet_vehicles`, y el mapa en `/admin/transport` rota el marcador del furgón según su ángulo de rumbo real.
   5. La suite automatizada de pruebas unitarias (`tests/telemetry_hybrid_gps.test.ts`) certifica 100% de cumplimiento con 0 fallos.
+
+---
+
+### 38.8 Baliza GPS Móvil PWA & Resiliencia para Flota Alquilada o Tercerizada (`useMobileGpsTracker` + `/api/transport/telemetry`) (SDD v1.9.169)
+
+#### A. Desafío Operativo del Gemba: Camiones Alquilados de Pico Logístico
+En días de pico de demanda (martes, sábados o temporadas festivas), la capacidad cúbica de la flota propia se satura, obligando al despacho a alquilar furgones adicionales tercerizados por horas o días. Dichos vehículos **no disponen de hardware GPS satelital fijo (Apps-360 / Traccar)** conectado a su batería u odómetro, y resulta inviable técnica y financieramente instalar cables o dispositivos OBD para una jornada temporal.
+
+#### B. Arquitectura de Baliza Móvil en Smartphone (Cero Hardware Fijo)
+1. **Activación Automática en Pantalla del Conductor (`/ops/driver/route-map/[id]`):**
+   - Al iniciar la ruta asignada en la aplicación web para conductores, el hook `useMobileGpsTracker` se vincula automáticamente a la placa del vehículo (`plate`), independientemente de si es propia o alquilada.
+   - **Screen WakeLock:** La PWA solicita a la API de pantalla del navegador (`navigator.wakeLock.request('screen')`) mantener el display encendido mientras el camión está en movimiento, impidiendo que el sistema operativo del teléfono suspenda los sensores de geolocalización al apagar la pantalla en el soporte del parabrisas.
+   - **Geolocalización Continua:** Se activa `navigator.geolocation.watchPosition` con `{ enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }` para capturar coordenadas lat/lng, cálculo de velocidad en km/h (`pos.coords.speed * 3.6`), rumbo (`heading`) y precisión métrica (`accuracy`).
+
+2. **Heartbeat Periódico & Eficiencia Energética:**
+   - Cada 60 segundos (intervalo configurable), el teléfono emite un paquete telemático HTTP POST a `/api/transport/telemetry` conteniendo coordenadas, rumbo, velocidad, nivel de batería del dispositivo (`battery_level` vía Battery API si está soportada) y la etiqueta explícita `tracking_source: 'mobile_app'`.
+   - Si el vehículo está detenido o la ruta no ha iniciado, no se generan peticiones innecesarias.
+
+3. **Tolerancia a Zonas Muertas (Offline Burst Sync):**
+   - En tramos viales o sótanos sin señal celular (2G/3G/4G degradada), los pings no se pierden ni generan excepciones: se acumulan en memoria en un buffer de contingencia (`offlineQueue`).
+   - Al recuperar la conectividad (`window.addEventListener('online')`), el hook transmite inmediatamente la ráfaga completa acumulada en una sola petición por lote a `/api/transport/telemetry`.
+
+4. **Auto-Aprovisionamiento en Torre de Control:**
+   - Si la placa del camión alquilado (ej. `ALQ-777`) no había sido precargada en el catálogo maestro, el endpoint de telemetría la auto-registra en `fleet_vehicles` bajo `vehicle_type = 'Alquilado'` y `tracking_source = 'mobile_app'`, permitiendo que aparezca al instante en el mapa general de transporte (`/admin/transport`) con su distintivo `[📱 Tracker Móvil (60s)]`.
+
+---
+
+#### Escenario 205: Despacho en Camión Alquilado sin Hardware GPS: Activación Automática de Baliza Móvil en Ruta, Auto-Aprovisionamiento y Vaciamiento de Cola Offline (SDD v1.9.169)
+- **Given** una ruta de distribución asignada a un camión alquilado de contingencia cuya placa no cuenta con GPS satelital cableado (Apps-360).
+- **When** el conductor inicia sesión en el portal operativo `/ops/driver` y abre la hoja de navegación de ruta `/ops/driver/route-map/[id]`:
+- **Then**:
+  1. El hook `useMobileGpsTracker` adquiere el Screen WakeLock del dispositivo móvil e inicia el sensor satelital de alta precisión del teléfono.
+  2. En el encabezado superior de la pantalla se despliega el chip visual esmeralda `[📱 GPS {PLACA} • Baliza en Vivo]`.
+  3. Cada 60 segundos se despacha un latido a `/api/transport/telemetry` con `tracking_source = 'mobile_app'`, latitud, longitud, velocidad y batería.
+  4. Si la placa no existe en `fleet_vehicles`, el backend la auto-aprovisiona de forma segura con `status = 'on_route'` e inserta la miga de pan en `vehicle_gps_logs`.
+  5. Si el camión entra en un sótano o túnel sin cobertura de datos, las coordenadas se resguardan en `offlineQueue`; al recuperar la señal, la ráfaga se vacía de inmediato hacia el servidor sin pérdida de trazabilidad.
+  6. En la Torre de Control de Despacho (`/admin/transport`), los despachadores observan el vehículo en tiempo real con la etiqueta `Tracker Móvil (60s)` y el velocímetro reactivo.
+  7. La suite automatizada de pruebas unitarias (`tests/telemetry_hybrid_gps.test.ts`) certifica con 4 pruebas específicas la validación de pings móviles, tolerancia a ráfagas offline y rechazo de datos espurios.
 
 ---
 
