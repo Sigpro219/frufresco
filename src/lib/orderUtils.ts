@@ -696,5 +696,83 @@ export const getOrderReplacementInfo = (order: any): OrderReplacementInfo => {
     };
 };
 
+/**
+ * Detects whether a customer profile corresponds to Colsubsidio (NIT 860007336 or company/contact name)
+ */
+export const isColsubsidioProfile = (profile: { company_name?: string | null; contact_name?: string | null; nit?: string | null } | null | undefined): boolean => {
+    if (!profile) return false;
+    const nit = (profile.nit || '').replace(/\D/g, '');
+    if (nit.includes('860007336')) return true;
+    const corpus = `${profile.company_name || ''} ${profile.contact_name || ''}`.toUpperCase();
+    return corpus.includes('COLSUBSIDIO');
+};
+
+export interface OrderProcurementReferences {
+    isColsubsidio: boolean;
+    purchaseOrderNumber: string | null; // Formal OC
+    solpedNumber: string | null;        // SOLPED
+    status: 'oc_formalizada' | 'solped_provisional' | 'none';
+    label: string;
+}
+
+/**
+ * Extracts and unifies OC and SOLPED references from order fields, logistics_data and admin_notes
+ */
+export const getOrderProcurementReferences = (order: any): OrderProcurementReferences => {
+    if (!order) {
+        return { isColsubsidio: false, purchaseOrderNumber: null, solpedNumber: null, status: 'none', label: '' };
+    }
+
+    const logistics = order.logistics_data || {};
+    const profile = order.profiles || {};
+    const isColsubsidio = Boolean(logistics.is_colsubsidio) || 
+        isColsubsidioProfile(profile) || 
+        isColsubsidioProfile({ company_name: order.customer_name, nit: order.customer_nit });
+
+    const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
+
+    // 1. Extract OC
+    let oc = order.purchase_order_number || logistics.purchase_order_number || null;
+    if (oc && oc.toUpperCase().startsWith('SOLPED:')) {
+        oc = null;
+    }
+    if (!oc) {
+        const ocMatch = notes.match(/\b(?:OC|O\.C\.|OCC|PO|ORDEN DE COMPRA)\s*[:#\s-]*([A-Za-z0-9\-_]{4,20})\b/i);
+        if (ocMatch) {
+            oc = ocMatch[1].trim();
+        }
+    }
+
+    // 2. Extract SOLPED
+    let solped = logistics.solped_number || null;
+    if (!solped) {
+        const solpedMatch = notes.match(/\b(?:SOLPED|SOLICITUD)\s*[:#\s-]*([0-9]{4,15})\b/i);
+        if (solpedMatch) {
+            solped = solpedMatch[1].trim();
+        } else if (order.purchase_order_number && order.purchase_order_number.toUpperCase().startsWith('SOLPED:')) {
+            solped = order.purchase_order_number.replace(/^SOLPED:\s*/i, '').trim();
+        }
+    }
+
+    let status: 'oc_formalizada' | 'solped_provisional' | 'none' = 'none';
+    let label = '';
+
+    if (oc) {
+        status = 'oc_formalizada';
+        label = solped ? `OC: ${oc} · SOLPED: ${solped}` : `OC: ${oc}`;
+    } else if (solped) {
+        status = 'solped_provisional';
+        label = `SOLPED: ${solped} (Pendiente OC)`;
+    }
+
+    return {
+        isColsubsidio,
+        purchaseOrderNumber: oc,
+        solpedNumber: solped,
+        status,
+        label
+    };
+};
+
 
 

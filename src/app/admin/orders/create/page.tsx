@@ -9,7 +9,7 @@ import { sanitizeDocText, resolveClientProfile, findBestProductMatch, findBestPr
 import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
-import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction, getStructuredSpecKey } from '@/lib/orderUtils';
+import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction, getStructuredSpecKey, isColsubsidioProfile } from '@/lib/orderUtils';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
@@ -4611,6 +4611,15 @@ function CreateOrderContent() {
             return showToast('❌ Atención: Todo pedido de reposición debe estar vinculado a un Pedido Original para trazabilidad de calidad.', 'error');
         }
 
+        // Poka-Yoke SDD §7.5.9: Para pedidos de Colsubsidio es obligatorio ingresar OC o SOLPED
+        if (isColsubsidioSelected) {
+            const effectivePo = purchaseOrderNumber?.trim() || (importValidation?.poNumber ? String(importValidation.poNumber).trim() : null);
+            const effectiveSolped = solpedNumber?.trim() || (importValidation?.solpedNumber ? String(importValidation.solpedNumber).trim() : null);
+            if (!effectivePo && !effectiveSolped) {
+                return showToast('❌ Regla Corporativa Colsubsidio: Es OBLIGATORIO ingresar al menos el número de Orden de Compra (OC) o Solicitud de Pedido (SOLPED).', 'error');
+            }
+        }
+
         // Manual Delivery Validation
         if (isManualDelivery && !manualDeliveryTime) {
             return showToast('Si activas entrega manual, debes especificar la Hora.');
@@ -4818,13 +4827,20 @@ function CreateOrderContent() {
                 ...(logisticsOverride || {}),
                 is_replacement: orderNature === 'replacement',
                 parent_order_id: parentOrderId || null,
-                parent_order_sequence: parentOrderFriendlyId || null
+                parent_order_sequence: parentOrderFriendlyId || null,
+                is_colsubsidio: isColsubsidioSelected,
+                purchase_order_number: effectivePo || null,
+                solped_number: effectiveSolped || null,
+                colsubsidio_status: isColsubsidioSelected
+                    ? (effectivePo ? 'oc_formalizada' : (effectiveSolped ? 'solped_provisional' : null))
+                    : (effectivePo ? 'oc_formalizada' : null)
             };
 
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
                     profile_id: finalProfileId,
+                    purchase_order_number: effectivePo || (effectiveSolped ? `SOLPED: ${effectiveSolped}` : null),
                     total: orderNature === 'replacement' ? 0 : calculateTotal(),
                     total_weight_kg: calculateTotalWeight(),
                     subtotal: orderNature === 'replacement' ? 0 : calculateSubtotal(),
@@ -5234,6 +5250,11 @@ function CreateOrderContent() {
     const selectedClientDetails = useMemo(() => {
         return clients.find(c => c.id === selectedClient);
     }, [clients, selectedClient]);
+
+    const isColsubsidioSelected = useMemo(() => {
+        if (clientType !== 'B2B' || !selectedClientDetails) return false;
+        return isColsubsidioProfile(selectedClientDetails);
+    }, [clientType, selectedClientDetails]);
 
     const deliveryRestrictionStatus = useMemo(() => {
         return evaluateDeliveryRestriction(selectedClientDetails, deliveryDate);
@@ -9248,10 +9269,10 @@ function CreateOrderContent() {
 
                             {/* REFERENCIAS DE COMPRA DEL CLIENTE: OC / SOLPED */}
                             <div style={{
-                                backgroundColor: THEME.colors.surface,
+                                backgroundColor: isColsubsidioSelected && (!purchaseOrderNumber && !solpedNumber) ? '#FFFBEB' : THEME.colors.surface,
                                 padding: '1rem 1.25rem',
                                 borderRadius: THEME.radius.lg,
-                                border: `1px solid ${THEME.colors.border}`,
+                                border: isColsubsidioSelected ? (purchaseOrderNumber || solpedNumber ? '1.5px solid #0D7A57' : '1.5px solid #F59E0B') : `1px solid ${THEME.colors.border}`,
                                 boxShadow: THEME.shadow.sm,
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -9259,18 +9280,44 @@ function CreateOrderContent() {
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <label style={{ fontSize: '0.72rem', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <FileText size={13} style={{ color: '#0D7A57' }} /> Referencias de Compra (OC)
+                                        <FileText size={13} style={{ color: '#0D7A57' }} /> Referencias de Compra (OC / SOLPED)
                                     </label>
-                                    {(purchaseOrderNumber || solpedNumber) && (
-                                        <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#065F46', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
-                                            Indexado en Remisión
-                                        </span>
-                                    )}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        {isColsubsidioSelected && (
+                                            <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#92400E', backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px', border: '1px solid #FCD34D' }}>
+                                                🏢 COLSUBSIDIO
+                                            </span>
+                                        )}
+                                        {(purchaseOrderNumber || solpedNumber) && (
+                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#065F46', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
+                                                Indexado en Remisión
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {isColsubsidioSelected && (
+                                    <div style={{
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FCD34D',
+                                        borderRadius: '6px',
+                                        padding: '0.45rem 0.65rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.72rem',
+                                        fontWeight: '800',
+                                        color: '#92400E'
+                                    }}>
+                                        <AlertTriangle size={14} style={{ color: '#D97706', flexShrink: 0 }} />
+                                        <span>REGLA CORPORATIVA COLSUBSIDIO: Obligatorio registrar al menos OC o SOLPED.</span>
+                                    </div>
+                                )}
+
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#334155', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
-                                            # Orden de Compra (OC)
+                                            # Orden de Compra (OC) {isColsubsidioSelected && <span style={{ color: '#DC2626' }}>*</span>}
                                         </label>
                                         <input
                                             type="text"
@@ -9286,7 +9333,7 @@ function CreateOrderContent() {
                                                 height: '34px',
                                                 padding: '0 0.55rem',
                                                 borderRadius: '6px',
-                                                border: purchaseOrderNumber ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                border: purchaseOrderNumber ? '1.5px solid #0D7A57' : (isColsubsidioSelected && !solpedNumber ? '1.5px solid #F59E0B' : '1px solid #CBD5E1'),
                                                 backgroundColor: purchaseOrderNumber ? '#F0FDF4' : 'white',
                                                 fontSize: '0.80rem',
                                                 fontWeight: purchaseOrderNumber ? '800' : '600',
@@ -9297,7 +9344,7 @@ function CreateOrderContent() {
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
-                                            # SOLPED <span style={{ fontSize: '0.58rem', fontWeight: '500', color: '#94A3B8' }}>(Opcional)</span>
+                                            # SOLPED {isColsubsidioSelected ? <span style={{ fontSize: '0.58rem', fontWeight: '700', color: '#D97706' }}>(o ingresar OC)</span> : <span style={{ fontSize: '0.58rem', fontWeight: '500', color: '#94A3B8' }}>(Opcional)</span>}
                                         </label>
                                         <input
                                             type="text"
@@ -9313,7 +9360,7 @@ function CreateOrderContent() {
                                                 height: '34px',
                                                 padding: '0 0.55rem',
                                                 borderRadius: '6px',
-                                                border: solpedNumber ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
+                                                border: solpedNumber ? '1.5px solid #0284C7' : (isColsubsidioSelected && !purchaseOrderNumber ? '1.5px solid #F59E0B' : '1px solid #CBD5E1'),
                                                 backgroundColor: solpedNumber ? '#F0F9FF' : 'white',
                                                 fontSize: '0.80rem',
                                                 fontWeight: solpedNumber ? '800' : '600',

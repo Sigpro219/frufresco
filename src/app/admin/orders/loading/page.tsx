@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity, getOrderReplacementInfo } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity, getOrderReplacementInfo, getOrderProcurementReferences } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -344,6 +344,11 @@ function OrderLoadingContent() {
     const [loadingItems, setLoadingItems] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [updateLoading, setUpdateLoading] = useState(false);
+
+    // Formalización de Orden de Compra (OC) para Colsubsidio / Pedidos con SOLPED
+    const [showFormalizeOcModal, setShowFormalizeOcModal] = useState(false);
+    const [formalizeOcInput, setFormalizeOcInput] = useState('');
+    const [isSavingFormalizeOc, setIsSavingFormalizeOc] = useState(false);
     
     const isOrderLocked = () => {
         if (!selectedOrder) return true;
@@ -1043,6 +1048,65 @@ function OrderLoadingContent() {
             alert(`Error al reasignar el pedido: ${err.message || 'Error desconocido'}`);
         } finally {
             setIsReassigning(false);
+        }
+    };
+
+    const handleSaveFormalizeOc = async () => {
+        if (!selectedOrder || !formalizeOcInput.trim()) {
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('Debes ingresar el número de Orden de Compra (OC).', 'error');
+            }
+            return;
+        }
+        setIsSavingFormalizeOc(true);
+        try {
+            const cleanOc = formalizeOcInput.trim();
+            const existingNotes = selectedOrder.admin_notes || '';
+            const ocToken = `OC: ${cleanOc}`;
+            const updatedNotes = existingNotes.includes('OC:') 
+                ? existingNotes.replace(/\bOC:\s*([A-Za-z0-9\-_]+)/i, ocToken)
+                : (existingNotes ? `${ocToken} | ${existingNotes}` : ocToken);
+            
+            const existingLogistics = selectedOrder.logistics_data || {};
+            const updatedLogistics = {
+                ...existingLogistics,
+                purchase_order_number: cleanOc,
+                colsubsidio_status: 'oc_formalizada'
+            };
+
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    purchase_order_number: cleanOc,
+                    admin_notes: updatedNotes,
+                    logistics_data: updatedLogistics
+                })
+                .eq('id', selectedOrder.id);
+
+            if (error) throw error;
+
+            // Update local React states
+            const updatedOrder = {
+                ...selectedOrder,
+                purchase_order_number: cleanOc,
+                admin_notes: updatedNotes,
+                logistics_data: updatedLogistics
+            };
+            setSelectedOrder(updatedOrder);
+            setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, ...updatedOrder } : o));
+
+            setShowFormalizeOcModal(false);
+            setFormalizeOcInput('');
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('🎉 ¡Orden de Compra formalizada con éxito!', 'success');
+            }
+        } catch (err: any) {
+            console.error('Error formalizando OC:', err);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`Error al guardar OC: ${err.message}`, 'error');
+            }
+        } finally {
+            setIsSavingFormalizeOc(false);
         }
     };
 

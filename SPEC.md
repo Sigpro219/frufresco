@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.148 (Certificación Dominio 8.4: Conciliación de Remisiones Físicas y Liquidación Definitiva - CIERRE DOMINIO 8 AL 100%)
+> **Versión:** 1.9.150 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.1 Landing & Catálogo)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -626,6 +626,40 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
    - Incorpora la leyenda legal vinculante: *«Ampara novedad y sustituye entrega del Pedido Original #PED-XXXX. Mercancía entregada a título de reposición comercial ($0 COP) - NO COBRAR AL CLIENTE»*.
    - Cumple la función legal y probatoria de nueva remisión física oficial con soporte de firma y recibido a satisfacción por parte del cliente.
 
+### 7.5.9 Protocolo Canónico Corporativo Colsubsidio: Poka-Yoke Innegociable de OC/SOLPED y Ciclo de Formalización Ágil
+
+1. **Premisa Operativa del Gemba y Realidad de Aprovisionamiento Corporativo:**
+   - La Caja Colombiana de Subsidio Familiar Colsubsidio (NIT `860007336`) y su red multi-sede (Restaurantes, Cafeterías, Hoteles/Clubes como Bellavista y El Cubo, Colegios y Jardines Infantiles) operan bajo un ciclo de compras institucional en SAP/ERP estructurado en dos fases temporales:
+     * **Fase 1 (Aprovisionamiento y Alistamiento Inicial - SOLPED):** La unidad operativa o sede emite una *Solicitud de Pedido* (**SOLPED**). FruFresco requiere capturar este número para autorizar el corte en campo, alistamiento en bodega y despacho logístico temprano.
+     * **Fase 2 (Formalización Presupuestal y Radicación - OC):** El área central de compras aprueba y formaliza la transacción expidiendo la *Orden de Compra* (**OC**). Este número es estrictamente obligatorio para la radicación exitosa de la Factura Electrónica de Venta sin rechazos contables.
+
+2. **Detección Automática y Determinista de Clientes Colsubsidio:**
+   - El motor identifica deterministamente a cualquier sede o filial de Colsubsidio evaluando:
+     $$\text{isColsubsidio} \iff \text{NIT limpio} = \text{'860007336'} \lor \text{Razón Social} \supset \text{'COLSUBSIDIO'}$$
+   - Centralizado en `src/lib/orderUtils.ts` (`isColsubsidioProfile`).
+
+3. **Poka-Yoke Innegociable en la Creación de Pedidos (`/admin/orders/create`):**
+   - **Alerta Visual Contextual:** Al seleccionar una sede de Colsubsidio, el bloque *Referencias de Compra* conmuta dinámicamente a modo corporativo destacado (`[ 🏢 CLIENTE COLSUBSIDIO • OBLIGATORIO OC O SOLPED ]`).
+   - **Compuerta Bloqueante en Runtime (`handleSubmit`):**  
+     Si `isColsubsidio === true` y tanto el campo `# Orden de Compra (OC)` como el campo `# SOLPED` se encuentran vacíos:
+     $$\text{Bloquear Guardado} \implies \text{Toast Error: } \text{"❌ Regla Corporativa Colsubsidio: Es obligatorio ingresar al menos el número de OC o SOLPED."}$$
+   - El sistema admite la creación con solo SOLPED, con solo OC, o con ambas referencias simultáneas.
+
+4. **Ciclo de Estados y Telemetría en Torre de Control (`/admin/orders/loading`):**
+   - Los pedidos registran su ciclo en `logistics_data`:
+     * `colsubsidio_status: 'solped_provisional'`: Pedido amparado únicamente por SOLPED. Se proyecta en la tarjeta de despacho (`OrderCard`) con insignia preventiva ámbar: `[ 🟡 SOLPED: XXXXX (Pendiente OC) ]`.
+     * `colsubsidio_status: 'oc_formalizada'`: Pedido amparado por OC definitiva. Se proyecta con insignia esmeralda: `[ 🟢 OC: XXXXX ]` (o combinada `[ 🟢 OC: XXXXX · SOLPED: YYYYY ]`).
+
+5. **Formalización Ágil en 1 Clic (Sin reconstrucción de Pedido):**
+   - En el panel de detalle de `/admin/orders/loading`, los pedidos en estado `solped_provisional` habilitan el control de acción rápida: **`[ 📝 Formalizar OC ]`**.
+   - Permite al operador o facturador registrar la OC definitiva en caliente, actualizando de forma atómica `orders.purchase_order_number`, `logistics_data.purchase_order_number`, el estado a `'oc_formalizada'` y anexando la traza en `admin_notes` sin alterar la logística ni el picking ya ejecutado.
+
+6. **Blindaje en Remisión Física (`contingency-print`):**
+   - En el membrete de la remisión física se estampa visiblemente:
+     * Si cuenta con OC: `ORDEN DE COMPRA (OC): [Número]`
+     * Si cuenta con SOLPED: `SOLPED: [Número]` (o ambos en caso de coexistencia).
+   - Garantiza que el almacenista receptor de Colsubsidio valide el código de inmediato y firme la remisión sin devoluciones.
+
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
@@ -668,6 +702,7 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 - [x] **Tarea COM-39 (Pedidos / Mesa de Trabajo Multicanal: Aislamiento Estricto Hogar vs Institucional, Selector In-Situ y Desbloqueo de Inyección B2C):** Desacoplar la Mesa de Trabajo (Staging en `/admin/orders/create`) para que opere de forma nativa en modo Hogar (B2C) e Institucional (B2B): (1) Conmutador visible in-situ `[ 🏢 Institucional (B2B) ]` | `[ 🏠 Hogar (B2C) ]` en la cabecera de auditoría; (2) En modo Hogar, erradicar validaciones corporativas de NIT/Empresas y habilitar búsqueda express de clientes hogar existentes o formulario inline de cliente nuevo (Nombre, Celular, Dirección); (3) Corregir compuerta bloqueante de `handleConfirmImport` para validar `selectedClientB2C` o `guestInfo` en lugar de exigir `selectedClient` corporativo; (4) Garantizar que los ítems inyectados en Hogar tomen la tarifa base minorista (`products.base_price`).
 - [x] **Tarea COM-40 (Pedidos / Blindaje Contractual e Inmutabilidad Tarifaria: Erradicación de Modificación Manual de Precio en Pedidos y Exclusividad del Módulo de Acuerdos Comerciales):** Resolver el hallazgo de control y seguridad comercial en la creación de pedidos (`/admin/orders/create`) formalizando la Ley de Inmutabilidad Tarifaria (§7.5.7): (1) **El precio NO es editable bajo ninguna circunstancia desde el entorno de nuevo pedido** para ningún rol de usuario; (2) **Cualquier modificación o fijación de precios solo se puede realizar formalmente desde el Módulo de Acuerdos Comerciales (`/admin/commercial`)** o mediante listas maestras compartidas en cascada; (3) Se elimina definitivamente el elemento `<input>` editable de la columna 'PRECIO UNIT.' en el carrito, reemplazándolo por un valor de solo lectura renderizado mediante `formatMoney(unitPrice)` para erradicar alteraciones arbitrarias o errores de digitación por parte de los operadores; (4) Se preserva la alerta visual `⚠️ Sin Precio` cuando un producto no tiene tarifa registrada para exigir su parametrización comercial oficial previa al despacho.
 - [x] **Tarea COM-41 (Pedidos / Reposición por Calidad: Conmutador de Naturaleza, Vinculación Canónica a Pedido Padre, Tarifa $0 COP Inviolable y Nueva Remisión Oficial):** Implementar la arquitectura integral de reposiciones por calidad (§7.5.8): (1) En `/admin/orders/create`, incorporar conmutador de cabecera `[ 📦 Pedido de Venta Ordinaria ]` | `[ 🔄 Pedido de Reposición ($0 COP) ]`; (2) Al activar reposición, desplegar selector asistido de pedidos recientes del cliente (`parent_order_id`, `#PED-XXXX`), indexando el vínculo en `orders.admin_notes` y `logistics_data`; (3) Forzar automáticamente a $0 COP todos los productos del carrito y exonerar la orden del bloqueo de margen cero; (4) En Torre de Control (`/admin/orders/loading` y `OrderCard`), renderizar la insignia distintiva `[ 🔄 REPOSICIÓN DE #PED-XXXX ]`; (5) En el motor de remisiones (`contingency-print`), certificar el encabezado formal 'REMISIÓN OFICIAL DE REPOSICIÓN • GARANTÍA DE CALIDAD' con referencia explícita al pedido padre y liquidación neta $0 COP.
+- [x] **Tarea COM-42 (Colsubsidio / Poka-Yoke de OC o SOLPED y Transición a OC Formalizada):** Implementar el protocolo corporativo Colsubsidio (§7.5.9): (1) En `/admin/orders/create`, detección inteligente de sedes de Colsubsidio por NIT `860007336` o razón social; (2) Alerta visual contextual y compuerta dura en `handleSubmit` exigiendo al menos un valor entre `# Orden de Compra (OC)` y `# SOLPED`; (3) Persistencia estructurada en `orders.purchase_order_number`, `logistics_data.solped_number`, `logistics_data.colsubsidio_status` y `admin_notes`; (4) En Torre de Control (`/admin/orders/loading`), badges preventivos `[ 🟡 SOLPED: XXXXX (Pendiente OC) ]` vs `[ 🟢 OC: XXXXX ]`; (5) Botón de acción rápida en 1 clic `[ 📝 Formalizar OC ]` en el panel de detalle para ingresar la OC definitiva en caliente; (6) En remisión de contingencia (`contingency-print`), impresión visible de la referencia de compra (OC / SOLPED) en el membrete del documento.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -8547,6 +8582,50 @@ La mesa de conciliación (`/admin/orders/contingency-reconciliation`) opera como
   3. Ingresa las canastillas (4 entregadas / 4 devueltas, balance 0) y presiona `[Guardar y Generar Ajuste]`.
   4. El sistema inserta la novedad en `billing_returns` con estado `approved`, actualiza la orden a `delivered` con la anotación de conciliación, despliega el banner verde de confirmación y enfoca automáticamente el siguiente pedido pendiente de la lista.
   5. En la Mesa de Facturación (`/admin/commercial/billing`), la novedad de $25.200 COP queda disponible de inmediato para ser descontada del corte definitivo para World Office.
+
+---
+
+## 40. Dominio 1: Tienda B2C, Catálogo Público, Pasarela y Checkout
+
+### 40.1 Misión y Alcance del Dominio
+El Dominio 1 (`src/app/`, `src/app/products/[id]`, `src/app/checkout/`, `src/app/checkout/result/`, `src/app/payments/simulator/`, `src/app/pqrs/`, `src/app/quotes/[id]/print/`) constituye la fachada pública, comercial y transaccional omnicanal de FruFresco. Su misión es ofrecer una experiencia de catálogo de alta velocidad, adaptativa a compradores institucionales (B2B) y consumidores finales (B2C), garantizando la transparencia de precios según la jerarquía tri-nivel (Acuerdos Comerciales $\to$ Modelos de Precios $\to$ Campañas Promocionales), búsqueda semántica impulsada por IA (Gemini 3.8 Flash), persistencia de carrito en almacenamiento local y pasarela de checkout con validación estricta de cobertura, ventanas de entrega y métodos de pago.
+
+### 40.2 Landing Page Principal, Propuesta de Valor y Catálogo Interactivo (`/` - `src/app/page.tsx`) (SDD v1.9.150)
+
+#### A. Arquitectura de Streaming SSR, Caché ISR y Resiliencia
+1. **Revalidación Incremental (ISR):** La página principal exporta `revalidate = 60` para garantizar un balance óptimo entre datos frescos de catálogo e impacto mínimo en el servidor.
+2. **Streaming por Componentes con `<Suspense>`:** La estructura visual divide la carga en límites de suspensión independientes:
+   - `CategoryPills`: Píldoras de taxonomía y familias botánicas/comerciales.
+   - `FeaturedSection`: Carrusel de SKUs destacados en oferta activa.
+   - `TypicalRecipesBar`: Barra interactiva de recetas e ingredientes colombianos con detonación de búsqueda pre-filtrada.
+   - `ProductGridContainer`: Matriz reactiva de productos con paginación, filtros de categoría y tarjetas de producto `ProductCard`.
+3. **Internacionalización y Multi-Moneda:** Soporte bilingüe (`es` / `en`) mediante diccionarios en memoria (`getTranslations`) y selector de idioma no destructivo.
+
+#### B. Superbuscador Omnibox & Expansión Semántica IA
+1. **Multi-Término OR en Base de Datos:** Cuando el usuario ingresa un término de búsqueda (`q`), el motor descompone la cadena en tokens y ejecuta consultas PostgREST con coincidencia flexible insensible a mayúsculas y acentos (`ilike` en `name`, `description`, `category`).
+2. **Expansión de Consulta con Inteligencia Artificial (`expandSearchQuery`):**
+   - Integración con Gemini 3.8 Flash mediante timeout en carrera (`Promise.race`) de 1.800 ms para evitar latencia perceptiva.
+   - Generación de sinónimos culinarios, nombres populares colombianos (ej. "aguacate" $\to$ "palta", "hass", "papaya" $\to$ "maradol") e ingredientes sustitutos.
+   - Fallback instantáneo al término original si la cuota de IA está copada o la llamada excede el tiempo límite.
+
+#### C. Jerarquía de Precios y Lógica Comercial Poka-Yoke
+1. **Triple Nivel de Liquidación:**
+   - **Nivel 1 (Acuerdos Comerciales B2B):** Si el usuario cuenta con sesión B2B activa, los precios fijados en `commercial_agreements` prevalecen de forma absoluta.
+   - **Nivel 2 (Modelo de Precios):** Para usuarios B2C o sin acuerdo directo, se aplica el multiplicador de margen sobre el costo base (`pricing_models`).
+   - **Nivel 3 (Campañas Promocionales):** Las campañas activas (`campaigns`) modulan el precio con descuento porcentual o monto fijo sobre el precio base o de catálogo.
+2. **Cero-Alert Dogma:** Cero uso de `alert()` o `confirm()`. Todas las interacciones de carrito (agregar, remover, variar peso o presentación) se reflejan de inmediato mediante badges y animaciones reactivas del `CartDrawer`.
+
+---
+
+#### Escenario 186: Navegación del Catálogo Público, Búsqueda Inteligente Semántica y Cotización en Tiempo Real (SDD v1.9.150)
+- **Given** un cliente en la página principal `/` de FruFresco.
+- **When** introduce "Ajiaco" en el buscador omnibox o selecciona la píldora de receta "Ajiaco Santafereño" en `TypicalRecipesBar`:
+- **Then**:
+  1. El sistema expande la consulta para incluir los ingredientes esenciales: Papa Criolla, Papa Pastusa, Guascas, Mazorca y Pollo / Pechuga.
+  2. `ProductGridContainer` renderiza instantáneamente los productos coincidentes sin recargar la página.
+  3. Cada tarjeta (`ProductCard`) muestra el precio por kilogramo o unidad de presentación, distintivo de disponibilidad en inventario y selector de incremento/decremento de unidades.
+  4. Al pulsar `[Agregar al Carrito]`, el producto se almacena en el carrito local con su factor de peso nominal, actualizando el contador flotante del carrito en el encabezado.
+
 
 
 
