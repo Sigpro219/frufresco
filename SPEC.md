@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.160 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.4 Consumo, Canastillas & CIERRE TOTAL DOMINIO 2)
+> **Versión:** 1.9.161 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.1 Dashboard Ejecutivo Central & KPIs Globales)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8999,6 +8999,43 @@ La consolidación de métricas de consumo (`tab=consumption`), balance de activo
   2. En la pestaña de canastillas, el sistema indica un saldo vivo de 35 canastillas en su bodega.
   3. El usuario pulsa `[Solicitar Recogida de Canastillas]`, digita 30 canastillas con la nota *"Listas en muelle de recepción torre B"* y pulsa `[Confirmar Solicitud]`.
   4. El sistema radica la solicitud en `customer_service_pqrs` con prioridad `urgent`, emite la notificación Toast verde *"Solicitud de recogida radicada exitosamente"* y cierra el modal sin bloquear la pantalla.
+
+---
+
+## 42. Dominio 10: Gobernanza Central, Command Center y RRHH
+
+### 42.1 Dashboard Ejecutivo Central, Telemetría Global y KPIs de Negocio (`/admin/dashboard` - `src/app/admin/dashboard/page.tsx`) (SDD v1.9.161)
+
+#### A. Misión y Alcance de la Telemetría de Alto Nivel
+El Dashboard Ejecutivo Central (`/admin/dashboard`) constituye la cabina de mando principal para la alta gerencia, socios directores y líderes de área de FruFresco. Su objetivo es consolidar en tiempo real la salud financiera, operativa y comercial de la compañía, agregando métricas de ventas brutas y netas, recaudo de cartera, volumen de kilogramos comercializados, margen proyectado, dispersión de tickets promedio y distribución porcentual entre líneas granel y unidades discretas.
+
+#### B. Arquitectura de Ingesta por Chunks, Agregación & Gobernanza RBAC
+1. **Ingesta Paginada por Chunks contra PostgREST (`CHUNK_SIZE = 100`):**
+   - Para erradicar desbordes de memoria y respetar el límite contractual de 1.000 registros por query de PostgREST / Supabase, la carga de `order_items` de las órdenes del periodo se ejecuta de forma fragmentada en lotes de 100 pedidos (`orders.slice(i, i + CHUNK_SIZE)`).
+   - Garantiza que órdenes masivas con decenas de miles de ítems en ventanas de 30 o 90 días se totalicen con precisión matemática absoluta ($O(N)$) sin truncamientos silenciosos de filas.
+2. **Cálculo y Proyección de KPIs Clave:**
+   - **Ventas Totales del Periodo:** Sumatoria monetaria de pedidos completados, en ruta y confirmados.
+   - **Margen Bruto Proyectado:** Cálculo diferencial entre precio de venta facturado y costo de abastecimiento (`cogs` / compra mayorista).
+   - **Ticket Promedio:** Análisis comparativo de la cesta media en ventanas móviles de 30, 60 y 90 días para detectar contracción o expansión en el gasto corporativo e institucional.
+   - **Cubicaje y Volumen (Kg vs Unidades):** Desglose del tonelaje total movilizado, clasificando productos a granel frente a referencias comercializadas por unidades o paquetes discretos.
+3. **Filtros Temporales y Comparativa de Tendencias:**
+   - Selectores rápidos (`Hoy`, `Ayer`, `Esta Semana`, `Este Mes`, `Rango Personalizado`) con cálculo de delta porcentual respecto al periodo cronológico anterior inmediato.
+4. **Gobernanza RBAC y Protección de Acceso:**
+   - La pantalla implementa el guardián de permisos RBAC (`usePermissions`), verificando que el usuario posea roles ejecutivos (`admin`, `gerencia`, `coordinador_operaciones`, `director_comercial`). Usuarios sin autorización son redirigidos de forma transparente al portal de pedidos o login.
+5. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - El código fuente (937 líneas) no contiene invocaciones a `alert()`, `confirm()` o `prompt()`. Los avisos de sincronización y alertas de liquidez se manejan reactivamente mediante componentes de estado y toasts no intrusivos.
+
+---
+
+#### Escenario 197: Análisis Ejecutivo de Rendimiento y Consulta de Métricas de Venta Global (SDD v1.9.161)
+- **Given** el Gerente General o Director Financiero accediendo a `/admin/dashboard`.
+- **When** selecciona el filtro temporal de "Este Mes" para la junta directiva:
+- **Then**:
+  1. El sistema ejecuta la consulta segmentada de órdenes y sus ítems en lotes controlados de 100 pedidos (`CHUNK_SIZE = 100`), evitando bloqueos de red o desbordes de PostgREST.
+  2. La pantalla renderiza las tarjetas de KPIs principales (Ventas Totales, Margen Bruto %, Ticket Promedio y Tonelaje Total Despachado).
+  3. El gráfico ejecutivo de distribución visualiza la proporción exacta entre pedidos de volumen institucional B2B y pedidos domésticos B2C.
+  4. La interfaz opera con fluidez instantánea, sin emitir alertas nativas del navegador y con respuesta HTTP 200 OK.
+
 
 
 
