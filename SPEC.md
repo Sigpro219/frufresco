@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.109 (Arquitectura Canónica de Listas de Precios & Acuerdos Maestros Compartidos: Efecto Cascada 1 a N / Single Source of Truth)
+> **Versión:** 1.9.110 (Deprecación de Botón Legado de Plantilla Estática y Unificación Canónica en Lista Maestra Viva)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -577,12 +577,16 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 
 5. **Jerarquía Contractual & Cascada Canónica de Precios:**
    - La resolución de tarifas para pedidos B2B obedece al siguiente orden de prevalencia matemática estricta:
-     $$\text{Precio Facturado} = \begin{cases} 
-     \text{Acuerdo Exclusivo Sucursal} & \text{si la sede posee un acuerdo propio específico a la medida} \\ 
-     \text{Acuerdo Exclusivo Matriz} & \text{si la matriz posee un acuerdo exclusivo propio no compartido} \\ 
-     \text{Lista Maestra Compartida (Cascada)} & \text{si la sucursal o matriz está vinculada a un acuerdo maestro activo} \\ 
-     \text{General Institucional} & \text{fallback por modelo de precios asignado en el perfil} 
-     \end{cases}$$
+      $$\text{Precio Facturado} = \begin{cases} 
+      \text{Acuerdo Exclusivo Sucursal} & \text{si la sede posee un acuerdo propio específico a la medida} \\ 
+      \text{Acuerdo Exclusivo Matriz} & \text{si la matriz posee un acuerdo exclusivo propio no compartido} \\ 
+      \text{Lista Maestra Compartida (Cascada)} & \text{si la sucursal o matriz está vinculada a un acuerdo maestro activo} \\ 
+      \text{General Institucional} & \text{fallback por modelo de precios asignado en el perfil} 
+      \end{cases}$$
+
+6. **Deprecación y Erradicación del Botón Legado "Modelo General (Plantilla Estática)":**
+   - **Contexto Histórico:** Previo a la arquitectura de Lista Maestra Viva en Cascada, existía en la barra de herramientas un botón auxiliar `[ ✨ Modelo General (N SKUs) ]` conectado a `/api/commercial/master-template`. Dicho botón permitía subir una plantilla estática en memoria que luego debía copiarse cliente por cliente (reproduciendo el modelo de clonación/fotocopias).
+   - **Dictamen Canónico:** Queda **formalmente deprecado y retirado** dicho botón de la barra de herramientas. La creación y gobernanza de listas institucionales generales se canaliza exclusivamente a través del flujo unificado de **`[ + Nuevo Acuerdo ]` ➔ `[ Lista Maestra Compartida (Efecto Cascada) ]`**, garantizando entidad relacional viva en `quotes`, vigencia temporal unificada (`start_date`, `valid_until`) y vinculación directa de clientes/sucursales sin duplicidad de interfaces.
 
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
@@ -621,7 +625,8 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 - [x] **Tarea COM-34 (Pedidos / Paridad Transversal del Modal de Personalización, Teclado, Calculadora y Resumen Estructurado en EmailDraftsModule):** Sincronizar el modal de personalización de ítems en `EmailDraftsModule.tsx` para replicar con estricta fidelidad el comportamiento de `/admin/orders/create`: (1) Evaluación de expresiones matemáticas en vivo en el campo Cantidad (`evaluateMathExpression` soportando `+`, `-`, `*`, `/`, `x`); (2) Navegación fluida por teclado (`Enter`, `Tab`, `Shift + Tab` con foco y selección de texto automática); (3) Poka-Yoke de Gramaje Dinámico Condicional (ocultamiento de Gramaje ante unidades discretas y cálculo reactivo `~Y und de Z gr`); (4) Sincronización bidireccional entre `modal-unit-select` y `Presentación`; (5) Tabla de 5 columnas estructuradas (`Producto`, `Presentación & Atributos`, `Cant. Facturada`, `Precio Unitario`, `Subtotal`) en el modal de Previsualización y Confirmación de Pedido (`showConfirmModal`).
 - [x] **Tarea COM-35 (Ingesta & Visor / Soporte Universal de Hojas de Cálculo y Formato LibreOffice ODS):** Erradicar la dependencia restrictiva exclusiva de extensiones `.xlsx` / `.xls` en todo el pipeline de digitalización y visualización. Centralizar la detección en `src/lib/spreadsheets.ts` (`isSpreadsheetFile`, `resolveSpreadsheetMimeType`), soportando nativamente `.ods` (OpenDocument Spreadsheet emitido por LibreOffice/Linux/Google Docs), `.csv`, `.tsv`, `.xlsm`, `.xlsb` y nombres de archivo alterados por clientes de correo o descargas sucesivas (ej. `FORMATO SUMINISTROS UNICO.xls_1 (1) (4) (3).ods`). Garantiza que en la ingesta automática (`email-ingest`), re-extracción (`reparse-draft`), Mesa de Trabajo (`extract-order`, `/admin/orders/create`) y visor de borradores (`EmailDraftsModule` y `CommercialInboxModule`) estos documentos se conviertan a CSV con SheetJS para extracción multimodal con Gemini y se rendericen en tablas interactivas con resaltado de cantidades sin caer en enlaces de descarga genéricos.
 - [ ] **Tarea COM-36 (Campañas / Maduración Comercial GAP-CAMP):** Deuda técnica formalizada para fase de pulido: (1) Modal de edición in-situ y extensión de fechas de vigencia sin destrucción de entidad; (2) Conmutador de suspensión temporal / pausa operativa (`status: 'paused'`) ante quiebres imprevistos de stock en bodega; (3) Telemetría de impacto comercial cruzando pedidos reales facturados contra `campaign_items` para reportar volumen vendido (kg) y margen bruto cedido; (4) Acción de duplicación ágil (`duplicateCampaign`) para relanzar campañas estacionales de cosecha con 1 clic.
-- [ ] **Tarea COM-37 (Acuerdos Comerciales / Listas de Precios Compartidas 1 a N con Efecto Cascada):** (1) En base de datos, soportar vinculación múltiple de clientes a un acuerdo maestro (`quotes.is_master_shared = true`, tabla de vinculación `agreement_clients` o sincronización relacional de `client_id`); (2) En `CommercialAgreementsModule.tsx`, actualizar el Wizard Paso 1 a "Lista Maestra Compartida (Efecto Cascada)" con banner explicativo Poka-Yoke y telemetría de sedes asociadas; (3) En Paso 2, requerir Nombre Institucional Maestro; (4) En la tabla principal de acuerdos, consolidar el acuerdo maestro en una sola fila con píldora interactiva `[👥 N Sedes]`; (5) Implementar modal de gestión de sedes vinculadas para agregar/remover clientes en caliente con 1 clic; (6) En la edición de precios del acuerdo maestro (drawer o Excel), asegurar que los cambios se propaguen en tiempo real en cascada a todos los clientes asociados al cotizar o montar pedidos en `/admin/orders/create` y `EmailDraftsModule`.
+- [x] **Tarea COM-37 (Acuerdos Comerciales / Listas de Precios Compartidas 1 a N con Efecto Cascada):** (1) En base de datos, soportar vinculación múltiple de clientes a un acuerdo maestro (`quotes.client_id = null`, clave `agreement_clients:<quote_id>` en `app_settings` y puntero directo `profiles.logistics_data.active_master_agreement_id`); (2) En `CommercialAgreementsModule.tsx`, actualizar el Wizard Paso 1 a "Lista Maestra Compartida (Efecto Cascada)" con banner explicativo Poka-Yoke y telemetría de sedes asociadas; (3) En Paso 2, requerir Nombre Institucional Maestro con presets de inicio y duración unificada; (4) En la tabla principal de acuerdos, consolidar el acuerdo maestro en una sola fila con píldora interactiva `[👥 N Sedes]`; (5) Implementar modal de gestión de sedes vinculadas para agregar/remover clientes en caliente con 1 clic; (6) En la edición de precios del acuerdo maestro (drawer o Excel), asegurar que los cambios se propaguen en tiempo real en cascada a todos los clientes asociados al cotizar o montar pedidos en `/admin/orders/create` y `EmailDraftsModule`.
+- [x] **Tarea COM-38 (Limpieza UX / Deprecación Botón Modelo General):** Retirar el botón legado `[ ✨ Modelo General ]` de la barra de herramientas de `CommercialAgreementsModule.tsx`, unificando la creación y gestión de listas maestras exclusivamente bajo el botón canónico `[ + Nuevo Acuerdo ]` con presets de vigencia y efecto cascada.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -7323,3 +7328,790 @@ El módulo `/ops/recogida` opera como la consola móvil en tiempo real para el c
   3. Si el transportista intenta rechazar la carga por mala calidad:
      - Los botones de motivo se muestran inhabilitados hasta que el usuario adjunta la fotografía de evidencia del producto en mal estado.
      - Al subir la imagen y presionar `[Mala Calidad / Feo]`, la compra transiciona a `rejected`, la foto se almacena en el bucket `vouchers`, se registra la novedad en `provider_novelties` y la tarea de compra en `procurement_tasks` se reabre automáticamente a `pending` para que el comprador consiga el producto de reemplazo.
+
+---
+
+### 37.5 Muelle de Recepción, Pesaje & Entrada a Bodega (`/ops/recepcion`)
+
+#### A. Misión Crítica y Contexto Físico en Muelle
+El módulo `/ops/recepcion` constituye el filtro primario de ingreso físico a planta donde se recibe la carga transportada desde Corabastos a partir de las 17:00 (5:00 PM) hora Bogotá (22:00 UTC) del día anterior. Erradica mermas invisibles y fraudes en pesaje mediante una **Validación Ciega de Báscula (Blind Scale Test)**, clasifica el estándar organoléptico mediante semáforo de 3 vías y segrega automáticamente los excesos de peso en una mesa de discrepancias en cuarentena antes de permitir la entrada formal al inventario disponible.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`purchases` (Compras en Tránsito y Recepción):**
+   - Estados de entrada monitoreados: `picked_up`, `partial_pickup`, `receiving` y concluidas (`received_ok`, `received_review`, `received_rejected`, `received_partial`).
+   - `received_quantity`: Peso neto ingresado en báscula de muelle.
+   - `quality_status`: Calificación del lote (`green`, `yellow`, `red`).
+   - `rejection_reason`: Motivo clasificado ante rechazo.
+   - `voucher_image_url`: Fotografía obligatoria de la mercancía no conforme en Storage `vouchers`.
+2. **`inventory_movements` (Kardex de Ingreso a Bodega):**
+   - Al finalizar con éxito (`received_ok`), registra entrada de tipo `purchase` con `quantity: actualQty`, `status_to: 'available'`.
+   - En veredictos para revisión (`received_review`), registra el movimiento con `status_to: 'in_process'` (cuarentena de calidad).
+3. **`weight_discrepancies` (Mesa de Excedentes y Sobrepesos):**
+   - Si `receivedQty > expectedQty`:
+     - La porción esperada entra al flujo de inventario estándar.
+     - El diferencial sobrante (`excess_quantity = receivedQty - expectedQty`) se registra en `weight_discrepancies` con `status: 'pending_approval'`, quedando en cuarentena hasta dictamen del Supervisor en `/ops/recepcion/supervisor`.
+4. **`provider_novelties` & `procurement_tasks` (Blindaje Operativo ante Rechazo):**
+   - Si el lote se rechaza (`received_rejected`), el sistema almacena la novedad con severidad `high` y evidencia fotográfica en `provider_novelties`.
+   - Reabre de inmediato la tarea de compra en `procurement_tasks` (`status: 'pending'`, `picked_quantity: 0`) para reponer de urgencia el pedido institucional.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Protocolo de Validación Ciega de Báscula (Blind Scale Protocol):**
+   - El operador digita el peso físico marcado en la báscula sin ver la cifra esperada.
+   - Si $\Delta = |\text{inputQty} - \text{expectedQty}| \le 0.05\text{ Kg}$, el peso se convalida instantáneamente y habilita la fase de inspección de calidad.
+   - Si $\text{inputQty} < \text{expectedQty} - 0.05\text{ Kg}$ (déficit físico):
+     - **Intento 1:** Alerta sonora y visual: *"Diferencia detectada. Pese nuevamente."*. Permite re-pesaje o confirmación manual si es un parcial conocido.
+     - **Intento 2+:** Bloqueo Poka-Yoke. Exige obligatoriamente seleccionar entre `[Recibir como PARCIAL]` o `[RECHAZAR TODO]`.
+2. **Segregación Automática de Excedentes:**
+   - Si el operador recibe más producto del facturado en Corabastos, la bodega resguarda la masa adicional sin inflar el inventario activo de venta ni desbalancear el costo de compra, enviando el sobrante a cuarentena y notificando a la mesa de supervisión.
+3. **Semáforo Obligatorio de Calidad en Muelle:**
+   - 🟢 **Conforme (`received_ok`):** Habilita de inmediato el producto para el picking de las células.
+   - 🟡 **Para Revisión (`received_review`):** Envía el lote a cuarentena interna preventiva.
+   - 🔴 **No Conforme (`received_rejected`):** Dispara la compuerta de rechazo total.
+4. **Poka-Yoke de Rechazo con Foto Innegociable:**
+   - Para presionar los botones de rechazo (*Mala Calidad / Feo*, *Producto Equivocado*, *Averiado / Roto*, *Otro Motivo*), la interfaz exige cargar la fotografía del producto defectuoso. El botón de confirmación permanece deshabilitado hasta que el archivo es adjuntado.
+5. **Carrusel Didáctico del Gemba (Onboarding Tutor):**
+   - Tutor interactivo vectorial en 3 pasos (*Recepción Bodega*, *Validación Ciega*, *Calidad y Excepciones*) con ilustraciones SVG dinámicas para estandarizar la curva de aprendizaje de los pesadores de muelle.
+
+---
+
+#### Escenario 163: Recepción en Muelle, Validación Ciega de Peso, Gestión de Excedentes y Rechazo con Evidencia (SDD v1.9.122)
+- **Given** un pesador de muelle recibiendo camiones en `/ops/recepcion` durante el turno nocturno.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y lista las compras del turno nocturno en estados en tránsito o muelle.
+  2. Al pulsar sobre un lote de Tomate Chonto con 50 Kg esperados:
+     - El operario digita 40 Kg (déficit de 10 Kg). El sistema advierte *"Diferencia detectada. Pese nuevamente."* sin revelar la cifra esperada.
+     - Al digitar nuevamente 40 Kg por confirmación de báscula, el sistema bloquea el flujo directo y presenta las opciones de excepción: `[Recibir como PARCIAL]` o `[RECHAZAR TODO]`.
+  3. Si el operario digita 55 Kg (excedente de 5 Kg):
+     - El sistema convalida la recepción, ingresa los 50 Kg esperados al inventario activo e inserta los 5 Kg sobrantes en `weight_discrepancies` en estado `pending_approval` para dictamen del supervisor.
+  4. Si el lote presenta pudrición severa y el operario califica en Rojo:
+     - El botón de rechazo permanece bloqueado hasta que el operario toma y adjunta la fotografía de evidencia.
+     - Al pulsar `[Mala Calidad / Feo]`, la compra transiciona a `received_rejected`, la foto se sube a `vouchers`, se registra la novedad en `provider_novelties` y la tarea en `procurement_tasks` se reactiva a `pending` para abastecimiento urgente.
+
+---
+
+### 37.6 Portal del Supervisor de Recepción, Cuarentenas & Discrepancias (`/ops/recepcion/supervisor`)
+
+#### A. Misión Crítica y Contexto Físico en Muelle
+El módulo `/ops/recepcion/supervisor` constituye la consola táctica de resolución y comando del Jefe de Muelle y Calidad de Planta para dictaminar los lotes retenidos en cuarentena (`received_review`) y los excesos de masa registrados en báscula (`weight_discrepancies`). Erradica pérdidas por inventario fantasma y protege los márgenes operativos mediante la aprobación o rechazo de excedentes en base de datos, la reapertura reactiva de compras institucionales y el control de acceso en caliente para los operarios de piso.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`purchases` (Lotes en Cuarentena de Calidad):**
+   - Lectura de compras con estado `'received_review'`, enriquecidas con datos relacionales de `products` (nombre, unidad, SKU, categoría, imagen) y `providers` (razón social).
+   - Cálculo preciso de la cantidad recibida mediante cruce con `inventory_movements` (`reference_type = 'purchase_reception'`).
+2. **`weight_discrepancies` (Mesa de Excedentes de Peso):**
+   - Lectura de ítems con `status: 'pending_approval'`.
+   - Campos canónicos: `expected_quantity`, `received_quantity`, `excess_quantity`, `status`, `supervisor_notes`, `created_at`, `resolved_at`.
+3. **`inventory_movements` (Kardex Atómico RPC):**
+   - Invocación de la función almacenada `handle_inventory_movement`:
+     - **Liberación de Cuarentena:** `type: 'transfer'`, de `in_process` a `available`.
+     - **Rechazo de Cuarentena:** `type: 'exit'`, retiro de `in_process`.
+     - **Aprobación de Excedente:** `type: 'transfer'`, de `in_process` a `available` por la cantidad `excess_quantity`.
+     - **Rechazo de Excedente:** `type: 'exit'`, retiro del sobrante de `in_process`.
+4. **`procurement_tasks` & `product_conversions` (Reapertura de Compras ante Rechazo):**
+   - Al rechazar una mercancía en cuarentena, el sistema deduce la cantidad de `total_purchased` en la tarea original.
+   - Aplica conversión de unidades si difieren entre producto y tarea (`product_conversions.conversion_factor`).
+   - Si `total_purchased <= 0`, transiciona la tarea a `'pending'`; si es menor a `total_requested`, transiciona a `'partial'`.
+5. **`collaborators`, `collaborator_shifts` & `audit_logs` (Gobernanza de Personal en Piso):**
+   - Catálogo de colaboradores activos con discriminación de turnos en tiempo real.
+   - Conmutación reactiva de permisos modulares (`allowed_modules`: `Compras`, `Recogida`, `Recepción`, `Alistamiento`, `Despacho`, `Inventarios`).
+   - Trazabilidad inmutable en `audit_logs` con acción `UPDATE_PERMISSIONS`.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Resolución Bimodal de Cuarentenas de Calidad:**
+   - **Liberación:** Transiciona la compra a `received_ok`, marca como resueltas las alertas previas en `provider_novelties` (`resolved: true`, `resolution_action: 'approved_by_supervisor'`) y traslada la masa a inventario disponible mediante RPC atómico.
+   - **Rechazo:** Exige clasificar el motivo de rechazo (`quality_defect`, `plague_pest`, `bad_packaging`, `temperature_break`, `other` con texto libre), permite adjuntar fotografía de evidencia a Storage `vouchers`, da de baja el producto de `in_process`, reabre la tarea en `procurement_tasks` e inserta la novedad de proveedor en `provider_novelties`.
+2. **Resolución Bimodal de Excedentes de Peso:**
+   - **Autorizar Excedente:** Aprueba la discrepancia, traslada el sobrante a disponible y actualiza `purchases.picked_up_quantity` al peso total recibido en báscula.
+   - **Rechazar Exceso:** Rechaza la discrepancia, desecha el exceso de `in_process` y consolida la compra por el peso esperado original, protegiendo al negocio de sobrecostos no pactados con proveedores informales.
+3. **Telemetría y Filtro Omnibox Instantáneo:**
+   - StatCards reactivos con conteo en vivo de Cuarentenas Activas y Excedentes Pendientes.
+   - Buscador universal que filtra simultáneamente por SKU, nombre botánico del producto o proveedor.
+4. **Matriz de Control de Acceso Modular en Tiempo Real:**
+   - Permite al supervisor habilitar o restringir módulos de piso a cualquier operario con un clic, reflejándose al instante y auditándose con el estándar Zero-Trust.
+
+---
+
+#### Escenario 164: Dictamen de Cuarentenas, Autorización de Excedentes y Gobernanza Modular de Personal (SDD v1.9.123)
+- **Given** el Supervisor de Recepción accediendo a `/ops/recepcion/supervisor` a las 05:30 AM.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y renderiza las tarjetas de telemetría con el conteo de cuarentenas y excedentes pendientes.
+  2. En la pestaña `Cuarentenas`:
+     - Al seleccionar un lote de Fresa Monterrey retenido por calidad amarilla:
+       - Si el supervisor pulsa `[Liberar a Inventario]` y confirma: la compra pasa a `received_ok`, las alertas de proveedor se marcan resueltas y el inventario pasa de `in_process` a `available` mediante `handle_inventory_movement`.
+       - Si el supervisor pulsa `[Rechazar]`: selecciona `Defecto de Calidad`, adjunta fotografía del lote y confirma; la compra pasa a `received_rejected`, la masa sale de `in_process`, la tarea en `procurement_tasks` se reabre a `pending` y se registra la penalización en `provider_novelties`.
+  3. En la pestaña `Excedentes`:
+     - Al seleccionar un sobrante de 8 Kg de Zanahoria:
+       - Al pulsar `[Autorizar Ingreso Excedente]`: la discrepancia pasa a `approved`, los 8 Kg se liberan a `available` y la compra consolida el nuevo peso total.
+       - Al pulsar `[Rechazar Exceso]`: la discrepancia pasa a `rejected`, los 8 Kg se eliminan de `in_process` y la compra queda fijada por la cantidad inicial pactada.
+  4. En la pestaña `Colaboradores`:
+     - El supervisor activa o desactiva la casilla `Recepción` para un operario de muelle, guardando de inmediato en `collaborators.allowed_modules` y registrando la traza de auditoría en `audit_logs`.
+
+---
+
+### 37.7 Consola de Picking & Alistamiento por Células de Patio (`/ops/picking`)
+
+#### A. Misión Crítica y Contexto Físico en Bodega
+El módulo `/ops/picking` constituye la consola táctica de piso para la preparación, pesaje y distribución física de mercancía hacia las 150 bahías de muelle. Permite orquestar el flujo operativo en tiempo real tanto en la modalidad cliente/bahía (*picking por orden*) como en la modalidad producto masivo (*picking por consolidado/recorrido*), garantizando que ningún alistador despache mercancía sin existencia verificada mediante cruces en caliente contra el inventario y segregando de inmediato los lotes defectuosos a cuarentena.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`orders` & `order_items` (Demanda Operativa de Alistamiento):**
+   - Lectura de órdenes en estados operativos: `para_compra`, `approved` y `picking`.
+   - Filtrado dinámico por fecha operativa Bogotá (corte D-1 / `delivery_date = targetDate`) gobernado por `app_settings.enable_cutoff_rules`.
+   - `order_items`: Actualización atómica de `picked_quantity`, `quality_status` (`green`, `yellow`, `red`) y `quality_notes`.
+   - `orders.warehouse_spaces`: Relación con las bahías físicas de piso (ej. `[ESPACIO 12, 13]`).
+2. **`products` & `inventory_stocks` (Cruce Poka-Yoke de Stock en Vivo):**
+   - Consulta paralela vía `/api/inventory/stocks` para determinar el inventario físico disponible en tiempo real de cada SKU antes de habilitar el alistamiento.
+3. **`inventory_movements` (Segregación Reactiva de Rechazos):**
+   - Si un alistador rechaza un producto por calidad en piso (`quality_status = 'red'`), el sistema inserta automáticamente una deducción con `type: 'adjustment'`, `status_to: 'in_process'`, retirando la masa defectuosa del disponible de bodega hacia cuarentena de inspección bajo referencia `order_picking`.
+4. **Supabase Realtime Channel (`picking-realtime`):**
+   - Canal persistente de broadcasting que emite el evento `refresh` ante cada actualización individual, manteniendo sincronizados en milisegundos los terminales de picking, la torre de control de supervisión y el checker de rectificación.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Gobernanza RBAC de Células y Equipos de Compra (`buying_team`):**
+   - Filtrado estricto por permisos personalizados del usuario (`profile.custom_permissions`):
+     - Soporta directivas granulares: exclusión (`-ops.picking.category:${cat}`), inclusión explícita (`+ops.picking.category:${cat}` o `ops.picking.category:${cat}`) y comodín de administrador (`*`, `+*`).
+   - Selector colapsable de células operativas con conmutación instantánea a `TODAS` las categorías.
+2. **Doble Modalidad Operativa Gemba (`viewMode`):**
+   - **Modo Espacio (`client`):** Organizado por cliente institucional y bahía física. Ordenado por severidad de alertas (rojo > amarillo > pendiente > completado) y número de bahía. Permite marcar `LISTO` en 1 clic si el stock es suficiente.
+   - **Modo Producto (`product`):** Agrupa el consolidado de un producto para que el operario baje un pallet o bulto y lo distribuya recorriendo secuencialmente las bahías de piso (`REPARTIR A N RECINTOS`).
+3. **Poka-Yoke de Stock Insuficiente (`isInsufficient`):**
+   - Si $\text{available\_stock} < \text{order\_quantity}$: el botón de acción rápida `LISTO` se transforma en `AJUSTAR` o `SIN STOCK`.
+   - Dentro del modal, la validación bloquea el guardado si $\text{qty} > \text{available\_stock}$, emitiendo la alerta: *"La cantidad supera el stock disponible en inventario"*.
+4. **Modal Bottom Sheet de Validación en Dos Fases:**
+   - **Fase 1: Entrada de Cantidad:** Digitación del peso neto en báscula. Detecta entregas parciales y habilita botón express de `¿Reportar Faltante Total?` (0 kg).
+   - **Fase 2: Semáforo de Calidad:**
+     - 🟢 **Verde:** Mercancía conforme.
+     - 🟡 **Amarillo:** Novedad leve (exige nota).
+     - 🔴 **Rojo:** Rechazo. Despliega matriz de motivos obligatorios (*Producto Dañado*, *Madurez Incorrecta*, *Presencia de Plagas*, *Embalaje Roto*, *Color/Tamaño No Cumple*, *Faltante*) y genera ajuste a cuarentena.
+5. **Dashboard de Telemetría Semafórica (HUD Sticky):**
+   - Barra de progreso tricolor en cabecera fija que refleja en tiempo real el porcentaje de avance global de la planta (`progress%`), contabilizando ítems listos, parciales, en alerta y pendientes.
+
+---
+
+#### Escenario 165: Alistamiento de Pedidos por Bahía o Producto, Control de Stock y Rechazo en Picking (SDD v1.9.124)
+- **Given** un alistador de la célula de Fruver en `/ops/picking` a las 06:00 AM.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y lista los pedidos activos asignados a las bahías de muelle.
+  2. En modo `Espacio`, para el cliente "Restaurante La Casona" en Bahía 14 con 10 Kg de Papa Pastusa:
+     - El sistema consulta `/api/inventory/stocks` y valida que existen 45 Kg en bodega.
+     - Al pulsar `[LISTO]`, el sistema valida la cantidad completa, fija `picked_quantity: 10`, `quality_status: 'green'` y actualiza la barra de avance del cliente.
+  3. Si para 5 Kg de Aguacate Hass el stock en bodega es de 0 Kg:
+     - El botón directo cambia a `[SIN STOCK]`. Al abrir el modal, el alistador pulsa `¿Reportar Faltante Total?`, guardando 0 Kg con alerta visible.
+  4. Si al alistar Fresas se detecta moho y el alistador marca semáforo Rojo con motivo "Producto Dañado":
+     - `order_items` registra `quality_status: 'red'` y el motivo en `quality_notes`.
+     - `inventory_movements` genera una salida por ajuste con `status_to: 'in_process'`, aislando el lote de la venta comercial.
+     - El canal Realtime `picking-realtime` transmite el broadcast de refresco para alertar a la mesa de despacho.
+
+---
+
+### 37.8 Tablero Matricial de Control de Picking & Torre FIDS (`/ops/picking/dashboard`)
+
+#### A. Misión Crítica y Contexto Físico en Bodega (Torre de Control de Alistamiento)
+El módulo `/ops/picking/dashboard` constituye la torre de control macro proyectada en pantallas de alta densidad (televisores industriales de 65"-75" colgados en la nave de alistamiento o terminales de despacho). Modela y monitorea la matriz completa de $M \text{ Productos Activos} \times N \text{ Órdenes / Bahías}$, detectando cuellos de botella por célula operativa, camiones listos al 100% para despacho y alertas de inventario crítico en tiempo real.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`orders`, `order_items` & `profiles` (Matriz de Celdas $M \times N$):**
+   - Lectura de órdenes en estado `para_compra`, `approved` y `picking`.
+   - Mapeo de columnas $N$ por orden individual con ID de secuencia (`sequence_id`), nombre corporativo, número de bahía asignada (`warehouse_spaces`) y total de canastillas estimadas (`crates_count`).
+2. **`route_stops`, `routes` & `fleet_vehicles` (Asignación de Flota y Rutas):**
+   - Vinculación relacional para agrupar las columnas por vehículo de transporte (`vehicle_plate`) y conductor (`fleet_vehicles.collaborators.contact_name`).
+   - Extracción de la hora programada de salida del camión (`departure_time` desde `routes.logic_parameters_snapshot.fleet_start_time`).
+3. **`products` & `inventory_stocks` (Filas de Productos y Stock Físico):**
+   - Productos agrupados por célula operativa (`buying_team`).
+   - Cálculo del stock disponible en bodega (`status = 'available'`). Si un SKU tiene stock 0 y demanda insatisfecha, se marca visualmente con fila roja (`isRedRow`) y badge `⚠️ SIN STOCK`.
+4. **Supabase Realtime Channel (`picking-realtime`):**
+   - Escucha unificada de eventos Postgres (`order_items`, `orders`, `inventory_stocks`) con debouncing inteligente de 2.5s y eventos de broadcast instantáneos.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Selector de Densidad Visual Cuádruple (Persistencia en LocalStorage):**
+   - `standard`: Celdas de 40x40px para uso en estaciones de trabajo y supervisión.
+   - `high`: Celdas de 32x32px para monitores de alta resolución.
+   - `tv`: Celdas compactas de 22x22px con ocultamiento forzado de cabeceras/pies de página del layout del ERP para maximizar el área de datos en pantallas de bodega.
+   - `fids` (Flight Information Display System): Modo de foco extremo. Oculta clientes y productos alistados al 100% y ordena las columnas restantes prioritariamente por la hora de salida del furgón (`departure_time`), focalizando la energía de los alistadores en los pedidos que están a minutos de salir.
+2. **Semáforo Cromático de Celdas:**
+   - ⚪ **Gris (`#1E293B`):** Pendiente (`ordered > 0, picked == 0`).
+   - 🟡 **Ámbar (`#2D1E08` / `#FBBF24`):** Parcial en alistamiento. Muestra fracción visual $\frac{\text{picked}}{\text{ordered}}$.
+   - 🟢 **Verde Esmeralda (`#34D399`):** Alistado completo (`picked >= ordered`).
+   - 🔴 **Rojo Pulsante (`#EF4444`):** Rechazado por calidad (`hasRejection`).
+   - 🟠 **Ámbar Pulsante (`#F59E0B`):** Novedad de verificación (`hasWarning`).
+3. **Poka-Yoke de Despacho Inmediato al 100% de Camión:**
+   - Al completarse todos los pedidos asignados a una ruta/vehículo, el encabezado de zona transiciona a verde con la acción interactiva: `RECTIFICAR CARGUE 📋`, permitiendo navegar en 1 clic a `/ops/rectificacion` para precinto LIFO.
+4. **Filtro Rápido Multi-Célula y Colapso de Nombres:**
+   - Popover multi-select que permite a un líder de célula (ej. Verduras) filtrar la matriz exclusivamente para su equipo sin alterar la vista global.
+   - Botón toggle para colapsar los nombres de clientes en el eje vertical, ahorrando 120px de espacio vertical cuando el supervisor solo requiere monitorear los números de bahía.
+5. **Ticker de Alertas Continuo (Marquee Footer) & Milestone Popups:**
+   - Ticker animado al pie que alerta sobre camiones listos, bajas existencias en bodega y alertas de calidad.
+   - Modal de inspección de alertas al hacer clic en el ticker.
+   - Popup de celebración central de 5 segundos al completarse un pedido o zona completa.
+
+---
+
+#### Escenario 166: Matriz Industrial M x N, Modo FIDS por Horas de Salida y Alerta de Cuello de Botella (SDD v1.9.125)
+- **Given** el Jefe de Operaciones proyectando `/ops/picking/dashboard` en la pantalla central de muelle.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y renderiza la matriz completa de productos y clientes ordenados por camión y bahía de piso.
+  2. Al conmutar al modo `FIDS`:
+     - El sistema oculta todos los pedidos que ya están listos al 100% y reordena las columnas restantes por `departure_time` (primer camión que sale a las 05:00 AM a la izquierda).
+  3. Si la Fresa Monterrey presenta 0 Kg en `inventory_stocks` y hay 12 Kg pendientes en matriz:
+     - La fila completa se resalta en rojo oscuro con el distintivo `⚠️ SIN STOCK` alertando a Compras y Supervisión de inmediato.
+  4. Cuando el camión de "RUTA SUR (WXYZ123)" completa el último ítem:
+     - Se dispara el banner `🚨 ¡CAMIÓN RUTA SUR AL 100%! PROCEDER CON DESPACHO INMEDIATO 🚨` en el ticker inferior.
+     - El encabezado del camión muestra el botón verde pulsante `RECTIFICAR CARGUE 📋` para el paso a precinto.
+
+---
+
+### 37.9 Terminal Kiosco de Picking Táctil por Célula (`/ops/picking/terminal`)
+
+#### A. Misión Crítica y Contexto Físico en Bodega (Terminal Kiosco de Piso)
+El módulo `/ops/picking/terminal` opera como la interfaz kiosco de ultra-alta velocidad montada en terminales táctiles fijas o tabletas industriales de 10" ubicadas en los mesones de trabajo de cada célula física (Frutas, Verduras, Hortalizas, Tubérculos, Lácteos, Despensa). Diseñada para operarios con guantes o manos húmedas, erradica la fricción de navegación mediante un flujo directo de 2 pasos y confirmación instantánea con un botón de gran tamaño (*1-Tap Pick*).
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`order_items` & `products` (Tareas Filtradas por Célula):**
+   - Lectura reactiva de ítems pendientes donde `products.category = selectedCell` y las órdenes vinculadas se encuentran en estado `approved` o `processing`.
+   - Filtro de exclusión estricto: solo muestra ítems con `picked_quantity < quantity`.
+2. **`orders` & `profiles` (Identificación del Destinatario):**
+   - Resolución canónica del nombre del cliente B2B (`company_name`) o B2C (`contact_name`).
+3. **Instrucciones Físicas de Alistamiento (`resolvePhysicalInstruction`):**
+   - Transducción inteligente de especificaciones agrícolas: variantes botánicas (`variant_label`), apodos de producto (`nickname`) y opciones personalizadas (`selected_options`). Estampa indicaciones directas para el operario (ej. *"maduro"*, *"corte pluma"*, *"racimo pequeño"*).
+4. **Supabase Realtime Channel (`terminal-changes`):**
+   - Canal dedicado de sincronización que escucha mutaciones en `order_items` y refresca automáticamente la cola de alistamiento de la célula sin intervención manual.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Flujo Kiosco en 2 Pasos (Zero-Friction UI):**
+   - **Paso 1 (Selección de Célula):** Grid de 6 botones masivos (`Frutas`, `Verduras`, `Hortalizas`, `Tubérculos`, `Lácteos`, `Despensa`).
+   - **Paso 2 (Lista de Alistamiento Activa):** Visualización de tarjetas de producto con tipografía monoespaciada de alto contraste, instrucción física destacada en verde esmeralda y botón amarillo brillante de confirmación.
+2. **Protocolo de Confirmación Rápida 1-Tap (`handlePick`):**
+   - Al pulsar el botón `CONFIRMAR` con la cantidad destacada:
+     - **Actualización Optimista:** El ítem desaparece de la pantalla de inmediato sin congelar la interfaz.
+     - **Feedback Visual:** Despliega banner temporal superior verde pulsante (*"Picado: [Producto] ([Cantidad])"*).
+     - **Persistencia en BD:** Actualiza `order_items.picked_quantity = quantity`.
+     - Si ocurre un fallo de red o base de datos, emite toast de advertencia y recarga la cola de tareas automáticamente.
+3. **Celebración y Pantalla Limpia (*Zero-Pending Celebration*):**
+   - Al completar todas las tareas asignadas a la célula, la pantalla limpia la lista y renderiza la pantalla de éxito con animación 🎉 (*"¡Todo Listo! No hay pendientes en [Célula]"*), permitiendo conmutar a otra célula para apoyar a los compañeros de planta.
+
+---
+
+#### Escenario 167: Selección de Célula, Instrucción Física de Alistamiento y Confirmación 1-Tap (SDD v1.9.126)
+- **Given** un alistador en la mesa de trabajo de la célula de Frutas en `/ops/picking/terminal`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y muestra el grid de selección de células.
+  2. Al pulsar sobre `[FRUTAS]`:
+     - El terminal se conecta al canal Realtime y lista las tareas pendientes de frutas para pedidos aprobados.
+  3. Al visualizar la tarjeta de Papaya Maradol (4 Kg) para "Hotel Tequendama":
+     - Muestra la indicación física: `↳ Punto Pintón (Maduración 3/5)`.
+  4. Al presionar el botón `[CONFIRMAR 4]`:
+     - La tarjeta desaparece al instante de la lista optimista.
+     - Se muestra el banner verde `Picado: Papaya Maradol (4)`.
+     - `order_items.picked_quantity` se actualiza a 4 en base de datos.
+     - Al alistar el último ítem de frutas, el terminal muestra la pantalla de celebración `🎉 ¡Todo Listo!` y el contador de pendientes marca 0.
+
+---
+
+### 37.10 Mesa de Alistamiento por Pedido y Cliente (`/ops/picking/cliente/[id]`)
+
+#### A. Misión Crítica y Contexto Físico en Bodega
+El módulo `/ops/picking/cliente/[id]` opera como la mesa de alistamiento monocliente donde el operario prepara de forma continua y guiada los productos solicitados por una empresa específica dentro de una célula botánica determinada (`?category=...`). Permite certificar la calidad individual de cada ítem, garantiza la trazabilidad física de las variantes e inicia formalmente el estado de preparación de la orden en planta.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`orders` & `order_items` (Detalle Específico del Pedido):**
+   - Lectura del pedido por UUID `orderId`.
+   - Filtrado de ítems de la orden coincidentes con la célula activa (`products.category === category`).
+   - `order_items`: Actualización de `picked_quantity` y `quality_status` (`green`, `yellow`, `red`).
+   - **Transición de Estado:** Al confirmar el primer alistamiento, promueve atómicamente la orden de `approved` a `in_preparation`.
+2. **`products` & `profiles` (Catálogo y Razón Social):**
+   - Nombre de producto con etiqueta de variante (`variant_label` o `nickname`).
+   - Unidad de medida oficial (`products.unit_of_measure`).
+   - Razón social B2B (`company_name`) o contacto B2C (`contact_name`).
+3. **`inventory_movements` (Segregación Automática por Rechazo):**
+   - Si la certificación de calidad es marcada en Rojo (`red`, *No Despachar*), registra movimiento de deducción inmediata en `inventory_movements` con `quantity: -selectedItem.quantity`, `type: 'adjustment'`, `status_to: 'in_process'`, resguardando el lote averiado bajo la referencia `order_picking`.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Aislamiento Monocelular:**
+   - La pantalla segrega la lista exclusivamente para la célula seleccionada por el alistador, evitando que mezcle productos refrigerados con frutas secas o abarrotes pesados en la misma canastilla.
+2. **Botón Poka-Yoke `TODO`:**
+   - En el modal de alistamiento, el botón express `TODO` rellena al instante la cantidad total requerida por el cliente (`pickedQty = quantity`), acelerando el pesaje cuando la caja viene completa de plaza sin mermas.
+3. **Certificación Tricolor de Calidad:**
+   - 🟢 **Excelente (`green`):** Cumple estándares organolépticos.
+   - 🟡 **Regular (`yellow`):** Aceptable con advertencia de maduración.
+   - 🔴 **No Despachar (`red`):** Bloquea el despacho del ítem y envía el stock defectuoso a cuarentena en `inventory_movements`.
+4. **Retroalimentación Visual Inmediata:**
+   - Las tarjetas de producto completadas se tornan verdes translúcidas (`rgba(13, 122, 87, 0.1)`) con un badge circular de check, distinguiendo claramente los pendientes de los finalizados.
+
+---
+
+#### Escenario 168: Picking Monocelular por Cliente, Transición a in_preparation y Retiro a Cuarentena (SDD v1.9.127)
+- **Given** un alistador en `/ops/picking/cliente/[id]?category=Verduras` para el cliente "Club El Nogal".
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y lista exclusivamente los ítems de Verduras del pedido.
+  2. Al pulsar sobre "Cebolla Cabezona Blanca" con 15 Kg solicitados:
+     - Se despliega el modal inferior de alistamiento.
+     - El alistador pulsa el botón `[TODO]`, rellenando automáticamente el campo con 15.
+     - Selecciona la calidad `[EXCELENTE]` (Verde) y pulsa `[CONFIRMAR ALISTAMIENTO]`.
+     - `order_items.picked_quantity` se actualiza a 15 y el pedido pasa de `approved` a `in_preparation`.
+  3. Si en el ítem "Espinaca Bogotana" detecta hojas marchitas y califica `[NO DESPACHAR]` (Rojo):
+     - `order_items.quality_status` se actualiza a `red`.
+     - Se genera una salida de inventario a `in_process` en `inventory_movements` para dar de baja el producto marchito.
+
+---
+
+### 37.11 Consola Central de Rectificación de Rutas & Despacho (`/ops/rectificacion`)
+
+#### A. Misión Crítica y Contexto Físico en Muelle (Compuerta Checker de Despacho)
+El módulo `/ops/rectificacion` opera como el panel principal del Auditor de Muelle (Checker) encargado de fiscalizar los camiones de transporte antes de su salida a reparto. Conecta la finalización del picking con el cargue furgonado en reversa (orden LIFO: última parada al fondo, primera parada en la puerta), impidiendo el despacho de rutas con alistamiento incompleto y asegurando la integridad física de las remisiones comerciales.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`routes` & `route_stops` (Consolidación de Rutas Operativas):**
+   - Lectura de rutas activas con su placa (`vehicle_plate`), conductor asignado (`driver_name`), estado operativo y total de paradas/pedidos.
+   - Cruce relacional con `fleet_vehicles.collaborators` para mapear la placa vehicular al nombre del chofer.
+2. **`orders` & `order_items` (Avance Real de Alistamiento):**
+   - Agregación en tiempo real de kilogramos solicitados vs picados por cada parada de la ruta para calcular el avance porcentual (`picking_pct`).
+3. **Máquina de Estados de Rectificación:**
+   - `in_picking`: Alistamiento en bodega inferior al 100%.
+   - `ready_for_rectification`: Alistamiento al 100%, furgón listo para precinto y conteo físico.
+   - `rectifying`: Checker con auditoría abierta.
+   - `rectified` / `in_transit`: Cargue validado formalmente, furgón sellado.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Cálculo Matemático de Avance de Alistamiento:**
+   $$\mathbf{picking\_pct} = \Big\lfloor \frac{\sum \min(\text{quantity},\ \text{picked\_quantity})}{\sum \text{quantity}} \times 100 \Big\rfloor$$
+   - Si $\mathbf{picking\_pct} == 100$, transiciona automáticamente el estado visual a `LISTO PARA RECTIFICAR`.
+2. **Poka-Yoke de Acceso Anticipado:**
+   - Si el Checker pulsa sobre un camión cuyo alistamiento está incompleto (`picking_pct < 100`), la interfaz intercepta la navegación con una advertencia modal:
+     *"⚠️ ALISTAMIENTO AL X%: Este camión aún no ha completado el 100% de alistamiento en el Tablero. ¿Deseas ingresar a la lista de rectificación de todas formas?"*
+3. **Telemetría y Filtros Rápidos de Muelle:**
+   - 3 StatCards superiores: Total de Camiones, Listos para Rectificar y En Transporte.
+   - Buscador omnibox reactivo por placa vehicular o conductor.
+   - Filtros de estado: `Todos`, `Pendientes`, `Completados`.
+4. **Indicador de Progreso LIFO:**
+   - Barra de progreso que ilustra la cantidad de pedidos validados respecto al total de la ruta (`validated_orders / total_orders`), informando visualmente cuánto falta para liberar el camión.
+
+---
+
+#### Escenario 169: Monitoreo de Rutas, Poka-Yoke de Alistamiento Incompleto y Acceso a Rectificación LIFO (SDD v1.9.128)
+- **Given** el Checker de muelle accediendo a `/ops/rectificacion` a las 05:45 AM.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y lista todos los camiones programados para el turno matutino.
+  2. Para el vehículo "NHP287" (García Henry) con picking al 21%:
+     - El badge se muestra en azul: `EN ALISTAMIENTO (21%)`.
+     - Si el Checker intenta ingresar a la ruta, el sistema despliega la confirmación preventiva antes de permitir la navegación.
+  3. Para el vehículo "WFW369" que alcanza el 100% de alistamiento:
+     - El badge cambia automáticamente a verde: `LISTO PARA RECTIFICAR`.
+     - El botón de acción resalta en verde esmeralda: `RECTIFICAR CARGUE (LIFO) ->`.
+  4. Al pulsar sobre el camión listo, la aplicación navega hacia `/ops/rectificacion/[routeId]` para iniciar el conteo LIFO.
+
+---
+
+### 37.12 Mesa Táctica de Rectificación de Cargue LIFO & Certificación de Salida (`/ops/rectificacion/[routeId]`)
+
+#### A. Misión Crítica y Contexto Físico en Muelle (Compuerta Shift-Left de Precinto y Facturación Neta)
+El módulo `/ops/rectificacion/[routeId]` constituye la mesa operativa de fiscalización física y precinto del vehículo de transporte antes de su salida a reparto. Su objetivo es erradicar el 100% de las notas crédito y disputas de entrega mediante la verificación rigurosa de las mercancías cargadas bajo la regla estricta **LIFO (Last-In, First-Out)**: la última parada de la ruta se estiba al fondo del furgón y la primera entrega en la compuerta.
+
+Integra una compuerta **Shift-Left de Calidad**, donde cualquier producto faltante por escasez en plaza mayorista o merma de selección es declarado en el muelle antes del despacho, ajustando automáticamente las cantidades de la remisión física para facturación neta, radicando la novedad en el sistema SAC/Calidad imputada a Compras, y certificando la salida del camión con trazabilidad de auditor.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`routes` & `route_stops` (Auditoría y Certificación de la Ruta):**
+   - Lectura de metadata de ruta: placa (`vehicle_plate`), conductor (`driver_name`), paradas ordenadas de forma descendente por `sequence_number`.
+   - Actualización atómica al certificar la ruta:
+     - `status`: Transiciona a `'rectified'`.
+     - `check_evidence_url`: Enlace a fotografía de la planilla física (en modo papel) o `null`.
+     - `check_mode`: `'digital'` | `'paper'`.
+     - `rectified_by_id`: UUID del auditor en sesión activa (`profile.id`).
+     - `rectified_by_name`: Nombre del responsable auditado.
+     - `rectified_at`: Marca temporal ISO 8601 del precinto.
+     - `is_certified_complete`: `true`.
+     - `has_shortages`: Booleano indicador de faltantes en muelle.
+     - `shortages_summary`: JSON array con el desglose de productos y kilogramos no cargados.
+2. **`orders` & `order_items` (Alineación Neta de Despacho):**
+   - Lectura de paradas, espacios de almacenamiento en bodega (`warehouse_spaces` / `location`), conteo de canastillas plásticas (`crates_count`), productos y precios unitarios.
+   - Actualización masiva de órdenes: Al certificar la salida de la ruta, promueve todos los pedidos asociados a `status: 'ready_for_dispatch'`.
+   - Ajuste atómico de ítems: Para cada ítem con escasez declarada, actualiza `order_items` (`picked_quantity` y `quantity` con la cantidad real despachada `shortage.actual_quantity`), garantizando que la remisión y la factura electrónica reflejen exactamente lo cargado.
+3. **`billing_returns` & `customer_service_pqrs` (Radicación Shift-Left de Novedades):**
+   - Inserción en `billing_returns` por cada faltante detectado:
+     - `quantity_returned`: Kilogramos faltantes (`missing_quantity`).
+     - `reason`: `[Faltante Cargue en Muelle - Escasez]: <motivo> | Parada #<stop> | Ruta <placa>`.
+     - `defect_category_l1`: `'comercial_cliente'`.
+     - `defect_subtype_l2`: `'producto_agotado_plaza'`.
+     - `imputed_responsible`: `'proveedor'`.
+     - `status`: `'pending_review'`.
+   - Inserción en `customer_service_pqrs`:
+     - `type`: `'reclamo'`.
+     - `category`: `'producto'`.
+     - `priority`: `'high'`.
+     - `subject`: `[Escasez Muelle] Faltante por Agotado: <producto> - Pedido #<id>`.
+     - `defect_category_l1`: `'comercial_cliente'`.
+     - `defect_subtype_l2`: `'producto_agotado_plaza'`.
+     - `imputed_responsible`: `'proveedor'`.
+     - `status`: `'pending'`.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Estiba LIFO Obligatoria (Inversa a la Ruta de Reparto):**
+   - El orden de visualización de las tarjetas es estrictamente inverso (`sequence_number` descendente): Stop 25 $\rightarrow$ Stop 24 $\rightarrow \dots \rightarrow$ Stop 1.
+   - Cada tarjeta expone claramente la ubicación de la mercancía en piso de bodega (`UBICACIÓN: ESP XX`) y el número de canastillas plásticas (`📦 CANASTILLAS: N`), guiando a la cuadrilla de cargue para introducir primero los pedidos del fondo.
+2. **Doble Modalidad de Chequeo Operativo:**
+   - **Modalidad Digital:** El auditor marca individualmente cada ítem o usa el botón de pedido completo (`validateWholeOrder`). Los ítems marcados se tachan y actualizan su color a verde.
+   - **Modalidad Planilla Física en Papel (`showPaperModal`):** Permite al auditor realizar el conteo con planilla impresa de contingencia. Autocompleta automáticamente el responsable desde `profile` e impone como Poka-Yoke ineludible la captura de una fotografía clara de la planilla física (`capture="environment"` / upload) antes de permitir la certificación.
+3. **Compuerta Shift-Left de Escasez / Agotado (`showShortageModal`):**
+   - Si un producto no se alistó por desabastecimiento, merma o falta en plaza, el operario pulsa `[Agotado]`.
+   - Se abre el modal táctico para ingresar la cantidad efectivamente cargada (o botón de 1-Tap `0 Kg (Agotado Total)`).
+   - Exige tipificación de causa raíz RCA (`Desabastecimiento en Plaza / Agotado Corabastos`, `Rechazo en mesa de selección por calidad / merma`, `Faltante de inventario en bodega`).
+   - Al marcarlo, la tarjeta del pedido activa una alerta visual amarilla: `⚠️ Este pedido contiene producto(s) no alistados por escasez. La remisión viajará con el valor neto ajustado.`
+   - Habilita el botón directo `[Reimprimir Remisión]` que invoca `/admin/orders/contingency-print?mode=remissions&orderIds=...` para emitir la remisión física corregida antes de que el camión encienda el motor.
+4. **Cápsula Flotante de Telemetría y Poka-Yoke de Cierre:**
+   - En estado incompleto: Cápsula ámbar fija: `FALTAN X PEDIDOS POR VALIDAR`. El botón de despacho permanece bloqueado.
+   - Al alcanzar el 100% de paradas validadas:
+     - Sin faltantes: Cápsula verde esmeralda `¡CARGUE 100% RECTIFICADO!`.
+     - Con faltantes: Cápsula ámbar con advertencia `¡CARGUE RECTIFICADO CON X NOVEDAD(ES)!`.
+     - Se desbloquea el botón `PASAR A CERTIFICACIÓN Y TRANSPORTE`.
+5. **Certificación Legal con Checkbox Innegociable (`showCertificationModal`):**
+   - Pantalla de balance final con desglose de auditor en muelle, vehículo y conductor, método de chequeo, pedidos rectificados y listado pormenorizado de faltantes a radicar en Calidad.
+   - Botón directo de lote `[Imprimir Remisiones Corregidas]`.
+   - Checkbox legal obligatorio (`certifiedAgreed`):
+     *"Certifico formalmente que he auditado el cargue del camión [placa], confirmo que las cantidades declaradas coinciden con el furgón y autorizo la salida a reparto."*
+   - Bloqueo de concurrencia y protección contra doble clic (`submittingCertification`). Tras persistir en base de datos, emite alerta de éxito y redirige a la consola del transportador `/ops/driver`.
+
+---
+
+#### Escenario 170: Rectificación de Cargue LIFO, Declaración Shift-Left de Agotado y Certificación de Salida (SDD v1.9.129)
+- **Given** el auditor de muelle accediendo a `/ops/rectificacion/[routeId]` para el vehículo "NHP287" (García Henry).
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y presenta las paradas ordenadas de forma LIFO inversa (ej. Parada #25 primero, Parada #1 al final).
+  2. Cada tarjeta indica la ubicación física en bodega (`ESP 32`) y el número de canastillas (`14`).
+  3. Al revisar la Parada #25 ("ADR WORK SAS - HOTEL SPOT CENTRO"):
+     - El auditor valida individualmente Ciruela, Espárragos, Lechuga y Perejil.
+     - En el ítem "Ruibarbo" (30 Kg), el cuadrillero constata que no llegó de Corabastos por desabastecimiento general.
+     - El auditor pulsa `[Agotado]`, selecciona `0 Kg (Agotado Total)`, elige la causa `Desabastecimiento en Plaza / Agotado Corabastos` y pulsa `[Confirmar Faltante & Ajustar]`.
+     - La tarjeta del pedido muestra el badge ámbar `FALTANTES EN MUELLE` y el botón `[Reimprimir Remisión]`.
+  4. Al validar todas las paradas de la ruta:
+     - La cápsula flotante indica: `¡CARGUE RECTIFICADO CON 1 NOVEDAD(ES)!` y resalta el botón `[PASAR A CERTIFICACIÓN Y TRANSPORTE]`.
+  5. Al abrir el modal de certificación:
+     - Se muestra el resumen de auditoría y la lista de novedades para Calidad.
+     - El auditor marca el checkbox legal de certificación y pulsa `[✓ CONFIRMAR Y ENVIAR A TRANSPORTE]`.
+     - El sistema inserta el registro en `billing_returns` y el ticket en `customer_service_pqrs` con subtipo `producto_agotado_plaza`.
+     - Ajusta `order_items` de Ruibarbo a 0 Kg.
+     - Actualiza la ruta a `rectified` y todas las órdenes a `ready_for_dispatch`.
+     - Despliega confirmación de éxito y redirige a `/ops/driver`.
+
+---
+
+### 37.13 Consola Móvil del Conductor, Odómetro Poka-Yoke & Rutas de Reparto (`/ops/driver`)
+
+#### A. Misión Crítica y Contexto Físico en Cabina (PWA del Transportador)
+El módulo `/ops/driver` opera como la consola táctica de despacho y cabina de mando móvil del conductor de reparto de FruFresco. Diseñada para operar desde smartphones en condiciones de baja iluminación de muelle (paleta oscura `#090D16` de alto contraste), actúa como compuerta operacional para:
+1. Identificar el vehículo de la flota asignado al turno.
+2. Auditar el odómetro físico antes de encender el motor mediante un protocolo de entrada a ciegas.
+3. Evaluar el semáforo preventivo de mantenimiento del camión.
+4. Desplegar la hoja de ruta matutina conectando con la verificación de paradas y la navegación GPS.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`fleet_vehicles` (Maestro de Flota y Odómetro):**
+   - Lectura de vehículos activos (`plate`, `current_odometer`).
+   - Actualización al confirmar odómetro inicial:
+     - `current_odometer`: Kilometraje verificado por el transportador.
+     - `last_odometer_update`: Marca temporal ISO 8601 del registro.
+2. **`maintenance_schedules` (Planes de Mantenimiento Preventivo):**
+   - Lectura relacional de tareas programadas vinculadas a la placa vehicular: `task_name`, `task_type` (`'date'` | `'km'`), `next_due_km`, `next_due_date`.
+   - Algoritmo de semáforo preventivo:
+     - **Tipo Fecha (`date`):** Si $\text{diffDays} < 0$, califica como `'urgent'` (*"Vencido hace N días"*); si $\text{diffDays} < 30$, califica como `'upcoming'` (*"Faltan N días"*).
+     - **Tipo Kilometraje (`km`):** Si $\text{next\_due\_km} - \text{currentOdo} < 0$, califica como `'urgent'` (*"Vencido hace N KM"*); si la diferencia es $< 1.500\text{ KM}$, califica como `'upcoming'` (*"Faltan N KM"*).
+3. **`routes` (Hojas de Ruta Asignadas):**
+   - Consulta de rutas activas no finalizadas (`neq('status', 'completed')`) asociadas a la placa vehicular (`vehicle_plate`).
+   - Lectura de estado (`planning`, `loading`, `in_transit`), hora de inicio (`start_time`), total de pedidos (`total_orders`) y peso total acumulado (`total_kilos`).
+4. **`delivery_events` (Bitácora de Telemetría GPS via `ActivityLog`):**
+   - Registro de transiciones de actividad operativa: Operación (⚡), Tanqueo (⛽), Taller (🛠️), Almuerzo (🥣), Receso (⏸️), Parquear (🅿️).
+   - Cálculo de distancia por fórmula de Haversine con factor de corrección vial industrial ($1.25$):
+     $$\mathbf{dist} = 2 R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta\text{lat}}{2}\right) + \cos(\text{lat}_1)\cos(\text{lat}_2)\sin^2\left(\frac{\Delta\text{lon}}{2}\right)}\right) \times 1.25$$
+   - Filtro de integridad: Bloqueo de coordenadas nulas y tope de $200\text{ KM}$ máximo por transición para evitar saltos irreales de odómetro. Inserción con tipo `activity_${type}` y descripción pericial.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Protocolo Poka-Yoke de Entrada a Ciegas (*Blind Odometer Entry*):**
+   - El input numérico no muestra el valor previo registrado en base de datos (`inputOdometer = ''`). El chofer está obligado a consultar físicamente el tablero del furgón.
+2. **Validación de No-Decrecimiento Innegociable:**
+   - Si $\text{inputVal} < \text{odometer}$, el sistema emite alerta inmediata y bloquea la operación:
+     *"❌ ERROR DE VALIDACIÓN: El kilometraje ingresado es inferior al último registro del sistema. Por favor, verifica el tablero del vehículo e ingresa el valor correcto."*
+   - Las rutas asignadas permanecen ocultas hasta que se confirme un odómetro válido.
+3. **Semáforo y Alertas Predictivas de Mantenimiento:**
+   - Banner animado con pulso intermitente que destaca en rojo (`AlertOctagon`) si hay un mantenimiento crítico vencido, o en amarillo (`AlertTriangle`) si está próximo, alertando al chofer: *"Informa al administrador al terminar tu turno"*.
+4. **Enrutamiento Inteligente por Estado de Despacho:**
+   - Si la ruta se encuentra en estado `planning` o `loading`: la tarjeta resalta el botón `INICIAR CARGUE` y navega a la hoja de verificación `/ops/driver/route/[id]`.
+   - Si la ruta ya se encuentra en estado `in_transit`: la tarjeta resalta el botón `CONTINUAR RUTA` y navega directamente al mapa de navegación `/ops/driver/route-map/[id]`.
+5. **Modo Simulación Operativa (`demoMode`):**
+   - Botón superior `SIMULAR OPERACIÓN` para pruebas de campo offline, entrenamiento de conductores y validación de UI con vehículos mock (`FTX-902`, `GHK-112`, `ABC-789`, etc.).
+
+---
+
+#### Escenario 171: Registro de Odómetro a Ciegas, Alertas Predictivas de Mantenimiento y Apertura de Ruta (SDD v1.9.130)
+- **Given** el conductor accediendo a `/ops/driver` desde su teléfono móvil a las 05:55 AM.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y solicita identificar el vehículo (`"Elige una placa"`).
+  2. El conductor selecciona la placa `"NHP287"`:
+     - El sistema carga el vehículo y despliega la tarjeta de odómetro a ciegas con el campo de texto vacío.
+  3. Si el conductor ingresa un kilometraje inferior (ej. 42.000 KM cuando el sistema tiene 45.300 KM):
+     - El sistema bloquea el avance con alerta de error de validación decreciente.
+  4. Al ingresar el kilometraje correcto (ej. 45.350 KM) y pulsar `[CONFIRMAR E INICIAR]`:
+     - Se actualiza `fleet_vehicles.current_odometer` a 45.350.
+     - Se desbloquea la bitácora `ActivityLog` y se evalúa el plan de mantenimiento.
+  5. Si el camión tiene cambio de aceite vencido por kilometraje:
+     - Se despliega el banner rojo pulsante: `ACCIÓN REQUERIDA · Vencido hace 350 KM · Cambio de Aceite`.
+  6. En la sección de rutas activas:
+     - Se muestra la ruta correspondiente con 25 pedidos y 450 Kg.
+     - Al estar en estado `loading`, el botón de acción indica `INICIAR CARGUE ->` y navega hacia `/ops/driver/route/[id]`.
+
+---
+
+### 37.14 Hoja de Ruta del Conductor, Verificación de Paradas LIFO & Salida a Reparto (`/ops/driver/route/[id]`)
+
+#### A. Misión Crítica y Contexto Físico en Muelle (Compuerta del Transportador)
+El módulo `/ops/driver/route/[id]` opera como la hoja de ruta interactiva y consola de cotejo físico del conductor antes de encender el motor y salir a reparto. Su propósito es asegurar que la mercancía cargada en el furgón coincida exactamente con las órdenes asignadas y respete de forma estricta la **estiba LIFO inversa (Last-In, First-Out)**, garantizando que el camión no salga a la calle sin haber sido previamente precintado y rectificado en muelle.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`routes` (Control de Tránsito y Precinto de Seguridad):**
+   - Lectura de cabecera: estado (`status`), certificación de rectificación (`is_certified_complete`).
+   - Transición de despacho: Al confirmar cargue y precinto, actualiza atómicamente la ruta a:
+     - `status`: `'in_transit'`.
+     - `start_time`: Marca temporal ISO 8601 del inicio de reparto.
+2. **`route_stops` & `orders` (Paradas y Órdenes en Reparto):**
+   - Consulta de paradas ordenadas por `sequence_number` ascendente.
+   - Enlace relacional con `orders`: dirección de entrega (`shipping_address`), espacios en bodega (`warehouse_spaces`), número de canastillas plásticas (`crates_count`), e ítems alistados (`picked_quantity` vs `quantity`).
+   - Actualización masiva de órdenes: Al liberar la ruta a tránsito, actualiza simultáneamente todas las órdenes asociadas a `status: 'in_transit'`.
+3. **`audit_logs` (Trazabilidad de Excepciones y Bypass):**
+   - Si un usuario administrador o desarrollador en entorno local ejecuta el bypass de muelle (`canBypass`), registra traza inmutable en `audit_logs` con `action: 'TEST_MODE_BYPASS_RECTIFICATION'`, `table_name: 'routes'`, `record_id: routeId` y justificación pericial.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Estiba LIFO Inversa en Pantalla:**
+   - La lista de paradas se invierte matemáticamente para el conductor:
+     $$\mathbf{sortedStops} = \text{stops.sort}((a, b) \Rightarrow b.\text{sequence\_number} - a.\text{sequence\_number})$$
+   - Muestra primero la última parada de la ruta para ser acomodada al fondo del furgón, y de última la parada #1 para quedar junto a la puerta de descarga.
+   - Cada tarjeta destaca la ubicación física en bodega (`UBICACIÓN: ESP XX`) y el número de canastillas (`📦 CANASTILLAS: N`).
+2. **Poka-Yoke de Alistamiento Incompleto (`toggleStop`):**
+   - **Bloqueo Duro:** Si un pedido tiene todos sus artículos en 0 Kg (`hasStartedPicking === false`), el sistema bloquea su selección con alerta de error:
+     *"❌ ERROR DE CARGUE: El pedido de [Cliente] no ha sido alistado en bodega (todos los artículos están en 0). Por favor, espera a que el equipo de alistamiento termine."*
+   - **Advertencia Preventiva:** Si el pedido contiene algunos artículos pendientes en 0 Kg (`hasPendingItems === true`), emite confirmación preventiva antes de permitir marcarlo como cargado.
+3. **Compuerta de Veto de Despacho (Candado de Rectificación):**
+   - Si la ruta no ha sido certificada en `/ops/rectificacion` (`!isCertified && routeStatus !== 'rectified'`), el botón principal de salida se bloquea en rojo:
+     `<Lock /> BLOQUEADO: ESPERANDO PRECINTO DE RECTIFICACIÓN`.
+   - Banner superior informativo: `🔒 VETO DE DESPACHO EN MUELLE: Ruta pendiente de rectificación física y precinto numerado de seguridad (/ops/rectificacion).`
+   - El conductor no puede salir a carretera sin que el auditor de muelle haya completado la rectificación formal.
+4. **Bypass Autorizado para Pruebas / Sandbox:**
+   - Exclusivo para administradores (`admin`, `sys_admin`, `logistic_admin`) o en entorno local (`localhost`), habilita el botón especial `⚡ FORZAR INICIO DE RUTA (BYPASS MODO PRUEBAS)`, el cual audita la acción y marca `is_certified_complete: true`.
+5. **Transición a Navegación Satelital:**
+   - Al completar la verificación de todos los pedidos y con el precinto validado, el botón cambia a esmeralda `CONFIRMAR Y SALIR A RUTA`, transiciona ruta y órdenes a `in_transit` y redirige a la torre de navegación en vivo `/ops/driver/route-map/[id]`.
+
+---
+
+#### Escenario 172: Cotejo de Cargue LIFO, Veto de Despacho sin Precinto y Liberación a Tránsito (SDD v1.9.131)
+- **Given** el conductor accediendo a `/ops/driver/route/[id]` para la ruta del camión "NHP287".
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y presenta las paradas ordenadas de forma LIFO inversa (ej. Parada #25 de primera, Parada #1 al final).
+  2. Si la ruta aún no ha sido certificada en la mesa de rectificación:
+     - Se muestra el banner rojo: `🔒 VETO DE DESPACHO EN MUELLE: Ruta pendiente de rectificación física...`.
+     - El botón inferior permanece bloqueado con el candado rojo: `BLOQUEADO: ESPERANDO PRECINTO DE RECTIFICACIÓN`.
+  3. Al intentar marcar un pedido que tiene todos los ítems en 0 Kg de alistamiento:
+     - El sistema bloquea la acción indicando que el pedido no ha sido alistado en bodega.
+  4. Una vez la ruta es certificada en `/ops/rectificacion`:
+     - El banner de veto desaparece.
+     - El conductor valida una a una las paradas cargadas en el furgón.
+  5. Al marcar la totalidad de paradas validadas:
+     - El botón inferior se ilumina en verde: `CONFIRMAR Y SALIR A RUTA`.
+  6. Al presionar el botón de salida:
+     - La ruta transiciona a `in_transit` con `start_time` actual.
+     - Todas las órdenes asociadas se actualizan a `in_transit`.
+     - La aplicación navega hacia el mapa satelital `/ops/driver/route-map/[id]`.
+
+---
+
+### 37.15 Torre de Navegación GPS & Monitoreo de Paradas en Tránsito (`/ops/driver/route-map/[id]`)
+
+#### A. Misión Crítica y Contexto Físico en Cabina (Cockpit de Tránsito)
+El módulo `/ops/driver/route-map/[id]` opera como la cabina de navegación satelital y guía de ruta en tiempo real del conductor durante el recorrido de reparto en la ciudad. Diseñado bajo el principio ergonómico de **Cero Distracción al Volante**, prioriza la parada inmediata a entregar mediante el patrón visual *Next-Stop Hero Card*, manteniendo el cálculo continuo de avance y enlazando de forma transparente con los motores de navegación GPS (Google Maps / Waze) y la mesa de entrega al cliente.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`routes` & `route_stops` (Secuencia de Reparto):**
+   - Lectura de cabecera de ruta: placa vehicular (`vehicle_plate`), estado operativo (`status: 'in_transit'`).
+   - Lectura de paradas ordenadas cronológicamente (`sequence_number` ascendente: 1 $\rightarrow$ 2 $\rightarrow \dots \rightarrow N$).
+   - Máquina de estados de parada:
+     - `'pending'`: En camino hacia el destino.
+     - `'arrived'`: Camión estacionado frente a la puerta del cliente.
+     - `'delivered'`: Entrega y cobro formalizado con firma/sello.
+     - `'failed'`: Novedad o rechazo de entrega en sitio.
+2. **`orders` & `profiles` (Cliente y Dirección Física):**
+   - Lectura de la orden asignada: dirección exacta de entrega (`shipping_address`), total a cobrar (`total`), razón social B2B (`company_name`) o contacto institucional.
+3. **`delivery_events` (Bitácora de Telemetría GPS Continua):**
+   - Integración nativa con `ActivityLog`: preserva la telemetría en segundo plano por placa vehicular, registrando tiempos de parada, almuerzo, receso y distancias recorridas en cada tramo.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Patrón Visual *Next-Stop Hero Card*:**
+   - La pantalla localiza reactivamente la primera parada pendiente:
+     $$\mathbf{nextStop} = \text{stops.find}(s \Rightarrow s.\text{status} === \text{'pending'})$$
+   - Si existe, se renderiza de forma prominente en la cabecera con tipografía sobredimensionada, dirección destacada y botones de acción táctiles duales:
+     - `NAVEGAR`: Invoca el deeplink nativo de Google Maps.
+     - `ENTREGAR`: Navega a la mesa de comprobante y entrega física `/ops/driver/delivery/[id]`.
+   - Tan pronto como la parada actual se concluye en la mesa de entrega, el sistema promueve de forma determinista la siguiente parada de la lista a la tarjeta Hero.
+2. **Deeplink Satelital Asistido en 1-Tap:**
+   - Construcción determinista del enlace de geocodificación:
+     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shipping_address)}`
+   - Permite al chofer iniciar la guía de voz en su aplicación de mapas preferida con un solo toque de pantalla.
+3. **Indicador de Progreso Global y Lista Atenuada:**
+   - Contador de avance superior: `completedStops / stops.length COMPLETADO`.
+   - La lista inferior de paradas completadas se visualiza con opacidad atenuada al 60% y distintivos bicolores (🟢 Check verde para entregadas, 🔴 X roja para no entregadas), eliminando el ruido visual en cabina.
+4. **Pantalla de Cierre de Jornada (*Trip Completed*):**
+   - Al completar el 100% de las paradas (`!nextStop`), la tarjeta Hero se reemplaza por el banner esmeralda de celebración:
+     *"¡Ruta completada! Todos los pedidos fueron gestionados."*
+
+---
+
+#### Escenario 173: Navegación Satelital Asistida, Monitoreo de Avance y Transición a Entrega (SDD v1.9.132)
+- **Given** el conductor en ruta a bordo del vehículo "NHP287" accediendo a `/ops/driver/route-map/[id]`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y calcula el progreso inicial (ej. `0 / 25 COMPLETADO`).
+  2. La tarjeta *Next-Stop Hero* destaca la Parada #1:
+     - Cliente: "ADR WORK SAS - HOTEL SPOT CENTRO".
+     - Dirección: "Carrera 7 #24-89, Bogotá".
+  3. Al pulsar el botón `[NAVEGAR]`:
+     - Se abre la aplicación de Google Maps con la dirección exacta precargada.
+  4. Al llegar a la sede del cliente y pulsar el botón `[ENTREGAR]`:
+     - La aplicación navega fluidamente hacia la mesa de comprobante físico `/ops/driver/delivery/[stopId]`.
+  5. Una vez registrada la entrega y retornado al mapa:
+     - La Parada #1 se muestra atenuada con check verde.
+     - El contador se actualiza a `1 / 25 COMPLETADO`.
+     - La tarjeta *Hero* conmuta automáticamente a la Parada #2.
+
+---
+
+### 37.16 Mesa de Entrega en Destino, Control de Canastillas & Novedades (`/ops/driver/delivery/[id]`)
+
+#### A. Misión Crítica y Contexto Físico en Destino (Cierre de Custodia)
+El módulo `/ops/driver/delivery/[id]` constituye la mesa operativa de entrega física y formalización en el local o muelle del cliente. En este punto de contacto crítico se cierra el ciclo de custodia de la mercancía, se audita el intercambio de canastillas plásticas en comodato, se efectúa el recaudo financiero para pedidos contra entrega, y se capturan las evidencias periciales (firmas, sellos, fotos) de cualquier novedad o devolución física en sitio.
+
+Incorpora la **Regla Anti Ping-Pong de Calidad (§35.2)**, bloqueando bucles infinitos de fletes cuando un cliente rechaza un pedido que ya era una reposición de garantía previa.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`route_stops` & `orders` (Formalización de Entrega):**
+   - Actualización al concluir la parada:
+     - `status`: `'delivered'` (o `'failed'` ante cancelación total).
+     - `completion_time`: Marca temporal ISO 8601 del cierre de la parada.
+     - `collected_amount`: Dinero en efectivo o transferencia recaudado ($ COP).
+     - `collected_method`: `'efectivo'` | `'transferencia'` | `'none'`.
+   - Transición de orden: Promueve `orders.status` a `'delivered'` (o `'cancelled'`).
+   - Cierre de ruta automático: Si no quedan más paradas en estado `pending`, transiciona atómicamente la ruta a `routes.status = 'completed'`.
+2. **`profiles` & `asset_movements` (Gobierno y Balance de Canastillas):**
+   - Evaluación del permiso de comodato: `profiles.needs_crates` (`true` préstamo permitido vs `false` prohibido).
+   - Cálculo del cambio neto de activos plásticos:
+     $$\mathbf{netChange} = \text{canastillasDelivered} - \text{canastillasReceived}$$
+   - Actualización atómica de cartera de activos en `profiles.crate_balance` asegurando $\mathbf{balance} \ge 0$.
+   - Inserción de traza en `asset_movements`: `route_id`, `order_id`, `profile_id`, `type` (`'delivery'` | `'pickup'`), `movement_type` (`'exchange'` | `'delivery_loan'` | `'driver_pickup'`), `delivered_qty`, `received_qty`, `quantity`, `balance_after`, `evidence_url`.
+3. **`billing_returns` & `inventory_movements` (Circuito Físico-Contable de Devoluciones):**
+   - Para cancelaciones totales o devoluciones parciales por SKU:
+     - Inserción en `billing_returns` con `order_id`, `product_id`, `quantity_returned`, `reason`, `photo_url` y `status: 'pending_review'`.
+     - Inserción en `inventory_movements` con `type: 'entry'`, `reference_type: 'route_return'`, `status_to: 'returned'`, notas de auditoría y soporte fotográfico, alimentando la Columna O de `/ops/inventory`.
+4. **`customer_service_pqrs` (Radicación RCA en Vivo):**
+   - Inserción de ticket SAC/Calidad con prioridad inmediata (`urgent` o `high`).
+   - Integración con metadatos RCA estructurados (`buildRcaMetadataTag`).
+   - **Protocolo Ping-Pong:** Si `orders.origin_source === 'customer_service'` o contiene `'REPOSICIÓN'`, etiqueta el ticket con `[ALERTA PING-PONG]`, advirtiendo al equipo de operaciones: *"NO volver a reprogramar despacho físico; liquidar mediante Nota Crédito"*.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Compuerta Poka-Yoke de Reposición (Corte de Bucle):**
+   - Si el pedido es una reposición, despliega un banner rojo de advertencia:
+     *"PEDIDO DE REPOSICIÓN (REGLA DE CORTE DE BUCLE): Si el cliente rechaza algún producto, el saldo NO se reprogramará en un tercer viaje. Se liquidará contablemente como Nota Crédito."*
+2. **Compuerta de Recaudo Contra Entrega:**
+   - Si `payment_method === 'contra_entrega'`, la interfaz destaca en amarillo el saldo total a recaudar en COP y despliega el formulario obligatorio de valor cobrado y método (`efectivo` o `transferencia`), previniendo fugas de caja en ruta.
+3. **Compuerta de Comodato de Canastillas:**
+   - Si `needs_crates === false`: Banner preventivo instruyendo al transportador a retener los envases vacíos en el furgón.
+   - Botón directo para reportar canastillas rotas o extraviadas con captura de fotografía en sitio.
+4. **Triaje de Novedades en Sitio:**
+   - **Cancelación Total:** Opciones tipificadas (`Cliente no estaba en casa`, `Local cerrado`, `Dirección incorrecta`, `Cliente rechaza pedido completo`, `Cancelado por central`).
+   - **Devolución Parcial por SKU:** Desglose individual de cada producto, input de cantidad devuelta con botón express `TODO`, selector de motivo (`RETURN_REASONS`) y captura de fotografía específica subida a Storage `delivery-evidence`.
+5. **Poka-Yoke de Evidencia Fotográfica:**
+   - Si el conductor intenta finalizar la entrega sin adjuntar fotografía de la remisión firmada o sellada, la aplicación exige confirmación explícita para evitar disputas de entrega.
+   - Al finalizar, despliega notificación Toast y retorna a la consola de navegación `/ops/driver/route-map/[routeId]`.
+
+---
+
+#### Escenario 174: Cierre de Entrega con Recaudo, Control de Canastillas en Comodato y Devolución Parcial RCA (SDD v1.9.133)
+- **Given** el conductor en el muelle de descarga del cliente "ADR WORK SAS - HOTEL SPOT CENTRO" accediendo a `/ops/driver/delivery/[stopId]`.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y lista los productos del pedido con sus instrucciones físicas (ej. *"Aguacate Hass ↳ Punto Pintón"*).
+  2. En la sección de canastillas:
+     - El cliente tiene préstamo autorizado (`needs_crates: true`).
+     - El conductor registra 14 canastillas entregadas y 10 vacías recibidas (delta neto: +4).
+  3. En la entrega física de mercancía:
+     - El cliente detecta 5 Kg de Tomate Chonto con sobremaduración.
+     - El conductor activa `¿Reportar Novedad / Devolución?`, selecciona `DEVOLUCIÓN PARCIAL / SKU`, digita 5 Kg en Tomate Chonto, elige el motivo `Maduración inadecuada` y captura la fotografía del producto.
+  4. El conductor captura la fotografía de la remisión física sellada por el jefe de compras del hotel.
+  5. Al presionar `[FINALIZAR ENTREGA]`:
+     - `route_stops.status` se actualiza a `'delivered'`.
+     - `orders.status` pasa a `'delivered'`.
+     - `profiles.crate_balance` se incrementa en 4 canastillas y se audita en `asset_movements`.
+     - Se registra la devolución en `billing_returns` y en `inventory_movements` (Columna O).
+     - Se radica el ticket en `customer_service_pqrs` con imputación a Transporte/Calidad.
+     - La pantalla retorna a la torre de navegación `/ops/driver/route-map/[routeId]`.
+
+---
+
+### 37.17 Portal Central de Operaciones & Centro de Lanzamiento (`/ops`)
+
+#### A. Misión Crítica y Contexto Físico en Planta (Hub de Operaciones)
+El módulo `/ops` opera como el centro neurálgico de mando y portal de lanzamiento táctico para todas las operaciones físicas de bodega, muelle, patio y carretera de FruFresco. Su objetivo es unificar bajo una sola interfaz industrial los 10 módulos core de la cadena de suministro, ofreciendo telemetría instantánea sobre la valorización económica del inventario en piso y alertando al personal operativo ante tareas o auditorías a ciegas pendientes solicitadas por compras.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`inventory_stocks` & `products` (Valorización de Stock en Piso):**
+   - Agregación en caliente del valor financiero total de la bodega:
+     $$\mathbf{totalStockValue} = \sum (\text{stocks.quantity} \times \text{products.base\_price})$$
+   - Permite al Jefe de Bodega conocer el valor patrimonial inmovilizado en frutas, verduras y procesados al inicio y cierre de cada turno.
+2. **`inventory_random_tasks` (Auditorías y Conteos a Ciegas):**
+   - Conteo exacto en tiempo real (`{ count: 'exact', head: true }`) de solicitudes de conteo aleatorio en estado `pending`.
+   - Actúa como semáforo Andon de alerta para el equipo de bodega.
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Matriz de Lanzamiento de 10 Estaciones de Trabajo:**
+   - **Compras** (`/ops/compras`): Consolidación, neteo y abastecimiento en Corabastos.
+   - **Recogida** (`/ops/recogida`): Zorrito, acarreos y selección manual en plaza.
+   - **Recepción** (`/ops/recepcion`): Pesaje ciego en muelle de entrada y tolerancia $\pm 0.05\text{ Kg}$.
+   - **Supervisor** (`/ops/recepcion/supervisor`): Liberación de cuarentenas y gobernanza de turnos.
+   - **Alistamiento** (`/ops/picking`): Picking celular guiado por 150 bahías de piso.
+   - **Tablero** (`/ops/picking/dashboard`): Matriz macro FIDS para pantallas gigantes de bodega.
+   - **Rectificación** (`/ops/rectificacion`): Mesa de validación LIFO y precinto furgonado.
+   - **Transporte** (`/ops/driver`): Cabina móvil del conductor, odómetro a ciegas y reparto.
+   - **Devoluciones** (`/ops/inventory`): Retornos de ruta e inconsistencias de furgón.
+   - **Cierre de Inventario** (`/ops/inventory`): Sábana de inventario físico y conteos por célula.
+2. **Alerta Andon Dinámica de Auditorías a Ciegas:**
+   - Si `pendingAudits > 0`:
+     - La tarjeta *Cierre de Inventario* activa el borde ámbar `card-op-warning` y muestra el badge `⚠️ N CONTEO(S) SOLICITADO(S)`.
+     - El banner inferior conmuta a estado ámbar (`Activity`), informando: *"Se requiere auditoría de piso para N conteo(s) pendiente(s) solicitado(s) por compras"* y activando el botón directo `RESOLVER AHORA ->`.
+   - Si `pendingAudits === 0`:
+     - Muestra estado sincronizado verde esmeralda (`Server`) con leyenda: *"Todos los flujos están funcionando normalmente. No hay auditorías pendientes"*.
+3. **Resaltado Visual Táctico de Transporte:**
+   - La tarjeta de *Transporte* (`/ops/driver`) cuenta con resaltado esmeralda permanente (`card-op-highlight`), permitiendo a los choferes identificar su acceso directo sin demoras durante el turno matutino.
+4. **Resguardo de Ciclo de Vida:**
+   - Implementa `useRef(isMounted)` para evitar advertencias de memoria o renderizados huérfanos durante la navegación rápida en planta.
+
+---
+
+#### Escenario 175: Telemetría de Valor de Inventario, Alertas Andon de Auditoría a Ciegas y Orquestación Táctica (SDD v1.9.134)
+- **Given** el Jefe de Operaciones accediendo al portal `/ops` al inicio del turno de la madrugada.
+- **When** se monta la pantalla:
+- **Then**:
+  1. La ruta responde con código `200 OK` y calcula el valor monetizado del inventario en piso (ej. `$48.520.000 COP`).
+  2. Si existen 2 conteos a ciegas solicitados por Compras en `inventory_random_tasks`:
+     - La tarjeta de "CIERRE DE INVENTARIO" se resalta con borde ámbar y el texto `⚠️ 2 CONTEO(S) SOLICITADO(S)`.
+     - El banner inferior muestra el icono de actividad ámbar y el botón `[RESOLVER AHORA ->]`.
+     - Al presionar el botón, navega directamente a la sábana de conteo `/ops/inventory`.
+  3. Los transportadores que ingresan al portal visualizan la tarjeta "TRANSPORTE" resaltada con borde esmeralda `card-op-highlight` y acceden fluidamente a `/ops/driver`.
+  4. Los 10 módulos core se encuentran interconectados sin enlaces rotos ni colisiones de permisos.
+
+
+
+
+
+

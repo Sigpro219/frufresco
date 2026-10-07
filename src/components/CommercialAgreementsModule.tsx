@@ -3445,36 +3445,6 @@ export default function CommercialAgreementsModule() {
                             );
                         })}
                         <button
-                            type="button"
-                            onClick={() => {
-                                setMasterUploadedItems([]);
-                                setMasterExcelPreviewData(null);
-                                setMasterParsedFile(null);
-                                setMasterModelName(`Institucional General - ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`);
-                                setIsUploadMasterModalOpen(true);
-                            }}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '0.45rem 1rem',
-                                borderRadius: '8px',
-                                backgroundColor: '#F0FDF4',
-                                color: '#166534',
-                                border: '1.5px solid #86EFAC',
-                                fontSize: '0.8rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                marginLeft: '8px',
-                                boxShadow: '0 2px 6px rgba(22, 101, 52, 0.08)'
-                            }}
-                            title="Configurar o actualizar la Plantilla Maestra de Precios Institucionales"
-                        >
-                            <Sparkles size={14} color="#16A34A" />
-                            Modelo General {masterTemplate ? `(${masterTemplate.items?.length || 0} SKUs)` : ''}
-                        </button>
-                        <button
                             onClick={handleOpenCreateModal}
                             onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
                             onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
