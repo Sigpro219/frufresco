@@ -660,6 +660,10 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
      * Si cuenta con SOLPED: `SOLPED: [Número]` (o ambos en caso de coexistencia).
    - Garantiza que el almacenista receptor de Colsubsidio valide el código de inmediato y firme la remisión sin devoluciones.
 
+7. **Modificación y Corrección Integral de OC/SOLPED en Panel de Edición (`/admin/orders/loading` - `editMode`):**
+   - El operador comercial, facturador o despachador dispone de campos dedicados para `# ORDEN DE COMPRA (OC)` y `# SOLICITUD DE PEDIDO (SOLPED)` directamente en el panel de modificación de pedidos (`editMode`).
+   - Al pulsar `[Guardar Cambios]`, el sistema valida el poka-yoke corporativo de Colsubsidio (exige al menos OC o SOLPED si el cliente es Colsubsidio), sincroniza de forma atómica `orders.purchase_order_number`, `orders.logistics_data` (`purchase_order_number`, `solped_number`, `colsubsidio_status`), `orders.admin_notes` (tokens indexados `OC: XXX | SOLPED: YYY`) e impacta la base de datos mediante `/api/orders/update`.
+
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
