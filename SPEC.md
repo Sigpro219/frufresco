@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.165 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.5 Centro de Parámetros Globales, Geocercas y Horas de Corte)
+> **Versión:** 1.9.166 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.6 Visor y Certificador de Plantillas Golden Print)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -9163,6 +9163,36 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   1. Al cambiar la hora de corte de toma de pedidos a las 20:00h y las entregas festivas a falso, el cambio se persiste inmediatamente en `app_settings` notificando con Toast verde `Cambio guardado ✓`.
   2. Al presionar "Probar Conexión", el sistema mide la latencia de red, verifica el acceso a Supabase Storage y actualiza el indicador visual a "Sistemas en Línea" con latencia exacta.
   3. Si un usuario con credenciales limitadas ingresa, la interfaz desactiva los controles de edición y despliega el banner informativo "Modo Vista", protegiendo los parámetros globales contra modificaciones no autorizadas.
+  4. La ruta responde con código HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
+
+---
+
+### §42.6 Pantalla 10.6: Visor y Certificador de Plantillas Golden Print (`/admin/docs/test-letterhead`)
+
+1. **Propósito Operativo & Arquitectura:**
+   - La pantalla `/admin/docs/test-letterhead` (`src/app/admin/docs/test-letterhead/page.tsx`) es el laboratorio de inspección y banco de pruebas para el motor universal de impresión formal desacoplado (`@/components/print`).
+   - Permite certificar el estándar **Golden Print** de FruFresco y empresas hermanas del ecosistema Delta CoreTech, garantizando que remisiones, relaciones de entrega, acuerdos de precios y facturas se rendericen con idéntica fidelidad métrica en papel físico que en pantalla.
+2. **Arquitectura Multi-Empresa & Presets de Marca:**
+   - **Conmutador Reactivo de Marcas:** Permite alternar en vivo entre los presets corporativos oficiales:
+     - `INVESTMENTS_CORTES_BRAND` (Investments Cortés / FruFresco: verde esmeralda `#0D7A57`, logotipo institucional, NIT 901.234.567-8).
+     - `DELTA_CORETECH_BRAND` (Delta CoreTech: azul tecnológico `#2563EB`, NIT corporativo, tipografía de ingeniería).
+     - `INGYEMEL_BRAND` (Ingyemel Mantenimiento: ámbar industrial `#D97706`, especificaciones de planta).
+   - Renderiza encabezado formal (`UniversalLetterhead`) con metadatos documentales (título, subtítulo, fecha, número de referencia consecutivo y etiqueta operativa de muelle o bahía de alistamiento).
+3. **Métricas Golden Print & Motor de Impresión Aislado:**
+   - **Aislamiento en Ventana Limpia (`printViaNewWindow`):** En lugar de contaminar el DOM de la aplicación o requerir dependencias pesadas de PDF en el servidor, clona el nodo del documento en un iframe o ventana emergente dedicada con reglas `@page { size: letter portrait; margin: 10mm; }`, inyectando las hojas de estilo tipográficas (`Outfit`), reglas anti-corte de página (`page-break-inside: avoid`) y disparando `window.print()` de forma asíncrona tras la precarga de imágenes.
+   - **Estructura Documental Industrial:** Incorpora caja de datos del cliente/contratista en 2 columnas, tabla compacta de alta densidad con números tabulares alineados a la derecha, desglose de subtotal e impuestos, total a pagar con color de acento y doble firma legal de despacho y recibido a conformidad con sello.
+4. **Dogma Zero-Alert:**
+   - Cero invocaciones a `alert()`, `confirm()` o `prompt()`. Control limpio con retroalimentación en botones y navegación accesible.
+
+---
+
+#### Escenario 202: Conmutación de Preset de Marca y Renderizado Golden Print en Ventana Limpia (SDD v1.9.166)
+- **Given** el Administrador o Auditor de Calidad autenticado en `/admin/docs/test-letterhead`.
+- **When** selecciona el preset "Investments Cortés (FruFresco)" y presiona "Imprimir Muestra Oficial":
+- **Then**:
+  1. El documento adopta de inmediato la paleta esmeralda, membrete y razón social de FruFresco sin recargar la página.
+  2. Al pulsar "Imprimir Muestra Oficial", se ejecuta `printViaNewWindow`, abriendo el diálogo de impresión nativo del sistema con márgenes milimétricos exactos de carta (Letter) y sin cabeceras espurias del navegador web.
+  3. Las tablas de productos y firmas legales respetan las reglas `avoid-break` impidiendo divisiones antiestéticas entre páginas.
   4. La ruta responde con código HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
 
 
