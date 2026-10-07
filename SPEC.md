@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.156 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.7 Visor Público Golden Print & CIERRE TOTAL DOMINIO 1)
+> **Versión:** 1.9.157 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.1 Dashboard Ejecutivo B2B & Pedidos Rápidos)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8842,6 +8842,49 @@ El visor público de cotizaciones y acuerdos institucionales (`src/app/quotes/[i
   2. Los 35 insumos se ordenan y clasifican en sus respectivas categorías (Frutas, Verduras, etc.) con sus unidades mínimas y precios unitarios.
   3. El pie de página totaliza el acuerdo y despliega la cláusula legal de estabilidad de precios y las condiciones de crédito (ej. 30 días).
   4. Al pulsar `[🖨️ Imprimir / Descargar PDF]`, el sistema abre el diálogo de impresión con estilos CSS `@page { size: letter portrait; margin: 1.0cm 1.2cm; }`, excluyendo la barra de herramientas y preservando los saltos de página limpios para archivo digital o firma física.
+
+---
+
+## 41. Portal Corporativo B2B e Institucional
+
+### 41.1 Dashboard Ejecutivo B2B, Pedidos Rápidos y Simulación de Clientes (`/b2b/dashboard` - `src/app/b2b/dashboard/page.tsx`) (SDD v1.9.157)
+
+#### A. Misión y Alcance del Hub Corporativo B2B
+El portal corporativo B2B (`src/app/b2b/dashboard/page.tsx`) constituye la plataforma transaccional de autogestión de suministros agrícolas para clientes institucionales de FruFresco (cadenas de restaurantes, hoteles, operadores de casinos, colegios e industrias alimentarias). Facilita el aprovisionamiento recurrente, el respeto estricto de listas de precios fijadas bajo acuerdos contractuales, la programación de entregas con corte de bioseguridad y la trazabilidad multi-sede.
+
+#### B. Arquitectura Transaccional & Lógica Poka-Yoke B2B
+1. **Modos de Enfoque Adaptativos (Focus Modes):**
+   - Soporte de tres modalidades de visualización ergonómica:
+     - `split`: Vista dual simultánea (Catálogo a la izquierda y Carrito institucional a la derecha).
+     - `catalog`: Vista completa de catálogo de insumos para exploración masiva.
+     - `cart`: Vista expandida de liquidación de pedido para revisión detallada de líneas y cantidades.
+2. **Jerarquía y Blindaje de Precios por Acuerdo Institucional:**
+   - Consulta reactiva de cotizaciones en estado `agreement` vinculadas al perfil corporativo (`quotes.status = 'agreement'`).
+   - Mapeo atómico en `agreementPricesMap`: si el SKU cuenta con precio pactado en el acuerdo vigente, se aplica prioritariamente; en caso contrario, se utiliza el `base_price` estándar.
+   - Píldoras de filtrado por catálogo: `[Acuerdo]` (solo SKUs pactados), `[Otros Productos]` o `[Todo]`.
+3. **Poka-Yoke de Escasez en Corabastos y Restricción de Compra:**
+   - Sincronización en tiempo real con `scarcity_locked_skus` (almacenado en `app_settings` por la Dirección de Compras en Plaza).
+   - Bloqueo preventivo de adición al carrito de insumos que presentan desabastecimiento crítico o veda agrícola temporal, previniendo quiebres de entrega en muelle.
+4. **Reordenamiento Ágil en 1 Clic desde Pedidos Históricos:**
+   - Barra horizontal de acceso rápido con pedidos anteriores (`historicalOrders` con icono Lucide `Clock`), permitiendo precargar instantáneamente la canasta base habitual del comprador institucional.
+5. **Simulador de Perfil Corporativo para Soporte Comercial:**
+   - Panel de conmutación de clientes (`simulatedClientId` / `simulatedProfiles`) restringido a roles administrativos y comerciales, permitiendo a ejecutivos de cuenta montar pedidos en nombre del cliente visualizando exactamente su acuerdo tarifario.
+6. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - Erradicación total de los siete (7) `alert()` y `window.confirm()` nativos que interrumpían el flujo de compra.
+   - Botón interactivo de vaciado de pedido en 2 pasos (`confirmClearCart` con badge `¿Vaciar?` y advertencia Lucide sin popups).
+   - Banner de advertencia in-UI `cartNotice` con icono `<AlertTriangle />` ante carrito vacío o fecha de entrega no seleccionada.
+   - Banner in-modal `submitError` en el modal de confirmación `isSummaryModalOpen` sincronizado con el bus global `showToast`.
+
+---
+
+#### Escenario 193: Radicación Corporativa B2B con Precios de Acuerdo y 2-Step Clear Cart (SDD v1.9.157)
+- **Given** un comprador institucional (jefe de compras o chef ejecutivo) autenticado en el portal corporativo `/b2b/dashboard`.
+- **When** navega por el catálogo filtrando por `[Acuerdo]`, agrega 15 bultos de papa pastusa y 8 canastillas de tomate chonto con sus precios pactados:
+- **Then**:
+  1. El sistema resuelve automáticamente los precios pactados en el acuerdo comercial institucional sobreescribiendo los precios base de lista.
+  2. Si el comprador pulsa por error el icono de basura en el carrito, el botón transiciona a modo confirmación `[⚠️ ¿Vaciar?]` durante 4 segundos sin desplegar alertas bloqueantes de navegador.
+  3. Al seleccionar la fecha de entrega y pulsar `[Finalizar Pedido B2B]`, se despliega el modal de confirmación `isSummaryModalOpen` con desglose detallado de ítems y total estimado.
+  4. Al pulsar `[Confirmar y Enviar Pedido]`, la orden se radica en estado `pending_approval` con origen `web_b2b`, emite la notificación Toast verde y redirige fluidamente sin interrumpir el entorno.
 
 
 

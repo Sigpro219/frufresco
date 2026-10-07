@@ -121,6 +121,9 @@ export default function B2BDashboard() {
     const [pickupQuantity, setPickupQuantity] = useState<number>(1);
     const [pickupNotes, setPickupNotes] = useState('');
     const [isSubmittingPickup, setIsSubmittingPickup] = useState(false);
+    const [cartNotice, setCartNotice] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [confirmClearCart, setConfirmClearCart] = useState<boolean>(false);
 
     useEffect(() => {
         const fetchScarcity = async () => {
@@ -531,8 +534,6 @@ export default function B2BDashboard() {
             updateQuantity(exists.id, newTotal);
             if (typeof window !== 'undefined' && (window as any).showToast) {
                 (window as any).showToast(`🛒 Se adicionaron ${qty} ${exists.unit} a ${baseName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
-            } else {
-                alert(`Ya tenías ${baseName} en tu pedido (${exists.quantity} ${exists.unit}). Se adicionaron ${qty} ${exists.unit} para un nuevo total de ${newTotal} ${exists.unit}`);
             }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
@@ -554,8 +555,6 @@ export default function B2BDashboard() {
             setOrderItems(prev => [...prev, newItem]);
             if (typeof window !== 'undefined' && (window as any).showToast) {
                 (window as any).showToast(`✅ ${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
-            } else {
-                alert(`${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) ${locale === 'en' ? 'added to order' : 'agregado al pedido'}`);
             }
         }
     };
@@ -999,30 +998,42 @@ export default function B2BDashboard() {
     }, [activeTab, activeProfile?.id, user?.id]);
 
     const handleClearOrder = () => {
-        if (window.confirm('¿Estás seguro de que quieres borrar todo el pedido y empezar de cero?')) {
+        if (confirmClearCart) {
             setOrderItems([]);
+            setConfirmClearCart(false);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('🗑️ Pedido vaciado correctamente', 'info');
+            }
+        } else {
+            setConfirmClearCart(true);
+            setTimeout(() => setConfirmClearCart(false), 4000);
         }
     };
 
     const handleSubmit = () => {
         const itemsToSubmit = orderItems.filter(item => item.quantity > 0);
         
-        console.log('handleSubmit called');
-        console.log('Total items:', orderItems.length);
-        console.log('Items with quantity > 0:', itemsToSubmit.length);
-        console.log('� Delivery date:', deliveryDate);
-        
         if (itemsToSubmit.length === 0) {
-            alert('Debes agregar al menos un producto con cantidad mayor a 0 para confirmar el pedido.');
+            const msg = 'Debes agregar al menos un producto con cantidad mayor a 0 para confirmar el pedido.';
+            setCartNotice(msg);
+            setTimeout(() => setCartNotice(null), 6000);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('⚠️ ' + msg, 'warning');
+            }
             return;
         }
         
         if (!deliveryDate) {
-            alert('Por favor selecciona una fecha de entrega.');
+            const msg = 'Por favor selecciona una fecha de entrega.';
+            setCartNotice(msg);
+            setTimeout(() => setCartNotice(null), 6000);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('⚠️ ' + msg, 'warning');
+            }
             return;
         }
         
-        console.log('Opening summary modal');
+        setSubmitError(null);
         setIsSummaryModalOpen(true);
     };
 
@@ -1030,6 +1041,7 @@ export default function B2BDashboard() {
         const itemsToSubmit = orderItems.filter(item => item.quantity > 0);
         if (itemsToSubmit.length === 0 || !deliveryDate) return;
         setSubmitting(true);
+        setSubmitError(null);
 
         try {
             const calculatedSubtotal = itemsToSubmit.reduce((acc, item) => {
@@ -1074,11 +1086,17 @@ export default function B2BDashboard() {
 
             await supabase.from('order_items').insert(itemsToInsert);
 
-            alert(t.b2b.dashboard.successMsg);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('🎉 ' + (t.b2b?.dashboard?.successMsg || 'Pedido institucional radicado exitosamente'), 'success');
+            }
             setIsSummaryModalOpen(false);
             router.push('/');
         } catch (error: any) {
-            alert('Error: ' + error.message);
+            console.error('Error submitting B2B order:', error);
+            setSubmitError(error.message || 'Error al radicar el pedido');
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('❌ Error: ' + error.message, 'error');
+            }
         } finally {
             setSubmitting(false);
         }
@@ -1949,21 +1967,31 @@ export default function B2BDashboard() {
                                             {orderItems.length > 0 && (
                                                 <button
                                                     onClick={handleClearOrder}
-                                                    title="Borrar todo el pedido y empezar de cero"
+                                                    title={confirmClearCart ? "Haz clic de nuevo para confirmar" : "Borrar todo el pedido y empezar de cero"}
                                                     style={{
-                                                        padding: '0.35rem 0.45rem',
+                                                        padding: confirmClearCart ? '0.35rem 0.65rem' : '0.35rem 0.45rem',
                                                         borderRadius: THEME.radius.md,
-                                                        border: '1px solid #FCA5A5',
-                                                        background: '#FEF2F2',
-                                                        color: '#DC2626',
+                                                        border: confirmClearCart ? '1.5px solid #DC2626' : '1px solid #FCA5A5',
+                                                        background: confirmClearCart ? '#DC2626' : '#FEF2F2',
+                                                        color: confirmClearCart ? '#FFFFFF' : '#DC2626',
                                                         cursor: 'pointer',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
+                                                        gap: '4px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
                                                         transition: 'all 0.2s'
                                                     }}
                                                 >
-                                                    <Trash2 size={15} strokeWidth={2} />
+                                                    {confirmClearCart ? (
+                                                        <>
+                                                            <AlertTriangle size={13} strokeWidth={2.5} />
+                                                            <span>¿Vaciar?</span>
+                                                        </>
+                                                    ) : (
+                                                        <Trash2 size={15} strokeWidth={2} />
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
@@ -2304,6 +2332,25 @@ export default function B2BDashboard() {
                                                 }}>
                                                     {t.b2b.dashboard.minQtyWarning}
                                                 </p>
+                                            )}
+                                            {cartNotice && (
+                                                <div style={{
+                                                    padding: '0.6rem 0.8rem',
+                                                    borderRadius: '10px',
+                                                    backgroundColor: '#FEF2F2',
+                                                    border: '1.5px solid #FCA5A5',
+                                                    color: '#991B1B',
+                                                    fontSize: '0.82rem',
+                                                    fontWeight: '700',
+                                                    marginBottom: '0.75rem',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    textAlign: 'left'
+                                                }}>
+                                                    <AlertTriangle size={16} style={{ flexShrink: 0, color: '#DC2626' }} />
+                                                    <span>{cartNotice}</span>
+                                                </div>
                                             )}
                                             <button
                                                 onClick={handleSubmit}
@@ -4368,6 +4415,25 @@ export default function B2BDashboard() {
                                 </span>
                             </div>
                         </div>
+
+                        {submitError && (
+                            <div className="no-print" style={{
+                                padding: '0.65rem 0.85rem',
+                                borderRadius: '10px',
+                                backgroundColor: '#FEF2F2',
+                                border: '1.5px solid #FCA5A5',
+                                color: '#991B1B',
+                                fontSize: '0.82rem',
+                                fontWeight: '700',
+                                marginBottom: '0.75rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}>
+                                <AlertTriangle size={16} style={{ flexShrink: 0, color: '#DC2626' }} />
+                                <span>{submitError}</span>
+                            </div>
+                        )}
 
                         {/* Action Buttons */}
                         <div className="no-print" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
