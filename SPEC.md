@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.158 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.2 Historial, Remisiones & Novedades PQRS B2B)
+> **Versión:** 1.9.159 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.3 Acuerdos de Precios Institucionales & Golden Print)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8921,6 +8921,42 @@ La pestaña de facturación y despachos corporativos (`/b2b/dashboard?tab=invoic
   3. El sistema activa el Poka-Yoke y proyecta el banner de advertencia in-modal: *"La cantidad afectada no puede ser mayor a la cantidad despachada (10 Kg)"* sin bloquear el navegador con popups.
   4. Al corregir a 2 kg, adjuntar la fotografía del empaque y pulsar `[Enviar Novedad a Calidad]`:
   5. Se inserta el reclamo en `customer_service_pqrs` con estado `pending`, se notifica a la Torre de Control de Calidad y se despliega la pantalla de confirmación con éxito.
+
+---
+
+### 41.3 Gestión de Acuerdos de Precios Institucionales y Visor Golden Print (`/b2b/dashboard?tab=agreements` & `/b2b/agreements/[id]/print` - `src/components/AgreementDocumentModal.tsx` & `src/app/b2b/agreements/[id]/print/page.tsx`) (SDD v1.9.159)
+
+#### A. Misión y Alcance de los Acuerdos Comerciales B2B
+La pestaña de convenios (`/b2b/dashboard?tab=agreements`) y el visor documental oficial (`/b2b/agreements/[id]/print`) representan el marco contractual que formaliza la estabilidad de precios agroalimentarios entre FruFresco y sus clientes institucionales. Permite consultar el portafolio en convenio, cuantificar los ahorros promedio respecto a la lista base de Corabastos y reabastecer insumos en 1 clic directamente hacia el carrito activo.
+
+#### B. Arquitectura Transaccional & Golden Print de Convenio
+1. **Gobernanza de Precios Fijos y Telemetría de Ahorro:**
+   - Despliegue de los insumos vinculados al convenio (`quote_items`) con doble cotización: Precio Lista Base vs Precio Pactado Convenio.
+   - Cálculo reactivo del porcentaje de descuento y ahorro unitario (`savingsPct = ((base_price - unit_price) / base_price) * 100`).
+   - Métrica ejecutiva consolidada de ahorro promedio institucional (típicamente entre 12% y 22%) proyectada en el documento formal.
+2. **Re-Pedido Rápido Directo desde la Matriz del Convenio:**
+   - Cada fila de insumo cuenta con un control de cantidad numérico y botón de re-pedido inmediato (`quickAddQuantities`), integrando los productos del acuerdo al pedido en curso sin salir de la vista ejecutiva.
+3. **Visor de Documento Formal (`AgreementDocumentModal`):**
+   - Modal interactivo con membrete corporativo `Letterhead` de Investments Cortés S.A.S. (NIT 901.393.217).
+   - Generación determinista del código de acuerdo `#ACU-XXXX`.
+   - Impresión sin ventanas emergentes intrusivas mediante `printViaNewWindow`.
+4. **Visor Público Imprimible Golden Print (`/b2b/agreements/[id]/print`):**
+   - Ruta standalone de alta resolución vectorial para descarga y archivo contable en PDF.
+   - Precarga asíncrona de logotipo institucional en memoria antes de invocar `window.print()` con retardo controlado (500 ms).
+   - Estilos CSS `@page { size: letter portrait; margin: 10mm; }` con reglas estrictas `page-break-inside: avoid` en cada fila de tabla.
+5. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - Ausencia absoluta de llamadas nativas a `alert()`, `confirm()` o diálogos bloqueantes en todos los componentes del flujo.
+
+---
+
+#### Escenario 195: Consulta de Acuerdo Institucional y Reordenamiento Directo (SDD v1.9.159)
+- **Given** un gerente de compras de una cadena de restaurantes que accede a `/b2b/dashboard?tab=agreements`.
+- **When** consulta su acuerdo comercial activo `#ACU-0428` con 42 insumos agropecuarios pactados:
+- **Then**:
+  1. El sistema despliega la tarjeta ejecutiva verde esmeralda confirmando la vigencia trimestral del convenio.
+  2. En la tabla de insumos, el usuario digita 10 unidades en "Cebolla Cabezona Limpia" y pulsa `[Agregar al Pedido]`.
+  3. El insumo se adiciona de inmediato al carrito corporativo aplicando la tarifa congelada del acuerdo ($2.800 COP/kg en lugar de $3.400 COP/kg base) con notificación Toast verde.
+  4. Al pulsar `[Ver / Descargar Documento Formal]`, se abre el visor `AgreementDocumentModal` con desglose legal, porcentaje de ahorro promedio del 17.6% y botón de impresión en formato Letterhead.
 
 
 
