@@ -108,7 +108,7 @@ export async function recalculateAndSyncProductPrices(
         // Fallback to latest purchase if no cost in cost matrix
         if (!baseCost || baseCost <= 0) {
             const { data: pur } = await supabaseClient
-                .from('purchases')
+                .from('purchase_history_normalized')
                 .select('unit_price')
                 .eq('product_id', productId)
                 .order('created_at', { ascending: false })
@@ -117,6 +117,17 @@ export async function recalculateAndSyncProductPrices(
             
             if (pur?.unit_price && pur.unit_price > 0) {
                 baseCost = pur.unit_price;
+            } else {
+                const { data: rawPur } = await supabaseClient
+                    .from('purchases')
+                    .select('unit_price')
+                    .eq('product_id', productId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (rawPur?.unit_price && rawPur.unit_price > 0) {
+                    baseCost = rawPur.unit_price;
+                }
             }
         }
 
@@ -289,14 +300,16 @@ export async function batchRecalculateAndSyncPrices(
             }
         });
 
-        // Fetch latest purchases for fallback
-        const { data: purchases } = await supabaseClient
-            .from('purchases')
-            .select('product_id, unit_price, created_at')
-            .order('created_at', { ascending: false });
+        // Fetch latest purchases for fallback with full pagination across purchase_history_normalized
+        const phnList = await fetchAllRows(
+            supabaseClient,
+            'purchase_history_normalized',
+            'product_id, unit_price, created_at',
+            q => q.order('created_at', { ascending: false })
+        );
 
         const purchaseMap = new Map<string, number>();
-        (purchases || []).forEach((p: any) => {
+        (phnList || []).forEach((p: any) => {
             if (!purchaseMap.has(p.product_id) && p.unit_price > 0) {
                 purchaseMap.set(p.product_id, Number(p.unit_price));
             }

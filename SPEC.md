@@ -26,7 +26,8 @@
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
-| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **42 Capítulos** | **203 Escenarios Canónicos (1..203)** | **🟢 100%** |
+| **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
+| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **203 Escenarios Canónicos (1..203)** | **🟢 100%** |
 
 ---
 
@@ -359,8 +360,16 @@ Cuando el sistema consulta el precio de un producto para un cliente o sucursal, 
 2. **Nivel 2 (Acuerdo Matriz):** Acuerdo Comercial Vigente asignado a la empresa matriz (`client_id = sucursal.parent_id`).
 3. **Nivel 3 (Campañas Promocionales B2B):** Si el SKU no tiene precio congelado por acuerdo, aplican las campañas activas de precio fijo o ajuste porcentual (`commercial_campaigns`).
 4. **Nivel 4 (Modelo Directo de Cliente):** Modelo de Precios asignado al perfil (`profiles.pricing_model_id`).
-5. **Nivel 5 (Modelo Heredado Matriz):** Modelo asignado a la matriz (`profiles.parent.pricing_model_id`), o en su defecto `General Institucional` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) si es cliente B2B.
-6. **Nivel 6 (Base Catálogo / B2C):** Lista `Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) reflejada en `products.base_price`.
+5. **Nivel 5 (Modelo General Institucional - Fallback Universal B2B):** Modelo asignado a la matriz (`profiles.parent.pricing_model_id`), o en su defecto `General Institucional` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) si es cliente B2B. Este precio se deriva estrictamente de: **Costo Base de la Matriz Comercial (`commercial_cost_matrix`) pasado por el margen del modelo de precios (`pricing_models` + `pricing_rules`) y materializado en `pricing_model_prices`**.
+6. **Nivel 6 (Canal Minorista B2C Exclusivo):** Lista `Clientes Hogar` (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) para consumidores finales residenciales (con IVA incluido).
+
+> [!CAUTION]
+> **Prohibición Estricta de Cotización o Facturación a $0 COP (Poka-Yoke Anti-Tarifa Cero):**  
+> Queda terminantemente prohibido cotizar, ingresar o despachar productos comerciales con tarifa \$0 COP o "sin precio". La DIAN prohíbe facturas comerciales con tarifa cero o consumo abierto sin liquidar. Si un cliente institucional solicita un producto fuera de su acuerdo comercial, el sistema **NUNCA debe ingresar el SKU en \$0 para "cotizar en caliente"**, sino que debe liquidar de forma inmediata y automática la tarifa vigente de **General Institucional** (Nivel 5). La única excepción admitida en todo el ecosistema para tarifa \$0 COP es una Reposición de Garantía por PQR (`orderNature === 'replacement'`), la cual requiere obligatoriamente amparo de un Pedido Original (`parentOrderId`).
+
+> [!IMPORTANT]
+> **Deprecación y Obsolescencia de `products.base_price`:**  
+> La columna `products.base_price` en la tabla maestra de productos es un campo estático legado de la fase prototipo. En operaciones institucionales B2B, **NUNCA debe utilizarse como fallback de precio ni como costo base de insumo**. Los precios B2B provienen exclusivamente de `quote_items` o de `pricing_model_prices` (General Institucional). La búsqueda y visualización de productos en consolas de captura de pedidos (`/admin/orders/create`) debe proyectar en tiempo real el precio contractual resuelto o el de General Institucional con badges distintivos (`[Convenio]` o `[Fuera de Convenio / Institucional]`), erradicando de raíz la proyección del estático y distorsionado `products.base_price`.
 
 > **Regla de Inmunidad Contractual de Acuerdos:**  
 > Los precios pactados bajo un Acuerdo Comercial formal representan un contrato vinculante. Por seguridad jurídica y protección del margen, **las Campañas Comerciales NUNCA alteran ni perforan los precios de productos que formen parte de un Acuerdo Comercial activo**. Las campañas solo modulan productos de catálogo o modelos no cobijados por dicho acuerdo.
@@ -418,6 +427,14 @@ Queda estrictamente erradicado el uso de fórmulas de alisamiento predictivo o m
 2. **Camino B (Carga Manual / Directa en Matriz):**
    - Modificación directa por el área comercial o importación masiva de Excel.
    - Genera la versión más reciente del costo y se convierte de inmediato en la **nueva realidad comercial**.
+
+#### B.1 Pipeline Canónico de la Fuente de Verdad: Costo $\to$ Modelo $\to$ Precio Materializado
+La fijación y resolución de tarifas en FruFresco sigue un flujo determinístico unidireccional estricto:
+$$\mathbf{Costo\ Oficial\ (commercial\_cost\_matrix)} \xrightarrow{+\ Merma\ Teórica} \mathbf{Costo\ Efectivo} \xrightarrow{+\ Margen\ Modelo\ (pricing\_rules)} \mathbf{Tarifa\ (pricing\_model\_prices)}$$
+1. **Fuente de Verdad del Costo Base:** La tabla `commercial_cost_matrix` (con fallback a la última compra registrada en `purchase_history_normalized`) es el **único origen autorizado de costos**. Se prohíbe taxativamente inferir costos a partir de `products.base_price`.
+2. **Procesamiento por el Modelo de Precios:** Los costos vigentes se multiplican por el margen del modelo (`pricing_models`) y sus excepciones por producto (`pricing_rules`), aplicando el markup multiplicador canónico y redondeo a \$50 COP.
+3. **Materialización Reactiva (`pricing_model_prices`):** Las tarifas resultantes se sincronizan y persisten en la tabla `pricing_model_prices` para cada modelo activo (General Institucional, Grande, Mediano, Pequeño, Clientes Hogar).
+4. **Consumo Transaccional:** Los módulos de toma de pedidos (`orders/create`, `EmailDraftsModule`) consultan `pricing_model_prices` para el modelo del cliente o su fallback `General Institucional`. Si el cliente tiene un acuerdo activo (`quotes.status = 'agreement'`), los precios congelados en `quote_items` reemplazan prioritariamente a las tarifas del modelo.
 
 #### C. Poka-Yoke: Circuit Breaker de Volatilidad (+/- > 20%)
 1. **Cálculo de Desvío:** Ante cualquier nuevo registro de costo (Camino A o Camino B), el sistema evalúa:
@@ -9257,6 +9274,25 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. Al presionar "Sincronizar Web", el botón solicita confirmación en 2 pasos y ajusta automáticamente la visibilidad de los productos en la tienda pública sin ventanas modales bloqueantes.
   3. Al subir un archivo Excel con la opción de purga activada, el formulario resalta el banner de advertencia rojo y transforma el botón de envío a `PURGAR Y PROCESAR EXCEL`, ejecutando la ingesta de forma atómica y consistente.
   4. La ruta responde con código HTTP 200 OK, TypeScript compila con 0 errores (`exit 0`), y se da por **CERRADA Y CERTIFICADA AL 100% LA TOTALIDAD DE LAS 76 PANTALLAS DEL SISTEMA FRUFRESCO**.
+
+---
+
+## 43. Apéndice Canónico de Deuda Técnica, Riesgos de Concurrencia & Hoja de Ruta de Escalabilidad
+
+> **Referencia:** Documento maestro [`TECHNICAL_DEBT.md`](file:///c:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/TECHNICAL_DEBT.md) en la raíz del repositorio.  
+> **Estado:** 🟡 Registrado & Priorizado (P0 a P2) para ventana de mantenimiento y escalabilidad.  
+> **Aprobación:** Dirección General y Arquitectura de Software.
+
+### 43.1 Declaración Formal de Deuda Técnica y Preservación de Estabilidad
+Habiendo alcanzado la certificación plena del 100% de las 76 pantallas físicas de FruFresco y la validación de 203 escenarios BDD ininterrumpidos, se establece como principio rector la **preservación de la estabilidad operativa alcanzada**. Las optimizaciones estructurales no se aplican de forma desordenada en caliente, sino mediante un protocolo formal de gestión de deuda técnica.
+
+### 43.2 Matriz de Mitigación de Riesgos Arquitectónicos
+1. **DEBT-001 (P0 - Integridad Transaccional):** Concurrencia en deducción de stock. Migración planificada de validaciones client-side hacia funciones almacenadas PostgreSQL (`RPC deduct_inventory_atomic`) dotadas de bloqueo pesimista de fila (`FOR UPDATE`).
+2. **DEBT-002 (P0 - Escalabilidad de Consultas):** Blindaje contra el límite de 1.000 filas de PostgREST en consultas analíticas anuales mediante vistas agregadas en base de datos.
+3. **DEBT-003 (P1 - Mantenibilidad & DX):** Desmantelamiento quirúrgico modular de los 4 archivos que superan las 10.000 líneas de código (`EmailDraftsModule.tsx`, `/admin/orders/create`, `CommercialAgreementsModule.tsx`, `ClientsModule.tsx`) utilizando el protocolo de extracción atómica de componentes y hooks.
+4. **DEBT-004 (P1 - Resiliencia Gemba):** Tolerancia a fallos de conectividad celular en bodegas subterráneas de Corabastos mediante colas locales en IndexedDB y reintentos con backoff exponencial.
+5. **DEBT-005 (P2 - Ergonomía Cognitiva):** Implementación de selector de doble densidad visual ("Modo Gemba Limpio" vs "Modo Analítico") para personal operativo de muelle.
+
 
 
 

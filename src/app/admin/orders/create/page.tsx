@@ -8568,6 +8568,39 @@ function CreateOrderContent() {
                                                     }}>
                                                         {p.name} <span style={{ fontSize: '0.8em', color: isFocused ? '#2563EB' : '#6B7280', fontWeight: '600' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
                                                     </span>
+                                                    {agreementProductIds.size > 0 && (
+                                                        agreementProductIds.has(p.id) ? (
+                                                            <span style={{ 
+                                                                fontSize: '0.66rem', 
+                                                                backgroundColor: isFocused ? '#E0E7FF' : '#EEF2FF', 
+                                                                color: '#3730A3', 
+                                                                padding: '2px 7px', 
+                                                                borderRadius: '4px', 
+                                                                fontWeight: '800', 
+                                                                display: 'inline-flex', 
+                                                                alignItems: 'center', 
+                                                                gap: '4px',
+                                                                border: isFocused ? '1px solid #6366F1' : '1px solid #C7D2FE'
+                                                            }}>
+                                                                <FileText size={10} style={{ flexShrink: 0 }} /> Convenio
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ 
+                                                                fontSize: '0.66rem', 
+                                                                backgroundColor: '#F3F4F6', 
+                                                                color: '#4B5563', 
+                                                                padding: '2px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontWeight: '700', 
+                                                                display: 'inline-flex', 
+                                                                alignItems: 'center', 
+                                                                gap: '4px',
+                                                                border: '1px solid #E5E7EB'
+                                                            }}>
+                                                                <Package size={10} style={{ flexShrink: 0 }} /> Fuera de Convenio (Institucional)
+                                                            </span>
+                                                        )
+                                                    )}
                                                     {isClientHabitual && (
                                                         <span style={{ 
                                                             fontSize: '0.7rem', 
@@ -8606,26 +8639,43 @@ function CreateOrderContent() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <span style={{ fontSize: '0.85rem', fontWeight: isFocused ? '800' : '600', color: isFocused ? '#1E40AF' : '#4B5563' }}>
-                                                    {formatMoney(p.base_price)}/{p.unit_of_measure}
-                                                    {p.options_config?.length > 0 && (
-                                                        <span style={{ 
-                                                            marginLeft: '6px', 
-                                                            fontSize: '0.7em', 
-                                                            backgroundColor: isFocused ? '#FEF08A' : '#FEF3C7', 
-                                                            color: '#92400E', 
-                                                            padding: '2px 6px', 
-                                                            borderRadius: '6px', 
-                                                            border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A',
-                                                            fontWeight: '800',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '3px'
-                                                        }}>
-                                                            <Settings size={11} /> Opciones
+                                                {(() => {
+                                                    const resolvedDisplayPrice = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
+                                                        ? contractPrices[p.id]
+                                                        : (clientType === 'B2B' && p.base_price
+                                                            ? Math.ceil((p.base_price / 1.19) / 50) * 50
+                                                            : (p.base_price || 0));
+                                                    const isZero = !resolvedDisplayPrice || resolvedDisplayPrice <= 0;
+
+                                                    return (
+                                                        <span style={{ fontSize: '0.85rem', fontWeight: isFocused ? '800' : '600', color: isFocused ? '#1E40AF' : '#4B5563', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                            {isZero ? (
+                                                                <span style={{ fontSize: '0.72rem', backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 7px', borderRadius: '4px', border: '1px solid #FCA5A5', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <AlertCircle size={11} color="#DC2626" /> SIN PRECIO ($0)
+                                                                </span>
+                                                            ) : (
+                                                                <span>{formatMoney(resolvedDisplayPrice)}/{p.unit_of_measure}</span>
+                                                            )}
+                                                            {p.options_config?.length > 0 && (
+                                                                <span style={{ 
+                                                                    marginLeft: '6px', 
+                                                                    fontSize: '0.7em', 
+                                                                    backgroundColor: isFocused ? '#FEF08A' : '#FEF3C7', 
+                                                                    color: '#92400E', 
+                                                                    padding: '2px 6px', 
+                                                                    borderRadius: '6px', 
+                                                                    border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A',
+                                                                    fontWeight: '800',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '3px'
+                                                                }}>
+                                                                    <Settings size={11} /> Opciones
+                                                                </span>
+                                                            )}
                                                         </span>
-                                                    )}
-                                                </span>
+                                                    );
+                                                })()}
                                             </div>
                                         );
                                     })}
