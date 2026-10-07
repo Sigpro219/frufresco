@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.139 (Certificación Dominio 6.4: Gestión de Parque Automotor, Odómetros & Asignación de Conductores - TMS-04)
+> **Versión:** 1.9.140 (Certificación Dominio 6.5: Panel Maestro de Conductores, Licencias & Disponibilidad Operativa - TMS-05 & Cierre Dominio 6 al 100%)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8347,6 +8347,37 @@ La consola de gestión de parque automotor (`FleetManagement`) administra los ac
   2. Al completarse la operación, un banner verde no bloqueante (`actionFeedback`) confirma la actualización en la parte superior del tablero.
   3. Si el usuario intenta registrar una placa ya existente, el sistema despliega un banner de advertencia descriptivo sin congelar la pantalla.
   4. Si el operador decide eliminar un vehículo del inventario, la interfaz no invoca un diálogo modal nativo del navegador, sino que transforma el botón de eliminación en una compuerta de dos pasos (`¿Confirmar Eliminación?`), requiriendo una confirmación deliberada antes de ejecutar el borrado en base de datos.
+
+---
+
+### 38.6 Panel Maestro de Conductores, Licencias & Disponibilidad Operativa (`/admin/transport?tab=drivers_panel`) (SDD v1.9.140)
+
+#### A. Misión y Alcance del Panel de Conductores
+El Panel de Conductores (`ConductorPanel.tsx`) centraliza la gestión del capital humano de reparto en FruFresco. Asegura la disponibilidad operativa de choferes vinculados y temporales, la asociación dinámica vehículo-conductor, la telemetría en tiempo real sobre la última actividad operativa reportada y el cálculo analítico de desempeño individual (tasa de efectividad de entrega, kilogramos transportados y tiempos promedio por parada).
+
+#### B. Arquitectura de Datos & Lógica Poka-Yoke
+1. **Gobierno de Colaboradores de Transporte (`collaborators` con `role = 'CONDUCTOR'`):**
+   - Filtrado y discriminación de conductores activos vs. inactivos y choferes de planta vs. contratistas temporales (`is_temporary`).
+   - Búsqueda omnibox reactiva en tiempo real sobre nombre de contacto, teléfono, correo institucional, especialidad, placa vehicular asignada y estado.
+2. **Vinculación Dinámica Vehicular & Poka-Yoke de Asignación Exclusiva:**
+   - La asignación de un conductor a un furgón en `fleet_vehicles` desvincula atómicamente al conductor de cualquier otro vehículo previo para evitar colisiones operativas (un conductor no puede manejar dos vehículos simultáneamente).
+   - Erradicación de diálogos bloqueantes de navegador (`window.alert`): todas las confirmaciones y errores de asignación se emiten reactivamente mediante un banner `actionFeedback` en cabecera con cierre automático a los 5 segundos.
+3. **Telemetría Operativa & Métricas Individuales de Desempeño:**
+   - Detección de última actividad física en las últimas 48 horas mediante escaneo de `delivery_events` (`activity_operation`, `activity_refuel`, `activity_workshop`, `activity_lunch`, etc.).
+   - Modal de Auditoría de Rendimiento con cálculo de indicadores en ventana móvil de 8 días: porcentaje de efectividad de entregas completadas vs. fallidas, volumen de kilogramos movilizados y total de rutas completadas.
+
+---
+
+#### Escenario 181: Vinculación Vehicular Reactiva y Telemetría de Conductores (SDD v1.9.140)
+- **Given** el Coordinador de Transporte en `/admin/transport?tab=drivers_panel`.
+- **When** asigna un vehículo disponible a un conductor activo desde el menú desplegable de gestión:
+- **Then**:
+  1. El sistema actualiza en base de datos la referencia `driver_id` en `fleet_vehicles`, desvinculando cualquier asignación previa del mismo conductor.
+  2. Un banner verde reactivo (`actionFeedback`) confirma en pantalla que el vehículo fue asignado exitosamente sin invocar diálogos nativos del navegador.
+  3. Los indicadores KPI de cabecera (Total, Activos, Asignados, Disponibles) se recalculan automáticamente reflejando la nueva distribución de la flota.
+  4. Si ocurre un error de red o de permisos en Supabase, el error se captura y despliega en un banner de advertencia visual no invasivo.
+  5. Al hacer clic sobre el perfil de un conductor, se abre el modal de telemetría calculando en tiempo real su tasa de efectividad de entrega y volumen de kilogramos transportados en las últimas rutas.
+
 
 
 

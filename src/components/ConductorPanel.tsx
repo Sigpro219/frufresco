@@ -13,7 +13,8 @@ import {
     RefreshCw, 
     Plus, 
     X, 
-    User
+    User,
+    CheckCircle2
 } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 
@@ -64,7 +65,17 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
     const [selectedDriver, setSelectedDriver] = useState<Conductor | null>(null);
     const [kpis, setKpis] = useState<DriverKPIs | null>(null);
     const [loadingKpis, setLoadingKpis] = useState(false);
+    const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const isMounted = useRef(true);
+
+    useEffect(() => {
+        if (actionFeedback?.type === 'success') {
+            const timer = setTimeout(() => {
+                setActionFeedback(null);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [actionFeedback]);
 
     useEffect(() => {
         isMounted.current = true;
@@ -247,6 +258,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
         if (readOnly) return;
         try {
             setLoading(true);
+            setActionFeedback(null);
             await supabase
                 .from('fleet_vehicles')
                 .update({ driver_id: null })
@@ -262,9 +274,19 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
 
             setAssigningId(null);
             await fetchConductores();
+            setActionFeedback({
+                type: 'success',
+                message: vehicleId === 'none'
+                    ? 'Vehículo desvinculado exitosamente del conductor.'
+                    : 'Vehículo asignado exitosamente al conductor.'
+            });
         } catch (err: unknown) {
             console.error('Error assigning vehicle:', err);
-            alert('Error al asignar el vehículo.');
+            const errMsg = err instanceof Error ? err.message : 'Error al asignar el vehículo.';
+            setActionFeedback({
+                type: 'error',
+                message: `Error al procesar asignación de vehículo: ${errMsg}`
+            });
         } finally {
             setLoading(false);
         }
@@ -303,6 +325,46 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
+            {/* ACTION FEEDBACK BANNER */}
+            {actionFeedback && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.65rem 1rem',
+                    borderRadius: THEME.radius.md,
+                    backgroundColor: actionFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                    border: `1px solid ${actionFeedback.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
+                    color: actionFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    boxShadow: THEME.shadow.sm
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {actionFeedback.type === 'success' ? (
+                            <CheckCircle2 size={16} color="#059669" />
+                        ) : (
+                            <AlertTriangle size={16} color="#DC2626" />
+                        )}
+                        <span>{actionFeedback.message}</span>
+                    </div>
+                    <button
+                        onClick={() => setActionFeedback(null)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: actionFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '2px'
+                        }}
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            )}
+
             {/* CABECERA ULTRA-COMPACTA 50/50: KPIs | BUSCADOR */}
             <div style={{ 
                 display: 'grid', 
@@ -348,7 +410,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Key size={16} color="#D97706" />
                         <div>
-                            <div style={{ fontSize: '0.55rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Célibes</div>
+                            <div style={{ fontSize: '0.55rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Disponibles</div>
                             <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#D97706' }}>{availVehicles}</div>
                         </div>
                     </div>
