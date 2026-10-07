@@ -8609,26 +8609,19 @@ function CreateOrderContent() {
                                                         );
                                                     })()}
 
-                                                    {/* Price Edit Input */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${isZeroPrice ? '#EF4444' : '#E2E8F0'}`, borderRadius: '8px', overflow: 'hidden', padding: '0 8px', backgroundColor: 'white', height: '36px', transition: 'all 0.2s' }}>
-                                                            <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
-                                                            <input
-                                                                type="text"
-                                                                value={formatPriceDisplay(item.price !== undefined && item.price !== null ? item.price : '')}
-                                                                onFocus={(e) => e.target.select()}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value.replace(/[^0-9,.]/g, '');
-                                                                    const cleanVal = val.replace(/\./g, '').replace(',', '.');
-                                                                    const parsed = cleanVal === '' ? '' : (parseFloat(cleanVal) || 0);
-                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: parsed as any } : c));
-                                                                }}
-                                                                style={{ width: '80px', height: '100%', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', padding: '2px 4px' }}
-                                                            />
+                                                    {/* Unit Price (Read-only, Protected by Commercial Agreement / Catalog) */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '2px' }}>
+                                                        <div style={{ 
+                                                            fontWeight: '800', 
+                                                            fontSize: '0.95rem', 
+                                                            color: isZeroPrice ? '#DC2626' : '#1E293B',
+                                                            fontVariantNumeric: 'tabular-nums'
+                                                        }}>
+                                                            {formatMoney(unitPrice)}
                                                         </div>
                                                         {isZeroPrice && (
                                                             <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                <AlertCircle size={11} color="#DC2626" /> Asignar Precio
+                                                                <AlertCircle size={11} color="#DC2626" /> Sin Precio
                                                             </span>
                                                         )}
                                                     </div>
