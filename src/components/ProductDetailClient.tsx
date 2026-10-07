@@ -13,7 +13,7 @@ interface Product {
     id: string;
     name: string;
     display_name?: string;
-    base_price: number;
+    base_price?: number;
     unit_of_measure: string;
     web_unit?: string;
     web_conversion_factor?: number;
@@ -229,7 +229,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     );
 
     // Aplicar factor de conversión comercial
-    const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price) : (product.pricing_model_prices?.[0]?.price || product.base_price);
+    const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || 0) : (product.pricing_model_prices?.[0]?.price || 0);
     
     // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
     const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;

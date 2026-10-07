@@ -37,14 +37,21 @@ export default function OpsHome() {
         
         async function fetchOpsData() {
             try {
-                const { data: stocks } = await supabase.from('inventory_stocks').select('quantity, product_id');
-                const { data: products } = await supabase.from('products').select('id, base_price');
+                const [stocksRes, matrixRes] = await Promise.all([
+                    supabase.from('inventory_stocks').select('quantity, product_id'),
+                    supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true)
+                ]);
                 
                 if (!isMounted.current) return;
 
-                const value = stocks?.reduce((acc, s) => {
-                    const price = products?.find(p => p.id === s.product_id)?.base_price || 0;
-                    return acc + (s.quantity * price);
+                const costMap = new Map<string, number>();
+                (matrixRes.data || []).forEach((c: any) => {
+                    if (c.manual_cost) costMap.set(c.product_id, Number(c.manual_cost));
+                });
+
+                const value = stocksRes.data?.reduce((acc: number, s: any) => {
+                    const cost = costMap.get(s.product_id) || 0;
+                    return acc + (s.quantity * cost);
                 }, 0) || 0;
 
                 const { count } = await supabase

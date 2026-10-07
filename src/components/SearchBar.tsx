@@ -108,7 +108,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
             const orFilter = `name.ilike.%${query}%,display_name.ilike.%${query}%,keywords.ilike.%${query}%`;
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, category, base_price, image_url, display_name, web_conversion_factor, pricing_model_prices(price)')
+                .select('id, name, category, image_url, display_name, web_conversion_factor, pricing_model_prices(price)')
                 .eq('is_active', true)
                 .eq('show_on_web', true)
                 .eq('pricing_model_prices.model_id', pricingModelId)
@@ -120,7 +120,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                 console.error("Predictive query error, using fallback:", error.message);
                 const { data: fallbackData } = await supabase
                     .from('products')
-                    .select('id, name, category, base_price, image_url, display_name, web_conversion_factor')
+                    .select('id, name, category, image_url, display_name, web_conversion_factor')
                     .eq('is_active', true)
                     .eq('show_on_web', true)
                     .or(orFilter)
@@ -355,7 +355,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.95rem' }}>{p.display_name || p.name}</div>
                                         <div style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.9rem' }}>
-                                            ${(Math.ceil(((p.pricing_model_prices?.[0]?.price || p.base_price || 0) * (p.web_conversion_factor || 1)) / 50) * 50).toLocaleString('es-CO')}
+                                            ${(Math.ceil(((p.pricing_model_prices?.[0]?.price || 0) * (p.web_conversion_factor || 1)) / 50) * 50).toLocaleString('es-CO')}
                                         </div>
                                     </div>
                                     <ChevronRight size={18} color="#d1d5db" />

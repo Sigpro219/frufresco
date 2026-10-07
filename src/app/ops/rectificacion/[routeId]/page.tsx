@@ -140,7 +140,7 @@ export default function RouteRectificationDetailPage() {
                             ),
                             order_items (
                                 id, product_id, quantity, picked_quantity, unit, unit_price,
-                                products (id, name, unit_of_measure, sku, base_price)
+                                products (id, name, unit_of_measure, sku)
                             )
                         )
                     `)
@@ -162,7 +162,7 @@ export default function RouteRectificationDetailPage() {
                             product_name: itm.products?.name || 'Producto',
                             quantity: Number(itm.quantity) || 1,
                             unit: itm.unit || itm.products?.unit_of_measure || 'Kg',
-                            unit_price: Number(itm.unit_price || itm.products?.base_price) || 0,
+                            unit_price: Number(itm.unit_price) || 0,
                             checked: false,
                             is_shortage: false,
                             actual_quantity: Number(itm.quantity) || 1,

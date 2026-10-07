@@ -58,7 +58,7 @@ export default function PrintAgreementPage() {
             // 4. Agreement Items
             const { data: iData } = await supabase
                 .from('quote_items')
-                .select('*, products(name, name_en, unit_of_measure, base_price)')
+                .select('*, products(name, name_en, unit_of_measure)')
                 .eq('quote_id', params.id);
 
             if (iData) setItems(iData);
@@ -123,14 +123,14 @@ export default function PrintAgreementPage() {
         ? `ACU-${agreement.quote_number}`
         : `ACU-${String(agreement.id).substring(0, 8).toUpperCase()}`;
 
-    // Compute average savings percentage
+    // Compute average savings percentage (if explicit list_price is present on item)
     let totalSavingsSum = 0;
     let validSavingsCount = 0;
     items.forEach(it => {
-        const basePrice = Number(it.products?.base_price || 0);
+        const listPrice = Number(it.list_price || 0);
         const uPrice = Number(it.unit_price || 0);
-        if (basePrice > 0 && uPrice > 0 && basePrice > uPrice) {
-            const pct = ((basePrice - uPrice) / basePrice) * 100;
+        if (listPrice > 0 && uPrice > 0 && listPrice > uPrice) {
+            const pct = ((listPrice - uPrice) / listPrice) * 100;
             totalSavingsSum += pct;
             validSavingsCount++;
         }

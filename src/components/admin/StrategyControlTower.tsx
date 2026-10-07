@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import {
     BarChart3,
     DollarSign,
@@ -67,6 +68,7 @@ export default function StrategyControlTower() {
     const [quotes, setQuotes] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [leads, setLeads] = useState<any[]>([]);
+    const [modelPrices, setModelPrices] = useState<any[]>([]);
 
     // Date Range Range ISO helper
     const dateRangeIso = useMemo(() => {
@@ -128,7 +130,8 @@ export default function StrategyControlTower() {
                 matrixRes,
                 quotesRes,
                 productsRes,
-                leadsRes
+                leadsRes,
+                pricesRes
             ] = await Promise.all([
                 ordersQuery,
                 supabase
@@ -151,10 +154,14 @@ export default function StrategyControlTower() {
                     .select('id, client_id, client_name, status, total_amount, created_at, valid_until'),
                 supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, category, inventory_group, unit_of_measure, min_inventory_level, base_price, is_active, parent_id'),
+                    .select('id, name, sku, accounting_id, category, inventory_group, unit_of_measure, min_inventory_level, is_active, parent_id'),
                 supabase
                     .from('leads')
-                    .select('id, company_name, status, created_at')
+                    .select('id, company_name, status, created_at'),
+                supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', GENERAL_INSTITUCIONAL_ID)
             ]);
 
             setOrders(ordersRes.data || []);
@@ -166,6 +173,7 @@ export default function StrategyControlTower() {
             setQuotes(quotesRes.data || []);
             setProducts(productsRes.data || []);
             setLeads(leadsRes.data || []);
+            setModelPrices(pricesRes.data || []);
         } catch (err) {
             console.error('Error fetching strategy control tower data:', err);
         } finally {
@@ -200,6 +208,15 @@ export default function StrategyControlTower() {
         });
         return m;
     }, [costMatrix]);
+
+    // General Institucional price lookup
+    const priceMap = useMemo(() => {
+        const m = new Map<string, number>();
+        modelPrices.forEach(p => {
+            if (p.price && Number(p.price) > 0) m.set(p.product_id, Number(p.price));
+        });
+        return m;
+    }, [modelPrices]);
 
     // Filtered orders by Segment
     const filteredOrders = useMemo(() => {
@@ -515,7 +532,7 @@ export default function StrategyControlTower() {
         const priceComparisonList = products
             .map(p => {
                 const matrixCost = costMap.get(p.id) || 0;
-                const basePrice = Number(p.base_price) || 0;
+                const basePrice = priceMap.get(p.id) || 0;
                 const estimatedCorabastos = matrixCost > 0 ? Math.round(matrixCost * 1.06) : (basePrice > 0 ? Math.round(basePrice * 0.82) : 0);
                 const spreadPct = basePrice > 0 && matrixCost > 0 ? Math.round(((basePrice - matrixCost) / basePrice) * 100) : 22;
                 return {
@@ -541,7 +558,7 @@ export default function StrategyControlTower() {
             freshnessPct: totalMatrixSkus > 0 ? Math.round((freshSkus / totalMatrixSkus) * 100) : 85,
             priceComparisonList
         };
-    }, [costMatrix, products, costMap]);
+    }, [costMatrix, products, costMap, priceMap]);
 
     // ── MASTER EXCEL EXPORT (1-CLIC) ──
     const handleExportExcel = async (areaKey: StrategyArea) => {
@@ -602,13 +619,14 @@ export default function StrategyControlTower() {
             } else if (areaKey === 'procurement') {
                 const procData = products.map(p => {
                     const c = costMap.get(p.id) || 0;
+                    const listPrice = priceMap.get(p.id) || 0;
                     return {
                         'ID Contable': p.accounting_id || '—',
                         'Producto': p.name,
                         'SKU': p.sku,
                         'Costo Matriz Actual ($)': c,
-                        'Precio Base Venta ($)': p.base_price || 0,
-                        'Margen Bruto Proyectado (%)': p.base_price > 0 ? Math.round(((p.base_price - c) / p.base_price) * 100) : 0
+                        'Precio General Institucional ($)': listPrice,
+                        'Margen Bruto Proyectado (%)': listPrice > 0 ? Math.round(((listPrice - c) / listPrice) * 100) : 0
                     };
                 });
                 const ws = XLSX.utils.json_to_sheet(procData);

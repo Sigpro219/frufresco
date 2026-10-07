@@ -116,7 +116,7 @@ export async function GET(request: Request) {
         const { data: dbProducts, error: dbErr } = await supabase
             .from('products')
             .select(`
-                id, name, display_name, base_price, unit_of_measure, image_url, 
+                id, name, display_name, unit_of_measure, image_url, 
                 is_active, iva_rate, weight_kg, web_conversion_factor,
                 pricing_model_prices(price, model_id)
             `)
@@ -138,7 +138,7 @@ export async function GET(request: Request) {
                 );
                 const rawPrice = Number(b2cPriceObj?.price) > 0 
                     ? Number(b2cPriceObj.price) 
-                    : (Number(dbProd.pricing_model_prices?.[0]?.price) || Number(dbProd.base_price) || 0);
+                    : (Number(dbProd.pricing_model_prices?.[0]?.price) || 0);
 
                 const conversionFactor = Number(dbProd.web_conversion_factor) || 1;
                 const currentPrice = Math.ceil((rawPrice * conversionFactor) / 50) * 50;

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 /**
  * ⚡ Endpoint: Liquidación de Precios a Costo Vigente para Pedidos sobre Lista Abierta a Consumo ($0 COP)
  * Recibe: { orderIds: string[] } | { orderId: string }
- * Actualiza los ítems con unit_price === 0 al costo activo de commercial_cost_matrix (o fallback base_price)
+ * Actualiza los ítems con unit_price === 0 al costo activo de commercial_cost_matrix (o modelo General Institucional)
  * y recalcula subtotal, impuestos y total de las órdenes.
  */
 export async function POST(req: NextRequest) {
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
             // Cargar order_items con datos de producto
             const { data: items, error: itemsErr } = await supabaseAdmin
                 .from('order_items')
-                .select('id, product_id, quantity, unit_price, products:product_id (id, name, base_price, iva_rate)')
+                .select('id, product_id, quantity, unit_price, products:product_id (id, name, iva_rate)')
                 .eq('order_id', orderId);
 
             if (itemsErr || !items || items.length === 0) {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
                 // Si el ítem tiene precio 0, liquidar al costo base o precio vigente
                 if (currentPrice === 0 && item.product_id) {
-                    const activeCost = costMap[item.product_id] || genPricesMap[item.product_id] || Number(prod.base_price) || 0;
+                    const activeCost = costMap[item.product_id] || genPricesMap[item.product_id] || 0;
                     if (activeCost > 0) {
                         currentPrice = activeCost;
                         // Actualizar order_item en BD

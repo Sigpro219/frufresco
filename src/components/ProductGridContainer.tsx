@@ -121,7 +121,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             const agreementPrice = agreementPriceMap.get(p.id);
             const basePrice = agreementPrice !== undefined 
                 ? agreementPrice 
-                : (p.pricing_model_prices?.[0]?.price ?? p.base_price ?? 0);
+                : (p.pricing_model_prices?.[0]?.price ?? 0);
 
             const campaignAdj = campaignMap.get(p.id);
             let finalPrice = basePrice;

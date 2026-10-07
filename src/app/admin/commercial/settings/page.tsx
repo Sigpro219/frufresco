@@ -209,7 +209,7 @@ export default function PricingSettingsPage({
             while (!finished) {
                 let query = supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, iva_rate, category, parent_id, utility_deviation_pct, unit_of_measure, base_price, show_on_web')
+                    .select('id, name, sku, accounting_id, iva_rate, category, parent_id, utility_deviation_pct, unit_of_measure, show_on_web')
                     .eq('is_active', true)
                     .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
                 
@@ -312,9 +312,6 @@ export default function PricingSettingsPage({
                         }
                     }
                     baseCost = realCost;
-                }
-                if (baseCost === 0) {
-                    baseCost = prod.base_price || 0;
                 }
 
                 // Margin adjustment rule if exists, or cascade from General Institucional baseline
@@ -435,7 +432,7 @@ export default function PricingSettingsPage({
         setLoadingTemplateItems(true);
         const { data, error } = await supabase
             .from('quote_template_items')
-            .select('product_id, products(id, name, sku, accounting_id, category, base_price, unit_of_measure)')
+            .select('product_id, products(id, name, sku, accounting_id, category, unit_of_measure)')
             .eq('template_id', templateId);
         if (data) {
             const flattened = data.map((item: any) => ({
@@ -505,7 +502,7 @@ export default function PricingSettingsPage({
         }
         const { data } = await supabase
             .from('products')
-            .select('id, name, sku, accounting_id, category, base_price, unit_of_measure')
+            .select('id, name, sku, accounting_id, category, unit_of_measure')
             .eq('is_active', true)
             .ilike('name', `%${term}%`)
             .limit(30);
@@ -559,7 +556,7 @@ export default function PricingSettingsPage({
             'SKU': item.sku || '',
             'Producto': item.name || '',
             'Categoría': CATEGORY_MAP[item.category] || item.category || '',
-            'Precio Base': item.base_price || 0
+            'Unidad': item.unit_of_measure || ''
         }));
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();

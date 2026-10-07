@@ -65,7 +65,6 @@ interface ProductItem {
     accounting_id: string;
     category: string;
     unit_of_measure: string;
-    base_price: number;
     resolved_price: number;
     show_on_web?: boolean;
 }
@@ -74,6 +73,8 @@ export default function PrintCatalogPage() {
     const [pricingModels, setPricingModels] = useState<PricingModel[]>([]);
     const [selectedModelId, setSelectedModelId] = useState<string>('');
     const [products, setProducts] = useState<ProductItem[]>([]);
+    const [modelPricesMap, setModelPricesMap] = useState<Map<string, number>>(new Map());
+    const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -97,21 +98,23 @@ export default function PrintCatalogPage() {
             setPricingModels(models);
 
             const defaultModel = models.find(m => m.name.toLowerCase().includes('institucional')) || models[0];
-            if (defaultModel) {
-                setSelectedModelId(defaultModel.id);
-            }
+            const activeModelId = defaultModel?.id || 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
+            setSelectedModelId(activeModelId);
 
-            // 2. Cargar Productos Activos y Costos
-            const [prodRes, matrixRes] = await Promise.all([
+            // 2. Cargar Productos Activos, Costos y Precios de Modelos
+            const [prodRes, matrixRes, pmpRes] = await Promise.all([
                 supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, category, unit_of_measure, base_price, is_active, show_on_web')
+                    .select('id, name, sku, accounting_id, category, unit_of_measure, is_active, show_on_web')
                     .eq('is_active', true)
                     .order('name', { ascending: true }),
                 supabase
                     .from('commercial_cost_matrix')
                     .select('product_id, manual_cost, is_active')
-                    .eq('is_active', true)
+                    .eq('is_active', true),
+                supabase
+                    .from('pricing_model_prices')
+                    .select('model_id, product_id, price')
             ]);
 
             const costMap = new Map<string, number>();
@@ -120,19 +123,27 @@ export default function PrintCatalogPage() {
                     costMap.set(m.product_id, Number(m.manual_cost));
                 }
             });
+            setCostMatrixMap(costMap);
+
+            const pmpMap = new Map<string, number>();
+            (pmpRes.data || []).forEach(pmp => {
+                if (pmp.price && Number(pmp.price) > 0) {
+                    pmpMap.set(`${pmp.model_id}_${pmp.product_id}`, Number(pmp.price));
+                }
+            });
+            setModelPricesMap(pmpMap);
 
             const marginPct = defaultModel?.base_margin_percent ? Number(defaultModel.base_margin_percent) : 34.5;
 
             const mappedProds: ProductItem[] = (prodRes.data || []).map(p => {
-                const bPrice = Number(p.base_price || 0);
-                const cost = costMap.get(p.id);
-                let resPrice = bPrice;
+                const cost = costMap.get(p.id) || 0;
+                const pmpPrice = pmpMap.get(`${activeModelId}_${p.id}`);
+                let resPrice = pmpPrice || 0;
 
-                // Si hay costo de matriz, aplicar fórmula de markup sobre costo efectivo
-                if (cost && cost > 0) {
+                // Si no hay precio cacheado en PMP pero hay costo en matriz, aplicar markup del modelo
+                if (resPrice <= 0 && cost > 0) {
                     resPrice = Math.round(cost * (1 + marginPct / 100));
                 }
-                if (resPrice <= 0) resPrice = bPrice;
 
                 return {
                     id: p.id,
@@ -141,7 +152,6 @@ export default function PrintCatalogPage() {
                     accounting_id: p.accounting_id || '---',
                     category: p.category || 'Varios',
                     unit_of_measure: p.unit_of_measure || 'Kg',
-                    base_price: bPrice,
                     resolved_price: resPrice,
                     show_on_web: p.show_on_web
                 };
@@ -162,12 +172,17 @@ export default function PrintCatalogPage() {
         const marginPct = selModel?.base_margin_percent ? Number(selModel.base_margin_percent) : 34.5;
 
         setProducts(prev => prev.map(p => {
-            const bPrice = p.base_price;
-            // Estimated price based on model margin variation
-            const resPrice = bPrice > 0 ? Math.round(bPrice * (1 + (marginPct - 34.5) / 100)) : bPrice;
+            const pmpPrice = modelPricesMap.get(`${modelId}_${p.id}`);
+            const cost = costMatrixMap.get(p.id) || 0;
+            let resPrice = pmpPrice || 0;
+
+            if (resPrice <= 0 && cost > 0) {
+                resPrice = Math.round(cost * (1 + marginPct / 100));
+            }
+
             return {
                 ...p,
-                resolved_price: resPrice > 0 ? resPrice : bPrice
+                resolved_price: resPrice
             };
         }));
     };

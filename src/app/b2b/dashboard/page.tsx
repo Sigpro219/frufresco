@@ -25,7 +25,6 @@ interface OrderItem {
     quantity: number;
     unit: string;
     unit_price?: number;
-    base_price?: number;
     variant_label?: string;
     added_at?: number;
 }
@@ -334,7 +333,7 @@ export default function B2BDashboard() {
                 while (hasMore) {
                     let query = supabase
                         .from('products')
-                        .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price, category')
+                        .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, category')
                         .eq('is_active', true)
                         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -403,7 +402,7 @@ export default function B2BDashboard() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price, category, is_active')
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, category, is_active')
                     .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
                     .eq('is_active', true)
                     .limit(50)
@@ -489,8 +488,7 @@ export default function B2BDashboard() {
             }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
-            const basePrice = product.base_price ? Number(product.base_price) : undefined;
-            const resolvedPrice = agreementPrice !== undefined ? Number(agreementPrice) : basePrice;
+            const resolvedPrice = agreementPrice !== undefined ? Number(agreementPrice) : 0;
 
             const newItem: OrderItem = {
                 id: Math.random().toString(36).substr(2, 9), // Temp ID
@@ -501,7 +499,6 @@ export default function B2BDashboard() {
                 quantity: numericModalQty,
                 unit: product.unit_of_measure || 'kg',
                 unit_price: resolvedPrice,
-                base_price: basePrice,
                 variant_label: optionValues.join(', ') || undefined,
                 added_at: Date.now()
             };
@@ -537,8 +534,7 @@ export default function B2BDashboard() {
             }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
-            const basePrice = product.base_price ? Number(product.base_price) : undefined;
-            const resolvedPrice = agreementPrice !== undefined ? Number(agreementPrice) : basePrice;
+            const resolvedPrice = agreementPrice !== undefined ? Number(agreementPrice) : 0;
 
             const newItem: OrderItem = {
                 id: Math.random().toString(36).substr(2, 9),
@@ -549,7 +545,6 @@ export default function B2BDashboard() {
                 quantity: qty,
                 unit: product.unit_of_measure || 'Kg',
                 unit_price: resolvedPrice,
-                base_price: basePrice,
                 added_at: Date.now()
             };
             setOrderItems(prev => [...prev, newItem]);
@@ -626,7 +621,7 @@ export default function B2BDashboard() {
             const p = Array.isArray(item.products) ? item.products[0] : item.products;
             const pId = item.product_id || p?.id;
             const priceFromMap = pricesMap && pId ? pricesMap[pId] : undefined;
-            const unitPrice = priceFromMap !== undefined ? priceFromMap : (item.unit_price || p?.base_price || 0);
+            const unitPrice = priceFromMap !== undefined ? priceFromMap : (item.unit_price || 0);
 
             return {
                 id: item.id || Math.random().toString(36).substr(2, 9),
@@ -697,7 +692,7 @@ export default function B2BDashboard() {
                     // Fallback: top products
                     const { data: topProducts } = await supabase
                         .from('products')
-                        .select('id, name, name_en, unit_of_measure, image_url, base_price')
+                        .select('id, name, name_en, unit_of_measure, image_url')
                         .eq('is_active', true)
                         .limit(10);
 
@@ -709,7 +704,7 @@ export default function B2BDashboard() {
                             product_name_en: p.name_en,
                             product_image: p.image_url || '',
                             quantity: 0,
-                            unit_price: pricesMap[p.id] ?? p.base_price ?? 0,
+                            unit_price: pricesMap[p.id] ?? 0,
                             unit: p.unit_of_measure || 'kg'
                         }));
                         setOrderItems(suggestedItems);
@@ -771,7 +766,7 @@ export default function B2BDashboard() {
                                 unit_price,
                                 unit,
                                 nickname,
-                                products(id, name, name_en, unit_of_measure, sku, base_price)
+                                products(id, name, name_en, unit_of_measure, sku)
                             )
                         `)
                         .eq('profile_id', targetProfileId)
@@ -821,7 +816,7 @@ export default function B2BDashboard() {
                         const orderIds = ordersData.map(o => o.id);
                         const { data: itemsData } = await supabase
                             .from('order_items')
-                            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, base_price, category)')
+                            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, category)')
                             .in('order_id', orderIds);
 
                         if (isMounted.current && itemsData) {
@@ -902,7 +897,7 @@ export default function B2BDashboard() {
                         pricing_models!model_id(name),
                         quote_items(
                             *,
-                            products(id, name, name_en, unit_of_measure, image_url, base_price, sku, category)
+                            products(id, name, name_en, unit_of_measure, image_url, sku, category)
                         )
                     `)
                     .in('client_id', clientIds)
@@ -917,7 +912,7 @@ export default function B2BDashboard() {
                             *,
                             quote_items(
                                 *,
-                                products(id, name, name_en, unit_of_measure, image_url, base_price, sku, category)
+                                products(id, name, name_en, unit_of_measure, image_url, sku, category)
                             )
                         `)
                         .in('client_id', clientIds)
@@ -1045,7 +1040,7 @@ export default function B2BDashboard() {
 
         try {
             const calculatedSubtotal = itemsToSubmit.reduce((acc, item) => {
-                const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? 0);
                 return acc + (Number(item.quantity || 0) * price);
             }, 0);
 
@@ -1073,7 +1068,7 @@ export default function B2BDashboard() {
 
             // Create order items
             const itemsToInsert = itemsToSubmit.map(item => {
-                const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? 0);
                 return {
                     order_id: order.id,
                     product_id: item.product_id,
@@ -1486,7 +1481,7 @@ export default function B2BDashboard() {
                                                             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                                                 {searchDropdownResults.map((prod, idx) => {
                                                                     const isAgree = agreementPricesMap[prod.id] !== undefined;
-                                                                    const displayPrice = isAgree ? agreementPricesMap[prod.id] : (prod.base_price || 0);
+                                                                    const displayPrice = isAgree ? agreementPricesMap[prod.id] : 0;
                                                                     const isFocused = idx === searchFocusedIndex;
 
                                                                     return (
@@ -1851,8 +1846,8 @@ export default function B2BDashboard() {
                                                                         </div>
                                                                     ) : (
                                                                         <div>
-                                                                            <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: '800', color: '#475569' }}>
-                                                                                ${formatPrice(p.base_price || 0)} / {p.unit_of_measure}
+                                                                            <span style={{ display: 'block', fontSize: '0.88rem', fontWeight: '800', color: '#64748B' }}>
+                                                                                Por cotizar / {p.unit_of_measure}
                                                                             </span>
                                                                             <span style={{
                                                                                 display: 'inline-flex',
@@ -2127,7 +2122,7 @@ export default function B2BDashboard() {
                                     <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                         <div style={{ flex: 1, overflowY: 'auto' }}>
                                             {displayedCartItems.map((item) => {
-                                                const uPrice = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                                                const uPrice = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? 0);
                                                 const itemSubtotal = item.quantity * uPrice;
 
                                                 // Smart Order Intelligence calculations
@@ -2312,7 +2307,7 @@ export default function B2BDashboard() {
                                         }}>
                                             <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total Subtotal:</span>
                                             <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                ${formatPrice(orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? i.base_price ?? 0)), 0))}
+                                                ${formatPrice(orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? 0)), 0))}
                                             </span>
                                         </div>
 
@@ -3412,7 +3407,7 @@ export default function B2BDashboard() {
                                                                     const p = Array.isArray(item.products) ? item.products[0] : item.products;
                                                                     const name = item.product_name || p?.name || 'Producto';
                                                                     const unit = p?.unit_of_measure || 'Kg';
-                                                                    const basePrice = Number(p?.base_price || 0);
+                                                                    const basePrice = 0;
                                                                     const uPrice = Number(item.unit_price || 0);
                                                                     const savings = basePrice > uPrice ? (basePrice - uPrice) : 0;
                                                                     const savingsPct = basePrice > 0 && savings > 0 ? ((savings / basePrice) * 100).toFixed(1) : 0;
@@ -4318,7 +4313,7 @@ export default function B2BDashboard() {
                                             </thead>
                                             <tbody>
                                                 {activeSubmitItems.map(item => {
-                                                    const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                                                    const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? 0);
                                                     const lineSubtotal = item.quantity * price;
 
                                                     const pastPurchases = historicalOrders.flatMap(o => o.order_items || o.items || []).filter((i: any) => (i.product_id && i.product_id === item.product_id) || (i.product_name && i.product_name === item.product_name));
@@ -4411,7 +4406,7 @@ export default function B2BDashboard() {
                             <div style={{ textAlign: 'right' }}>
                                 <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', display: 'block' }}>Total Estimado:</span>
                                 <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#10B981', letterSpacing: '-0.03em' }}>
-                                    ${formatPrice(orderItems.reduce((acc, i) => acc + (i.quantity * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? i.base_price ?? 0)), 0))}
+                                    ${formatPrice(orderItems.reduce((acc, i) => acc + (i.quantity * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? 0)), 0))}
                                 </span>
                             </div>
                         </div>

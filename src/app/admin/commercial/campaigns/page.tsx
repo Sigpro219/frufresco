@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import { 
     Plus, 
     Megaphone, 
@@ -100,14 +101,26 @@ export default function CampaignsPage({ embedded = false }: { embedded?: boolean
                 .eq('role', 'b2b_client')
                 .order('company_name');
             
-            const { data: prods } = await supabase
-                .from('products')
-                .select('id, name, sku, base_price, category')
-                .eq('is_active', true)
-                .order('name');
+            const [{ data: prods }, { data: pmpData }] = await Promise.all([
+                supabase
+                    .from('products')
+                    .select('id, name, sku, category')
+                    .eq('is_active', true)
+                    .order('name'),
+                supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', GENERAL_INSTITUCIONAL_ID)
+            ]);
+
+            const pricesMap = new Map((pmpData || []).map(p => [p.product_id, Number(p.price) || 0]));
+            const prodsWithPrices = (prods || []).map(p => ({
+                ...p,
+                reference_price: pricesMap.get(p.id) || 0
+            }));
 
             setAvailableClients(clients || []);
-            setAvailableProducts(prods || []);
+            setAvailableProducts(prodsWithPrices);
         } catch (e) {
             console.error('Error fetching discovery data:', e);
         }

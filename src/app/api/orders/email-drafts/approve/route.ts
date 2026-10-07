@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const productIds = items.map((i: any) => i.productId || i.product_id || i.id).filter(Boolean);
     const { data: dbProducts } = await supabaseAdmin
       .from('products')
-      .select('id, name, base_price, unit_of_measure, weight_kg, iva_rate')
+      .select('id, name, unit_of_measure, weight_kg, iva_rate')
       .in('id', productIds);
     const productsMap = new Map((dbProducts || []).map((p: any) => [p.id, p]));
 
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     const formattedItems = items.map((item: any) => {
       const pId = item.productId || item.product_id || item.id;
       const dbProd = productsMap.get(pId);
-      const unitPrice = Number(item.unitPrice || item.price || dbProd?.base_price || 0);
+      const unitPrice = Number(item.unitPrice || item.price || 0);
       const qty = Number(item.quantity || item.qty || 1);
       const itemTotal = unitPrice * qty;
       totalGross += itemTotal;

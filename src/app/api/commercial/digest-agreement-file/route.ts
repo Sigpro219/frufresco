@@ -173,7 +173,7 @@ export async function POST(req: Request) {
       const to = from + pageSize - 1;
       const { data: batch, error: prodErr } = await supabaseAdmin
         .from('products')
-        .select('id, sku, accounting_id, name, unit_of_measure, base_price, is_active, iva_rate, category')
+        .select('id, sku, accounting_id, name, unit_of_measure, is_active, iva_rate, category')
         .range(from, to);
 
       if (prodErr) {
@@ -349,7 +349,7 @@ export async function POST(req: Request) {
 
       // Cálculo de Costos y Márgenes
       const costBasis = matchedProd
-        ? (costMatrixMap[matchedProd.id] || matchedProd.base_price || 0)
+        ? (costMatrixMap[matchedProd.id] || 0)
         : 0;
 
       let marginPercent = 0;

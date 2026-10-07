@@ -5356,6 +5356,14 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const isB2C = role === 'b2c_client';
     const isB2B = role === 'b2b_client';
 
+    const [b2bStructureType, setB2bStructureType] = useState<'matriz' | 'sucursal' | 'individual'>(() => {
+        if (isB2C) return 'individual';
+        if (editData?.is_corporate_parent) return 'matriz';
+        if (editData?.parent_id) return 'sucursal';
+        if (isEdit) return 'individual';
+        return 'matriz'; // Por defecto al crear un nuevo B2B, arranca como Casa Matriz
+    });
+
     const initialContact = splitContactName(editData?.contact_name || '');
     const [contactFirstName, setContactFirstName] = useState(initialContact.firstName);
     const [contactLastName, setContactLastName] = useState(initialContact.lastName);
@@ -5388,7 +5396,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         document_type: editData?.document_type || 'invoice',
         remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true,
         print_invoice: (editData as any)?.print_invoice || false,
-        is_corporate_parent: isB2C ? false : (editData?.is_corporate_parent || false),
+        is_corporate_parent: isB2C ? false : (editData?.is_corporate_parent !== undefined ? editData.is_corporate_parent : (!isEdit ? true : false)),
         parent_id: editData?.parent_id || '',
         branch_id: editData?.branch_id || '',
         corporate_role: editData?.corporate_role || '',
@@ -6081,6 +6089,38 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
             if (isB2C) {
                 payload.is_corporate_parent = false;
+                payload.parent_id = null;
+            } else {
+                if (b2bStructureType === 'matriz') {
+                    payload.is_corporate_parent = true;
+                    payload.parent_id = null;
+                    payload.branch_id = null;
+                    if (!payload.company_name && payload.razon_social) {
+                        payload.company_name = payload.razon_social;
+                    }
+                    if (!payload.razon_social && payload.company_name) {
+                        payload.razon_social = payload.company_name;
+                    }
+                } else if (b2bStructureType === 'sucursal') {
+                    if (!formData.parent_id) {
+                        setSaving(false);
+                        window.showToast?.('Por favor selecciona una Casa Matriz para vincular la sucursal, o elige Cuenta Individual.', 'info');
+                        return;
+                    }
+                    payload.is_corporate_parent = false;
+                    payload.parent_id = formData.parent_id;
+                } else {
+                    // 'individual'
+                    payload.is_corporate_parent = false;
+                    payload.parent_id = null;
+                    payload.branch_id = null;
+                    if (!payload.company_name && payload.razon_social) {
+                        payload.company_name = payload.razon_social;
+                    }
+                    if (!payload.razon_social && payload.company_name) {
+                        payload.razon_social = payload.company_name;
+                    }
+                }
             }
 
             console.log('--- INTENTO DE GUARDADO (Payload Sanitized) ---');
@@ -6127,7 +6167,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         .eq('parent_id', (editData as Profile).id);
                 }
 
-                window.showToast?.('Base de datos actualizada', 'success');
+                const clientTypeLabel = isB2C ? 'Cliente Hogar' : (b2bStructureType === 'matriz' ? 'Casa Matriz' : b2bStructureType === 'sucursal' ? 'Sucursal' : 'Cuenta Individual');
+                window.showToast?.(`${clientTypeLabel} actualizada con éxito`, 'success');
             } else {
                 const targetRole = role;
                 // Usamos el ID estable generado al inicio para asegurar consistencia con las excepciones
@@ -6142,7 +6183,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     console.error('DETALLES SUPABASE:', fullError);
                     throw new Error(`DB Error [${error.code}]: ${error.message} (${fullError})`);
                 }
-                window.showToast?.('Cliente creado con éxito', 'success');
+                const clientTypeLabel = isB2C ? 'Cliente Hogar' : (b2bStructureType === 'matriz' ? 'Casa Matriz' : b2bStructureType === 'sucursal' ? 'Sucursal' : 'Cuenta Individual');
+                window.showToast?.(`${clientTypeLabel} creada con éxito`, 'success');
             }
             onRefresh();
             onClose();
@@ -6201,14 +6243,14 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '10px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
-                                {isLead ? <FileText size={20} /> : isReadOnly ? <ClipboardList size={20} /> : (isB2C ? <User size={20} /> : (formData.is_corporate_parent ? <Building2 size={20} /> : <MapPin size={20} />))}
+                                {isLead ? <FileText size={20} /> : isReadOnly ? <ClipboardList size={20} /> : (isB2C ? <User size={20} /> : (b2bStructureType === 'matriz' ? <Building2 size={20} /> : b2bStructureType === 'sucursal' ? <MapPin size={20} /> : <UserCheck size={20} />))}
                             </div>
                             <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03rem' }}>
-                                {isLead ? 'Ficha de Prospecto (Lead)' : isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta Hogar' : 'Cuenta Institucional'}`)}
+                                {isLead ? 'Ficha de Prospecto (Lead)' : isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : (b2bStructureType === 'matriz' ? 'Casa Matriz B2B' : b2bStructureType === 'sucursal' ? 'Sucursal Institucional' : 'Cuenta B2B Individual')}` : `Nueva ${isB2C ? 'Cuenta Hogar' : (b2bStructureType === 'matriz' ? 'Casa Matriz B2B' : b2bStructureType === 'sucursal' ? 'Sucursal Institucional' : 'Cuenta B2B Individual')}`)}
                             </h2>
                         </div>
                         <p style={{ color: '#64748B', margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>
-                            {isLead ? `Detalles del lead capturado por el chatbot` : isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
+                            {isLead ? `Detalles del lead capturado por el chatbot` : isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : (b2bStructureType === 'matriz' ? 'Registra la entidad jurídica matriz (holding) que centraliza facturación, NIT y acuerdos.' : b2bStructureType === 'sucursal' ? 'Registra una sede operativa o punto de entrega subordinado a una Casa Matriz.' : 'Registra una cuenta comercial independiente de sede única.'))}
                         </p>
                     </div>
 
@@ -6745,11 +6787,111 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         )}
                         {/* BLOQUE: IDENTIFICACIÓN (DINÁMICO) */}
                         <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><UserCheck size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
-                                <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>
-                                    {isB2C ? 'IDENTIFICACIÓN Y DATOS BÁSICOS' : 'IDENTIFICACIÓN Y VÍNCULOS'}
-                                </h4>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><UserCheck size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>
+                                        {isB2C ? 'IDENTIFICACIÓN Y DATOS BÁSICOS' : 'IDENTIFICACIÓN Y ESTRUCTURA CORPORATIVA'}
+                                    </h4>
+                                </div>
+
+                                {/* SELECTOR SEGMENTADO DE ESTRUCTURA B2B (SOLO B2B) */}
+                                {!isB2C && !isLead && (
+                                    <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '12px', border: '1px solid #E2E8F0', gap: '3px' }}>
+                                        <button
+                                            type="button"
+                                            disabled={isReadOnly || (isEdit && branches.length > 0 && b2bStructureType === 'matriz')}
+                                            title={isEdit && branches.length > 0 && b2bStructureType === 'matriz' ? 'Esta Casa Matriz tiene sucursales vinculadas activas' : 'Entidad jurídica central que agrupa sedes y factura'}
+                                            onClick={() => {
+                                                setB2bStructureType('matriz');
+                                                setFormData(prev => ({ 
+                                                    ...prev, 
+                                                    is_corporate_parent: true, 
+                                                    parent_id: '', 
+                                                    branch_id: '',
+                                                    razon_social: prev.razon_social || prev.company_name,
+                                                    company_name: prev.company_name || prev.razon_social 
+                                                }));
+                                            }}
+                                            style={{
+                                                padding: '0.4rem 0.85rem',
+                                                borderRadius: '9px',
+                                                border: 'none',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: (isReadOnly || (isEdit && branches.length > 0 && b2bStructureType === 'matriz')) ? 'default' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                backgroundColor: b2bStructureType === 'matriz' ? '#1E3A8A' : 'transparent',
+                                                color: b2bStructureType === 'matriz' ? 'white' : '#64748B',
+                                                boxShadow: b2bStructureType === 'matriz' ? '0 2px 4px rgba(30, 58, 138, 0.25)' : 'none',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            <span>👑</span> Casa Matriz
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={isReadOnly || (isEdit && branches.length > 0)}
+                                            title={isEdit && branches.length > 0 ? 'No se puede cambiar una matriz con sucursales a sucursal' : 'Punto de entrega o sede física subordinada a una matriz'}
+                                            onClick={() => {
+                                                setB2bStructureType('sucursal');
+                                                setFormData(prev => ({ ...prev, is_corporate_parent: false }));
+                                            }}
+                                            style={{
+                                                padding: '0.4rem 0.85rem',
+                                                borderRadius: '9px',
+                                                border: 'none',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: (isReadOnly || (isEdit && branches.length > 0)) ? 'default' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                backgroundColor: b2bStructureType === 'sucursal' ? '#EA580C' : 'transparent',
+                                                color: b2bStructureType === 'sucursal' ? 'white' : '#64748B',
+                                                boxShadow: b2bStructureType === 'sucursal' ? '0 2px 4px rgba(234, 88, 12, 0.25)' : 'none',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            <span>🏢</span> Sucursal de Matriz
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={isReadOnly || (isEdit && branches.length > 0)}
+                                            title={isEdit && branches.length > 0 ? 'No se puede cambiar una matriz con sucursales a cuenta individual' : 'Negocio independiente autónomo sin estructura multi-sede'}
+                                            onClick={() => {
+                                                setB2bStructureType('individual');
+                                                setFormData(prev => ({ 
+                                                    ...prev, 
+                                                    is_corporate_parent: false, 
+                                                    parent_id: '', 
+                                                    branch_id: '',
+                                                    razon_social: prev.razon_social || prev.company_name,
+                                                    company_name: prev.company_name || prev.razon_social 
+                                                }));
+                                            }}
+                                            style={{
+                                                padding: '0.4rem 0.85rem',
+                                                borderRadius: '9px',
+                                                border: 'none',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: (isReadOnly || (isEdit && branches.length > 0)) ? 'default' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                backgroundColor: b2bStructureType === 'individual' ? '#0D7A57' : 'transparent',
+                                                color: b2bStructureType === 'individual' ? 'white' : '#64748B',
+                                                boxShadow: b2bStructureType === 'individual' ? '0 2px 4px rgba(13, 122, 87, 0.25)' : 'none',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            <span>👤</span> Cuenta Individual
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {isB2C ? (
@@ -6759,60 +6901,59 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <FormField label="WhatsApp / Celular" value={formData.phone} onChange={(v) => setFormData({...formData, phone: v})} required readOnly={isReadOnly} />
                                     <FormField label="Email Principal" value={formData.email} onChange={(v) => setFormData({...formData, email: v, contact_email: v})} required readOnly={isReadOnly} />
                                 </div>
+                            ) : b2bStructureType === 'matriz' ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
+                                    <FormField label="Razón Social Legal (Casa Matriz)" value={formData.razon_social} onChange={(v) => setFormData({...formData, razon_social: v, company_name: v})} required readOnly={isEdit || isReadOnly} placeholder="Ej: ALIMENTOS Y BEBIDAS S.A.S." />
+                                    <FormField label="NIT" value={formData.nit} onChange={(v) => setFormData({...formData, nit: v})} required readOnly={isEdit || isReadOnly} placeholder="Ej: 900123456-1" />
+                                    <FormField label="Email Principal (Facturación)" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} required readOnly={isReadOnly} placeholder="facturacion@empresa.com" />
+                                </div>
+                            ) : b2bStructureType === 'sucursal' ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ *</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input 
+                                                type="text"
+                                                placeholder="Buscar Matriz por NIT o Nombre..."
+                                                value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
+                                                onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
+                                                onChange={(e) => {
+                                                    if (isReadOnly) return;
+                                                    setParentSearch(e.target.value);
+                                                    if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
+                                                    setIsParentDropdownOpen(true);
+                                                }}
+                                                readOnly={isEdit || isReadOnly}
+                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
+                                            />
+                                            {isParentDropdownOpen && !formData.parent_id && (
+                                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                                                    {potentialParents.filter(p => 
+                                                        p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
+                                                        p.nit?.includes(parentSearch) ||
+                                                        p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
+                                                    ).map(p => (
+                                                        <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
+                                                            <div style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E3A8A' }}>👑 {p.company_name}</div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
+                                                                <span>NIT: {p.nit}</span>
+                                                                <span>•</span>
+                                                                <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <FormField label="Nombre Comercial Sucursal" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v})} required readOnly={isReadOnly} placeholder="Ej: Sede Chicó Calle 93" />
+                                    <FormField label="ID Sucursal" value={formData.branch_id} onChange={(v) => setFormData({...formData, branch_id: v})} placeholder="Ej: SUC-01" readOnly={isReadOnly} />
+                                </div>
                             ) : (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
-                                    {!formData.is_corporate_parent && (
-                                        <div style={{ position: 'relative' }}>
-                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ</label>
-                                            <div style={{ position: 'relative' }}>
-                                                <input 
-                                                    type="text"
-                                                    placeholder="Buscar Matriz..."
-                                                    value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
-                                                    onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
-                                                    onChange={(e) => {
-                                                        if (isReadOnly) return;
-                                                        setParentSearch(e.target.value);
-                                                        if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
-                                                        setIsParentDropdownOpen(true);
-                                                    }}
-                                                    readOnly={isEdit || isReadOnly}
-                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
-                                                />
-                                                {isParentDropdownOpen && !formData.parent_id && (
-                                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
-                                                        {potentialParents.filter(p => 
-                                                            p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
-                                                            p.nit?.includes(parentSearch) ||
-                                                            p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
-                                                        ).map(p => (
-                                                            <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
-                                                                <div style={{ fontWeight: '800', fontSize: '0.8rem' }}>{p.company_name}</div>
-                                                                <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
-                                                                    <span>NIT: {p.nit}</span>
-                                                                    <span>•</span>
-                                                                    <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {formData.is_corporate_parent ? (
-                                        <>
-                                            <FormField label="Razón Social Legal" value={formData.razon_social} onChange={(v) => setFormData({...formData, razon_social: v, company_name: v})} required readOnly={isEdit || isReadOnly} />
-                                            <FormField label="NIT" value={formData.nit} onChange={(v) => setFormData({...formData, nit: v})} required readOnly={isEdit || isReadOnly} />
-                                            <FormField label="Email Principal (Facturación)" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} required readOnly={isReadOnly} />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FormField label="Nombre Comercial Sucursal" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v})} required readOnly={isReadOnly} />
-                                            <FormField label="ID Sucursal" value={formData.branch_id} onChange={(v) => setFormData({...formData, branch_id: v})} placeholder="Ej: SUC-01" readOnly={isReadOnly} />
-                                        </>
-                                    )}
+                                    <FormField label="Razón Social / Nombre Comercial" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v, razon_social: v})} required readOnly={isReadOnly} placeholder="Ej: Panadería & Café El Roble" />
+                                    <FormField label="NIT / Cédula" value={formData.nit} onChange={(v) => setFormData({...formData, nit: v})} required readOnly={isEdit || isReadOnly} placeholder="Ej: 900987654-3" />
+                                    <FormField label="Email Principal" value={formData.email} onChange={(v) => setFormData({...formData, email: v, contact_email: v})} required readOnly={isReadOnly} placeholder="administracion@negocio.com" />
                                 </div>
                             )}
 
@@ -6856,9 +6997,48 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         {/* BLOQUE: SUCURSALES VINCULADAS (UBICADO DE PRIMERAS EN LA PARTE SUPERIOR PARA MATRICES) */}
                         {isB2B && formData.is_corporate_parent && editData?.id && (
                             <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Building2 size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
-                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Building2 size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
+                                    </div>
+                                    {!isReadOnly && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (onSwitchClient) {
+                                                    onSwitchClient({
+                                                        role: 'b2b_client',
+                                                        parent_id: (editData as Profile).id,
+                                                        nit: formData.nit,
+                                                        razon_social: formData.razon_social || formData.company_name,
+                                                        email: formData.email,
+                                                        pricing_model_id: formData.pricing_model_id,
+                                                        is_corporate_parent: false
+                                                    } as any);
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '0.45rem 0.9rem',
+                                                borderRadius: '8px',
+                                                backgroundColor: '#1E3A8A',
+                                                color: 'white',
+                                                border: 'none',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 4px rgba(30, 58, 138, 0.25)',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1E3A8A'}
+                                        >
+                                            <Plus size={14} /> Nueva Sucursal Vinculada
+                                        </button>
+                                    )}
                                 </div>
                                 {branches.length === 0 ? (
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', fontFamily: THEME.typography.fontFamilySecondary }}>No hay sucursales asociadas a esta Casa Matriz.</p>
@@ -8498,7 +8678,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                         <Loader2 size={16} className="animate-spin" /> GUARDANDO...
                                     </div>
-                                ) : isB2C ? 'GUARDAR CLIENTE HOGAR' : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : 'SUCURSAL'}`}
+                                ) : isB2C ? 'GUARDAR CLIENTE HOGAR' : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : (b2bStructureType === 'sucursal' ? 'SUCURSAL' : 'CUENTA INDIVIDUAL')}`}
                             </button>
                         )}
                     </div>

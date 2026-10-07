@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, Product } from '@/lib/supabase';
+import { CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -235,6 +236,25 @@ export default function AdminProductsPage() {
                 }
             }
 
+            // Precios oficiales desde pricing_model_prices (priorizando Clientes Hogar/B2C, luego General Institucional)
+            const { data: pmpData } = await supabase
+                .from('pricing_model_prices')
+                .select('product_id, price, model_id')
+                .in('model_id', [CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID]);
+
+            const pricesMap: Record<string, number> = {};
+            (pmpData || []).forEach(pmp => {
+                if (pmp.model_id === GENERAL_INSTITUCIONAL_ID && pmp.price && Number(pmp.price) > 0) {
+                    pricesMap[pmp.product_id] = Number(pmp.price);
+                }
+            });
+            (pmpData || []).forEach(pmp => {
+                if (pmp.model_id === CLIENTES_HOGAR_ID && pmp.price && Number(pmp.price) > 0) {
+                    pricesMap[pmp.product_id] = Number(pmp.price);
+                }
+            });
+            setProductPrices(pricesMap);
+
             setProducts(allProducts);
         } catch (err) {
             console.error('Unexpected fetch error:', err);
@@ -244,6 +264,7 @@ export default function AdminProductsPage() {
         }
     }, [showToast]);
 
+    const [productPrices, setProductPrices] = useState<Record<string, number>>({});
     const [savingId, setSavingId] = useState<string | null>(null);
     const [isSyncingPrices, setIsSyncingPrices] = useState(false);
     const [autosyncEnabled, setAutosyncEnabled] = useState(true);
@@ -619,7 +640,7 @@ export default function AdminProductsPage() {
             return hasVariantsArray || hasOptionsConfig;
         }).length;
 
-        const withPrice = products.filter(p => p.base_price > 0).length;
+        const withPrice = products.filter(p => (productPrices[p.id] || 0) > 0).length;
 
         return {
             total,
@@ -628,7 +649,7 @@ export default function AdminProductsPage() {
             variantsCoverage: formatNumber(withVariants / total * 100, 1),
             pricingStatus: formatNumber(withPrice / total * 100, 1)
         };
-    }, [products]);
+    }, [products, productPrices]);
 
     const filteredProducts = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -668,9 +689,9 @@ export default function AdminProductsPage() {
 
         // 3. Filtro Precio
         if (priceFilter === 'with_price') {
-            filtered = filtered.filter(p => (p.base_price || 0) > 0);
+            filtered = filtered.filter(p => (productPrices[p.id] || 0) > 0);
         } else if (priceFilter === 'zero_price') {
-            filtered = filtered.filter(p => !p.base_price || p.base_price === 0);
+            filtered = filtered.filter(p => (productPrices[p.id] || 0) === 0);
         }
 
         // 4. Filtro Variantes
@@ -788,14 +809,14 @@ export default function AdminProductsPage() {
                 }
                 if (sortConfig.column === 'price') {
                     if (sortConfig.special === 'zero_first') {
-                        const priceA = a.base_price || 0;
-                        const priceB = b.base_price || 0;
+                        const priceA = productPrices[a.id] || 0;
+                        const priceB = productPrices[b.id] || 0;
                         if (priceA === 0 && priceB > 0) return -1;
                         if (priceB === 0 && priceA > 0) return 1;
                         return priceA - priceB;
                     }
-                    const priceA = a.base_price || 0;
-                    const priceB = b.base_price || 0;
+                    const priceA = productPrices[a.id] || 0;
+                    const priceB = productPrices[b.id] || 0;
                     return sortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
                 }
                 return 0;
@@ -814,7 +835,8 @@ export default function AdminProductsPage() {
         variantFilter, 
         visibilityColFilter, 
         devReviewFilter, 
-        sortConfig
+        sortConfig,
+        productPrices
     ]);
 
     const paginatedProducts = useMemo(() => {
@@ -2525,7 +2547,11 @@ export default function AdminProductsPage() {
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <div style={{ fontWeight: '700', fontSize: '1.1rem', color: THEME.colors.textMain }}>
-                                                {formatMoney(product.base_price)}
+                                                {(productPrices[product.id] || 0) > 0 ? (
+                                                    formatMoney(productPrices[product.id])
+                                                ) : (
+                                                    <span style={{ color: THEME.colors.textMuted, fontSize: '0.85rem' }}>$0</span>
+                                                )}
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>

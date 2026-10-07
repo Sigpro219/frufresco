@@ -15,7 +15,7 @@ interface Product {
     id: string;
     name: string;
     name_en?: string;
-    base_price: number;
+    base_price?: number;
     unit_of_measure: string;
     image_url: string;
     sku?: string;
@@ -267,7 +267,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         : true;
     
     // Aplicar factor de conversión y redondeo a 50
-    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price || 0) : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
+    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || 0) : (product.pricing_model_prices?.[0]?.price || 0);
     
     // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
     const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;

@@ -226,7 +226,7 @@ export async function POST(request: Request) {
             if (template?.id) {
                 const { data: tItems } = await supabase
                     .from('quote_template_items')
-                    .select('product_id, products(id, name, base_price, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit, is_active)')
+                    .select('product_id, products(id, name, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit, is_active)')
                     .eq('template_id', template.id);
 
                 if (tItems && tItems.length > 0) {
@@ -290,7 +290,7 @@ export async function POST(request: Request) {
                 if (catProds.length === 0) {
                     const { data: fallbackProds } = await supabase
                         .from('products')
-                        .select('id, name, base_price, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
+                        .select('id, name, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
                         .eq('is_active', true)
                         .in('category', codes);
                     if (fallbackProds) catProds = fallbackProds;
@@ -313,9 +313,8 @@ export async function POST(request: Request) {
             if (productsToQuote.length === 0) {
                 const { data: activeProds } = await supabase
                     .from('products')
-                    .select('id, name, base_price, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
+                    .select('id, name, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
                     .eq('is_active', true)
-                    .gt('base_price', 0)
                     .limit(30);
                 if (activeProds) productsToQuote = activeProds;
             }
@@ -327,7 +326,7 @@ export async function POST(request: Request) {
                 const itemsToInsert = [];
 
                 for (const p of productsToQuote) {
-                    const baseCost = overridesMap.get(p.id) || purchasesMap.get(p.id) || Number(p.base_price) || 0;
+                    const baseCost = overridesMap.get(p.id) || purchasesMap.get(p.id) || 0;
                     const defaultModelMargin = colorTag === 'verde' ? 47 : colorTag === 'amarillo' ? 48 : 49;
                     const modelMargin = modelRulesMap.has(p.id) ? modelRulesMap.get(p.id)! : defaultModelMargin;
 
@@ -362,7 +361,7 @@ export async function POST(request: Request) {
                         product_id: p.id,
                         product_name: p.name,
                         quantity: qty,
-                        cost_basis: baseCost || p.base_price,
+                        cost_basis: baseCost || 0,
                         margin_percent: quotedMargin,
                         unit_price: unitPrice,
                         iva_rate: itemTaxRate,

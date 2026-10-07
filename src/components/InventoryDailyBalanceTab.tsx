@@ -274,6 +274,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
 
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
+    const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
     // Modales de apoyo
     const [isWasteModalOpen, setIsWasteModalOpen] = useState(false);
@@ -523,7 +524,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 const { data: batch, error: prodErr } = await supabase
                     .from('products')
                     .select(`
-                        id, name, sku, accounting_id, unit_of_measure, category, inventory_group, base_price, parent_id, is_active,
+                        id, name, sku, accounting_id, unit_of_measure, category, inventory_group, parent_id, is_active,
                         inventory_stocks (id, warehouse_id, quantity)
                     `)
                     .eq('is_active', true)
@@ -541,6 +542,23 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 }
             }
             setProducts(allActiveProducts);
+
+            // Cargar matriz de costos para valuación real de inventario (erradicando base_price)
+            try {
+                const { data: costMatrixData } = await supabase
+                    .from('commercial_cost_matrix')
+                    .select('product_id, manual_cost')
+                    .eq('is_active', true);
+                const costMap = new Map<string, number>();
+                (costMatrixData || []).forEach(cm => {
+                    if (cm.manual_cost && Number(cm.manual_cost) > 0) {
+                        costMap.set(cm.product_id, Number(cm.manual_cost));
+                    }
+                });
+                setCostMatrixMap(costMap);
+            } catch (cmErr) {
+                console.warn('Error cargando commercial_cost_matrix en balance diario:', cmErr);
+            }
 
             // 2. Cargar movimientos desde el inicio del día seleccionado hasta el presente (para cálculo retroactivo)
             const startOfDayIso = `${balanceDate}T00:00:00.000Z`;
@@ -776,7 +794,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 colC_inventoryGroup: p.inventory_group || 'GENERAL',
                 colD_productName: p.name,
                 unit_of_measure: p.unit_of_measure || 'KG',
-                base_price: p.base_price || 0,
+                base_price: costMatrixMap.get(p.id) || 0,
                 colE_initialStock: initialStock,
                 colF_corrections: f_corrections,
                 colG_purchases: g_purchases,
@@ -803,7 +821,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 evidencePhotosX: evidenceX
             };
         });
-    }, [balanceDate, products, movements, previousClosingMap]);
+    }, [balanceDate, products, movements, previousClosingMap, costMatrixMap]);
 
     // Agrupamiento Jerárquico Padre - Hijo (Familias de Inventario tipo Kardex)
     const dailyFamilies: DailyFamily[] = useMemo(() => {
@@ -1570,8 +1588,7 @@ export default function InventoryDailyBalanceTab({ workCells, externalDate, onDa
                 movType = 'exit';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.EMPLOYEE_SALE;
                 qty = -newVal;
-                const targetProd = products.find(p => p.id === productId);
-                const unitPrice = (targetProd as any)?.base_price || 0;
+                const unitPrice = costMatrixMap.get(productId) || 0;
                 const totalPayroll = Math.round(newVal * unitPrice);
 
                 // Si ya existía un movimiento con colaborador asignado previamente en esta fecha, preservarlo

@@ -73,7 +73,7 @@ export interface PricingSyncResult {
  * applies margin adjustments from pricing_rules (or base_margin_percent),
  * applies IVA and Colombian commercial 50-multiple rounding,
  * updates pricing_model_prices, mirrors the cost into commercial_overrides for DB triggers,
- * and updates products.base_price for B2C Clientes Hogar.
+ * updates pricing_model_prices, and mirrors the cost into commercial_overrides for DB triggers.
  */
 export async function recalculateAndSyncProductPrices(
     supabaseClient: any,
@@ -83,7 +83,7 @@ export async function recalculateAndSyncProductPrices(
     try {
         const { data: prod, error: pErr } = await supabaseClient
             .from('products')
-            .select('id, name, iva_rate, base_price, theoretical_shrinkage_pct')
+            .select('id, name, iva_rate, theoretical_shrinkage_pct')
             .eq('id', productId)
             .single();
 
@@ -264,13 +264,13 @@ export async function batchRecalculateAndSyncPrices(
         if (targetProductIds && targetProductIds.length > 0) {
             const { data, error } = await supabaseClient
                 .from('products')
-                .select('id, name, iva_rate, base_price, theoretical_shrinkage_pct')
+                .select('id, name, iva_rate, theoretical_shrinkage_pct')
                 .eq('is_active', true)
                 .in('id', targetProductIds);
             if (error) throw error;
             prods = data || [];
         } else {
-            prods = await fetchAllRows(supabaseClient, 'products', 'id, name, iva_rate, base_price, theoretical_shrinkage_pct', q => q.eq('is_active', true));
+            prods = await fetchAllRows(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct', q => q.eq('is_active', true));
         }
 
         if (!prods || prods.length === 0) {
@@ -319,7 +319,6 @@ export async function batchRecalculateAndSyncPrices(
         });
 
         const pmpBatch: Array<{ model_id: string; product_id: string; price: number; updated_at: string }> = [];
-        const productUpdates: Array<{ id: string; base_price: number }> = [];
         const overridesBatch: Array<{ product_id: string; manual_cost: number; expires_at: null; updated_by: string }> = [];
 
         let processed = 0;
@@ -378,12 +377,6 @@ export async function batchRecalculateAndSyncPrices(
                 });
             }
 
-            if (hogarPrice && hogarPrice > 0) {
-                productUpdates.push({
-                    id: prod.id,
-                    base_price: hogarPrice
-                });
-            }
             processed++;
         }
 

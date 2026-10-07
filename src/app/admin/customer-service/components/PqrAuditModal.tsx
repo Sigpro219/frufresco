@@ -74,7 +74,7 @@ export default function PqrAuditModal({
         formattedCountdown: '--:--',
         deadlineText: ''
     });
-    const [availableCatalogProducts, setAvailableCatalogProducts] = useState<{ id: string; name: string; sku?: string; base_price?: number; unit_of_measure?: string }[]>([]);
+    const [availableCatalogProducts, setAvailableCatalogProducts] = useState<{ id: string; name: string; sku?: string; unit_of_measure?: string }[]>([]);
     const [substituteModalOpen, setSubstituteModalOpen] = useState(false);
     const [selectedSubstituteProductId, setSelectedSubstituteProductId] = useState('');
     const [substituteTargetItemId, setSubstituteTargetItemId] = useState('');
@@ -129,7 +129,8 @@ export default function PqrAuditModal({
             const caseReturns = novelties.filter(n => n.order_id === pqr.order_id);
             if (caseReturns.length > 0) {
                 return caseReturns.reduce((sum, item) => {
-                    const price = item.products?.base_price || 0;
+                    const oi = item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
+                    const price = Number(oi?.unit_price || item.unit_price || 0);
                     return sum + (price * (Number(item.quantity_returned) || 0));
                 }, 0);
             }
@@ -177,7 +178,7 @@ export default function PqrAuditModal({
                 try {
                     const { data: items } = await supabase
                         .from('order_items')
-                        .select(`*, products(name, sku, unit_of_measure, base_price)`)
+                        .select(`*, products(name, sku, unit_of_measure)`)
                         .eq('order_id', pqr.order_id);
                     setOrderItems(items || []);
 
@@ -262,7 +263,7 @@ export default function PqrAuditModal({
             try {
                 const { data } = await supabase
                     .from('products')
-                    .select('id, name, sku, base_price, unit_of_measure')
+                    .select('id, name, sku, unit_of_measure')
                     .eq('is_active', true)
                     .order('name');
                 setAvailableCatalogProducts(data || []);

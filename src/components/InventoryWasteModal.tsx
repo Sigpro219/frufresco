@@ -32,7 +32,7 @@ interface ProductOption {
     unit_of_measure: string;
     category?: string;
     inventory_group?: string | null;
-    base_price?: number;
+    manual_cost?: number;
     inventory_stocks?: {
         id?: string;
         warehouse_id?: string;
@@ -100,12 +100,28 @@ export default function InventoryWasteModal({
                 const { data, error } = await supabase
                     .from('products')
                     .select(`
-                        id, name, sku, accounting_id, unit_of_measure, category, inventory_group, base_price,
+                        id, name, sku, accounting_id, unit_of_measure, category, inventory_group,
                         inventory_stocks (id, warehouse_id, quantity)
                     `)
                     .order('name');
+
+                const { data: costMatrix } = await supabase
+                    .from('commercial_cost_matrix')
+                    .select('product_id, manual_cost')
+                    .eq('is_active', true);
+                const costMap = new Map<string, number>();
+                costMatrix?.forEach(cm => {
+                    if (cm.manual_cost && Number(cm.manual_cost) > 0) {
+                        costMap.set(cm.product_id, Number(cm.manual_cost));
+                    }
+                });
+
                 if (!error && data) {
-                    setProducts(data as ProductOption[]);
+                    const mapped = (data as any[]).map(p => ({
+                        ...p,
+                        manual_cost: costMap.get(p.id) || 0
+                    }));
+                    setProducts(mapped as ProductOption[]);
                 }
             };
             fetchProducts();
@@ -269,8 +285,9 @@ export default function InventoryWasteModal({
                 const emp = staffProfiles.find(p => p.id === selectedProfileId);
                 const empText = emp ? `${emp.contact_name} (${emp.email || 'Colaborador'})` : employeeName.trim();
                 finalNote += ` Empleado: ${empText}`;
-                if (selectedProduct.base_price) {
-                    const totalVal = Math.round(qtyNum * selectedProduct.base_price);
+                const cost = selectedProduct.manual_cost || 0;
+                if (cost > 0) {
+                    const totalVal = Math.round(qtyNum * cost);
                     finalNote += ` | Valor Nómina: $${totalVal.toLocaleString('es-CO')}`;
                 }
             }

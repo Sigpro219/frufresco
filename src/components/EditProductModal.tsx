@@ -1227,7 +1227,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
     // Cálculos de Precios Simulados para Live Preview
-    const baseKgPrice = product.base_price || 0;
+    const baseKgPrice = product.pricing_model_prices?.[0]?.price || 0;
     const priceLibra = Math.ceil((baseKgPrice * 0.5) / 50) * 50;
     const priceUnit = Math.ceil((baseKgPrice * (targetGrams / 1000)) / 50) * 50;
     const priceSecondary = secondaryGrams ? Math.ceil((baseKgPrice * (secondaryGrams / 1000)) / 50) * 50 : 0;
@@ -2185,7 +2185,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                 <Zap size={11} strokeWidth={2} /> Hereda costo {child.utility_deviation_pct ? `(+${child.utility_deviation_pct}%)` : ''}
                                                             </span>
                                                         ) : (
-                                                            <span>Base: <strong>${(child.base_price || 0).toLocaleString('es-CO')}</strong></span>
+                                                            <span>Precio: <strong>${(child.pricing_model_prices?.[0]?.price || 0).toLocaleString('es-CO')}</strong></span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -3496,7 +3496,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 <div style={{ backgroundColor: '#1E293B', color: 'white', padding: '1.2rem 1.5rem', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                                     <div>
                                         <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>
-                                            Simulación de Precios al Cliente (Base Kg: ${baseKgPrice.toLocaleString('es-CO')})
+                                            Simulación de Precios al Cliente (Precio Kg: ${baseKgPrice.toLocaleString('es-CO')})
                                         </span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px', flexWrap: 'wrap' }}>
                                             {commercialTypology === 'bimodal' && (

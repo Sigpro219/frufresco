@@ -164,12 +164,13 @@ export default function CommercialReportsPage() {
                 }
             }
 
-            // 1. Fetch Profiles, Products, Matrix Costs, Purchases
-            const [profilesRes, productsRes, matrixRes, purchasesRes] = await Promise.all([
+            // 1. Fetch Profiles, Products, Matrix Costs, Purchases, Model Prices
+            const [profilesRes, productsRes, matrixRes, purchasesRes, modelPricesRes] = await Promise.all([
                 supabase.from('profiles').select('id, role, company_name, contact_name, nit, is_corporate_parent, parent_id'),
-                supabase.from('products').select('id, name, sku, accounting_id, category, unit_of_measure, is_active, base_price').eq('is_active', true),
+                supabase.from('products').select('id, name, sku, accounting_id, category, unit_of_measure, is_active').eq('is_active', true),
                 supabase.from('commercial_cost_matrix').select('product_id, manual_cost, updated_at, is_active').eq('is_active', true),
-                supabase.from('purchases').select('product_id, unit_price, created_at').order('created_at', { ascending: false })
+                supabase.from('purchases').select('product_id, unit_price, created_at').order('created_at', { ascending: false }),
+                supabase.from('pricing_model_prices').select('product_id, price').eq('model_id', 'd90a91e5-827c-473d-9d4f-3e28c7c91e15')
             ]);
 
             const profileMap = new Map<string, any>();
@@ -193,6 +194,13 @@ export default function CommercialReportsPage() {
                     if (!costMap.has(pc.product_id)) {
                         costMap.set(pc.product_id, Number(pc.unit_price));
                     }
+                }
+            });
+
+            const modelPriceMap = new Map<string, number>();
+            (modelPricesRes.data || []).forEach(mp => {
+                if (mp.price && Number(mp.price) > 0) {
+                    modelPriceMap.set(mp.product_id, Number(mp.price));
                 }
             });
 
@@ -369,7 +377,7 @@ export default function CommercialReportsPage() {
             productsRes.data?.forEach(p => {
                 const mCost = costMap.get(p.id) || 0;
                 const pCost = latestPurchaseMap.get(p.id) || 0;
-                const catPrice = Number(p.base_price || 0);
+                const catPrice = modelPriceMap.get(p.id) || 0;
 
                 if (catPrice > 0 && (mCost > 0 || pCost > 0)) {
                     const effectiveCost = mCost > 0 ? mCost : pCost;

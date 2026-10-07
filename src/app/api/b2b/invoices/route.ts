@@ -47,7 +47,7 @@ export async function GET(request: Request) {
                     unit_price,
                     unit,
                     nickname,
-                    products(id, name, name_en, unit_of_measure, sku, base_price)
+                    products(id, name, name_en, unit_of_measure, sku)
                 )
             `)
             .in('profile_id', clientIds)

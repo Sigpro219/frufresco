@@ -147,14 +147,15 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                 .from('billing_returns')
                 .select(`
                     *,
-                    products(name, sku, unit_of_measure, base_price),
+                    products(name, sku, unit_of_measure),
                     orders(
                         sequence_id,
                         total,
                         created_at,
                         origin_source,
                         admin_notes,
-                        profiles(id, company_name, contact_name, role, nit, phone, contact_phone)
+                        profiles(id, company_name, contact_name, role, nit, phone, contact_phone),
+                        order_items(product_id, unit_price)
                     )
                 `)
                 .order('created_at', { ascending: false });
@@ -248,7 +249,8 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
         const totalCoQ = novelties.reduce((sum, n) => {
             if (n.status === 'approved' || n.status === 'pending_review') {
-                const price = n.products?.base_price || 0;
+                const oi = n.orders?.order_items?.find((item: any) => item.product_id === n.product_id);
+                const price = Number(oi?.unit_price || 0);
                 return sum + (price * (Number(n.quantity_returned) || 0));
             }
             return sum;
@@ -1288,7 +1290,8 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                             <tbody>
                                 {filteredNovelties.length > 0 ? (
                                     filteredNovelties.map((nov, idx) => {
-                                        const price = nov.products?.base_price || 0;
+                                        const oi = nov.orders?.order_items?.find((item: any) => item.product_id === nov.product_id);
+                                        const price = Number(oi?.unit_price || 0);
                                         const qty = Number(nov.quantity_returned) || 0;
                                         const totalImpact = price * qty;
 

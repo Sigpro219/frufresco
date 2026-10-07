@@ -59,7 +59,8 @@ export default function RncPrintPage() {
                         .from('billing_returns')
                         .select(`
                             *,
-                            products(name, sku, unit_of_measure, base_price)
+                            products(name, sku, unit_of_measure),
+                            orders(order_items(product_id, unit_price))
                         `)
                         .eq('order_id', pqrData.order_id);
                     
@@ -146,7 +147,8 @@ export default function RncPrintPage() {
 
     // Total economic impact (Cost of Quality)
     const totalImpactCoQ = novelties.reduce((sum, item) => {
-        const price = item.products?.base_price || 0;
+        const oi = item.orders?.order_items?.find((o: any) => o.product_id === item.product_id);
+        const price = Number(oi?.unit_price || item.unit_price || 0);
         return sum + (price * (Number(item.quantity_returned) || 0));
     }, 0);
 

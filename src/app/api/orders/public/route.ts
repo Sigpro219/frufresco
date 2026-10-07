@@ -92,7 +92,7 @@ export async function POST(request: Request) {
             const productIds = items.map((item: any) => item.product_id);
             const { data: dbProducts, error: dbErr } = await supabase
                 .from('products')
-                .select('id, base_price, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id), product_variants(sku, price_adjustment_percent, is_active, options)')
+                .select('id, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id), product_variants(sku, price_adjustment_percent, is_active, options)')
                 .in('id', productIds);
 
             if (dbErr) {
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
                     const isKgProd = (dbProd.unit_of_measure || '').toLowerCase() === 'kg';
                     const unitFactor = parsedWeight !== null ? parsedWeight : ((isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1));
 
-                    const basePrices = [dbProd.base_price || 0];
+                    const basePrices: number[] = [];
                     if (dbProd.pricing_model_prices) {
                         for (const p of dbProd.pricing_model_prices) {
                             if (p.price > 0) basePrices.push(p.price);

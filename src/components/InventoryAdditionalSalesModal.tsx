@@ -26,7 +26,6 @@ interface AdditionalSaleRecord {
         sku?: string;
         accounting_id?: number | null;
         unit_of_measure: string;
-        base_price?: number;
     } | null;
 }
 
@@ -37,6 +36,7 @@ interface InventoryAdditionalSalesModalProps {
 
 export default function InventoryAdditionalSalesModal({ isOpen, onClose }: InventoryAdditionalSalesModalProps) {
     const [records, setRecords] = useState<AdditionalSaleRecord[]>([]);
+    const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -57,7 +57,7 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
                 .from('inventory_movements')
                 .select(`
                     id, product_id, quantity, notes, created_at, admin_decision,
-                    products (name, sku, accounting_id, unit_of_measure, base_price)
+                    products (name, sku, accounting_id, unit_of_measure)
                 `)
                 .eq('reference_type', 'additional_sale')
                 .gte('created_at', startIso)
@@ -65,6 +65,39 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
+
+            const productIds = Array.from(new Set(((data as any[]) || []).map(r => r.product_id).filter(Boolean)));
+            const newPriceMap = new Map<string, number>();
+
+            if (productIds.length > 0) {
+                const { data: pmpData } = await supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', 'd90a91e5-827c-473d-9d4f-3e28c7c91e15')
+                    .in('product_id', productIds);
+
+                (pmpData || []).forEach(pmp => {
+                    if (pmp.price && Number(pmp.price) > 0) {
+                        newPriceMap.set(pmp.product_id, Number(pmp.price));
+                    }
+                });
+
+                const missingIds = productIds.filter(id => !newPriceMap.has(id));
+                if (missingIds.length > 0) {
+                    const { data: ccmData } = await supabase
+                        .from('commercial_cost_matrix')
+                        .select('product_id, manual_cost')
+                        .in('product_id', missingIds)
+                        .eq('is_active', true);
+                    (ccmData || []).forEach(ccm => {
+                        if (ccm.manual_cost && Number(ccm.manual_cost) > 0) {
+                            newPriceMap.set(ccm.product_id, Number(ccm.manual_cost));
+                        }
+                    });
+                }
+            }
+
+            setPriceMap(newPriceMap);
             setRecords((data as any) || []);
         } catch (err: any) {
             console.error('Error fetching additional sales for billing:', err);
@@ -83,8 +116,8 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
 
     const parsedRows = records.map(r => {
         const qty = Math.abs(r.quantity || 0);
-        const basePrice = r.products?.base_price || 0;
-        const totalEstimated = Math.round(qty * basePrice);
+        const unitPrice = priceMap.get(r.product_id) || 0;
+        const totalEstimated = Math.round(qty * unitPrice);
 
         return {
             raw: r,
@@ -93,7 +126,7 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
             accountingId: r.products?.accounting_id || 'S/N',
             qty,
             uom: r.products?.unit_of_measure || 'KG',
-            unitPrice: basePrice,
+            unitPrice,
             totalEstimated,
             notes: r.notes || '',
             date: new Date(r.created_at).toLocaleDateString('es-CO', {

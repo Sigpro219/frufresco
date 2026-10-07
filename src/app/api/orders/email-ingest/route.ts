@@ -692,7 +692,7 @@ export async function POST(req: Request) {
     try {
       const { data: dbProducts } = await supabaseAdmin
         .from('products')
-        .select('id, name, base_price, unit_of_measure, weight_kg')
+        .select('id, name, unit_of_measure, weight_kg')
         .eq('is_active', true);
       if (dbProducts) globalDbProducts = dbProducts;
     } catch (e) {
@@ -1527,7 +1527,7 @@ export async function POST(req: Request) {
           const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
           if (bestMatch) {
             matchedProductId = bestMatch.id;
-            resolvedUnitPrice = bestMatch.base_price || 0;
+            resolvedUnitPrice = 0;
             const normAssigned = (assignedUnit || '').toLowerCase().trim();
             if (!assignedUnit || normAssigned === 'unidad' || normAssigned === 'und' || normAssigned === 'uds' || normAssigned === 'unidades' || normAssigned === 'u') {
               assignedUnit = bestMatch.unit_of_measure || 'Kg';
@@ -1713,7 +1713,7 @@ export async function POST(req: Request) {
         try {
           const { data: productsData } = await supabaseAdmin
             .from('products')
-            .select('id, name, base_price, unit_of_measure')
+            .select('id, name, unit_of_measure')
             .eq('is_active', true);
           if (productsData) dbProducts = productsData;
         } catch (e) {
@@ -1810,7 +1810,7 @@ export async function POST(req: Request) {
             }
 
             if (matchedProduct) {
-              price = matchedProduct.base_price || 0;
+              price = 0;
               unit = matchedProduct.unit_of_measure || '';
             }
           }

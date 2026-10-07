@@ -17,9 +17,9 @@ interface AgreementItem {
         name_en?: string;
         unit_of_measure?: string;
         sku?: string;
-        base_price?: number;
         image_url?: string;
     };
+    list_price?: number;
 }
 
 interface AgreementDocumentModalProps {
@@ -64,15 +64,15 @@ export default function AgreementDocumentModal({
         ? `ACU-${agreement.quote_number}`
         : `ACU-${agreement.id.substring(0, 8).toUpperCase()}`;
 
-    // Compute average savings percentage
+    // Compute average savings percentage (if explicit list_price is present on item)
     let totalSavingsSum = 0;
     let validSavingsCount = 0;
 
     items.forEach(it => {
-        const basePrice = Number(it.products?.base_price || 0);
+        const listPrice = Number(it.list_price || 0);
         const uPrice = Number(it.unit_price || 0);
-        if (basePrice > 0 && uPrice > 0 && basePrice > uPrice) {
-            const pct = ((basePrice - uPrice) / basePrice) * 100;
+        if (listPrice > 0 && uPrice > 0 && listPrice > uPrice) {
+            const pct = ((listPrice - uPrice) / listPrice) * 100;
             totalSavingsSum += pct;
             validSavingsCount++;
         }
@@ -301,18 +301,18 @@ export default function AgreementDocumentModal({
                                             const p = it.products;
                                             const name = it.product_name || p?.name || 'Producto';
                                             const unit = p?.unit_of_measure || 'Kg';
-                                            const basePrice = Number(p?.base_price || 0);
+                                            const listPrice = Number(it.list_price || 0);
                                             const uPrice = Number(it.unit_price || 0);
-                                            const savings = basePrice > uPrice ? (basePrice - uPrice) : 0;
-                                            const savingsPct = basePrice > 0 && savings > 0 ? ((savings / basePrice) * 100).toFixed(1) : 0;
+                                            const savings = listPrice > uPrice ? (listPrice - uPrice) : 0;
+                                            const savingsPct = listPrice > 0 && savings > 0 ? ((savings / listPrice) * 100).toFixed(1) : 0;
 
                                             return (
                                                 <tr key={it.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
                                                     <td style={{ padding: '2.5px 6px', color: '#64748B', fontWeight: '700' }}>{idx + 1}</td>
                                                     <td style={{ padding: '2.5px 6px', color: '#0F172A', fontWeight: '700' }}>{name}</td>
                                                     <td style={{ padding: '2.5px 6px', textAlign: 'center', color: '#475569', fontWeight: '600' }}>{unit}</td>
-                                                    <td style={{ padding: '2.5px 6px', textAlign: 'right', color: '#94A3B8', textDecoration: basePrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
-                                                        {basePrice > 0 ? `$${formatPrice(basePrice)}` : '-'}
+                                                    <td style={{ padding: '2.5px 6px', textAlign: 'right', color: '#94A3B8', textDecoration: listPrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
+                                                        {listPrice > 0 ? `$${formatPrice(listPrice)}` : '-'}
                                                     </td>
                                                     <td style={{ padding: '2.5px 6px', textAlign: 'right', color: '#0D7A57', fontWeight: '800' }}>
                                                         ${formatPrice(uPrice)}
@@ -323,7 +323,7 @@ export default function AgreementDocumentModal({
                                                                 -${formatPrice(savings)} ({savingsPct}%)
                                                             </span>
                                                         ) : (
-                                                            <span style={{ color: '#94A3B8', fontSize: '0.65rem' }}>Tarifa Estándar</span>
+                                                             <span style={{ color: '#94A3B8', fontSize: '0.65rem' }}>Tarifa Estándar</span>
                                                         )}
                                                     </td>
                                                 </tr>

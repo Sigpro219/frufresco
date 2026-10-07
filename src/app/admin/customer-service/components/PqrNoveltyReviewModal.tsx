@@ -22,7 +22,8 @@ export default function PqrNoveltyReviewModal({
 }: PqrNoveltyReviewModalProps) {
     if (!isOpen || !novelty) return null;
 
-    const unitPrice = novelty.products?.base_price || 0;
+    const oi = novelty.orders?.order_items?.find((item: any) => item.product_id === novelty.product_id);
+    const unitPrice = Number(oi?.unit_price || novelty.unit_price || 0);
     const qty = Number(novelty.quantity_returned) || 0;
     const totalImpact = unitPrice * qty;
 

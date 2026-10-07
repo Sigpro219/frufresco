@@ -27,7 +27,7 @@ interface InventoryItem {
         buying_team?: string | null;
         unit_of_measure: string;
         image_url: string;
-        base_price: number;
+        base_price?: number;
         is_active: boolean;
         min_inventory_level: number;
         accounting_id?: number | null;
@@ -700,7 +700,7 @@ export default function InventoryAdminPage() {
                     let query = supabase
                         .from('products')
                         .select(`
-                            id, name, sku, category, inventory_group, buying_team, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id, parent_id, web_conversion_factor, weight_kg,
+                            id, name, sku, category, inventory_group, buying_team, unit_of_measure, image_url, is_active, min_inventory_level, accounting_id, parent_id, web_conversion_factor, weight_kg,
                             inventory_stocks!product_id (
                                 *,
                                 warehouses (name)
@@ -913,7 +913,7 @@ export default function InventoryAdminPage() {
                 const isPerishable = ['FR', 'VE', 'HO'].includes(cat);
                 if (auditPolicy.prioritizePerishables && !isPerishable && !auditPolicy.prioritizeHighValue) score -= 5;
                 
-                if (auditPolicy.prioritizeHighValue && item.products?.base_price > 10000) score += 15;
+                if (auditPolicy.prioritizeHighValue && (avgCosts[item.product_id] || 0) > 10000) score += 15;
                 if (auditPolicy.prioritizeCriticalStock && item.quantity <= (item.products?.min_inventory_level || 0)) score += 20;
 
                 return { item, score };
@@ -959,7 +959,7 @@ export default function InventoryAdminPage() {
         } finally {
             if (!isAuto && isMounted.current) setGeneratingAudit(false);
         }
-    }, [auditPolicy, fetchData]);
+    }, [auditPolicy, fetchData, avgCosts]);
 
     // --- GOBERNANZA DE CÉLULAS & ASIGNACIÓN DE SKUS LOGIC ---
     const activeProductsCatalog = useMemo(() => {
@@ -974,7 +974,6 @@ export default function InventoryAdminPage() {
                     inventory_group: s.products.inventory_group,
                     unit_of_measure: s.products.unit_of_measure,
                     image_url: s.products.image_url,
-                    base_price: s.products.base_price,
                     is_active: s.products.is_active,
                     min_inventory_level: s.products.min_inventory_level,
                     accounting_id: s.products.accounting_id
@@ -1627,8 +1626,8 @@ export default function InventoryAdminPage() {
                     break;
                 }
                 case 'cost': {
-                    const costA = avgCosts[a.parent.product_id] || a.parent.products?.base_price || 0;
-                    const costB = avgCosts[b.parent.product_id] || b.parent.products?.base_price || 0;
+                    const costA = avgCosts[a.parent.product_id] || 0;
+                    const costB = avgCosts[b.parent.product_id] || 0;
                     comp = costA - costB;
                     break;
                 }
@@ -1676,14 +1675,14 @@ export default function InventoryAdminPage() {
                     comp = (a.products?.min_inventory_level || 0) - (b.products?.min_inventory_level || 0);
                     break;
                 case 'cost': {
-                    const costA = avgCosts[a.product_id] || a.products?.base_price || 0;
-                    const costB = avgCosts[b.product_id] || b.products?.base_price || 0;
+                    const costA = avgCosts[a.product_id] || 0;
+                    const costB = avgCosts[b.product_id] || 0;
                     comp = costA - costB;
                     break;
                 }
                 case 'total_value': {
-                    const valA = (avgCosts[a.product_id] || a.products?.base_price || 0) * (a.quantity || 0);
-                    const valB = (avgCosts[b.product_id] || b.products?.base_price || 0) * (b.quantity || 0);
+                    const valA = (avgCosts[a.product_id] || 0) * (a.quantity || 0);
+                    const valB = (avgCosts[b.product_id] || 0) * (b.quantity || 0);
                     comp = valA - valB;
                     break;
                 }

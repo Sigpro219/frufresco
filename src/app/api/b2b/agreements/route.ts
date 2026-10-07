@@ -24,7 +24,7 @@ export async function GET(request: Request) {
                 pricing_models!model_id(name),
                 quote_items(
                     *,
-                    products(id, name, name_en, unit_of_measure, image_url, base_price, sku, category, is_active)
+                    products(id, name, name_en, unit_of_measure, image_url, sku, category, is_active)
                 )
             `)
             .eq('client_id', clientId)
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
                     *,
                     quote_items(
                         *,
-                        products(id, name, name_en, unit_of_measure, image_url, base_price, sku, category, is_active)
+                        products(id, name, name_en, unit_of_measure, image_url, sku, category, is_active)
                     )
                 `)
                 .eq('client_id', clientId)

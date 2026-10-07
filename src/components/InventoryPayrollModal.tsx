@@ -34,7 +34,6 @@ interface EmployeeSaleRecord {
         name: string;
         sku?: string;
         unit_of_measure: string;
-        base_price?: number;
     } | null;
 }
 
@@ -52,7 +51,7 @@ interface ProductItem {
     name: string;
     sku?: string;
     unit_of_measure: string;
-    base_price?: number;
+    manual_cost?: number;
 }
 
 interface InventoryPayrollModalProps {
@@ -75,6 +74,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
     const [loading, setLoading] = useState(false);
     const [staffList, setStaffList] = useState<StaffMember[]>([]);
     const [productsList, setProductsList] = useState<ProductItem[]>([]);
+    const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
     
     // Superbuscador Omnibox Universal
     const [searchTerm, setSearchTerm] = useState('');
@@ -156,7 +156,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
                 .from('inventory_movements')
                 .select(`
                     id, product_id, quantity, notes, created_at,
-                    products (name, sku, unit_of_measure, base_price)
+                    products (name, sku, unit_of_measure)
                 `)
                 .eq('reference_type', 'employee_sale')
                 .gte('created_at', startIso)
@@ -209,15 +209,34 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
         }
     };
 
-    // Cargar productos activos
+    // Cargar productos activos y matriz de costos
     const fetchProducts = async () => {
         try {
             const { data } = await supabase
                 .from('products')
-                .select('id, name, sku, unit_of_measure, base_price')
+                .select('id, name, sku, unit_of_measure')
                 .eq('is_active', true)
                 .order('name');
-            if (data) setProductsList(data);
+
+            const { data: costMatrix } = await supabase
+                .from('commercial_cost_matrix')
+                .select('product_id, manual_cost')
+                .eq('is_active', true);
+            const costMap = new Map<string, number>();
+            (costMatrix || []).forEach(cm => {
+                if (cm.manual_cost && Number(cm.manual_cost) > 0) {
+                    costMap.set(cm.product_id, Number(cm.manual_cost));
+                }
+            });
+            setCostMatrixMap(costMap);
+
+            if (data) {
+                const mapped = data.map(p => ({
+                    ...p,
+                    manual_cost: costMap.get(p.id) || 0
+                }));
+                setProductsList(mapped);
+            }
         } catch (err) {
             console.error('Error fetching products for employee sale:', err);
         }
@@ -294,9 +313,9 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
         }
 
         const qty = Math.abs(item.quantity || 0);
-        const basePrice = item.products?.base_price || 0;
+        const unitCost = costMatrixMap.get(item.product_id) || 0;
         
-        let totalVal = Math.round(qty * basePrice);
+        let totalVal = Math.round(qty * unitCost);
         const valMatch = notes.match(/Valor Nómina:\s*\$([0-9.,]+)/i);
         if (valMatch) {
             const parsed = parseInt(valMatch[1].replace(/\./g, ''), 10);
@@ -322,7 +341,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
             uom: item.products?.unit_of_measure || 'KG',
             productName: item.products?.name || 'Producto Desconocido',
             sku: item.products?.sku || '',
-            unitPrice: basePrice,
+            unitPrice: unitCost,
             totalVal,
             datePart,
             timePart,
@@ -436,7 +455,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
             const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
             const warehouseId = whData?.id;
 
-            const unitPrice = selectedProd.base_price || 0;
+            const unitPrice = selectedProd.manual_cost || costMatrixMap.get(selectedProd.id) || 0;
             const totalCost = Math.round(qtyNum * unitPrice);
             const timestampIso = `${newSaleDate}T12:00:00.000Z`;
 
@@ -1500,7 +1519,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
                                     <option value="">-- Seleccionar producto del catálogo --</option>
                                     {productsList.map(p => (
                                         <option key={p.id} value={p.id}>
-                                            {p.name} (${formatNumber(p.base_price || 0)} / {p.unit_of_measure})
+                                            {p.name} (${formatNumber(p.manual_cost || 0)} / {p.unit_of_measure})
                                         </option>
                                     ))}
                                 </select>
@@ -1612,7 +1631,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
                                             const p = productsList.find(x => x.id === newSaleProductId);
                                             const q = parseFloat(newSaleQty.replace(',', '.'));
                                             if (!p || isNaN(q) || q <= 0) return '$0 COP';
-                                            const total = Math.round(q * (p.base_price || 0));
+                                            const total = Math.round(q * (p.manual_cost || 0));
                                             return `$${formatNumber(total)} COP`;
                                         })()}
                                     </div>

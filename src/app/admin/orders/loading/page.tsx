@@ -1875,7 +1875,7 @@ function OrderLoadingContent() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
+                    .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
                     .eq('is_active', true)
                     .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
                     .limit(50);
@@ -2033,7 +2033,7 @@ function OrderLoadingContent() {
             const fetchAndSubstitute = async () => {
                 const { data: subProduct } = await supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
+                    .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
                     .eq('id', exc.substitution_product_id)
                     .single();
                 
@@ -2057,7 +2057,7 @@ function OrderLoadingContent() {
         if (!product?.options_config) {
             const { data: fullProd } = await supabase
                 .from('products')
-                .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
+                .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
                 .eq('id', item.product_id)
                 .single();
             if (fullProd) {
@@ -2279,7 +2279,7 @@ function OrderLoadingContent() {
                 ? Number(agreementPricesMap[product.id])
                 : ((contractPrices[product.id] !== undefined && contractPrices[product.id] !== null)
                     ? Number(contractPrices[product.id])
-                    : (product.base_price ? Number(product.base_price) : 0));
+                    : 0);
             const newItem = {
                 order_id: selectedOrder.id,
                 product_id: product.id,
@@ -5550,7 +5550,7 @@ function OrderLoadingContent() {
                                                             ? Number(agreementPricesMap[prod.id])
                                                             : ((contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null)
                                                                 ? Number(contractPrices[prod.id])
-                                                                : (prod.base_price ? Number(prod.base_price) : 0));
+                                                                : 0);
 
                                                         return (
                                                             <div 

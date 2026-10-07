@@ -149,6 +149,7 @@ export default function HRManagement() {
     const [payrollStartDate, setPayrollStartDate] = useState(firstDayOfMonth);
     const [payrollEndDate, setPayrollEndDate] = useState(todayStr);
     const [payrollSales, setPayrollSales] = useState<any[]>([]);
+    const [payrollCostMap, setPayrollCostMap] = useState<Map<string, number>>(new Map());
     const [loadingPayroll, setLoadingPayroll] = useState(false);
     const [payrollSearch, setPayrollSearch] = useState('');
     const [expandedCollab, setExpandedCollab] = useState<string | null>(null);
@@ -176,7 +177,7 @@ export default function HRManagement() {
                 .from('inventory_movements')
                 .select(`
                     id, product_id, quantity, notes, created_at,
-                    products (id, name, sku, accounting_id, unit_of_measure, base_price)
+                    products (id, name, sku, accounting_id, unit_of_measure)
                 `)
                 .eq('reference_type', 'employee_sale')
                 .gte('created_at', startIso)
@@ -184,6 +185,18 @@ export default function HRManagement() {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
+
+            const { data: costMatrix } = await supabase
+                .from('commercial_cost_matrix')
+                .select('product_id, manual_cost')
+                .eq('is_active', true);
+            const costMap = new Map<string, number>();
+            (costMatrix || []).forEach(cm => {
+                if (cm.manual_cost && Number(cm.manual_cost) > 0) {
+                    costMap.set(cm.product_id, Number(cm.manual_cost));
+                }
+            });
+            setPayrollCostMap(costMap);
             setPayrollSales(data || []);
         } catch (err: any) {
             console.error('Error fetching payroll sales in HR:', err);
@@ -232,9 +245,9 @@ export default function HRManagement() {
             }
 
             const qty = Math.abs(item.quantity || 0);
-            const basePrice = item.products?.base_price || 0;
+            const unitCost = payrollCostMap.get(item.product_id) || 0;
             
-            let totalVal = Math.round(qty * basePrice);
+            let totalVal = Math.round(qty * unitCost);
             const valMatch = notes.match(/Valor Nómina:\s*\$([0-9.,]+)/i);
             if (valMatch) {
                 const parsed = parseInt(valMatch[1].replace(/\./g, ''), 10);
@@ -250,7 +263,7 @@ export default function HRManagement() {
                 productName: item.products?.name || 'Producto Desconocido',
                 accountingId: item.products?.accounting_id || 'S/N',
                 sku: item.products?.sku || '',
-                unitPrice: basePrice,
+                unitPrice: unitCost,
                 totalVal,
                 date: new Date(item.created_at).toLocaleDateString('es-CO', {
                     year: 'numeric',

@@ -302,7 +302,7 @@ export async function enrichCommercialProposal(
   // 1. Fetch active products
   const { data: dbProducts } = await supabaseAdmin
     .from('products')
-    .select('id, sku, name, unit_of_measure, base_price, accounting_id, iva_rate')
+    .select('id, sku, name, unit_of_measure, accounting_id, iva_rate')
     .eq('is_active', true);
 
   const catalog = dbProducts || [];

@@ -1090,7 +1090,6 @@ export default function CheckoutPage() {
                     id: data.id,
                     name: data.name,
                     name_en: data.name_en,
-                    base_price: data.base_price,
                     unit_of_measure: data.unit_of_measure,
                     image_url: data.image_url,
                     sku: data.sku,

@@ -1,12 +1,12 @@
 # FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
 ## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
 
-> **Versión:** 1.9.170 (Blindaje Canónico Dominio 6 - TMS: Benchmark FinOps de Telemetría Satelital, Latido Urbano 60s vs Intermunicipal 120s y Consumo Cero en Google Maps — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.171 (Estructuración Canónica B2B en CRM: Selector Tri-Estado Casa Matriz, Sucursal Vinculada y Cuenta Individual con Poka-Yoke Anti-Huérfanos — 76/76 Pantallas Certificadas)  
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 205 Escenarios BDD Ininterrumpidos (1..205)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 206 Escenarios BDD Ininterrumpidos (1..206)
 
 ---
 
@@ -22,12 +22,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **204 Escenarios Canónicos (1..204)** | **🟢 100%** |
+| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **206 Escenarios Canónicos (1..206)** | **🟢 100%** |
 
 ---
 
@@ -1230,6 +1230,19 @@ Toda cuenta institucional cuenta con su expediente estructurado:
    - Panel de bloqueo temporal de productos en desabastecimiento generalizado con mensaje explicativo institucional para cotizaciones y pedidos abiertos, evitando sobreventas de inventario inexistente.
 6. **Saneamiento Preventivo en Importación / Exportación Masiva Excel (Regla 32K):**
    - El exportador e importador `.xlsx` analiza y sanea campos complejos de auditoría e historial para prevenir el desbordamiento de 32.767 caracteres por celda del estándar OpenXML/BIFF8.
+
+#### F. Selector Canónico de Estructura Institucional en Creación B2B (`ClientFormModal`)
+1. **Problema Gemba Resuelto (Defecto Histórico de Sucursal Forzada):**
+   - Con anterioridad, la pulsación de `[+ Nuevo Institucional]` inicializaba `is_corporate_parent: false`, forzando al usuario al formulario de una sucursal subordinada con campo obligatorio *"VINCULAR A CASA MATRIZ"*, impidiendo la declaración de nuevas Casas Matrices desde la interfaz visual y obligando a inserciones directas por base de datos o importaciones masivas.
+2. **Selector Segmentado Tri-Estado de Alta Visibilidad:**
+   - En la cabecera del bloque *"IDENTIFICACIÓN Y ESTRUCTURA CORPORATIVA"*, se incorpora un control segmentado interactivo de tres vías:
+     * **👑 Casa Matriz (`is_corporate_parent: true, parent_id: null`):** Activa el modo holding corporativo. Oculta el buscador de matriz, habilita la captura de Razón Social Legal, NIT, Email de facturación electrónica, configuración maestra de documento, herencia en cascada a sucursales y expediente digital (RUT, Cámara de Comercio, Cédula Representante Legal). Habilita en el pie el botón `[GUARDAR CASA MATRIZ]`.
+     * **🏢 Sucursal de Matriz (`is_corporate_parent: false, parent_id: <matriz.id>`):** Activa el modo punto de entrega subordinado. Despliega el buscador omnibox de matriz (`potentialParents`), solicita Nombre Comercial de la sede, ID Sucursal (ej. `SUC-01`), y activa la sección de Localización Operativa con geocodificación satelital y mapa interactivo. Habilita en el pie el botón `[GUARDAR SUCURSAL]`.
+     * **👤 Cuenta Individual (`is_corporate_parent: false, parent_id: null`):** Activa el modo negocio independiente mono-sede (restaurante o panadería única). Oculta el buscador de matriz, solicita Razón Social / Nombre Comercial, NIT / Cédula, Email, y activa localización operativa satelital con asignación directa de modelo de precios. Habilita en el pie el botón `[GUARDAR CUENTA INDIVIDUAL]`.
+3. **Poka-Yoke Anti-Sucursales Huérfanas:**
+   - Si el operador intenta guardar una Sucursal sin haber seleccionado una Casa Matriz válida en el buscador, el motor intercepta la acción antes del envío (`payload.parent_id = null`), detiene el guardado y emite una notificación en pantalla: *"Por favor selecciona una Casa Matriz para vincular la sucursal, o elige Cuenta Individual."*.
+4. **Acceso Rápido desde Expediente de Matriz (`[+ Nueva Sucursal Vinculada]`):**
+   - Desde la tabla de *Sucursales Vinculadas* de una Casa Matriz existente, se incorpora el gatillo `[+ Nueva Sucursal Vinculada]`, el cual conmuta inmediatamente el modal en modo `sucursal`, pre-asigna el `parent_id` de la matriz activa y pre-carga la razón social y modelo de precios, eliminando la doble digitación.
 
 ---
 
@@ -8572,6 +8585,18 @@ En días de pico de demanda (martes, sábados o temporadas festivas), la capacid
   5. Si el camión entra en un sótano o túnel sin cobertura de datos, las coordenadas se resguardan en `offlineQueue`; al recuperar la señal, la ráfaga se vacía de inmediato hacia el servidor sin pérdida de trazabilidad.
   6. En la Torre de Control de Despacho (`/admin/transport`), los despachadores observan el vehículo en tiempo real con la etiqueta `Tracker Móvil (60s)` y el velocímetro reactivo.
   7. La suite automatizada de pruebas unitarias (`tests/telemetry_hybrid_gps.test.ts`) certifica con 4 pruebas específicas la validación de pings móviles, tolerancia a ráfagas offline y rechazo de datos espurios.
+
+---
+
+#### Escenario 206: Creación Estructural de Cuentas Institucionales B2B (Casa Matriz, Sucursal Vinculada o Cuenta Individual) y Poka-Yoke Anti-Huérfanos (SDD v1.9.171)
+- **Given** el Director Comercial o Analista de Operaciones en el Directorio Maestro B2B (`/admin/commercial/clients`).
+- **When** presiona el botón `[+ Nuevo Institucional]`:
+- **Then**:
+  1. El modal `ClientFormModal` abre de forma predeterminada en modo **👑 Casa Matriz B2B**, desplegando el título dinámico *"Nueva Casa Matriz B2B"*, el selector segmentado con la opción matriz activa y los campos de Razón Social Legal, NIT y Email de Facturación.
+  2. El campo restrictivo *"VINCULAR A CASA MATRIZ"* queda completamente oculto, habilitando la configuración de documento base y expediente digital tributario.
+  3. Si el usuario conmuta al botón **🏢 Sucursal de Matriz**, el título cambia a *"Nueva Sucursal Institucional"*, se despliega el buscador predictivo de Casa Matriz, y si intenta guardar sin vincular una matriz, el Poka-Yoke anti-huérfanos bloquea el submit emitiendo la notificación correctiva.
+  4. Si el usuario conmuta al botón **👤 Cuenta Individual**, el título cambia a *"Nueva Cuenta B2B Individual"*, se oculta el selector de matriz y se habilitan tanto la ficha comercial independiente como la localización satelital y modelo de precios directo.
+  5. Al consultar una Casa Matriz existente con sucursales creadas, el botón `[+ Nueva Sucursal Vinculada]` precarga de forma inmediata la jerarquía corporativa sin fricción operativa.
 
 ---
 

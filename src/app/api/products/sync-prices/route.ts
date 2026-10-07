@@ -120,7 +120,7 @@ async function handleSync(request: Request) {
             while (!routeFinished) {
                 let productsQuery = supabase
                     .from('products')
-                    .select('id, name, sku, iva_rate, category, parent_id, utility_deviation_pct, unit_of_measure, base_price')
+                    .select('id, name, sku, iva_rate, category, parent_id, utility_deviation_pct, unit_of_measure')
                     .eq('is_active', true)
                     .range(routePageNum * ROUTE_PAGE_SIZE, (routePageNum + 1) * ROUTE_PAGE_SIZE - 1);
                 
@@ -153,7 +153,7 @@ async function handleSync(request: Request) {
                 continue;
             }
 
-            // 3. Fetch Overrides
+            // 3. Fetch Overrides & Commercial Cost Matrix
             const { data: overrides } = await supabase
                 .from('commercial_overrides')
                 .select('product_id, manual_cost, expires_at');
@@ -163,6 +163,17 @@ async function handleSync(request: Request) {
             overrides?.forEach(o => {
                 if (!o.expires_at || new Date(o.expires_at) > now) {
                     overridesMap[o.product_id] = o.manual_cost;
+                }
+            });
+
+            const { data: costMatrix } = await supabase
+                .from('commercial_cost_matrix')
+                .select('product_id, manual_cost')
+                .eq('is_active', true);
+            const costMatrixMap: Record<string, number> = {};
+            costMatrix?.forEach(cm => {
+                if (cm.manual_cost && Number(cm.manual_cost) > 0) {
+                    costMatrixMap[cm.product_id] = Number(cm.manual_cost);
                 }
             });
 
@@ -202,12 +213,17 @@ async function handleSync(request: Request) {
                 // Priority 1: Commercial Override cost
                 const overrideCost = overridesMap[prod.id];
                 
-                // Priority 2: Latest purchase (fallback to parent product if exist)
+                // Priority 2: Commercial Cost Matrix
+                const matrixCost = costMatrixMap[prod.id];
+
+                // Priority 3: Latest purchase (fallback to parent product if exist)
                 const purchaseInfo = purchasesMap[prod.id] || (prod.parent_id ? purchasesMap[prod.parent_id] : null);
                 
                 let baseCost = 0;
                 if (overrideCost !== undefined) {
                     baseCost = overrideCost;
+                } else if (matrixCost !== undefined) {
+                    baseCost = matrixCost;
                 } else if (purchaseInfo) {
                     let realCost = purchaseInfo.price;
                     
@@ -233,11 +249,6 @@ async function handleSync(request: Request) {
                         }
                     }
                     baseCost = realCost;
-                }
-                
-                // Priority 3: Fallback to existing base price if no override/purchase is found
-                if (baseCost === 0) {
-                    baseCost = prod.base_price || 0;
                 }
 
                 if (baseCost === 0) return; // Skip if no cost found

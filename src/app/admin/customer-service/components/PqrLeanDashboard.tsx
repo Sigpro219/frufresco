@@ -198,7 +198,8 @@ export default function PqrLeanDashboard({
 
         periodNovelties.forEach(n => {
             if (n.status === 'approved' || n.status === 'pending_review') {
-                const price = n.products?.base_price || 0;
+                const oi = n.orders?.order_items?.find((item: any) => item.product_id === n.product_id);
+                const price = Number(oi?.unit_price || n.unit_price || 0);
                 const qty = Number(n.quantity_returned) || 0;
                 totalCoQ += (price * qty);
             }
@@ -545,7 +546,8 @@ export default function PqrLeanDashboard({
             const associatedNovs = periodNovelties.filter(n => n.order_id === p.order_id);
             if (associatedNovs.length > 0) {
                 associatedNovs.forEach(n => {
-                    const pr = n.products?.base_price || 0;
+                    const oi = n.orders?.order_items?.find((item: any) => item.product_id === n.product_id);
+                    const pr = Number(oi?.unit_price || n.unit_price || 0);
                     const q = Number(n.quantity_returned) || 0;
                     map[key].totalAmount += (pr * q);
                 });

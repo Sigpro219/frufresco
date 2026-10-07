@@ -36,7 +36,7 @@ export async function GET() {
 
         const { data: items, error: iErr } = await supabaseAdmin
             .from('quote_items')
-            .select('id, product_id, product_name, quantity, cost_basis, margin_percent, unit_price, iva_rate, iva_amount, total_price, products:product_id (accounting_id, unit_of_measure, name, base_price, iva_rate, sku)')
+            .select('id, product_id, product_name, quantity, cost_basis, margin_percent, unit_price, iva_rate, iva_amount, total_price, products:product_id (accounting_id, unit_of_measure, name, iva_rate, sku)')
             .eq('quote_id', template.id)
             .order('product_name', { ascending: true });
 

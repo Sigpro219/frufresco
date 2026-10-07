@@ -484,7 +484,7 @@ function CreateOrderContent() {
             try {
                 const { data, error } = await supabase
                     .from('orders')
-                    .select('id, sequence_id, created_at, delivery_date, total, status, admin_notes, order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, products(id, name, base_price, unit_of_measure, weight_kg))')
+                    .select('id, sequence_id, created_at, delivery_date, total, status, admin_notes, order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, products(id, name, unit_of_measure, weight_kg))')
                     .eq('profile_id', activeCustomerId)
                     .order('created_at', { ascending: false })
                     .limit(20);
@@ -1623,7 +1623,7 @@ function CreateOrderContent() {
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
                 .from('products')
-                .select('id, accounting_id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor, iva_rate')
+                .select('id, accounting_id, sku, name, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor, iva_rate')
                 .eq('is_active', true)
                 .order('name');
 

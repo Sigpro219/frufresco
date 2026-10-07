@@ -298,7 +298,7 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     // Load active products catalog for automatic SKU matching
     const { data: allProducts } = await supabase
       .from('products')
-      .select('id, name, sku, unit_of_measure, base_price, weight_kg, options_config')
+      .select('id, name, sku, unit_of_measure, weight_kg, options_config')
       .eq('is_active', true);
 
     const productCatalog = allProducts || [];

@@ -76,7 +76,7 @@ export default function OrderDetailPage() {
             name: string;
             unit_of_measure: string;
             image_url: string;
-            base_price: number;
+            base_price?: number;
             options_config?: any;
             weight_kg?: number;
             requires_label?: boolean;
@@ -134,7 +134,7 @@ export default function OrderDetailPage() {
                 .select(`
                     *,
                     product:products (
-                        id, name, unit_of_measure, image_url, base_price, variants, weight_kg, requires_label
+                        id, name, unit_of_measure, image_url, variants, weight_kg, requires_label
                     )
                 `)
                 .eq('order_id', id);
@@ -300,10 +300,10 @@ export default function OrderDetailPage() {
             setSearchResults([]);
             return;
         }
-        // Select 'base_price' and 'variants'
+        // Select options_config, variants, and pricing_model_prices
         const { data } = await supabase
             .from('products')
-            .select('id, name, image_url, unit_of_measure, base_price, options_config, variants')
+            .select('id, name, image_url, unit_of_measure, options_config, variants, pricing_model_prices(price, model_id)')
             .eq('is_active', true)
             .ilike('name', `%${term}%`)
             .limit(5);
@@ -342,7 +342,10 @@ export default function OrderDetailPage() {
     };
 
     const addProductToEditList = (product: any, qty: number, options: any, label: any) => {
-        const price = product.base_price || 0;
+        const modelPrice = product.pricing_model_prices?.find((pmp: any) => pmp.model_id === 'd90a91e5-827c-473d-9d4f-3e28c7c91e15')?.price
+            || product.pricing_model_prices?.[0]?.price
+            || 0;
+        const price = Number(modelPrice) || 0;
 
         const newItem: OrderItem = {
             id: null, // New items don't have an ID yet

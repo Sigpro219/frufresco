@@ -1096,6 +1096,15 @@ export default function CommercialAgreementsModule() {
     const handleApplyOpenConsumptionToCreateFlow = async () => {
         try {
             setParsing(true);
+            const { data: costMatrixData } = await supabase
+                .from('commercial_cost_matrix')
+                .select('product_id, manual_cost')
+                .eq('is_active', true);
+            const costMap: Record<string, number> = {};
+            (costMatrixData || []).forEach((c: any) => {
+                if (c.manual_cost) costMap[c.product_id] = Number(c.manual_cost);
+            });
+
             const { data: allProds, error } = await supabase
                 .from('products')
                 .select('id, name, accounting_id, sku, unit_of_measure, is_active, iva_rate')
@@ -1119,7 +1128,7 @@ export default function CommercialAgreementsModule() {
                 unit: p.unit_of_measure || 'Kg',
                 unit_price: 0,
                 matched_product: p,
-                cost_basis: ((p as any).base_price !== undefined ? Number((p as any).base_price) : 0),
+                cost_basis: costMap[p.id] || 0,
                 margin_percent: 0,
                 iva_rate: Number(p.iva_rate) || 0,
                 confidence: 'high' as const,

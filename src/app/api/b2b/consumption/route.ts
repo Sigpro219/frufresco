@@ -44,34 +44,42 @@ export async function GET(request: Request) {
             }
         }
 
-        // 1. Fetch Agreements to get agreement prices & base prices
+        // 1. Fetch Agreements to get agreement prices
         const { data: quoteAgreements } = await supabaseAdmin
             .from('quotes')
             .select(`
                 id,
                 quote_items(
                     product_id,
-                    unit_price,
-                    products(id, base_price)
+                    unit_price
                 )
             `)
             .in('client_id', clientIds)
             .eq('status', 'agreement');
 
         const agreementMap: Record<string, number> = {};
-        const basePriceMap: Record<string, number> = {};
 
         if (quoteAgreements && quoteAgreements.length > 0) {
             quoteAgreements.forEach((q: any) => {
                 q.quote_items?.forEach((qi: any) => {
-                    if (qi.product_id) {
-                        if (qi.unit_price) agreementMap[qi.product_id] = Number(qi.unit_price);
-                        const p = Array.isArray(qi.products) ? qi.products[0] : qi.products;
-                        if (p?.base_price) basePriceMap[qi.product_id] = Number(p.base_price);
+                    if (qi.product_id && qi.unit_price) {
+                        agreementMap[qi.product_id] = Number(qi.unit_price);
                     }
                 });
             });
         }
+
+        // Fetch standard catalog prices from General Institucional model for comparison
+        const { data: genPrices } = await supabaseAdmin
+            .from('pricing_model_prices')
+            .select('product_id, price')
+            .eq('model_id', 'd90a91e5-827c-473d-9d4f-3e28c7c91e15');
+        const genPriceMap: Record<string, number> = {};
+        (genPrices || []).forEach(gp => {
+            if (gp.price && Number(gp.price) > 0) {
+                genPriceMap[gp.product_id] = Number(gp.price);
+            }
+        });
 
         // 2. Fetch all valid orders for client (or matrix group)
         const { data: ordersData, error: ordersError } = await supabaseAdmin
@@ -102,7 +110,7 @@ export async function GET(request: Request) {
 
         const { data: itemsData, error: itemsError } = await supabaseAdmin
             .from('order_items')
-            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, sku, name, name_en, unit_of_measure, image_url, base_price, category)')
+            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, sku, name, name_en, unit_of_measure, image_url, category)')
             .in('order_id', orderIds);
 
         if (itemsError) {
@@ -139,10 +147,10 @@ export async function GET(request: Request) {
                 itemsSum += qty * unitPrice;
                 totalKg += qty;
 
-                if (pId && (agreementMap[pId] || basePriceMap[pId] || p?.base_price)) {
-                    const baseP = basePriceMap[pId] || Number(p?.base_price || unitPrice * 1.15);
-                    if (baseP > unitPrice) {
-                        totalSavingsCop += qty * (baseP - unitPrice);
+                if (pId && genPriceMap[pId]) {
+                    const standardPrice = genPriceMap[pId];
+                    if (standardPrice > unitPrice) {
+                        totalSavingsCop += qty * (standardPrice - unitPrice);
                     }
                 }
             });

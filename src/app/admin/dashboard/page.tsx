@@ -199,7 +199,7 @@ export default function AdminDashboard() {
                         .from('order_items')
                         .select(`
                             id, order_id, product_id, quantity, unit_price, unit, selected_options,
-                            products:product_id(name, base_price)
+                            products:product_id(name)
                         `)
                         .in('order_id', chunk);
 

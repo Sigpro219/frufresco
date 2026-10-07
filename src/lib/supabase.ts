@@ -101,7 +101,7 @@ export interface Product {
     sku: string;
     name: string;
     description: string;
-    base_price: number;
+    base_price?: number;
     unit_of_measure: string;
     weight_kg?: number;
     display_name?: string;
