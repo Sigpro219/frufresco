@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Printer, FileText, Scale } from 'lucide-react';
+import { Printer, FileText, Scale, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
 export default function CreditPrintPage() {
     const { id } = useParams();
@@ -69,8 +70,59 @@ export default function CreditPrintPage() {
         if (id) fetchDossierData();
     }, [id]);
 
-    if (loading) return <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Cargando expediente de crédito...</div>;
-    if (!client) return <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Cliente no encontrado.</div>;
+    if (loading) {
+        return (
+            <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+                <div style={{ backgroundColor: '#FFFFFF', padding: '2.5rem 3rem', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 4px 16px rgba(0,0,0,0.04)', textAlign: 'center', maxWidth: '420px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#ECFDF5', color: '#0D7A57', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <Loader2 size={24} className="animate-spin" />
+                    </div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0F172A', marginBottom: '0.35rem' }}>
+                        Cargando Expediente de Crédito
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', color: '#64748B', margin: 0 }}>
+                        Recuperando formulario SARLAFT, referencias y pagaré en blanco...
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!client) {
+        return (
+            <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+                <div style={{ backgroundColor: '#FFFFFF', padding: '2.5rem', borderRadius: '14px', border: '1px solid #FCA5A5', boxShadow: '0 4px 16px rgba(239,68,68,0.06)', textAlign: 'center', maxWidth: '480px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#FEF2F2', color: '#DC2626', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <AlertCircle size={26} />
+                    </div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0F172A', marginBottom: '0.4rem' }}>
+                        Cliente o Expediente No Encontrado
+                    </h3>
+                    <p style={{ fontSize: '0.84rem', color: '#64748B', marginBottom: '1.5rem', lineHeight: 1.45 }}>
+                        No se encontró ningún registro para el cliente con ID "{id}". Verifica el identificador o regresa a la mesa de cartera.
+                    </p>
+                    <Link
+                        href="/admin/commercial/billing"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            backgroundColor: '#0D7A57',
+                            color: '#FFFFFF',
+                            padding: '0.6rem 1.2rem',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '0.82rem',
+                            textDecoration: 'none',
+                            boxShadow: '0 2px 6px rgba(13,122,87,0.25)'
+                        }}
+                    >
+                        <ArrowLeft size={16} /> Volver a Facturación y Cartera
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     const d = dossier || {};
     
@@ -315,6 +367,26 @@ export default function CreditPrintPage() {
             {/* Float Print Control Toolbar */}
             <div className="no-print" style={{ position: 'fixed', top: 0, left: 0, right: 0, backgroundColor: '#f8f9fa', borderBottom: '2px solid #0D7A57', padding: '8px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2000, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <Link 
+                        href="/admin/commercial/billing"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: '#475569',
+                            textDecoration: 'none',
+                            fontSize: '0.80rem',
+                            fontWeight: 700,
+                            padding: '0.45rem 0.75rem',
+                            borderRadius: '7px',
+                            border: '1px solid #CBD5E1',
+                            backgroundColor: '#FFFFFF',
+                            transition: 'all 0.15s ease'
+                        }}
+                        title="Regresar a la Mesa de Facturación y Cartera"
+                    >
+                        <ArrowLeft size={14} /> Facturación
+                    </Link>
                     <h3 style={{ margin: 0, fontFamily: 'sans-serif', fontSize: '13px', color: '#333' }}>
                         Documentos de Crédito - <b>{isBlankMode ? 'Expediente Vacío' : client.company_name}</b>
                     </h3>

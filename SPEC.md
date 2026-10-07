@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.144 (Certificación Dominio 8.2: Emisión Masiva de Remisiones y Facturas de Venta Golden Print de Corte - FAC-02)
+> **Versión:** 1.9.146 (Certificación Dominio 8.3: Expediente Oficial de Crédito B2B, SARLAFT & Pagaré en Blanco Art. 622 C.Co. - FAC-03)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8475,6 +8475,43 @@ La vista de impresión masiva de corte (`/admin/commercial/billing/print/[id]`) 
   3. Los clientes que tienen configurada remisión a ciegas (`remission_with_prices = false`) presentan su remisión sin precios unitarios ni valor total, salvaguardando la confidencialidad de tarifas.
   4. Los clientes con factura electrónica presentan su factura con la resolución DIAN oficial, subtotal de productos, IVA excluido (Art. 424 E.T.) y total a pagar.
   5. Al pulsar `[Imprimir Lote]`, se abre la ventana limpia de impresión con cortes de página automáticos (`page-break`) entre cada cliente y firmas de recibo a satisfacción con Cédula y Sello.
+
+---
+
+### 39.4 Emisión Oficial de Expediente de Crédito B2B, SARLAFT & Pagaré en Blanco Art. 622 C.Co. (`/admin/commercial/billing/print-credit/[id]`) (SDD v1.9.146)
+
+#### A. Misión y Alcance Jurídico-Financiero
+La consola de emisión documental de crédito (`/admin/commercial/billing/print-credit/[id]`) genera el paquete formal de vinculación y garantías financieras de *Investments Cortés S.A.S.* Procesa dos modalidades operativas: (1) Impresión en blanco (`id === 'blank'`) para captura física en visitas comerciales a plantas y restaurantes; y (2) Emisión formal precargada desde `client_credit_dossiers` y `profiles` para formalización contractual de cupos y plazos de pago B2B.
+
+#### B. Arquitectura de Garantías, SARLAFT & Estándares Legales Colombianos
+1. **Solicitud de Crédito y Conocimiento del Cliente (Formato FC-001 - 4 Páginas):**
+   - **Página 1:** Identificación general, tipo de establecimiento, cupo solicitado, plazo (8, 15, 30, 45 días), datos de ubicación y composición accionaria / socios mayoritarios con verificación de Personas Expuestas Políticamente (PEP).
+   - **Página 2:** Declaración de operaciones internacionales y productos financieros en moneda extranjera (cumplimiento SARLAFT / SAGRILAFT de la Superintendencia de Sociedades).
+   - **Página 3:** Clase de contribuyente (Gran Contribuyente, Autorretenedor, Responsable de IVA, Régimen Simple), referencias comerciales y referencias personales de la gerencia.
+   - **Página 4:** Condiciones comerciales de pago acordadas, autorización irrevocable de consulta y reporte a Centrales de Riesgo Financiero (Datacrédito / TransUnion CIFIN) conforme a la Ley 1266 de 2008 (Habeas Data Financiero) y Ley 1581 de 2012 (Protección de Datos Personales), y bloque para firma con huella dactilar del índice derecho y sello institucional con NIT.
+2. **Pagaré en Blanco con Carta de Instrucciones (Art. 622 Código de Comercio - 2 Páginas):**
+   - **Página 5 (Pagaré No. PG-001):** Título valor en blanco suscrito conforme al Art. 622 del Código de Comercio colombiano, estipulando intereses moratorios a la tasa máxima legal certificada por la Superintendencia Financiera de Colombia, cláusula aceleratoria y renuncia expresa a requerimientos privados o judiciales de constitución en mora.
+   - **Página 6 (Carta de Instrucciones):** Mandato expreso e irrevocable otorgado por el deudor y deudor solidario a favor de *Investments Cortés S.A.S.* para llenar los espacios en blanco del pagaré ante cualquier mora o retardo en el pago de facturas de venta, confiriendo mérito ejecutivo pleno para cobro coactivo judicial.
+3. **Conmutador Bimodal Táctico:**
+   - Selección de alcance: *Todo el Expediente (6 Páginas)*, *Solo Solicitud (4 Páginas)*, o *Solo Pagaré (2 Páginas)*.
+   - Adaptación jurídica según naturaleza tributaria: *Persona Natural* (exige cédula y referencias personales) vs *Persona Jurídica* (exige Certificado de Existencia y Representación Legal de Cámara de Comercio, RUT y facultades de endeudamiento del Representante Legal).
+4. **Resguardo Poka-Yoke & Experiencia de Usuario:**
+   - Erradicación total de diálogos bloqueantes de navegador (`alert()` / `confirm()`).
+   - Estados de carga y error estructurados bajo Swiss Precision UI con botón directo de retorno a la Mesa de Facturación y Cartera.
+   - Hoja de estilo milimétrica `@page { size: letter portrait; margin: 8mm 10mm; }` garantizando que los renglones de firma, sellos y recuadros de huella dactilar se mantengan perfectamente alineados en impresión física y exportación a PDF.
+
+---
+
+#### Escenario 184: Emisión de Expediente de Crédito B2B, SARLAFT y Pagaré en Blanco (SDD v1.9.146)
+- **Given** el Director Comercial o Analista de Cartera en `/admin/commercial/billing` (pestaña Cartera & Expedientes).
+- **When** abre el expediente de crédito de un cliente B2B o solicita un formulario en blanco y navega a `/admin/commercial/billing/print-credit/[id]`:
+- **Then**:
+  1. Si `id === 'blank'`, el sistema inicializa una plantilla con líneas punteadas y casillas en blanco listas para diligenciamiento manual en campo.
+  2. Si `id` corresponde a un cliente con expediente registrado en `client_credit_dossiers`, el sistema precarga de forma limpia los datos de contacto, accionistas, régimen tributario, cupo aprobado y deudores solidarios sin insertar líneas bajas redundantes.
+  3. El usuario puede alternar la impresión entre "Todo (6 Págs)", "Solicitud (4 Págs)" o "Pagaré (2 Págs)" y cambiar entre Persona Natural y Jurídica desde la barra de control fija.
+  4. Al pulsar `[Imprimir Selección]`, se activa la impresión de alta fidelidad con encabezado institucional Investments Cortés S.A.S. (FC-001), texto legal en justificación estricta y recuadros formales para huella y sello de Cámara de Comercio.
+  5. Si el cliente no existe en base de datos, se despliega una tarjeta de error amigable con botón directo para regresar a la mesa de facturación.
+
 
 
 
