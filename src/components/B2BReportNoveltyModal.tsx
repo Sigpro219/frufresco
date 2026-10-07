@@ -38,6 +38,7 @@ export default function B2BReportNoveltyModal({
     const [description, setDescription] = useState('');
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+    const [modalError, setModalError] = useState<string | null>(null);
 
     const NOVELTY_REASONS = [
         "Avería / Producto magullado o golpeado",
@@ -88,22 +89,39 @@ export default function B2BReportNoveltyModal({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setModalError(null);
         if (!order?.id || !description.trim()) {
-            alert('Por favor ingresa una breve descripción del problema.');
+            const msg = 'Por favor ingresa una breve descripción del problema.';
+            setModalError(msg);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('⚠️ ' + msg, 'warning');
+            }
             return;
         }
 
         if (reportType === 'product') {
             if (!selectedItemId) {
-                alert('Por favor selecciona el producto afectado.');
+                const msg = 'Por favor selecciona el producto afectado.';
+                setModalError(msg);
+                if (typeof window !== 'undefined' && (window as any).showToast) {
+                    (window as any).showToast('⚠️ ' + msg, 'warning');
+                }
                 return;
             }
             if (!affectedQty || Number(affectedQty) <= 0) {
-                alert('Por favor especifica la cantidad afectada.');
+                const msg = 'Por favor especifica la cantidad afectada.';
+                setModalError(msg);
+                if (typeof window !== 'undefined' && (window as any).showToast) {
+                    (window as any).showToast('⚠️ ' + msg, 'warning');
+                }
                 return;
             }
             if (selectedItem && Number(affectedQty) > Number(selectedItem.quantity)) {
-                alert(`La cantidad afectada no puede ser mayor a la cantidad despachada (${selectedItem.quantity} ${selectedItem.products?.unit_of_measure}).`);
+                const msg = `La cantidad afectada no puede ser mayor a la cantidad despachada (${selectedItem.quantity} ${selectedItem.products?.unit_of_measure || ''}).`;
+                setModalError(msg);
+                if (typeof window !== 'undefined' && (window as any).showToast) {
+                    (window as any).showToast('⚠️ ' + msg, 'warning');
+                }
                 return;
             }
         }
@@ -217,7 +235,11 @@ export default function B2BReportNoveltyModal({
             if (onSuccess) onSuccess();
         } catch (err: any) {
             console.error('Error submitting B2B novelty:', err);
-            alert('Error al registrar la novedad: ' + (err.message || 'Intente nuevamente.'));
+            const msg = 'Error al registrar la novedad: ' + (err.message || 'Intente nuevamente.');
+            setModalError(msg);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('❌ ' + msg, 'error');
+            }
         } finally {
             setSubmitting(false);
         }
@@ -509,6 +531,25 @@ export default function B2BReportNoveltyModal({
                                 )}
                             </div>
                         </div>
+
+                        {modalError && (
+                            <div style={{
+                                padding: '0.65rem 0.85rem',
+                                borderRadius: '8px',
+                                backgroundColor: '#FEF2F2',
+                                border: '1.5px solid #FCA5A5',
+                                color: '#991B1B',
+                                fontSize: '0.82rem',
+                                fontWeight: '700',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginTop: '0.5rem'
+                            }}>
+                                <AlertTriangle size={16} style={{ flexShrink: 0, color: '#DC2626' }} />
+                                <span>{modalError}</span>
+                            </div>
+                        )}
 
                         {/* Submit Button */}
                         <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid #F1F5F9' }}>

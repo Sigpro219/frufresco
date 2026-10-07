@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.157 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.1 Dashboard Ejecutivo B2B & Pedidos Rápidos)
+> **Versión:** 1.9.158 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.2 Historial, Remisiones & Novedades PQRS B2B)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8885,6 +8885,42 @@ El portal corporativo B2B (`src/app/b2b/dashboard/page.tsx`) constituye la plata
   2. Si el comprador pulsa por error el icono de basura en el carrito, el botón transiciona a modo confirmación `[⚠️ ¿Vaciar?]` durante 4 segundos sin desplegar alertas bloqueantes de navegador.
   3. Al seleccionar la fecha de entrega y pulsar `[Finalizar Pedido B2B]`, se despliega el modal de confirmación `isSummaryModalOpen` con desglose detallado de ítems y total estimado.
   4. Al pulsar `[Confirmar y Enviar Pedido]`, la orden se radica en estado `pending_approval` con origen `web_b2b`, emite la notificación Toast verde y redirige fluidamente sin interrumpir el entorno.
+
+---
+
+### 41.2 Historial de Pedidos Corporativos, Remisiones y Novedades PQRS B2B (`/b2b/dashboard?tab=invoices` - `src/components/InvoiceDocumentModal.tsx` & `src/components/B2BReportNoveltyModal.tsx`) (SDD v1.9.158)
+
+#### A. Misión y Alcance del Módulo de Facturación y Posventa B2B
+La pestaña de facturación y despachos corporativos (`/b2b/dashboard?tab=invoices`) centraliza la custodia documental y el seguimiento del cumplimiento operativo de las entregas de FruFresco hacia el cliente B2B. Proporciona a los economatos, contadores y auditores de compras el acceso instantáneo a las remisiones de entrega valorizadas, el estado logístico de cada orden y el canal oficial de radicación de novedades técnicas con soporte fotográfico.
+
+#### B. Arquitectura de Custodia Documental & Tramitación de Novedades
+1. **Historial de Despachos y Consecutivos Amigables:**
+   - Despliegue de órdenes asociadas al cliente corporativo con numeración amigable `#PED-XXXX`, fecha de entrega pactada y estado logístico (`pending_approval`, `approved`, `picking`, `in_route`, `delivered`).
+   - Resumen financiero de cada despacho con valor total en COP y botón directo para visualizar e imprimir el comprobante de remisión.
+2. **Visualizador de Remisión Oficial (`InvoiceDocumentModal`):**
+   - Modal de alta fidelidad que reproduce la remisión oficial de despacho con membrete de Investments Cortés S.A.S. (NIT 901.393.217).
+   - Desglose línea por línea de productos entregados, cantidades despachadas, precio unitario de acuerdo, tasa de IVA y subtotal liquidado, con botón integrado de impresión rápida (`window.print()`).
+3. **Módulo de Novedades de Calidad y Reclamos (`B2BReportNoveltyModal`):**
+   - Canal Poka-Yoke para que el cliente corporativo radique novedades en un plazo máximo de 12 horas pos-entrega.
+   - Tipificación dual: Novedad sobre producto específico (`product`) vs Novedad general del servicio (`general`).
+   - Categorización taxonómica: `producto` (avería, maduración, fitopatología), `entrega` (demora, faltante) o `facturacion` (precio discordante).
+   - Poka-Yoke de límite estricto: la cantidad reclamada no puede exceder la cantidad física despachada en la remisión original.
+   - Carga de fotografía de soporte en el bucket `delivery-evidence` de Supabase Storage e inserción atómica en `customer_service_pqrs`.
+4. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - Erradicación total de los cinco (5) `alert()` nativos presentes en el flujo de validación y captura de errores de `B2BReportNoveltyModal`.
+   - Sustitución por el banner reactivo in-modal `modalError` con icono Lucide `<AlertTriangle />` y sincronización con el bus global `showToast`.
+
+---
+
+#### Escenario 194: Consulta de Remisión y Radicación de Novedad B2B con Poka-Yoke de Cantidad (SDD v1.9.158)
+- **Given** un ecónomo de hotel que recibió un despacho con remisión `#PED-1049` y encuentra 2 kg de fresas magulladas.
+- **When** ingresa a `/b2b/dashboard?tab=invoices`, pulsa `[Ver Remisión]` para verificar el despacho, y luego pulsa `[Reportar Novedad]`:
+- **Then**:
+  1. El sistema abre `B2BReportNoveltyModal` cargando automáticamente los ítems despachados en esa orden.
+  2. El ecónomo selecciona `Avería / Producto magullado`, marca las fresas e intenta digitar 15 kg (cuando solo se despacharon 10 kg).
+  3. El sistema activa el Poka-Yoke y proyecta el banner de advertencia in-modal: *"La cantidad afectada no puede ser mayor a la cantidad despachada (10 Kg)"* sin bloquear el navegador con popups.
+  4. Al corregir a 2 kg, adjuntar la fotografía del empaque y pulsar `[Enviar Novedad a Calidad]`:
+  5. Se inserta el reclamo en `customer_service_pqrs` con estado `pending`, se notifica a la Torre de Control de Calidad y se despliega la pantalla de confirmación con éxito.
 
 
 
