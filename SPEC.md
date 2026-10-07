@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.166 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.6 Visor y Certificador de Plantillas Golden Print)
+> **Versión:** 1.9.167 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.7 Maestro Central de Catálogo, SKUs y Familias — ¡CIERRE 100% DE LAS 76 PANTALLAS DEL SISTEMA!)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -9194,6 +9194,37 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. Al pulsar "Imprimir Muestra Oficial", se ejecuta `printViaNewWindow`, abriendo el diálogo de impresión nativo del sistema con márgenes milimétricos exactos de carta (Letter) y sin cabeceras espurias del navegador web.
   3. Las tablas de productos y firmas legales respetan las reglas `avoid-break` impidiendo divisiones antiestéticas entre páginas.
   4. La ruta responde con código HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
+
+---
+
+### §42.7 Pantalla 10.7: Maestro Central de Catálogo, SKUs y Familias (`/admin/master/products`) — ¡GRAN HITO FINAL 76/76!
+
+1. **Propósito Operativo & Arquitectura:**
+   - La pantalla `/admin/master/products` (`src/app/admin/master/products/page.tsx`) es el núcleo del catálogo maestro de FruFresco, gobernando la taxonomía oficial de productos, SKUs secuenciales, categorías (`FRUTAS`, `VERDURAS`, `TUBERCULOS`, `ABARROTES`, `LACTEOS`), unidades de medida dinámicas (`dynamicUnits`), vinculación contable (`accounting_id`), visibilidad multicanal y administración de variaciones (`product_variations`).
+2. **Pipeline de Ingesta Masiva, Excel Streaming & Purga Poka-Yoke:**
+   - **Parser Multi-Hoja XLSX:** Soporta libros Excel con hasta 3 hojas estructuradas: `1. Productos` (SKU, nombre, categoría, unidad, costo manual, impuestos), `2. Variaciones` (calibres, empaques, multiplicadores de gramaje) y `3. Diccionario_Guia`.
+   - **Purga & Carga Masiva Segura:** Sustitución de `confirm()` por una advertencia visual prominente y un botón dinámico conmutado a `PURGAR Y PROCESAR EXCEL` en carmesí `#DC2626`, protegiendo la base de datos contra borrados accidentales y aplicando deshabilitación progresiva si existen restricciones de clave foránea (`FK constraints`).
+   - **Exportación Completa del Maestro:** Generador XLSX desacoplado que exporta el catálogo íntegro con hoja de variaciones y guía técnica de importación.
+3. **Automatización Inteligente de Catálogo & Sincronización Web:**
+   - **Sanitización Poka-Yoke de SKUs y Descripciones:** Algoritmo secuencial que detecta productos huérfanos sin código o descripción, asignando SKUs normalizados y descripciones automáticas estructuradas. Activado mediante botón Poka-Yoke de 2 pasos (`¿CONFIRMAR SANETIZAR?`) temporizado a 4 segundos.
+   - **Sincronización Automática de Visibilidad Web (`syncWebVisibility`):** Evalúa el estado de las fotografías en Supabase Storage, ocultando masivamente productos sin imagen (`show_on_web = false`) y activando aquellos con fotografía verificada y estado activo (`show_on_web = true`), con confirmación Poka-Yoke interactiva en 2 pasos (`¿CONFIRMAR SINCRONIZAR?`).
+   - **Optimización de Carga Fotográfica:** Integración con `optimizeImageForUpload` para comprimir y convertir imágenes a WebP en el navegador antes de subir al bucket de almacenamiento.
+4. **Erradicación Total de Diálogos Nativos (Zero-Alert & Zero-Confirm Dogma):**
+   - 100% libre de `window.alert()`, `window.confirm()` y `window.prompt()`.
+   - Modales especializados (`CreateProductModal`, `EditProductModal`), alertas visuales andon y toasts reactivos para el 100% de los flujos de usuario.
+5. **Declaración Solemne de Cierre del Sistema:**
+   - **Con la certificación de esta pantalla, se completa formalmente el 100% de las 76 pantallas físicas de FruFresco bajo la Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke y Diseño Industrial Suizo).**
+
+---
+
+#### Escenario 203: Sanitización Secuencial, Importación Masiva Poka-Yoke y Cierre Integral del Ecosistema (SDD v1.9.167)
+- **Given** el Director de Catálogo o Administrador General autenticado en `/admin/master/products`.
+- **When** opera el catálogo maestro ejecutando la sanitización masiva, sincronización web e importación de productos:
+- **Then**:
+  1. Al presionar "Sanetizar", el botón muta a `¿CONFIRMAR SANETIZAR?` en rojo alerta; al hacer clic nuevamente, se generan los códigos SKU secuenciales y descripciones faltantes, notificando el total actualizado vía Toast esmeralda.
+  2. Al presionar "Sincronizar Web", el botón solicita confirmación en 2 pasos y ajusta automáticamente la visibilidad de los productos en la tienda pública sin ventanas modales bloqueantes.
+  3. Al subir un archivo Excel con la opción de purga activada, el formulario resalta el banner de advertencia rojo y transforma el botón de envío a `PURGAR Y PROCESAR EXCEL`, ejecutando la ingesta de forma atómica y consistente.
+  4. La ruta responde con código HTTP 200 OK, TypeScript compila con 0 errores (`exit 0`), y se da por **CERRADA Y CERTIFICADA AL 100% LA TOTALIDAD DE LAS 76 PANTALLAS DEL SISTEMA FRUFRESCO**.
 
 
 

@@ -141,6 +141,8 @@ export default function MasterProductsPage() {
     const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
+    const [confirmSanitize, setConfirmSanitize] = useState(false);
+    const [confirmSyncWeb, setConfirmSyncWeb] = useState(false);
     const ITEMS_PER_PAGE = 50;
 
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -470,7 +472,7 @@ export default function MasterProductsPage() {
             showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
             return;
         }
-        if (!confirm('¿Deseas generar automáticamente SKUs y Descripciones para todos los productos que no los tengan?')) return;
+        setConfirmSanitize(false);
         
         try {
             setLoading(true);
@@ -522,7 +524,7 @@ export default function MasterProductsPage() {
             return;
         }
 
-        if (!confirm(`Sincronización Web:\n\n• Se ocultarán ${toHide} productos sin foto.\n• Se activarán ${toShow} productos con foto activa.\n\n¿Deseas aplicar estos cambios masivamente?`)) return;
+        setConfirmSyncWeb(false);
 
         try {
             setLoading(true);
@@ -754,10 +756,6 @@ export default function MasterProductsPage() {
                 });
             }
 
-            if (wipeExistingData) {
-                const confirmed = confirm('ATENCIÓN: Se eliminarán TODOS los productos actuales antes de cargar los nuevos. ¿Estás absolutamente seguro?');
-                if (!confirmed) return;
-            }
 
             setLoading(true);
             try {
@@ -1381,54 +1379,107 @@ export default function MasterProductsPage() {
                             <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>Gestión centralizada de estándares, códigos contables y definiciones técnicas.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <button
-                                onClick={sanitizeMasterData}
-                                disabled={!canEdit}
-                                style={{
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: THEME.radius.md,
-                                    backgroundColor: '#FFFBEB',
-                                    color: '#B45309',
-                                    border: '1px solid #FDE68A',
-                                    fontWeight: '600',
-                                    cursor: canEdit ? 'pointer' : 'not-allowed',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.8rem',
-                                    opacity: canEdit ? 1 : 0.6,
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
-                                onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
-                                title="Generar descripciones y sanetizar datos de productos"
-                            >
-                                <Wand2 size={14} strokeWidth={1.5} /> Sanetizar
-                            </button>
-                            <button
-                                onClick={syncWebVisibility}
-                                disabled={!canEdit}
-                                style={{
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: THEME.radius.md,
-                                    backgroundColor: THEME.colors.primaryLight,
-                                    color: THEME.colors.primary,
-                                    border: `1px solid ${THEME.colors.border}`,
-                                    fontWeight: '600',
-                                    cursor: canEdit ? 'pointer' : 'not-allowed',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.8rem',
-                                    opacity: canEdit ? 1 : 0.6,
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#DFE7DF'; }}
-                                onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
-                                title="Sincronizar visibilidad web con disponibilidad de imágenes"
-                            >
-                                <Globe size={14} strokeWidth={1.5} /> Sincronizar Web
-                            </button>
+                            {confirmSanitize ? (
+                                <button
+                                    onClick={sanitizeMasterData}
+                                    disabled={!canEdit || loading}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: THEME.radius.md,
+                                        backgroundColor: '#DC2626',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #B91C1C',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.8rem'
+                                    }}
+                                    title="Confirmar sanetización masiva de SKUs y descripciones"
+                                >
+                                    <AlertTriangle size={14} /> ¿CONFIRMAR SANETIZAR?
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => {
+                                        setConfirmSanitize(true);
+                                        setTimeout(() => setConfirmSanitize(false), 4000);
+                                    }}
+                                    disabled={!canEdit || loading}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: THEME.radius.md,
+                                        backgroundColor: '#FFFBEB',
+                                        color: '#B45309',
+                                        border: '1px solid #FDE68A',
+                                        fontWeight: '600',
+                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.8rem',
+                                        opacity: canEdit ? 1 : 0.6,
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
+                                    onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
+                                    title="Generar descripciones y sanetizar datos de productos"
+                                >
+                                    <Wand2 size={14} strokeWidth={1.5} /> Sanetizar
+                                </button>
+                            )}
+
+                            {confirmSyncWeb ? (
+                                <button
+                                    onClick={syncWebVisibility}
+                                    disabled={!canEdit || loading}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: THEME.radius.md,
+                                        backgroundColor: '#0D7A57',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #065F46',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.8rem'
+                                    }}
+                                    title="Confirmar sincronización web"
+                                >
+                                    <CheckCircle2 size={14} /> ¿CONFIRMAR SINCRONIZAR?
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => {
+                                        setConfirmSyncWeb(true);
+                                        setTimeout(() => setConfirmSyncWeb(false), 4000);
+                                    }}
+                                    disabled={!canEdit || loading}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: THEME.radius.md,
+                                        backgroundColor: THEME.colors.primaryLight,
+                                        color: THEME.colors.primary,
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        fontWeight: '600',
+                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.8rem',
+                                        opacity: canEdit ? 1 : 0.6,
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#DFE7DF'; }}
+                                    onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                                    title="Sincronizar visibilidad web con disponibilidad de imágenes"
+                                >
+                                    <Globe size={14} strokeWidth={1.5} /> Sincronizar Web
+                                </button>
+                            )}
 
                             <button
                                 onClick={() => canEdit && setIsCreateModalOpen(true)}
@@ -2797,6 +2848,12 @@ export default function MasterProductsPage() {
                                     Borrar todos los productos existentes antes de cargar (Limpieza total)
                                 </label>
                             </div>
+                            {wipeExistingData && (
+                                <div style={{ marginTop: '0.5rem', padding: '0.65rem 0.85rem', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: THEME.radius.sm, color: '#991B1B', fontSize: '0.75rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                                    <span>ADVERTENCIA: La purga total eliminará o deshabilitará el catálogo previo antes de cargar las nuevas filas.</span>
+                                </div>
+                            )}
 
                             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <button 
@@ -2805,7 +2862,7 @@ export default function MasterProductsPage() {
                                     style={{ 
                                         width: '100%', 
                                         padding: '0.6rem', 
-                                        backgroundColor: selectedFile ? THEME.colors.primary : '#A7F3D0', 
+                                        backgroundColor: !selectedFile ? '#A7F3D0' : wipeExistingData ? '#DC2626' : THEME.colors.primary, 
                                         color: 'white', 
                                         border: 'none', 
                                         borderRadius: THEME.radius.sm, 
@@ -2814,10 +2871,10 @@ export default function MasterProductsPage() {
                                         fontSize: '0.85rem',
                                         transition: 'all 0.15s'
                                     }}
-                                    onMouseEnter={e => { if (selectedFile) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
-                                    onMouseLeave={e => { if (selectedFile) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
+                                    onMouseEnter={e => { if (selectedFile) e.currentTarget.style.backgroundColor = wipeExistingData ? '#B91C1C' : THEME.colors.primaryHover; }}
+                                    onMouseLeave={e => { if (selectedFile) e.currentTarget.style.backgroundColor = wipeExistingData ? '#DC2626' : THEME.colors.primary; }}
                                 >
-                                    {loading ? 'Procesando...' : 'Procesar Excel'}
+                                    {loading ? 'Procesando...' : wipeExistingData ? 'PURGAR Y PROCESAR EXCEL' : 'Procesar Excel'}
                                 </button>
                                 
                                 <button 
