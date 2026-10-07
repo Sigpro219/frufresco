@@ -1241,11 +1241,16 @@ function CreateOrderContent() {
                 }
                 
                 if (candidateAgreement) {
-                    activeAgreement = candidateAgreement;
                     const start = candidateAgreement.start_date?.split('T')[0];
                     const end = candidateAgreement.valid_until?.split('T')[0];
                     if (start && start > checkDate) expired = true;
                     if (end && end < checkDate) expired = true;
+
+                    if (!expired) {
+                        activeAgreement = candidateAgreement;
+                    } else {
+                        activeAgreement = null; // Expired! Precios congelados no aplican
+                    }
                 }
             }
 

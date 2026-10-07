@@ -6808,6 +6808,58 @@ export default function CommercialAgreementsModule() {
                                                     color: THEME.colors.textMain
                                                 }}
                                             />
+                                            {/* Quick Start Date Presets */}
+                                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const now = new Date();
+                                                        const y = now.getFullYear();
+                                                        const m = String(now.getMonth() + 1).padStart(2, '0');
+                                                        const dStr = `${y}-${m}-01`;
+                                                        setStartDate(dStr);
+                                                        if (!isNameManuallyEdited) {
+                                                            const c = b2bClients.find(cl => cl.id === selectedClientId);
+                                                            setAgreementName(computeDefaultAgreementName(c, isMultiClientMode, dStr));
+                                                        }
+                                                    }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.72rem', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    📅 1 del Mes Actual
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const todayStr = new Date().toISOString().split('T')[0];
+                                                        setStartDate(todayStr);
+                                                        if (!isNameManuallyEdited) {
+                                                            const c = b2bClients.find(cl => cl.id === selectedClientId);
+                                                            setAgreementName(computeDefaultAgreementName(c, isMultiClientMode, todayStr));
+                                                        }
+                                                    }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.72rem', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    📅 Hoy
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const now = new Date();
+                                                        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                                                        const y = nextMonth.getFullYear();
+                                                        const m = String(nextMonth.getMonth() + 1).padStart(2, '0');
+                                                        const dStr = `${y}-${m}-01`;
+                                                        setStartDate(dStr);
+                                                        if (!isNameManuallyEdited) {
+                                                            const c = b2bClients.find(cl => cl.id === selectedClientId);
+                                                            setAgreementName(computeDefaultAgreementName(c, isMultiClientMode, dStr));
+                                                        }
+                                                    }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontSize: '0.72rem', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    📅 1 del Próximo Mes
+                                                </button>
+                                            </div>
                                         </div>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>
@@ -6851,6 +6903,37 @@ export default function CommercialAgreementsModule() {
                                                     <option value="years">Años</option>
                                                 </select>
                                             </div>
+                                            {/* Quick Duration Presets */}
+                                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDurationValue(1); setDurationUnit('months'); }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 1 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 1 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 1 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    ⚡ 1 Mes (Mensual)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDurationValue(15); setDurationUnit('days'); }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 15 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 15 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 1 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    15 Días (Quincenal)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDurationValue(8); setDurationUnit('days'); }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 8 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 8 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 8 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    8 Días (Semanal)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDurationValue(3); setDurationUnit('months'); }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 3 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 3 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 3 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                >
+                                                    3 Meses (Trimestral)
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -6871,6 +6954,11 @@ export default function CommercialAgreementsModule() {
                                             month: 'long',
                                             year: 'numeric'
                                         });
+                                        const formattedStart = new Date(startDate + 'T12:00:00').toLocaleDateString('es-CO', {
+                                            day: 'numeric',
+                                            month: 'long',
+                                            year: 'numeric'
+                                        });
                                         return (
                                             <div style={{ 
                                                 marginTop: '6px', 
@@ -6879,16 +6967,36 @@ export default function CommercialAgreementsModule() {
                                                 border: '1.5px solid #BFDBFE', 
                                                 borderRadius: '10px',
                                                 display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '12px'
+                                                flexDirection: 'column',
+                                                gap: '8px'
                                             }}>
-                                                <Calendar size={22} color="#2563EB" />
-                                                <div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Vigencia Calculada:</span>
-                                                    <strong style={{ color: '#1E3A8A', fontSize: '0.95rem', textTransform: 'capitalize' }}>
-                                                        Vence el {formattedExpiry}
-                                                    </strong>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                    <Calendar size={22} color="#2563EB" style={{ flexShrink: 0 }} />
+                                                    <div style={{ flex: 1 }}>
+                                                        <span style={{ fontSize: '0.72rem', color: '#1E40AF', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>
+                                                            {isMultiClientMode ? 'Vigencia Unificada de la Lista Maestra:' : 'Vigencia Calculada:'}
+                                                        </span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                                            <span style={{ fontSize: '0.85rem', color: '#334155' }}>Desde: <strong>{formattedStart}</strong></span>
+                                                            <span style={{ fontSize: '0.85rem', color: '#64748B' }}>➔</span>
+                                                            <strong style={{ color: '#1E3A8A', fontSize: '0.95rem', textTransform: 'capitalize' }}>
+                                                                Vence el {formattedExpiry}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
                                                 </div>
+                                                {isMultiClientMode && (
+                                                    <div style={{ 
+                                                        padding: '6px 10px', 
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.7)', 
+                                                        borderRadius: '6px', 
+                                                        border: '1px solid #DBEAFE', 
+                                                        fontSize: '0.75rem', 
+                                                        color: '#1E40AF' 
+                                                    }}>
+                                                        ⚡ <strong>Efecto Cascada Simultáneo:</strong> Esta vigencia rige idénticamente para todas las Casas Matrices y sucursales vinculadas. Al llegar la fecha de vencimiento, expirará en simultáneo para todas las sedes asociadas.
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })()}
