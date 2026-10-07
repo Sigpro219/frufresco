@@ -3030,14 +3030,39 @@ export default function BillingDashboard() {
                                                                 </span>
                                                             </td>
                                                             <td style={{ padding: '0.55rem 0.75rem', textAlign: 'right' }}>
-                                                                <button 
-                                                                    onClick={() => exportToWorldOffice(cut.id)}
-                                                                    style={{ backgroundColor: THEME.colors.surface, color: THEME.colors.textMain, padding: '0.36rem 0.75rem', borderRadius: '7px', border: `1px solid ${THEME.colors.border}`, fontWeight: '700', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}
-                                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.color = THEME.colors.primary; }}
-                                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.color = THEME.colors.textMain; }}
-                                                                >
-                                                                    <FileSpreadsheet size={13} style={{ color: THEME.colors.primary }} /> Plano World Office (.xlsx)
-                                                                </button>
+                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <a 
+                                                                        href={`/admin/commercial/billing/print/${cut.id}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        style={{ 
+                                                                            backgroundColor: '#ECFDF5', 
+                                                                            color: '#065F46', 
+                                                                            padding: '0.36rem 0.75rem', 
+                                                                            borderRadius: '7px', 
+                                                                            border: '1px solid #A7F3D0', 
+                                                                            fontWeight: '700', 
+                                                                            fontSize: '0.72rem', 
+                                                                            textDecoration: 'none',
+                                                                            display: 'inline-flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '5px', 
+                                                                            transition: 'all 0.15s ease', 
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)' 
+                                                                        }}
+                                                                        title="Imprimir Remisiones y Facturas Oficiales de este Corte"
+                                                                    >
+                                                                        <Printer size={13} style={{ color: '#0D7A57' }} /> Imprimir Documentos
+                                                                    </a>
+                                                                    <button 
+                                                                        onClick={() => exportToWorldOffice(cut.id)}
+                                                                        style={{ backgroundColor: THEME.colors.surface, color: THEME.colors.textMain, padding: '0.36rem 0.75rem', borderRadius: '7px', border: `1px solid ${THEME.colors.border}`, fontWeight: '700', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}
+                                                                        onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.color = THEME.colors.primary; }}
+                                                                        onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.color = THEME.colors.textMain; }}
+                                                                    >
+                                                                        <FileSpreadsheet size={13} style={{ color: THEME.colors.primary }} /> Plano World Office (.xlsx)
+                                                                    </button>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );

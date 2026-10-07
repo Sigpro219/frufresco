@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.142 (Certificación Dominio 8.1: Mesa de Facturación Masiva, Cortes AM/PM/ADJ, Exportación World Office & Cartera B2B - FAC-01)
+> **Versión:** 1.9.144 (Certificación Dominio 8.2: Emisión Masiva de Remisiones y Facturas de Venta Golden Print de Corte - FAC-02)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8438,6 +8438,44 @@ La mesa de facturación (`/admin/commercial/billing`) centraliza la emisión mas
   2. El analista utiliza el botón "Liquidar Costo Vigente", el cual solicita confirmación visual en UI en dos pasos (sin recurrir a `window.confirm`), invocando la API de liquidación para actualizar los precios con base en la matriz comercial vigente.
   3. Tras liquidar el pedido, el analista confirma el corte oficial: se genera el registro en `billing_cuts`, se insertan las facturas en `billing_invoices` con consecutivo correlativo DIAN, se actualiza la secuencia en `app_settings` y se emite una notificación de éxito con el rango de facturas generadas.
   4. Al presionar "Descargar Excel (.xlsx)" para World Office, se genera y descarga el archivo plano estructurado de 57 columnas con desglose contable de cada ítem, sin interrupciones por alertas nativas del navegador.
+
+---
+
+### 39.3 Emisión Masiva de Remisiones y Facturas de Venta Golden Print (`/admin/commercial/billing/print/[id]`) (SDD v1.9.144)
+
+#### A. Misión y Alcance de la Emisión Impresa de Corte
+La vista de impresión masiva de corte (`/admin/commercial/billing/print/[id]`) genera en un único lote paginado los folios oficiales listos para emisión física en papel membreteado institucional de *Investments Cortés S.A.S.* Procesa de manera determinista cada pedido asignado al corte `billing_cuts.id`, aplicando el estándar Golden Print suizo con saltos de página inviolables (`@page { size: letter portrait; margin: 0.8cm 1.0cm; }`), membrete ejecutivo, franja de resolución DIAN y discriminación estricta entre Factura Electrónica de Venta y Remisión Oficial de Entrega.
+
+#### B. Arquitectura de Datos & Lógica Poka-Yoke de Impresión
+1. **Diferenciación Canónica de Documentos (Factura vs Remisión):**
+   - Si `order.document_type === 'invoice'` (o el perfil del cliente exige factura), el encabezado emite `FACTURA ELECTRÓNICA DE VENTA` con badge `DIAN VÁLIDA` en modo oscuro, exponiendo obligatoriamente los precios unitarios, subtotal, IVA (0% según Art. 424 E.T. para productos agrícolas no procesados) y total liquidado.
+   - Si `order.document_type === 'remission'`, el encabezado emite `REMISIÓN OFICIAL DE ENTREGA` con badge `VALORIZADA` o `A CIEGAS`.
+2. **Poka-Yoke de Remisión a Ciegas vs Valorizada (Gobernanza Financiera B2B):**
+   - El sistema respeta la bandera `remission_with_prices` del pedido o del cliente (`profiles.remission_with_prices`): si es `false`, las columnas de valor unitario y total se ocultan automáticamente del papel para evitar que el personal de recepción en muelle del cliente conozca las tarifas comerciales acordadas con la gerencia.
+   - La barra de control superior no imprimible incluye un interruptor táctico `[Precios: Forzados en Todo]` que permite al cajero/despachador habilitar temporalmente los precios si la entrega requiere valorización en sitio.
+3. **Franja Oficial de Resolución DIAN:**
+   - Consulta reactiva de parámetros globales en `app_settings`: `billing_invoice_prefix`, `billing_resolution_number` y `billing_resolution_date`.
+   - Si el documento es Factura de Venta, se imprime la leyenda legal: *"Resolución DIAN No. {resolutionNumber} de fecha {resolutionDate}. Prefijo autorizado {invoicePrefix}. Modalidad Facturación Electrónica de Venta"*.
+4. **Instrucciones Físicas de Alistamiento & Trazabilidad Agrícola:**
+   - Cada renglón de producto en el cuerpo de la tabla invoca `resolvePhysicalInstruction(...)`, imprimiendo especificaciones de calibre, maduración o corte (ej. `↳ Corte: Juliana Fina`, `↳ Calibre: Grueso / 1ra`) en color esmeralda institucional, permitiendo al receptor en báscula auditar la conformidad técnica del producto entregado.
+5. **Control de Ventana de Impresión Limpia (Golden Print via New Window):**
+   - Botón primario que invoca `printViaNewWindow(...)`, transfiriendo el árbol DOM a una ventana completamente aislada sin artefactos web (sin scrollbars, sin barras de navegación, sin widgets).
+   - Respaldo Poka-Yoke directo a `window.print()` nativo si el navegador bloquea las ventanas emergentes (pop-ups).
+6. **Buscador Reactivo Omnibox de Lote:**
+   - Entrada de búsqueda en tiempo real en la barra de control para filtrar instantáneamente el lote por nombre de cliente, NIT o consecutivo amigable (`#PED-XXXX`), facilitando la reimpresión aislada de un folio específico sin regenerar todo el corte.
+
+---
+
+#### Escenario 183: Emisión Masiva Impresa de Corte de Facturación y Remisiones a Ciegas (SDD v1.9.144)
+- **Given** el Analista de Despacho o Facturación con un corte generado (ej. Corte AM #0012 con 25 pedidos) en `/admin/commercial/billing`.
+- **When** presiona el botón `[Imprimir Documentos]` en el historial de cortes y se abre `/admin/commercial/billing/print/[id]`:
+- **Then**:
+  1. El sistema recupera el registro de `billing_cuts`, los pedidos vinculados ordenados por `sequence_id` y las credenciales DIAN vigentes.
+  2. La barra de control superior despliega el resumen del corte (Corte #, franja horaria AM/PM, total de pedidos y monto acumulado en COP) junto al buscador reactivo de pedidos.
+  3. Los clientes que tienen configurada remisión a ciegas (`remission_with_prices = false`) presentan su remisión sin precios unitarios ni valor total, salvaguardando la confidencialidad de tarifas.
+  4. Los clientes con factura electrónica presentan su factura con la resolución DIAN oficial, subtotal de productos, IVA excluido (Art. 424 E.T.) y total a pagar.
+  5. Al pulsar `[Imprimir Lote]`, se abre la ventana limpia de impresión con cortes de página automáticos (`page-break`) entre cada cliente y firmas de recibo a satisfacción con Cédula y Sello.
+
 
 
 
