@@ -3890,6 +3890,7 @@ function CreateOrderContent() {
                 .from('orders')
                 .insert({
                     profile_id: finalProfileId,
+                    type: clientType === 'B2B' ? 'b2b' : 'b2c',
                     total: Math.round(total),
                     total_weight_kg: parseFloat(totalWeightKg.toFixed(3)),
                     subtotal: Math.round(subtotal),
@@ -3981,16 +3982,37 @@ function CreateOrderContent() {
     };
 
     const handleConfirmImport = async () => {
-        // Validación de Seguridad: Debe haber un cliente seleccionado
-        if (!selectedClient) {
-            showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar la importación.', 'error');
-            return;
+        // 1. Validación de Seguridad según el Canal (B2B vs B2C Hogar)
+        if (clientType === 'B2B') {
+            if (!selectedClient) {
+                showToast('⚠️ Debes seleccionar o buscar la empresa cliente en el sistema antes de confirmar la importación.', 'error');
+                return;
+            }
+        } else {
+            // Canal Hogar (B2C)
+            if (b2cMode === 'new') {
+                if (!guestInfo.name?.trim() || !guestInfo.phone?.trim()) {
+                    showToast('⚠️ Debes ingresar al menos Nombre y Teléfono para cliente Hogar nuevo antes de continuar.', 'error');
+                    return;
+                }
+            } else {
+                if (!selectedClientB2C) {
+                    showToast('⚠️ Debes buscar y seleccionar un cliente Hogar existente en el sistema antes de confirmar la importación.', 'error');
+                    return;
+                }
+            }
         }
 
-        // Validación de Seguridad: Si el documento detectado no coincide con el cliente asignado
-        if (!isAuditClientMatch && importValidation?.clientInDocument) {
+        // 2. Validación de Seguridad: Si el documento detectado no coincide con el cliente asignado
+        const targetClientDisplayName = clientType === 'B2B'
+            ? selectedClientDetails?.company_name
+            : (b2cMode === 'search' 
+                ? (getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name || 'Cliente Hogar') 
+                : (guestInfo.name || 'Cliente Hogar Nuevo'));
+
+        if (!isAuditClientMatch && importValidation?.clientInDocument && targetClientDisplayName) {
             const confirmed = window.confirm(
-                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes seleccionada la empresa:\n"${selectedClientDetails?.company_name}"\n\n¿Deseas continuar e importar este pedido a ${selectedClientDetails?.company_name}?`
+                `⚠️ ALERTA DE AUDITORÍA:\n\nEl documento indica que el pedido es para:\n"${importValidation.clientInDocument}"\n\nPero en el sistema tienes asignado:\n"${targetClientDisplayName}"\n\n¿Deseas continuar e importar este pedido para ${targetClientDisplayName}?`
             );
             if (!confirmed) {
                 return;
@@ -4041,9 +4063,14 @@ function CreateOrderContent() {
                     const fallbackOptionLabel = publicOptionValues.length > 0 ? publicOptionValues.join(', ') : (item.observations || undefined);
                     const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
                     const prodId = item.suggestedProduct?.id;
-                    const resolvedPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
-                        ? contractPrices[prodId]
-                        : (item.price || item.suggestedProduct?.base_price || 1000);
+
+                    // En Hogar (B2C) aplican precios minoristas (base_price o precio del documento); en B2B aplican precios contractuales
+                    const resolvedPrice = clientType === 'B2C'
+                        ? (item.price || item.suggestedProduct?.base_price || 1000)
+                        : ((prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                            ? contractPrices[prodId]
+                            : (item.price || item.suggestedProduct?.base_price || 1000));
+
                     return {
                         product: item.suggestedProduct,
                         qty: item.quantity,
@@ -4059,7 +4086,7 @@ function CreateOrderContent() {
                 });
 
             // Guardar/Actualizar la memoria de aprendizaje del cliente en paralelo
-            const activeClientId = selectedClient;
+            const activeClientId = clientType === 'B2B' ? selectedClient : (b2cMode === 'search' ? selectedClientB2C : null);
             if (activeClientId && stagedItems.length > 0) {
                 const learningPromises = stagedItems
                     .filter(item => item.suggestedProduct && item.originalName)
@@ -6437,8 +6464,65 @@ function CreateOrderContent() {
                                                 {isAuditClientMatch ? <CheckCircle2 size={26} strokeWidth={1.7} /> : <AlertTriangle size={26} strokeWidth={1.7} />}
                                             </div>
                                             <div>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isAuditClientMatch ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                    Validación de Cliente (Auditoría en Vivo)
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isAuditClientMatch ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                        Validación de Cliente (Auditoría en Vivo)
+                                                    </div>
+
+                                                    {/* CONMUTADOR DE CANAL RÁPIDO EN MESA DE TRABAJO */}
+                                                    <div style={{ display: 'inline-flex', padding: '2px', backgroundColor: '#E2E8F0', borderRadius: '8px', gap: '2px', marginLeft: '4px' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setClientType('B2B');
+                                                                showToast('🏢 Canal de importación: Institucional (B2B)', 'info');
+                                                            }}
+                                                            style={{
+                                                                padding: '3px 8px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                backgroundColor: clientType === 'B2B' ? THEME.colors.primary : 'transparent',
+                                                                color: clientType === 'B2B' ? '#ffffff' : '#64748B',
+                                                                fontWeight: '800',
+                                                                cursor: 'pointer',
+                                                                fontSize: '0.72rem',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            <Building2 size={12} />
+                                                            <span>Institucional (B2B)</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setClientType('B2C');
+                                                                if (!guestInfo.name && importValidation?.clientInDocument) {
+                                                                    setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
+                                                                }
+                                                                showToast('🏠 Canal de importación: Hogar (B2C)', 'info');
+                                                            }}
+                                                            style={{
+                                                                padding: '3px 8px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                backgroundColor: clientType === 'B2C' ? '#16A34A' : 'transparent',
+                                                                color: clientType === 'B2C' ? '#ffffff' : '#64748B',
+                                                                fontWeight: '800',
+                                                                cursor: 'pointer',
+                                                                fontSize: '0.72rem',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            <Home size={12} />
+                                                            <span>Hogar (B2C)</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                     <span>Documento detectado para:</span>
@@ -6467,6 +6551,28 @@ function CreateOrderContent() {
                                                                 }}
                                                             >
                                                                 ⚡ Buscar "{importValidation.clientInDocument}"
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setClientType('B2C');
+                                                                    if (!guestInfo.name && importValidation?.clientInDocument) {
+                                                                        setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
+                                                                    }
+                                                                    showToast('🏠 Cambiado a Pedido Hogar (B2C)', 'info');
+                                                                }}
+                                                                style={{
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '800',
+                                                                    backgroundColor: '#F0FDF4',
+                                                                    color: '#166534',
+                                                                    padding: '2px 8px',
+                                                                    borderRadius: '4px',
+                                                                    border: '1px solid #86EFAC',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                🏠 ¿Es Pedido Hogar? Cambiar a Hogar
                                                             </button>
                                                         </div>
                                                     ) : !isAuditClientMatch ? (
@@ -6506,43 +6612,210 @@ function CreateOrderContent() {
                                                         </div>
                                                     )
                                                 ) : (
-                                                    b2cMode === 'new' ? (
-                                                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
-                                                            ✅ Cliente Hogar nuevo: <b>{guestInfo.name || importValidation.clientInDocument || 'Sin registrar'}</b>
+                                                    /* CANAL HOGAR (B2C) IN-SITU CONTROLS */
+                                                    <div style={{ marginTop: '4px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                                            <div style={{ display: 'inline-flex', padding: '2px', backgroundColor: '#DBEAFE', borderRadius: '6px', gap: '2px' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setB2CMode('search')}
+                                                                    style={{
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '5px',
+                                                                        border: 'none',
+                                                                        backgroundColor: b2cMode === 'search' ? '#2563EB' : 'transparent',
+                                                                        color: b2cMode === 'search' ? '#FFFFFF' : '#1E40AF',
+                                                                        fontWeight: '700',
+                                                                        fontSize: '0.72rem',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    🔍 Buscar Cliente Existente
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setB2CMode('new');
+                                                                        if (!guestInfo.name && importValidation?.clientInDocument) {
+                                                                            setGuestInfo(prev => ({ ...prev, name: importValidation.clientInDocument }));
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '5px',
+                                                                        border: 'none',
+                                                                        backgroundColor: b2cMode === 'new' ? '#2563EB' : 'transparent',
+                                                                        color: b2cMode === 'new' ? '#FFFFFF' : '#1E40AF',
+                                                                        fontWeight: '700',
+                                                                        fontSize: '0.72rem',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    👤 Cliente Hogar Nuevo
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                    ) : !selectedClientB2C ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ fontSize: '0.85rem', color: '#DC2626', fontWeight: '700' }}>
-                                                                ⚠️ No has seleccionado el cliente Hogar en el sistema.
-                                                            </span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setClientSearchB2C(importValidation.clientInDocument)}
-                                                                style={{
-                                                                    fontSize: '0.75rem',
-                                                                    fontWeight: '800',
-                                                                    backgroundColor: '#DC2626',
-                                                                    color: '#FFFFFF',
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: '4px',
-                                                                    border: 'none',
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                            >
-                                                                ⚡ Buscar "{importValidation.clientInDocument}"
-                                                            </button>
-                                                        </div>
-                                                    ) : !isAuditClientMatch ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ fontSize: '0.84rem', color: '#C2410C', fontWeight: '600' }}>
-                                                                ⚠️ El documento parece ser para <b>{importValidation.clientInDocument}</b>, pero tienes seleccionado <b>{getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}</b>.
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '600', marginTop: '2px' }}>
-                                                            ✅ Cliente Hogar validado correctamente ({getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.phone}).
-                                                        </div>
-                                                    )
+
+                                                        {b2cMode === 'search' ? (
+                                                            selectedClientB2C ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                                                                    <span style={{ fontSize: '0.84rem', color: '#166534', fontWeight: '700' }}>
+                                                                        ✅ Cliente Hogar: <b>{getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}</b> (Tel: {getSelectedB2CDetails()?.phone || getSelectedB2CDetails()?.contact_phone || 'Sin tel'} - {getSelectedB2CDetails()?.address || 'Sin dir'})
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSelectedClientB2C('');
+                                                                            setClientSearchB2C('');
+                                                                        }}
+                                                                        style={{
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: '700',
+                                                                            backgroundColor: '#F1F5F9',
+                                                                            color: '#475569',
+                                                                            padding: '2px 8px',
+                                                                            borderRadius: '4px',
+                                                                            border: '1px solid #CBD5E1',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                    >
+                                                                        Cambiar
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ position: 'relative', marginTop: '4px', width: '100%', maxWidth: '520px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                                                                            <Search size={13} style={{ position: 'absolute', left: '8px', color: '#94A3B8' }} />
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Buscar cliente hogar por nombre o celular..."
+                                                                                value={clientSearchB2C}
+                                                                                onChange={(e) => setClientSearchB2C(e.target.value)}
+                                                                                style={{
+                                                                                    width: '100%',
+                                                                                    padding: '4px 8px 4px 26px',
+                                                                                    fontSize: '0.8rem',
+                                                                                    borderRadius: '6px',
+                                                                                    border: '1.5px solid #93C5FD',
+                                                                                    outline: 'none',
+                                                                                    backgroundColor: '#FFFFFF',
+                                                                                    color: '#0F172A'
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        {importValidation?.clientInDocument && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setClientSearchB2C(importValidation.clientInDocument)}
+                                                                                style={{
+                                                                                    fontSize: '0.72rem',
+                                                                                    fontWeight: '800',
+                                                                                    backgroundColor: '#DBEAFE',
+                                                                                    color: '#1E40AF',
+                                                                                    padding: '4px 8px',
+                                                                                    borderRadius: '6px',
+                                                                                    border: '1px solid #93C5FD',
+                                                                                    cursor: 'pointer',
+                                                                                    whiteSpace: 'nowrap'
+                                                                                }}
+                                                                            >
+                                                                                ⚡ Buscar "{importValidation.clientInDocument}"
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                    {filteredClientsB2C.length > 0 && (
+                                                                        <div style={{
+                                                                            position: 'absolute',
+                                                                            top: 'calc(100% + 4px)',
+                                                                            left: 0,
+                                                                            right: 0,
+                                                                            backgroundColor: '#FFFFFF',
+                                                                            border: '1px solid #93C5FD',
+                                                                            borderRadius: '8px',
+                                                                            boxShadow: '0 8px 16px rgba(0,0,0,0.12)',
+                                                                            maxHeight: '200px',
+                                                                            overflowY: 'auto',
+                                                                            zIndex: 60
+                                                                        }}>
+                                                                            {filteredClientsB2C.map((c) => (
+                                                                                <div
+                                                                                    key={c.id}
+                                                                                    onClick={() => selectClientB2C(c)}
+                                                                                    style={{
+                                                                                        padding: '6px 10px',
+                                                                                        cursor: 'pointer',
+                                                                                        borderBottom: '1px solid #F1F5F9',
+                                                                                        fontSize: '0.8rem'
+                                                                                    }}
+                                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                                                                >
+                                                                                    <div style={{ fontWeight: '800', color: '#1E40AF' }}>{c.contact_name || c.company_name}</div>
+                                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Tel: {c.phone || c.contact_phone || 'Sin tel'} • {c.address || 'Sin dir'}</div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )
+                                                        ) : (
+                                                            /* MODO CLIENTE HOGAR NUEVO */
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Nombre del cliente *"
+                                                                    value={guestInfo.name}
+                                                                    onChange={(e) => setGuestInfo(prev => ({ ...prev, name: e.target.value }))}
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        fontSize: '0.8rem',
+                                                                        borderRadius: '6px',
+                                                                        border: '1.5px solid #86EFAC',
+                                                                        outline: 'none',
+                                                                        minWidth: '180px',
+                                                                        backgroundColor: '#FFFFFF'
+                                                                    }}
+                                                                />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Celular / Teléfono *"
+                                                                    value={guestInfo.phone}
+                                                                    onChange={(e) => setGuestInfo(prev => ({ ...prev, phone: e.target.value }))}
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        fontSize: '0.8rem',
+                                                                        borderRadius: '6px',
+                                                                        border: '1.5px solid #86EFAC',
+                                                                        outline: 'none',
+                                                                        minWidth: '140px',
+                                                                        backgroundColor: '#FFFFFF'
+                                                                    }}
+                                                                />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Dirección de entrega"
+                                                                    value={guestInfo.address || editableAddress}
+                                                                    onChange={(e) => {
+                                                                        setGuestInfo(prev => ({ ...prev, address: e.target.value }));
+                                                                        setEditableAddress(e.target.value);
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        fontSize: '0.8rem',
+                                                                        borderRadius: '6px',
+                                                                        border: '1.5px solid #CBD5E1',
+                                                                        outline: 'none',
+                                                                        minWidth: '180px',
+                                                                        backgroundColor: '#FFFFFF'
+                                                                    }}
+                                                                />
+                                                                <span style={{ fontSize: '0.72rem', color: '#15803D', fontWeight: '700' }}>
+                                                                    ✨ Se registrará como cliente Hogar al confirmar
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
