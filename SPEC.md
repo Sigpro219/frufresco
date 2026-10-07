@@ -1,10 +1,32 @@
-# FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
-## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
+# FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
+## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
 
-> **Versión:** 1.9.167 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.7 Maestro Central de Catálogo, SKUs y Familias — ¡CIERRE 100% DE LAS 76 PANTALLAS DEL SISTEMA!)
+> **Versión:** 1.9.167 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.7 Maestro Central de Catálogo, SKUs y Familias — ¡CIERRE 100% DE LAS 76 PANTALLAS DEL SISTEMA!)  
 > **Fecha:** 07 de Octubre, 2026  
-> **Estado:** 🟢 Aprobado & Activo en Contrato  
-> **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
+> **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
+> **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
+> **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 42 Capítulos Arquitectónicos, 203 Escenarios BDD Ininterrumpidos (1..203)
+
+---
+
+## 📑 ÍNDICE CANÓNICO DE ARQUITECTURA & MATRIZ DE LOS 10 DOMINIOS
+
+### Mapa de Cobertura por Dominios Operativos (76 / 76 Pantallas Físicas Certificadas)
+
+| Dominio | Nombre del Dominio | Pantallas | Capítulos SDD | Rango de Escenarios BDD | Cobertura |
+| :---: | :--- | :---: | :---: | :---: | :---: |
+| **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192 (§40.1 - §40.8) | 🟢 100% |
+| **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196 (§41.1 - §41.4) | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158 | 🟢 100% |
+| **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
+| **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
+| **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181 (§38.1 - §38.6) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145 (§7.1 - §7.18) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
+| **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
+| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **42 Capítulos** | **203 Escenarios Canónicos (1..203)** | **🟢 100%** |
 
 ---
 
@@ -5610,6 +5632,16 @@ La experiencia de usuario en dispositivos móviles (teléfonos inteligentes y ta
   1. **Supresión del Estado por Defecto 'Maduro':** Al ser la maduración madura la condición estándar de todo producto de catálogo en FruFresco, el sistema no genera pastillas ni badges visuales con el texto `[Maduro]`. La celda de *Presentación & Atributos* se renderiza limpia con la etiqueta en cursiva `Estándar`.
   2. **Poka-Yoke Anti-Redundancia con el Nombre (`isRedundantAttribute`):** Si un producto contiene en su nombre la palabra del atributo (ej. `"Plátano maduro"` o `"Plátano verde"`), se suprime cualquier badge homónimo, erradicando pleonasmos visuales en la tabla.
   3. **Exclusividad para Maduraciones Diferenciales:** Únicamente se generan badges visuales cuando la maduración representa una instrucción operativa excepcional no dicha en el nombre (ej. `[Pintón]`, `[Verde]`, `[Biche]`, `[Listo para tajar]`).
+
+---
+
+#### Escenario 113: Captura Interactiva de Orden de Compra (OC), Thead Sticky y Resiliencia Visual en Modal de Facturación y Remisión
+- **Given** un operador en el módulo de facturación masiva (`/admin/commercial/billing`) o en la vista de detalle de pedido al abrir el modal de previsualización de remisión o factura.
+- **When** se examina la cabecera del documento y la tabla de ítems facturados:
+- **Then**:
+  1. **Entrada Interactiva de OC con Persistencia Reactiva:** Si la orden carece de OC, el sistema expone un input interactivo enfocado con acento ámbar (`#F59E0B`) permitiendo al facturador digitarla en caliente; al ingresar el valor, este se sincroniza inmediatamente en `client_po_number` sin recargar la pantalla.
+  2. **Thead Sticky Magnético y Protección de Scroll:** La cabecera `<thead>` permanece congelada en `position: sticky, top: 0, zIndex: 30` con fondo sólido `#F8FAFC` y borde inferior marcado, impidiendo la pérdida de referencia visual en documentos con más de 30 líneas de producto.
+  3. **Iconografía Vectorial Homogénea:** Se emplean exclusivamente glifos vectoriales oficiales de `lucide-react` con tamaño y grosor de trazo estandarizados, erradicando emojis y símbolos unicode volátiles.
 
 ---
 
