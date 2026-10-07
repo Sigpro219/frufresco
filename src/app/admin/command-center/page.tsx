@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft, MapPin, History, Download, Search, Calendar, User, Loader2, Eye } from 'lucide-react';
+import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft, MapPin, History, Download, Search, Calendar, User, Loader2, Eye, AlertTriangle } from 'lucide-react';
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import TechUserGovernance from '@/components/admin/TechUserGovernance';
@@ -86,6 +86,13 @@ export default function CommandCenter() {
     const [settings, setSettings] = useState<Setting[]>([]);
     const [loading, setLoading] = useState(true);
     const [, setStatusMessage] = useState({ text: '', type: '' });
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 4000);
+    };
+    const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
+    const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [showAttributesModal, setShowAttributesModal] = useState(false);
     const [activeTab, setActiveTab] = useState<'governance' | 'helpdesk' | 'approvals' | 'fleet' | 'geofencing' | 'audit'>('governance');
@@ -410,9 +417,10 @@ export default function CommandCenter() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Logs de Auditoría");
             XLSX.writeFile(wb, `Reporte_Auditoria_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast('Reporte de auditoría exportado exitosamente', 'success');
         } catch (err: any) {
             console.error('Error exporting data:', err);
-            alert('Error al exportar reporte: ' + err.message);
+            showToast('Error al exportar reporte: ' + err.message, 'error');
         } finally {
             setAuditExporting(false);
         }
@@ -518,8 +526,8 @@ export default function CommandCenter() {
             if (!deployData.success) {
                 const detail = deployData.results
                     ?.map((r: { branch: string; success: boolean; message: string }) => `${r.branch}: ${r.success ? '✅' : '❌ ' + r.message}`)
-                    .join('\n') || deployData.error;
-                alert('⚠️ Deploy de código falló:\n\n' + detail);
+                    .join(' | ') || deployData.error;
+                showToast(`Deploy de código falló: ${detail}`, 'error');
                 return;
             }
 
@@ -532,18 +540,18 @@ export default function CommandCenter() {
             const configData = await configRes.json();
 
             const deploySummary = deployData.results
-                ?.map((r: { branch: string; success: boolean; message: string }) => `• ${r.branch}: ${r.success ? '✅ ' + r.message : '❌ ' + r.message}`)
-                .join('\n') || '';
+                ?.map((r: { branch: string; success: boolean; message: string }) => `${r.branch}: ${r.success ? 'OK' : 'Error'}`)
+                .join(', ') || '';
 
             if (configData.success) {
-                alert(`🚀 Deploy completo:\n\n${deploySummary}\n\n⚙️ Config sincronizada. Vercel redespliega en ~60s.`);
+                showToast(`Deploy completado con éxito (${deploySummary}). Configuración sincronizada.`, 'success');
             } else {
-                alert(`Código desplegado pero config falló:\n\n${deploySummary}`);
+                showToast(`Código desplegado pero configuración falló: ${deploySummary}`, 'error');
             }
             fetchTenants();
         } catch (err) {
             console.error('Full Deploy Error:', err);
-            alert('Error inesperado en el deploy. Revisa la consola del servidor.');
+            showToast('Error inesperado en el deploy. Revisa la consola del servidor.', 'error');
         } finally {
             setSyncing(null);
         }
@@ -627,10 +635,16 @@ export default function CommandCenter() {
     };
 
     const removeUnitPermanently = async (unit: string) => {
-        if (!window.confirm(`¿Estás SEGURO de eliminar "${unit}" permanentemente?`)) return;
-        const standard = settings.find(s => s.key === 'standard_units')?.value || '';
-        const newList = standard.split(',').filter((u: string) => u !== unit).join(',');
-        await handleUpdateSetting('standard_units', newList);
+        if (unitToDelete === unit) {
+            const standard = settings.find(s => s.key === 'standard_units')?.value || '';
+            const newList = standard.split(',').filter((u: string) => u !== unit).join(',');
+            await handleUpdateSetting('standard_units', newList);
+            setUnitToDelete(null);
+            showToast(`Unidad "${unit}" eliminada permanentemente`, 'success');
+        } else {
+            setUnitToDelete(unit);
+            setTimeout(() => setUnitToDelete(prev => prev === unit ? null : prev), 4000);
+        }
     };
 
     const getSystemRoles = (): Role[] => {
@@ -655,15 +669,23 @@ export default function CommandCenter() {
     };
 
     const saveRole = async () => {
-        if (!newRole.label || !newRole.value) { alert('Nombre y Código requeridos'); return; }
+        if (!newRole.label || !newRole.value) { 
+            showToast('Nombre Comercial y Código de Sistema requeridos', 'error'); 
+            return; 
+        }
         const currentRoles = getSystemRoles();
         let newList;
-        if (isEditing) { newList = currentRoles.map(r => r.value === newRole.value ? newRole : r); }
-        else {
-            if (currentRoles.find(r => r.value === newRole.value)) { alert('Código ya existe'); return; }
+        if (isEditing) { 
+            newList = currentRoles.map(r => r.value === newRole.value ? newRole : r); 
+        } else {
+            if (currentRoles.find(r => r.value === newRole.value)) { 
+                showToast('El código de sistema ya existe. Debe ser único.', 'error'); 
+                return; 
+            }
             newList = [...currentRoles, newRole];
         }
         await handleUpdateSetting('system_roles', JSON.stringify(newList));
+        showToast(isEditing ? 'Rol técnico actualizado exitosamente' : 'Rol técnico registrado exitosamente', 'success');
         setNewRole({ label: '', value: '', color: '#64748B', permissions: [] });
         setIsEditing(false);
     };
@@ -677,15 +699,20 @@ export default function CommandCenter() {
     const removeRole = async (roleValue: string) => {
         // Only CORE system roles are truly protected
         if (['admin', 'sys_admin'].includes(roleValue)) {
-            alert('Este es un rol raíz del motor CORE y no puede ser eliminado.');
+            showToast('Este es un rol raíz del motor CORE y no puede ser eliminado.', 'error');
             return;
         }
         
-        if (!window.confirm(`¿Estás seguro de eliminar el rol "${roleValue}"?`)) return;
-        
-        const currentRoles = getSystemRoles();
-        const newList = currentRoles.filter(r => r.value !== roleValue);
-        await handleUpdateSetting('system_roles', JSON.stringify(newList));
+        if (roleToDelete === roleValue) {
+            const currentRoles = getSystemRoles();
+            const newList = currentRoles.filter(r => r.value !== roleValue);
+            await handleUpdateSetting('system_roles', JSON.stringify(newList));
+            setRoleToDelete(null);
+            showToast(`Rol "${roleValue}" eliminado exitosamente`, 'success');
+        } else {
+            setRoleToDelete(roleValue);
+            setTimeout(() => setRoleToDelete(prev => prev === roleValue ? null : prev), 4000);
+        }
     };
 
     const togglePermission = (moduleId: string) => {
@@ -833,23 +860,25 @@ export default function CommandCenter() {
                                             <span style={{ fontWeight: '700', color: THEME.colors.primary, fontSize: '0.85rem' }}>{u}</span>
                                             <button 
                                                 onClick={() => removeUnitPermanently(u)} 
+                                                title={unitToDelete === u ? 'Click de nuevo para confirmar eliminación definitiva' : 'Eliminar unidad'}
                                                 style={{ 
                                                     border: 'none', 
-                                                    background: 'none', 
+                                                    background: unitToDelete === u ? '#EF4444' : 'none', 
+                                                    color: unitToDelete === u ? 'white' : '#EF4444', 
+                                                    borderRadius: unitToDelete === u ? '6px' : '0',
                                                     cursor: 'pointer', 
-                                                    color: '#EF4444', 
-                                                    fontSize: '1rem',
-                                                    fontWeight: 'bold',
-                                                    padding: '0 2px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    transition: 'transform 0.1s'
+                                                    fontSize: unitToDelete === u ? '0.7rem' : '1rem',
+                                                    fontWeight: 'bold', 
+                                                    padding: unitToDelete === u ? '2px 6px' : '0 2px', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    transition: 'all 0.15s' 
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+                                                onMouseEnter={(e) => { if (unitToDelete !== u) e.currentTarget.style.transform = 'scale(1.2)'; }}
+                                                onMouseLeave={(e) => { if (unitToDelete !== u) e.currentTarget.style.transform = 'none'; }}
                                             > 
-                                                × 
+                                                {unitToDelete === u ? '¿Eliminar?' : '×'} 
                                             </button>
                                         </div>
                                     ))}
@@ -875,7 +904,22 @@ export default function CommandCenter() {
                                                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                                         <button onClick={() => handleEditRole(role)} style={{ border: 'none', background: '#F1F5F9', color: '#475569', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer' }}>EDITAR</button>
                                                         {!['admin', 'b2b_client', 'b2c_client'].includes(role.value) && (
-                                                            <button onClick={() => removeRole(role.value)} style={{ border: 'none', background: '#FEE2E2', color: '#EF4444', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', marginLeft: '4px' }}>ELIMINAR</button>
+                                                            <button 
+                                                                onClick={() => removeRole(role.value)} 
+                                                                style={{ 
+                                                                    border: 'none', 
+                                                                    background: roleToDelete === role.value ? '#DC2626' : '#FEE2E2', 
+                                                                    color: roleToDelete === role.value ? 'white' : '#EF4444', 
+                                                                    padding: '4px 8px', 
+                                                                    borderRadius: '6px', 
+                                                                    cursor: 'pointer', 
+                                                                    marginLeft: '4px',
+                                                                    fontWeight: '700',
+                                                                    transition: 'all 0.15s'
+                                                                }}
+                                                            >
+                                                                {roleToDelete === role.value ? '¿CONFIRMAR?' : 'ELIMINAR'}
+                                                            </button>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -1448,6 +1492,32 @@ export default function CommandCenter() {
             {showAttributesModal && (
                 <ManageAttributesModal onClose={() => setShowAttributesModal(false)} />
             )}
+
+            {toast && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '24px',
+                    right: '24px',
+                    zIndex: 9999,
+                    padding: '12px 20px',
+                    borderRadius: '12px',
+                    backgroundColor: toast.type === 'error' ? '#991B1B' : toast.type === 'success' ? '#065F46' : '#1E293B',
+                    color: 'white',
+                    fontWeight: '700',
+                    fontSize: '0.85rem',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    maxWidth: '450px'
+                }}>
+                    {toast.type === 'error' && <AlertTriangle size={18} style={{ color: '#FCA5A5', flexShrink: 0 }} />}
+                    {toast.type === 'success' && <ShieldCheck size={18} style={{ color: '#A7F3D0', flexShrink: 0 }} />}
+                    {toast.type === 'info' && <RefreshCw size={18} style={{ color: '#93C5FD', flexShrink: 0 }} />}
+                    <span>{toast.message}</span>
+                </div>
+            )}
+
             <style jsx>{`
                 .animate-spin { animation: spin 1s linear infinite; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

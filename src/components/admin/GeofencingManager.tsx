@@ -147,6 +147,8 @@ function isPointInPolygon(point: Point, vs: Point[]) {
 export default function GeofencingManager({ settings, onSave, saving, canEdit }: GeofencingManagerProps) {
     const [editMode, setEditMode] = useState<'b2c' | 'b2b' | null>(null);
     const [tempPoly, setTempPoly] = useState<Point[]>([]);
+    const [confirmClear, setConfirmClear] = useState(false);
+    const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
     const [visibleB2C, setVisibleB2C] = useState(true);
     const [visibleB2B, setVisibleB2B] = useState(true);
     const [visibleOutOfBounds, setVisibleOutOfBounds] = useState(true);
@@ -211,7 +213,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         });
 
         if (filteredPoints.length === 0) {
-            alert('No hay registros para exportar con los filtros actuales.');
+            setNoticeMsg('No hay registros para exportar con los filtros actuales.');
+            setTimeout(() => setNoticeMsg(null), 4000);
             return;
         }
 
@@ -266,8 +269,14 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
     }, []);
 
     const clearVertices = () => {
-        if (window.confirm('¿Estás seguro de que deseas eliminar todos los puntos dibujados?')) {
+        if (confirmClear) {
             setTempPoly([]);
+            setConfirmClear(false);
+            setNoticeMsg('Vértices eliminados del trazado.');
+            setTimeout(() => setNoticeMsg(null), 3000);
+        } else {
+            setConfirmClear(true);
+            setTimeout(() => setConfirmClear(false), 4000);
         }
     };
 
@@ -428,20 +437,21 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 style={{ 
                                     padding: '0.65rem', 
                                     borderRadius: THEME.radius.sm, 
-                                    backgroundColor: THEME.colors.primaryLight, 
-                                    color: THEME.colors.primary, 
-                                    border: 'none', 
+                                    backgroundColor: confirmClear ? '#FEE2E2' : THEME.colors.primaryLight, 
+                                    color: confirmClear ? '#DC2626' : THEME.colors.primary, 
+                                    border: confirmClear ? '1px solid #FCA5A5' : 'none', 
                                     fontWeight: '700', 
                                     cursor: 'pointer',
                                     fontSize: '0.85rem',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '6px'
+                                    gap: '6px',
+                                    transition: 'all 0.15s'
                                 }}
                             >
                                 <Trash2 size={14} strokeWidth={1.5} />
-                                <span>Limpiar Puntos</span>
+                                <span>{confirmClear ? '¿Confirmar Limpieza?' : 'Limpiar Puntos'}</span>
                             </button>
                             <button 
                                 onClick={() => setEditMode(null)} 

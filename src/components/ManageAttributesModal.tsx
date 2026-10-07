@@ -102,6 +102,17 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
     const [editingName, setEditingName] = useState('');
     const [newValueInputs, setNewValueInputs] = useState<Record<string, string>>({});
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    const [modalToast, setModalToast] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
+    const [attrToDelete, setAttrToDelete] = useState<string | null>(null);
+    const [subValueToDelete, setSubValueToDelete] = useState<{ attrId: string; val: string } | null>(null);
+
+    const showModalToast = (text: string, type: 'success' | 'error' | 'warning' = 'success') => {
+        setModalToast({ text, type });
+        if (typeof window !== 'undefined' && (window as any).showToast) {
+            (window as any).showToast(text, type);
+        }
+        setTimeout(() => setModalToast(null), 4000);
+    };
 
     const fetchAttributes = useCallback(async () => {
         try {
@@ -194,7 +205,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             if (grams === null) return; // Operator clicked cancel
             const gramsNum = parseInt(grams.trim());
             if (isNaN(gramsNum) || gramsNum <= 0) {
-                alert('Error: Debe ingresar un número de gramos válido (mayor a 0).');
+                showModalToast('Debe ingresar un número de gramos válido (mayor a 0).', 'error');
                 return;
             }
             finalVal = `${val}|${gramsNum}`;
@@ -215,21 +226,27 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
     };
 
     const handleRemoveValueLocal = (attrId: string, valueToRemove: string) => {
-        if (!confirm(`PRECAUCIÓN: ¿Seguro que quieres eliminar la subcategoría "${valueToRemove}"?\n\nSi hay productos usando este valor, podrían quedar inconsistentes.`)) return;
-        
-        setLocalAttributes(localAttributes.map(a => a.id === attrId 
-            ? { ...a, suggested_values: a.suggested_values.filter(v => v !== valueToRemove) } 
-            : a
-        ));
+        if (subValueToDelete?.attrId === attrId && subValueToDelete?.val === valueToRemove) {
+            setLocalAttributes(localAttributes.map(a => a.id === attrId 
+                ? { ...a, suggested_values: a.suggested_values.filter(v => v !== valueToRemove) } 
+                : a
+            ));
+            setSubValueToDelete(null);
+            showModalToast(`Opción "${valueToRemove}" removida`, 'warning');
+        } else {
+            setSubValueToDelete({ attrId, val: valueToRemove });
+            setTimeout(() => setSubValueToDelete(prev => (prev?.attrId === attrId && prev?.val === valueToRemove ? null : prev)), 4000);
+        }
     };
 
     const handleDeleteLocal = (id: string, name: string) => {
-        const firstCheck = confirm(`ACCIÓN CRÍTICA: Estás a punto de borrar la categoría completa "${name}".\n\nEsto afectará la capacidad de crear variantes basadas en este atributo para TODOS los productos.`);
-        if (firstCheck) {
-            const secondCheck = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO?\n\nRecomendamos NO borrar categorías que ya tengan productos vinculados.`);
-            if (secondCheck) {
-                setLocalAttributes(localAttributes.filter(a => a.id !== id));
-            }
+        if (attrToDelete === id) {
+            setLocalAttributes(localAttributes.filter(a => a.id !== id));
+            setAttrToDelete(null);
+            showModalToast(`Categoría "${name}" eliminada`, 'warning');
+        } else {
+            setAttrToDelete(id);
+            setTimeout(() => setAttrToDelete(prev => prev === id ? null : prev), 4000);
         }
     };
 
@@ -263,16 +280,12 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             }
 
             await fetchAttributes();
-            if ((window as any).showToast) {
-                (window as any).showToast('Gobernanza actualizada con éxito', 'success');
-            } else {
-                alert('Gobernanza actualizada con éxito');
-            }
-            onClose(); // Cerrar el modal al guardar exitosamente
+            showModalToast('Gobernanza de atributos actualizada con éxito', 'success');
+            setTimeout(() => onClose(), 600);
         } catch (err: any) {
             console.error('Save error:', err);
             const errMsg = err.message || err.details || 'Error desconocido de permisos de base de datos.';
-            alert(`Error al guardar los cambios: ${errMsg}`);
+            showModalToast(`Error al guardar los cambios: ${errMsg}`, 'error');
         } finally {
             setSaving(false);
         }
@@ -281,11 +294,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
     const handleExportExcel = () => {
         try {
             if (!localAttributes || localAttributes.length === 0) {
-                if (typeof window !== 'undefined' && (window as any).showToast) {
-                    (window as any).showToast('No hay variantes registradas para exportar', 'error');
-                } else {
-                    alert('No hay variantes registradas para exportar');
-                }
+                showModalToast('No hay variantes registradas para exportar', 'warning');
                 return;
             }
 
@@ -296,7 +305,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             });
 
             if (validAttributes.length === 0) {
-                alert('No hay atributos válidos disponibles para exportar (se excluyó Gramaje frutas).');
+                showModalToast('No hay atributos válidos disponibles para exportar (se excluyó Gramaje frutas).', 'warning');
                 return;
             }
 
@@ -349,12 +358,10 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             const dateStr = new Date().toISOString().split('T')[0];
             XLSX.writeFile(workbook, `Matriz_Variantes_FruFresco_${dateStr}.xlsx`);
 
-            if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('Matriz de atributos exportada en Excel con éxito', 'success');
-            }
+            showModalToast('Matriz de atributos exportada en Excel con éxito', 'success');
         } catch (err: any) {
             console.error('Error al exportar variantes a Excel:', err);
-            alert('Error al generar el archivo Excel: ' + (err?.message || err));
+            showModalToast('Error al generar el archivo Excel: ' + (err?.message || err), 'error');
         }
     };
 
@@ -373,6 +380,22 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 border: '1px solid #E5E7EB'
             }}>
                 <div style={{ position: 'absolute', top: '20px', right: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {modalToast && (
+                        <div style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            backgroundColor: modalToast.type === 'error' ? '#991B1B' : modalToast.type === 'warning' ? '#B45309' : '#065F46',
+                            color: 'white',
+                            fontWeight: '700',
+                            fontSize: '0.78rem',
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                            <span>{modalToast.text}</span>
+                        </div>
+                    )}
                     <button 
                         type="button"
                         onClick={handleExportExcel}
@@ -546,9 +569,24 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                             </button>
                                             <button 
                                                 onClick={() => handleDeleteLocal(attr.id, attr.name)}
-                                                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer' }}
+                                                style={{ 
+                                                    background: attrToDelete === attr.id ? '#DC2626' : 'none', 
+                                                    border: 'none', 
+                                                    color: attrToDelete === attr.id ? 'white' : '#9CA3AF', 
+                                                    borderRadius: attrToDelete === attr.id ? '6px' : '0',
+                                                    padding: attrToDelete === attr.id ? '2px 8px' : '4px',
+                                                    fontWeight: '700',
+                                                    fontSize: attrToDelete === attr.id ? '0.7rem' : 'inherit',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                                title={attrToDelete === attr.id ? 'Click de nuevo para confirmar eliminación definitiva' : 'Eliminar categoría'}
                                             >
-                                                <Trash2 size={18} />
+                                                <Trash2 size={attrToDelete === attr.id ? 14 : 18} />
+                                                {attrToDelete === attr.id && <span>¿Confirmar?</span>}
                                             </button>
                                         </div>
                                     </div>
@@ -560,13 +598,15 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
                                              const renderChip = (val: string) => {
                                                 const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
+                                                const isConfirming = subValueToDelete?.attrId === attr.id && subValueToDelete?.val === val;
                                                 return (
                                                     <span key={val} style={{ 
                                                         display: 'inline-flex', alignItems: 'center', gap: '5px', 
-                                                        backgroundColor: isWebUnit ? '#ECFDF5' : 'white', 
-                                                        border: isWebUnit ? '1.5px solid #10B981' : '1.5px solid #E5E7EB', 
+                                                        backgroundColor: isConfirming ? '#FEE2E2' : isWebUnit ? '#ECFDF5' : 'white', 
+                                                        border: isConfirming ? '1.5px solid #EF4444' : isWebUnit ? '1.5px solid #10B981' : '1.5px solid #E5E7EB', 
                                                         padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
-                                                        fontWeight: '700', color: isWebUnit ? '#047857' : '#374151' 
+                                                        fontWeight: '700', color: isConfirming ? '#DC2626' : isWebUnit ? '#047857' : '#374151',
+                                                        transition: 'all 0.15s'
                                                     }} title={isWebUnit ? 'Exclusivo para Tienda Web: Hereda unidad web y factor en Kg.' : undefined}>
                                                         {isWebUnit ? (
                                                             <>
@@ -578,9 +618,21 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                         )}
                                                         <button 
                                                             onClick={() => handleRemoveValueLocal(attr.id, val)}
-                                                            style={{ background: 'none', border: 'none', color: isWebUnit ? '#059669' : '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}
+                                                            style={{ 
+                                                                background: isConfirming ? '#DC2626' : 'none', 
+                                                                border: 'none', 
+                                                                color: isConfirming ? 'white' : (isWebUnit ? '#059669' : '#9CA3AF'), 
+                                                                borderRadius: isConfirming ? '4px' : '0',
+                                                                padding: isConfirming ? '1px 4px' : 0,
+                                                                fontSize: isConfirming ? '0.65rem' : 'inherit',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer', 
+                                                                display: 'flex',
+                                                                alignItems: 'center'
+                                                            }}
+                                                            title={isConfirming ? 'Click para confirmar eliminación' : 'Remover opción'}
                                                         >
-                                                            <X size={12} />
+                                                            {isConfirming ? '¿Borrar?' : <X size={12} />}
                                                         </button>
                                                     </span>
                                                 );

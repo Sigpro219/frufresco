@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.161 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.1 Dashboard Ejecutivo Central & KPIs Globales)
+> **Versión:** 1.9.162 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.2 Command Center, Gobernanza Técnica y Control de Flota SaaS)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -9035,6 +9035,41 @@ El Dashboard Ejecutivo Central (`/admin/dashboard`) constituye la cabina de mand
   2. La pantalla renderiza las tarjetas de KPIs principales (Ventas Totales, Margen Bruto %, Ticket Promedio y Tonelaje Total Despachado).
   3. El gráfico ejecutivo de distribución visualiza la proporción exacta entre pedidos de volumen institucional B2B y pedidos domésticos B2C.
   4. La interfaz opera con fluidez instantánea, sin emitir alertas nativas del navegador y con respuesta HTTP 200 OK.
+
+---
+
+### 42.2 Command Center, Gobernanza Técnica y Control de Flota SaaS (`/admin/command-center` - `src/app/admin/command-center/page.tsx`) (SDD v1.9.162)
+
+#### A. Misión y Alcance de la Consola Maestra de Ingeniería
+El Command Center (`/admin/command-center`) es la consola técnica suprema reservada exclusivamente para el rol `sys_admin` (Chief Engineer / Administrador de Plataforma). Centraliza la parametrización nuclear del motor SCOS de FruFresco, orquestando seis subsistemas críticos: Gobernanza de Unidades y Roles, Aprobación de Usuarios Técnicos y Permisos Granulares, Mesa de Ayuda con Telemetría SLA, Control Maestro de Geocercas con Detección de Demandas Rechazadas, Trazabilidad de Flota Multitenant y Consola Forense de Auditoría Irrestricta.
+
+#### B. Arquitectura de Gobernanza, Seguridad y Poka-Yoke
+1. **Control de Acceso Estricto (RBAC Guard):**
+   - El componente evalúa de inmediato el perfil de autenticación (`useAuth`). Si el rol del usuario no es estrictamente `sys_admin`, ejecuta una redirección automática e instantánea a `/admin`, protegiendo la consola contra accesos no autorizados.
+2. **Los 6 Ejes Operativos del Command Center:**
+   - **Gobernanza (`tab=governance`):** Gestión de unidades de medida estándar del catálogo (`standard_units`), maestro de roles de sistema (`system_roles`) con asignación modular (`AVAILABLE_MODULES`), integración con el modal de atributos maestros (`ManageAttributesModal`) y enrutamiento de webhooks para ingesta por IA (`inbox_email_orders`, `inbox_email_commercial`).
+   - **Aprobaciones (`tab=approvals`):** Módulo `TechUserGovernance` para expedición de credenciales de acceso digital a colaboradores, generación de código QR para fichaje móvil, árbol de permisos personalizados (`PermissionTreeEditor`) y vinculación segura con Supabase Auth.
+   - **Mesa de Ayuda (`tab=helpdesk`):** Monitor de soporte técnico institucional (`support_tickets_metrics`), cálculo dinámico de tiempo promedio de respuesta (SLA en minutos), filtrado de tickets por estado (`open`, `in_progress`, `resolved`) y gestión de respuestas operativas.
+   - **Geocercas (`tab=geofencing`):** Componente `GeofencingManager` integrado con Google Maps API (`@vis.gl/react-google-maps`). Permite delimitar polígonos de cobertura para B2B HORECA y B2C Hogares, renderiza marcadores de demanda insatisfecha fuera de zona (`outOfBoundsPoints`), ejecuta el algoritmo de ray-casting `isPointInPolygon` y exporta auditorías de rechazo geográfico a XLSX.
+   - **Flota SaaS (`tab=fleet`):** Panel de control multitenant (`fleet_tenants`), telemetría de sincronización y despliegue automatizado de código (`/api/maintenance/update-all`) y configuración (`/api/fleet/sync`) a instancias satélite.
+   - **Auditoría Forense (`tab=audit`):** Historial transaccional irrestricto desde la génesis de la base de datos para `sys_admin`, superbuscador multicriterio con filtrado por texto, rango temporal, módulo (`PRODUCTS`, `SECURITY`, `ORDERS`, `SETTINGS`, `HR_ADMIN`) y tipo de acción (`INSERT`, `UPDATE`, `DELETE`), modal de inspección JSON y exportación masiva a Excel.
+3. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert & Zero-Confirm Dogma):**
+   - Supresión integral de `alert()`, `confirm()` y `prompt()` en la página principal y en sus tres componentes subordinados (`GeofencingManager.tsx`, `ManageAttributesModal.tsx`, `TechUserGovernance.tsx`).
+   - Implementación de botones Poka-Yoke de confirmación en dos pasos (con auto-reinicio a 4s) para eliminación de unidades técnicas, remoción de roles del sistema, limpieza de vértices de mapa y suspensión/reactivación de usuarios técnicos.
+   - Modal tipográfico de seguridad para revocación definitiva de cuentas de usuario técnico, exigiendo la digitación explícita de la palabra clave `ELIMINAR` para habilitar el botón de acción transaccional.
+   - Notificaciones y advertencias emitidas mediante toasts no intrusivos y banners contextuales reactivos.
+
+---
+
+#### Escenario 198: Gobernanza de Roles, Auditoría Forense y Revocación Poka-Yoke de Acceso (SDD v1.9.162)
+- **Given** el Administrador de Plataforma (`sys_admin`) autenticado en `/admin/command-center`.
+- **When** navega entre las pestañas de "Gobernanza", "Aprobaciones" y "Auditoría":
+- **Then**:
+  1. En la pestaña de Gobernanza, el administrador añade una nueva unidad de empaque "Canastilla Plástica 20kg", la cual se sincroniza reactivamente en `app_settings` sin recarga de página.
+  2. Al pulsar el botón de eliminar sobre un rol no protegido, el botón muta a `¿CONFIRMAR?` en fondo carmesí durante 4 segundos; al hacer clic nuevamente se concreta la eliminación y se notifica vía Toast verde.
+  3. En la pestaña de Aprobaciones, al revocar una cuenta digital, el sistema despliega el modal interactivo de confirmación exigiendo la palabra `ELIMINAR` antes de ejecutar la llamada a `/api/provider/users`, suprimiendo cualquier diálogo nativo `window.confirm`.
+  4. En la pestaña de Auditoría, el superbuscador filtra en milisegundos las operaciones del módulo `SECURITY` y genera el reporte XLSX descargable con HTTP 200 OK.
+
 
 
 

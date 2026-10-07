@@ -99,6 +99,11 @@ export default function TechUserGovernance() {
     const [tempPermissions, setTempPermissions] = useState<string[]>([]);
     const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
+    // Poka-Yoke and Modal states
+    const [statusToToggle, setStatusToToggle] = useState<string | null>(null);
+    const [userToDelete, setUserToDelete] = useState<ActiveTechUser | null>(null);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
     // Copy Alert State
     const [copied, setCopied] = useState(false);
 
@@ -107,7 +112,7 @@ export default function TechUserGovernance() {
     }, []);
 
     useEffect(() => {
-        const isModalOpen = !!(approvingCol || showCredentialsModal || viewingUser || resettingUser || editingPermissionsUser);
+        const isModalOpen = !!(approvingCol || showCredentialsModal || viewingUser || resettingUser || editingPermissionsUser || userToDelete);
         if (isModalOpen) {
             document.body.style.overflow = 'hidden';
         } else {
@@ -162,7 +167,7 @@ export default function TechUserGovernance() {
     const handleConfirmApprove = async () => {
         if (!approvingCol) return;
         if (!inputEmail) {
-            alert('El correo electrónico es obligatorio');
+            setError('El correo electrónico es obligatorio');
             return;
         }
 
@@ -199,7 +204,7 @@ export default function TechUserGovernance() {
             setTimeout(() => setSuccessMessage(null), 5000);
             await fetchGovernanceData();
         } catch (err: any) {
-            alert(`Error al aprobar: ${err.message}`);
+            setError(`Error al aprobar: ${err.message}`);
         } finally {
             setActionLoading(null);
         }
@@ -241,15 +246,19 @@ export default function TechUserGovernance() {
             setTimeout(() => setSuccessMessage(null), 5000);
             await fetchGovernanceData();
         } catch (err: any) {
-            alert(`Error al restablecer contraseña: ${err.message}`);
+            setError(`Error al restablecer contraseña: ${err.message}`);
         } finally {
             setActionLoading(null);
         }
     };
 
     const handleToggleStatus = async (user: ActiveTechUser) => {
-        const actionText = user.is_active ? 'suspender' : 'reactivar';
-        if (!confirm(`¿Estás seguro de que deseas ${actionText} el acceso digital para ${user.contact_name}?`)) return;
+        if (statusToToggle !== user.profile_id) {
+            setStatusToToggle(user.profile_id);
+            setTimeout(() => setStatusToToggle(prev => prev === user.profile_id ? null : prev), 4000);
+            return;
+        }
+        setStatusToToggle(null);
 
         try {
             setActionLoading(user.profile_id);
@@ -272,21 +281,16 @@ export default function TechUserGovernance() {
             setSuccessMessage(`Estado actualizado con éxito para ${user.contact_name}`);
             setTimeout(() => setSuccessMessage(null), 5000);
         } catch (err: any) {
-            alert(`Error al cambiar estado: ${err.message}`);
+            setError(`Error al cambiar estado: ${err.message}`);
         } finally {
             setActionLoading(null);
         }
     };
 
-    const handleDeleteUser = async (user: ActiveTechUser) => {
-        if (!confirm(`⚠️ ALERTA CRÍTICA: ¿Estás seguro de que deseas REVOCAR Y ELIMINAR permanentemente la cuenta de ${user.contact_name}? Esta acción eliminará su login de Supabase Auth.`)) return;
-
-        const confirmWord = 'ELIMINAR';
-        const input = prompt(`Para confirmar la eliminación definitiva de la cuenta de ${user.contact_name}, escribe la palabra "${confirmWord}" en mayúsculas:`);
-        if (input !== confirmWord) {
-            alert('Confirmación incorrecta. Acción cancelada.');
-            return;
-        }
+    const executeDeleteUser = async () => {
+        if (!userToDelete || deleteConfirmText !== 'ELIMINAR') return;
+        const user = userToDelete;
+        setUserToDelete(null);
 
         try {
             setActionLoading(user.profile_id);
@@ -308,7 +312,7 @@ export default function TechUserGovernance() {
             setSuccessMessage(`Cuenta revocada con éxito para ${user.contact_name}`);
             setTimeout(() => setSuccessMessage(null), 5000);
         } catch (err: any) {
-            alert(`Error al revocar cuenta: ${err.message}`);
+            setError(`Error al revocar cuenta: ${err.message}`);
         } finally {
             setActionLoading(null);
         }
@@ -341,7 +345,7 @@ export default function TechUserGovernance() {
             setEditingPermissionsUser(null);
             await fetchGovernanceData();
         } catch (err: any) {
-            alert(`Error al guardar permisos: ${err.message}`);
+            setError(`Error al guardar permisos: ${err.message}`);
         } finally {
             setIsSavingPermissions(false);
         }
@@ -714,19 +718,22 @@ export default function TechUserGovernance() {
                                                             style={{ 
                                                                 padding: '0.5rem 0.8rem', 
                                                                 borderRadius: '8px', 
-                                                                border: `1px solid ${user.is_active ? '#FCA5A5' : THEME.colors.primary}`, 
-                                                                backgroundColor: 'transparent', 
-                                                                color: user.is_active ? '#EF4444' : THEME.colors.primary,
-                                                                fontWeight: '700',
+                                                                border: `1px solid ${statusToToggle === user.profile_id ? '#DC2626' : (user.is_active ? '#FCA5A5' : THEME.colors.primary)}`, 
+                                                                backgroundColor: statusToToggle === user.profile_id ? '#FEE2E2' : 'transparent', 
+                                                                color: statusToToggle === user.profile_id ? '#DC2626' : (user.is_active ? '#EF4444' : THEME.colors.primary),
+                                                                fontWeight: '700', 
                                                                 cursor: 'pointer',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
                                                                 gap: '0.3rem',
-                                                                fontSize: '0.75rem'
+                                                                fontSize: '0.75rem',
+                                                                transition: 'all 0.15s'
                                                             }}
                                                         >
                                                             {actionLoading === user.profile_id ? (
                                                                 <RefreshCw size={14} className="animate-spin" />
+                                                            ) : statusToToggle === user.profile_id ? (
+                                                                <span>¿Confirmar {user.is_active ? 'suspensión' : 'activación'}?</span>
                                                             ) : user.is_active ? (
                                                                 <>
                                                                     <Lock size={13} /> Suspender
@@ -739,7 +746,7 @@ export default function TechUserGovernance() {
                                                         </button>
 
                                                         <button 
-                                                            onClick={() => handleDeleteUser(user)}
+                                                            onClick={() => { setUserToDelete(user); setDeleteConfirmText(''); }}
                                                             disabled={actionLoading === user.profile_id}
                                                             style={{ 
                                                                 padding: '0.5rem', 
@@ -991,7 +998,10 @@ export default function TechUserGovernance() {
                                     <button 
                                         onClick={() => {
                                             const printWin = window.open('', '_blank', 'width=600,height=600');
-                                            if (!printWin) return alert('Habilita ventanas emergentes.');
+                                            if (!printWin) {
+                                                setError('Habilita ventanas emergentes en tu navegador para imprimir.');
+                                                return;
+                                            }
                                             const qrSvgHtml = document.querySelector('#print-label-area-governance svg')?.outerHTML || '';
                                             
                                             printWin.document.write(`
@@ -1203,6 +1213,98 @@ export default function TechUserGovernance() {
                                 ) : (
                                     'Guardar Permisos'
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {userToDelete && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '2rem',
+                        maxWidth: '460px',
+                        width: '100%',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem', color: '#DC2626' }}>
+                            <AlertTriangle size={24} />
+                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
+                                Revocar y Eliminar Cuenta
+                            </h3>
+                        </div>
+                        <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: '1.5', margin: '0 0 1rem 0' }}>
+                            Estás a punto de revocar y eliminar permanentemente la cuenta de <strong style={{ color: '#111827' }}>{userToDelete.contact_name}</strong>. Esta acción eliminará su login de Supabase Auth y acceso digital.
+                        </p>
+                        <p style={{ fontSize: '0.8rem', fontWeight: '700', color: '#DC2626', margin: '0 0 0.5rem 0' }}>
+                            Para confirmar, escribe la palabra <span style={{ textDecoration: 'underline' }}>ELIMINAR</span> en mayúsculas:
+                        </p>
+                        <input 
+                            type="text"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            placeholder="ELIMINAR"
+                            style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                borderRadius: '10px',
+                                border: '1.5px solid #CBD5E1',
+                                fontSize: '0.9rem',
+                                fontWeight: '800',
+                                letterSpacing: '0.05em',
+                                outline: 'none',
+                                marginBottom: '1.5rem',
+                                boxSizing: 'border-box'
+                            }}
+                            autoFocus
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button
+                                onClick={() => { setUserToDelete(null); setDeleteConfirmText(''); }}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #CBD5E1',
+                                    background: 'white',
+                                    color: '#475569',
+                                    fontWeight: '700',
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={executeDeleteUser}
+                                disabled={deleteConfirmText !== 'ELIMINAR' || actionLoading === userToDelete.profile_id}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    backgroundColor: deleteConfirmText === 'ELIMINAR' ? '#DC2626' : '#FCA5A5',
+                                    color: 'white',
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: deleteConfirmText === 'ELIMINAR' ? 'pointer' : 'not-allowed',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                {actionLoading === userToDelete.profile_id ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                <span>Eliminar Definitivamente</span>
                             </button>
                         </div>
                     </div>
