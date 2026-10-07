@@ -1212,346 +1212,54 @@ function CreateOrderContent() {
         }
     }, [latitude, longitude, b2cGeofence]);
 
-    // Resolve Contract / Pricing Model reactively
+    // Resolve Contract / Pricing Model reactively via ultra-fast consolidated endpoint
     useEffect(() => {
+        let isCancelled = false;
+
         async function resolveContract() {
-            let modelId: string | null = null;
-            let currentProfile: any = null;
-
             const isB2B = clientType === 'B2B' || Boolean(selectedClient);
+            const activeId = isB2B ? selectedClient : selectedClientB2C;
+            const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
 
-            if (selectedClient) {
-                currentProfile = clients.find(c => c.id === selectedClient);
-                if (!currentProfile) {
-                    const { data } = await supabase
-                        .from('profiles')
-                        .select('id, company_name, pricing_model_id, parent_id, role, payment_days, logistics_data')
-                        .eq('id', selectedClient)
-                        .maybeSingle();
-                    if (data) currentProfile = data;
-                }
-            } else if (selectedClientB2C) {
-                currentProfile = b2cClients.find(c => c.id === selectedClientB2C);
-            }
-
-            if (currentProfile) {
-                let resolvedModelId = currentProfile.pricing_model_id;
-                if (!resolvedModelId && currentProfile.parent_id) {
-                    const parent = clients.find(c => c.id === currentProfile.parent_id);
-                    if (parent) {
-                        resolvedModelId = parent.pricing_model_id;
-                    }
-                }
-                modelId = resolvedModelId || null;
-            }
-
-            let resolvedModel: any = null;
-            let expired = false;
-            let b2cFallback = false;
-            let activeAgreement: any = null;
-
-            // SPEC.md Secc. 7.2: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz)
-            if (isB2B && (selectedClient || currentProfile)) {
-                const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
-                const branchId = currentProfile?.id || selectedClient;
-                const parentId = currentProfile?.parent_id || null;
-                const parentProfile = parentId ? clients.find(c => c.id === parentId) : null;
-
-                // Evaluación de permiso de compras fuera de convenio (con herencia de matriz)
-                let allowOff = true;
-                if (currentProfile) {
-                    if (currentProfile.override_parent_off_agreement && currentProfile.allow_off_agreement_purchases !== undefined && currentProfile.allow_off_agreement_purchases !== null) {
-                        allowOff = currentProfile.allow_off_agreement_purchases !== false;
-                    } else if (parentProfile && parentProfile.allow_off_agreement_purchases !== undefined && parentProfile.allow_off_agreement_purchases !== null) {
-                        allowOff = parentProfile.allow_off_agreement_purchases !== false;
-                    } else if (currentProfile.allow_off_agreement_purchases !== undefined && currentProfile.allow_off_agreement_purchases !== null) {
-                        allowOff = currentProfile.allow_off_agreement_purchases !== false;
-                    }
-                }
-                setAllowOffAgreementPurchases(allowOff);
-
-                // Nivel 1: Prevalencia Máxima - Acuerdo asignado directamente a la Sucursal
-                let candidateAgreement: any = null;
-                if (branchId) {
-                    const { data: branchAgreement } = await supabase
-                        .from('quotes')
-                        .select('id, quote_number, start_date, valid_until')
-                        .eq('client_id', branchId)
-                        .eq('status', 'agreement')
-                        .maybeSingle();
-                    if (branchAgreement) {
-                        candidateAgreement = branchAgreement;
-                    }
-                }
-
-                // Nivel 2: Fallback - Acuerdo asignado a la empresa matriz
-                if (!candidateAgreement && parentId) {
-                    const { data: matrixAgreement } = await supabase
-                        .from('quotes')
-                        .select('id, quote_number, start_date, valid_until, model_snapshot_name')
-                        .eq('client_id', parentId)
-                        .eq('status', 'agreement')
-                        .maybeSingle();
-                    if (matrixAgreement) {
-                        candidateAgreement = matrixAgreement;
-                    }
-                }
-
-                // Nivel 3: Fallback de Cascada - Acuerdo Maestro Compartido (Lista Maestra Viva Multi-Cliente)
-                if (!candidateAgreement) {
-                    const masterId = currentProfile?.logistics_data?.active_master_agreement_id 
-                                  || parentProfile?.logistics_data?.active_master_agreement_id;
-                    
-                    if (masterId) {
-                        const { data: sharedMaster } = await supabase
-                            .from('quotes')
-                            .select('id, quote_number, start_date, valid_until, model_snapshot_name')
-                            .eq('id', masterId)
-                            .eq('status', 'agreement')
-                            .maybeSingle();
-                        if (sharedMaster) {
-                            candidateAgreement = sharedMaster;
-                        }
-                    }
-
-                    // Fallback complementario: buscar pertenencia en app_settings
-                    if (!candidateAgreement && (branchId || parentId)) {
-                        const { data: sharedSettings } = await supabase
-                            .from('app_settings')
-                            .select('key, value')
-                            .ilike('key', 'agreement_clients:%');
-                        
-                        if (sharedSettings) {
-                            for (const item of sharedSettings) {
-                                try {
-                                    const linkedIds: string[] = JSON.parse(item.value || '[]');
-                                    if (linkedIds.includes(branchId) || (parentId && linkedIds.includes(parentId))) {
-                                        const quoteId = item.key.replace('agreement_clients:', '');
-                                        const { data: sharedMaster } = await supabase
-                                            .from('quotes')
-                                            .select('id, quote_number, start_date, valid_until, model_snapshot_name')
-                                            .eq('id', quoteId)
-                                            .eq('status', 'agreement')
-                                            .maybeSingle();
-                                        if (sharedMaster) {
-                                            candidateAgreement = sharedMaster;
-                                            break;
-                                        }
-                                    }
-                                } catch (e) {
-                                    // ignore parse error
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if (candidateAgreement) {
-                    const start = candidateAgreement.start_date?.split('T')[0];
-                    const end = candidateAgreement.valid_until?.split('T')[0];
-                    if (start && start > checkDate) expired = true;
-                    if (end && end < checkDate) expired = true;
-
-                    if (!expired) {
-                        activeAgreement = candidateAgreement;
-                    } else {
-                        activeAgreement = null; // Expired! Precios congelados no aplican
-                    }
-                }
-            }
-
-            if (activeAgreement) {
-                resolvedModel = {
-                    id: activeAgreement.id,
-                    name: activeAgreement.model_snapshot_name || `Acuerdo ${activeAgreement.quote_number}`,
-                    is_agreement: true
-                };
-            } else {
-                // 1. Fetch current pricing model if defined
-                if (modelId) {
-                    const { data: pm } = await supabase
-                        .from('pricing_models')
-                        .select('*')
-                        .eq('id', modelId)
-                        .single();
-                    
-                    if (pm) {
-                        resolvedModel = pm;
-                        // Validate expiration against deliveryDate
-                        if (deliveryDate) {
-                            const delivery = deliveryDate.split('T')[0];
-                            const start = pm.start_date?.split('T')[0];
-                            const end = pm.end_date?.split('T')[0];
-                            if (start && start > delivery) {
-                                expired = true;
-                            }
-                            if (end && end < delivery) {
-                                expired = true;
-                            }
-                        }
-                    }
-                }
-
-                // 2. Fallback to General Institucional (B2B) or Clientes Hogar (B2C) if no model or if expired
-                if (!resolvedModel || expired) {
-                    b2cFallback = true;
-                    const defaultTargetId = isB2B ? GENERAL_INSTITUCIONAL_ID : CLIENTES_HOGAR_ID;
-
-                    const { data: defaultModel } = await supabase
-                        .from('pricing_models')
-                        .select('*')
-                        .eq('id', defaultTargetId)
-                        .maybeSingle();
-
-                    if (defaultModel) {
-                        resolvedModel = defaultModel;
-                    } else {
-                        const targetNames = isB2B 
-                            ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
-                            : ['Clientes Hogar', 'Clientes B2C'];
-
-                        const { data: fallbackByName } = await supabase
-                            .from('pricing_models')
-                            .select('*')
-                            .in('name', targetNames)
-                            .maybeSingle();
-                        if (fallbackByName) {
-                            resolvedModel = fallbackByName;
-                        }
-                    }
-                }
-            }
-
-            setActivePricingModel(resolvedModel);
-            setIsB2CDefault(b2cFallback);
-            setIsContractExpired(expired);
-
-            // 3. Load prices for the resolved contract/model
-            if (resolvedModel) {
-                const map: Record<string, number> = {};
-                const customIds = new Set<string>();
-
-                // Fetch model prices
-                const { data: activePrices } = await supabase
-                    .from('pricing_model_prices')
-                    .select('product_id, price')
-                    .eq('model_id', resolvedModel.id);
-                
-                activePrices?.forEach((p: any) => {
-                    map[p.product_id] = p.price;
-                    if (resolvedModel.name !== 'Clientes Hogar' && resolvedModel.name !== 'Clientes B2C' && resolvedModel.name !== 'General Institucional' && !resolvedModel.is_base_model && !resolvedModel.is_agreement) {
-                        customIds.add(p.product_id);
-                    }
-                });
-
-                const agrProdIds = new Set<string>();
-                if (activeAgreement) {
-                    let allQuoteItems: any[] = [];
-                    let qPage = 0;
-                    const qLimit = 1000;
-                    while (true) {
-                        const { data: qChunk, error: qErr } = await supabase
-                            .from('quote_items')
-                            .select('product_id, unit_price')
-                            .eq('quote_id', activeAgreement.id)
-                            .range(qPage * qLimit, (qPage + 1) * qLimit - 1);
-                        if (qErr || !qChunk || qChunk.length === 0) break;
-                        allQuoteItems = allQuoteItems.concat(qChunk);
-                        if (qChunk.length < qLimit) break;
-                        qPage++;
-                    }
-                    
-                    allQuoteItems.forEach((p: any) => {
-                        map[p.product_id] = p.unit_price;
-                        customIds.add(p.product_id);
-                        agrProdIds.add(p.product_id);
-                    });
-                }
-                setAgreementProductIds(agrProdIds);
-
-                // Fallback institucional: precargar precios de General Institucional para productos sin tarifa específica
-                if (isB2B && resolvedModel && resolvedModel.id !== GENERAL_INSTITUCIONAL_ID) {
-                    const { data: genPrices } = await supabase
-                        .from('pricing_model_prices')
-                        .select('product_id, price')
-                        .eq('model_id', GENERAL_INSTITUCIONAL_ID);
-                    
-                    genPrices?.forEach((p: any) => {
-                        if (map[p.product_id] === undefined && p.price > 0) {
-                            map[p.product_id] = p.price;
-                        }
-                    });
-                }
-
-                // Fetch active campaigns targeting this B2B client
-                const campMap: Record<string, { value: number; type: string; name: string }> = {};
-                const effectiveClientId = selectedClient;
-                if (clientType === 'B2B' && effectiveClientId) {
-                    const { data: targetCampaigns } = await supabase
-                        .from('campaign_targets')
-                        .select('campaign_id')
-                        .eq('profile_id', effectiveClientId);
-
-                    if (targetCampaigns && targetCampaigns.length > 0) {
-                        const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
-                        const nowIso = new Date().toISOString();
-                        const { data: activeCamps } = await supabase
-                            .from('commercial_campaigns')
-                            .select('*')
-                            .in('id', campIds)
-                            .eq('status', 'active')
-                            .lte('start_date', nowIso)
-                            .gte('end_date', nowIso);
-
-                        if (activeCamps && activeCamps.length > 0) {
-                            const activeCampIds = activeCamps.map((c: any) => c.id);
-                            const { data: items } = await supabase
-                                .from('campaign_items')
-                                .select('campaign_id, product_id, adjustment_value')
-                                .in('campaign_id', activeCampIds);
-
-                            items?.forEach((item: any) => {
-                                const camp = activeCamps.find((c: any) => c.id === item.campaign_id);
-                                if (camp) {
-                                    campMap[item.product_id] = {
-                                        value: item.adjustment_value,
-                                        type: camp.type,
-                                        name: camp.name
-                                    };
-                                }
-                            });
-                        }
-                    }
-                }
-
-                // SPEC.md Secc. 7.2: Inmunidad Contractual - Campañas aplican a productos de catálogo/modelo, NO a SKUs congelados en Acuerdo Comercial
-                Object.keys(campMap).forEach((productId) => {
-                    if (agrProdIds.has(productId)) {
-                        return; // Blindado por contrato vigente
-                    }
-                    const basePrice = map[productId] || 0;
-                    if (basePrice > 0) {
-                        const campaign = campMap[productId];
-                        if (campaign.type === 'fixed_price') {
-                            map[productId] = campaign.value;
-                        } else if (campaign.type === 'margin_adjustment') {
-                            map[productId] = basePrice * (1 + campaign.value / 100);
-                        }
-                    }
-                });
-
-                setCampaignPrices(campMap);
-                setContractPrices(map);
-                setCustomPriceIds(customIds);
-            } else {
+            if (!activeId) {
+                setActivePricingModel(null);
+                setIsB2CDefault(false);
+                setIsContractExpired(false);
+                setAllowOffAgreementPurchases(true);
                 setContractPrices({});
+                setAgreementProductIds(new Set());
                 setCustomPriceIds(new Set());
                 setCampaignPrices({});
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${activeId}&delivery_date=${checkDate}&client_type=${clientType}`);
+                if (!res.ok) throw new Error('Error en resolución de precios');
+                const data = await res.json();
+                if (isCancelled) return;
+
+                if (data.success) {
+                    setActivePricingModel(data.resolvedModel);
+                    setIsB2CDefault(Boolean(data.isB2CDefault));
+                    setIsContractExpired(Boolean(data.isExpired));
+                    setAllowOffAgreementPurchases(Boolean(data.allowOffAgreementPurchases));
+                    setContractPrices(data.contractPrices || {});
+                    setAgreementProductIds(new Set(data.agreementProductIds || []));
+                    setCustomPriceIds(new Set(data.customPriceIds || []));
+                    setCampaignPrices(data.campaignPrices || {});
+                }
+            } catch (err) {
+                console.error("Error al resolver acuerdo comercial:", err);
             }
         }
 
         resolveContract();
-    }, [clientType, selectedClient, selectedClientB2C, deliveryDate, clients, b2cClients]);
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [clientType, selectedClient, selectedClientB2C, deliveryDate]);
 
     // Reactively update prices in cart when contractPrices change
     useEffect(() => {

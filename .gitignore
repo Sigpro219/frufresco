@@ -51,4 +51,5 @@ models_list*.json
 gcp-service-account.json
 .agents/
 endpoint_results.json
+backups/
 
