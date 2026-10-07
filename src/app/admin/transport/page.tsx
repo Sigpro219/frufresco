@@ -403,11 +403,27 @@ export default function TransportControlTower() {
         isMounted.current = true;
         const controller = new AbortController();
         fetchTransportData(controller.signal);
+
+        // Polling telemático satelital en vivo cada 30 segundos cuando está en el mapa
+        const interval = setInterval(() => {
+            if (isMounted.current && activeTab === 'map') {
+                fetch('/api/transport/sync-gps')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && isMounted.current) {
+                            fetchTransportData();
+                        }
+                    })
+                    .catch(() => {});
+            }
+        }, 30000);
+
         return () => { 
             isMounted.current = false;
             controller.abort();
+            clearInterval(interval);
         };
-    }, [fetchTransportData]);
+    }, [fetchTransportData, activeTab]);
 
     if (loading) {
         return (
@@ -456,11 +472,10 @@ export default function TransportControlTower() {
         );
     }
 
-    // Quick Fleet Calculation for Sidebar Intelligence Widget
     const totalVehicles = fleetData.length;
-    const vehiclesOnRoute = fleetData.filter(v => v.status === 'on_route').length;
-    const vehiclesAvailable = fleetData.filter(v => v.status === 'available').length;
+    const vehiclesOnRoute = fleetData.filter(v => (v.speed || 0) > 0 || v.status === 'on_route' || activeRoutes.some((r: any) => (r.vehicle_plate === v.plate || r.driver_id === v.driver_id) && (r.status === 'in_transit' || r.status === 'loading'))).length;
     const vehiclesMaintenance = fleetData.filter(v => v.status === 'maintenance').length;
+    const vehiclesAvailable = Math.max(0, totalVehicles - vehiclesOnRoute - vehiclesMaintenance);
     const avgKilosPerRoute = activeRoutes.length > 0 ? Math.round(stats.totalKilos / activeRoutes.length) : 0;
 
     return (
@@ -788,8 +803,9 @@ export default function TransportControlTower() {
                                                     ? { lat: v.last_latitude, lng: v.last_longitude }
                                                     : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
 
-                                                const isAvailable = v.status === 'available' || (!activeRoute && v.status !== 'maintenance');
-                                                const isInRoute = activeRoute && (activeRoute.status === 'in_transit' || activeRoute.status === 'loading');
+                                                const isMoving = (v.speed || 0) > 0;
+                                                const isInRoute = isMoving || (activeRoute && (activeRoute.status === 'in_transit' || activeRoute.status === 'loading'));
+                                                const isAvailable = !isMoving && (v.status === 'available' || (!activeRoute && v.status !== 'maintenance'));
                                                 const isHovered = hoveredVehicleId === v.id;
                                                 const isSelected = selectedVehicleId === v.id;
                                                 const isPopoverOpen = isHovered || isSelected;
@@ -823,19 +839,27 @@ export default function TransportControlTower() {
                                                                 width: isPopoverOpen ? '38px' : '32px', 
                                                                 height: isPopoverOpen ? '38px' : '32px', 
                                                                 borderRadius: '10px', 
-                                                                background: isInRoute 
-                                                                    ? 'linear-gradient(135deg, #0284C7 0%, #0D7A57 100%)' 
-                                                                    : isAvailable 
-                                                                        ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)' 
-                                                                        : 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', 
+                                                                background: isMoving
+                                                                    ? 'linear-gradient(135deg, #2563EB 0%, #0284C7 100%)' // Azul Eléctrico en Movimiento
+                                                                    : isInRoute 
+                                                                        ? 'linear-gradient(135deg, #0284C7 0%, #0D7A57 100%)' 
+                                                                        : isAvailable 
+                                                                            ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)' 
+                                                                            : 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', 
                                                                 display: 'flex', 
                                                                 alignItems: 'center', 
                                                                 justifyContent: 'center', 
                                                                 color: 'white', 
                                                                 fontWeight: '900', 
                                                                 fontSize: isPopoverOpen ? '0.85rem' : '0.75rem',
-                                                                boxShadow: isPopoverOpen ? '0 8px 18px rgba(13, 122, 87, 0.4)' : '0 4px 10px rgba(0,0,0,0.18)',
-                                                                border: isPopoverOpen ? '3px solid white' : '2px solid white',
+                                                                boxShadow: isMoving
+                                                                    ? '0 0 16px rgba(37, 99, 235, 0.8), 0 4px 10px rgba(0,0,0,0.22)'
+                                                                    : isPopoverOpen 
+                                                                        ? '0 8px 18px rgba(13, 122, 87, 0.4)' 
+                                                                        : '0 4px 10px rgba(0,0,0,0.18)',
+                                                                border: isMoving
+                                                                    ? '2px solid #BFDBFE'
+                                                                    : isPopoverOpen ? '3px solid white' : '2px solid white',
                                                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                                                 transform: isPopoverOpen ? 'scale(1.1)' : 'scale(1)'
                                                             }}>
@@ -848,18 +872,33 @@ export default function TransportControlTower() {
 
                                                             {/* VEHICLE PLATE BADGE */}
                                                             <div style={{ 
-                                                                backgroundColor: isPopoverOpen ? THEME.colors.primary : 'white', 
-                                                                color: isPopoverOpen ? 'white' : THEME.colors.textMain, 
+                                                                backgroundColor: isMoving ? '#2563EB' : isPopoverOpen ? THEME.colors.primary : 'white', 
+                                                                color: isMoving || isPopoverOpen ? 'white' : THEME.colors.textMain, 
                                                                 padding: '1px 6px', 
                                                                 borderRadius: '4px', 
                                                                 fontSize: '0.55rem', 
                                                                 fontWeight: '900', 
                                                                 marginTop: '2px',
-                                                                border: `1px solid ${isPopoverOpen ? THEME.colors.primary : THEME.colors.border}`,
-                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
-                                                                transition: 'all 0.15s ease'
+                                                                border: `1px solid ${isMoving ? '#1D4ED8' : isPopoverOpen ? THEME.colors.primary : THEME.colors.border}`,
+                                                                boxShadow: isMoving ? '0 2px 6px rgba(37, 99, 235, 0.4)' : '0 2px 4px rgba(0,0,0,0.08)',
+                                                                transition: 'all 0.15s ease',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                whiteSpace: 'nowrap'
                                                             }}>
-                                                                {v.plate}
+                                                                <span>{v.plate}</span>
+                                                                {isMoving && (
+                                                                    <span style={{ 
+                                                                        fontSize: '0.5rem', 
+                                                                        backgroundColor: 'rgba(255,255,255,0.28)', 
+                                                                        padding: '0 3px', 
+                                                                        borderRadius: '3px',
+                                                                        fontWeight: '900'
+                                                                    }}>
+                                                                        {Math.round(v.speed)} km/h
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             {/* ── RICH OPERATIONAL TOOLTIP / POPOVER ── */}
@@ -899,14 +938,19 @@ export default function TransportControlTower() {
                                                                             fontWeight: '900',
                                                                             padding: '2px 7px',
                                                                             borderRadius: '6px',
-                                                                            backgroundColor: isInRoute ? '#EFF6FF' : isAvailable ? '#ECFDF5' : '#FEF3C7',
-                                                                            color: isInRoute ? '#1D4ED8' : isAvailable ? '#065F46' : '#B45309',
-                                                                            border: isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                                                                            backgroundColor: isMoving ? '#EFF6FF' : isInRoute ? '#EFF6FF' : isAvailable ? '#ECFDF5' : '#FEF3C7',
+                                                                            color: isMoving ? '#2563EB' : isInRoute ? '#1D4ED8' : isAvailable ? '#065F46' : '#B45309',
+                                                                            border: isMoving ? '1px solid #BFDBFE' : isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             gap: '4px'
                                                                         }}>
-                                                                            {isInRoute ? (
+                                                                            {isMoving ? (
+                                                                                <>
+                                                                                    <Navigation size={10} strokeWidth={2.5} style={{ color: '#2563EB' }} />
+                                                                                    <span>EN MOVIMIENTO ({Math.round(v.speed)} km/h)</span>
+                                                                                </>
+                                                                            ) : isInRoute ? (
                                                                                 <>
                                                                                     <Navigation size={10} strokeWidth={2.5} style={{ color: '#1D4ED8' }} />
                                                                                     <span>EN RUTA</span>
@@ -1104,8 +1148,8 @@ export default function TransportControlTower() {
                                                 <span>Flota en Patio ({vehiclesAvailable})</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#2563EB' }}></div>
-                                                <span>En Ruta ({vehiclesOnRoute})</span>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#2563EB', boxShadow: '0 0 6px rgba(37,99,235,0.7)' }}></div>
+                                                <span>En Movimiento ({vehiclesOnRoute})</span>
                                             </div>
                                         </div>
                                     </>

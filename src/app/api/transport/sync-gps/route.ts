@@ -7,19 +7,20 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const customApiKey = searchParams.get('key') || undefined;
 
-        // 1. Obtener telemetría viva de apps-360.online
+        // 1. Obtener telemetría viva de apps-360.online (GPSWOX / Apps-360)
         const liveObjects = await fetchApps360Fleet(customApiKey);
 
         if (liveObjects.length === 0) {
             return NextResponse.json({
                 success: true,
-                message: 'No live telemetry records found or APPS360_API_KEY not configured.',
+                message: 'No se obtuvieron vehículos o falta configurar APPS360_EMAIL y APPS360_PASSWORD (o APPS360_USER_API_HASH) en .env.local.',
                 synced_count: 0,
                 timestamp: new Date().toISOString()
             });
         }
 
-        const syncedVehicles = [];
+        const syncedVehicles: string[] = [];
+        let schemaErrorDetected = false;
 
         // 2. Sincronizar cada vehículo en fleet_vehicles
         for (const item of liveObjects) {
@@ -49,7 +50,10 @@ export async function GET(req: NextRequest) {
                 .select('id, plate');
 
             if (error) {
-                console.warn(`[Sync GPS API] Error updating vehicle ${item.plate}:`, error.message);
+                console.warn(`[Sync GPS API] Error actualizando vehículo ${item.plate}:`, error.message);
+                if (error.message.includes('column') || error.message.includes('schema')) {
+                    schemaErrorDetected = true;
+                }
             } else if (data && data.length > 0) {
                 syncedVehicles.push(item.plate);
 
@@ -67,7 +71,7 @@ export async function GET(req: NextRequest) {
                         created_at: item.last_gps_sync
                     });
                 } catch {
-                    // Safe non-blocking
+                    // Safe non-blocking en caso de que la tabla histórica esté en proceso de migración
                 }
             }
         }
@@ -77,11 +81,14 @@ export async function GET(req: NextRequest) {
             total_fetched: liveObjects.length,
             synced_count: syncedVehicles.length,
             synced_plates: syncedVehicles,
+            schema_notice: schemaErrorDetected 
+                ? 'Atención: Supabase reportó columnas faltantes en fleet_vehicles. Aplique la migración 20261007_fleet_gps_telemetry.sql.' 
+                : undefined,
             timestamp: new Date().toISOString()
         });
     } catch (err: any) {
         console.error('[Sync GPS API] Synchronization error:', err);
-        return NextResponse.json({ error: err.message || 'Error syncing GPS data' }, { status: 500 });
+        return NextResponse.json({ error: err.message || 'Error sincronizando telemetría GPS' }, { status: 500 });
     }
 }
 
