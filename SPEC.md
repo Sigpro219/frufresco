@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.155 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.6 Portal Público de Radicación de PQRS y Devoluciones)
+> **Versión:** 1.9.156 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.7 Visor Público Golden Print & CIERRE TOTAL DOMINIO 1)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8803,6 +8803,41 @@ El portal público de novedades (`src/app/pqrs/page.tsx`) constituye el canal of
   4. Ingresa sus datos de contacto y pulsa `[Radicar PQRS & Solicitar Garantía]`.
   5. Si omite un campo mandatorio (descripción o contacto), el sistema muestra un banner in-UI de advertencia de alta visibilidad sin interrumpir la sesión con popups invasivos.
   6. Al validar exitosamente, se genera el radicado oficial en la tabla `pqrs`, se notifica a la Torre de Control de Calidad y se despliega la pantalla de confirmación con el número de seguimiento.
+
+---
+
+### 40.8 Visor Público de Cotización Comercial Golden Print & Aceptación Digital B2B (`/quotes/[id]/print` - `src/app/quotes/[id]/print/page.tsx`) (SDD v1.9.156)
+
+#### A. Misión y Alcance del Módulo de Formalización Comercial
+El visor público de cotizaciones y acuerdos institucionales (`src/app/quotes/[id]/print/page.tsx`) es el artefacto documental oficial de FruFresco para presentar propuestas de suministro agrícola y acuerdos de precios fijos a clientes corporativos B2B (restaurantes, hoteles, casinos de alimentación, cadenas de retail e instituciones). Su diseño bajo el estándar *Golden Print Industrial* permite la consulta digital interactiva y la impresión formal en PDF sin desbordamientos de página ni distorsión tipográfica.
+
+#### B. Arquitectura de Impresión & Reglas de Negocio Bilaterales
+1. **Dicotomía de Documentos (Cotización vs Acuerdo Comercial):**
+   - **Cotización Comercial (`status !== 'agreement'`):** Prefijo `COT DDMM XXXX`. Vigencia estándar de 8 días calendario (sujeta a variaciones de cosecha en plaza). Diseñada para prospectos (`leads`) o clientes en prospección.
+   - **Acuerdo Comercial Institucional (`status === 'agreement'`):** Prefijo `ACI DDMM XXXX`. Documento vinculante con fecha de vigencia explícita (`valid_until`), tarifas fijadas y condiciones de crédito pactadas (`payment_terms_days`).
+2. **Estructura Taxonómica y Agrupación Industrial:**
+   - Clasificación canónica de productos ofertados en diez (10) familias prioritarias: Verduras, Frutas, Hortalizas, Tubérculos y Plátanos, Despensa y Abarrotes, Lácteos y Derivados, Congelados y Pulpas, Procesados y Pelados, Hierbas Aromáticas y Otros Productos.
+   - Ordenamiento alfabético insensible a tildes dentro de cada familia con contador de SKUs por grupo y numeración secuencial global.
+3. **Poka-Yoke de Cantidad Mínima y Factores Logísticos:**
+   - Deducción algorítmica de la cantidad mínima de despacho (`formatMinQty`) a partir de la unidad de medida y el factor de conversión web (`web_conversion_factor`), previniendo pedidos fraccionados no autorizados.
+4. **Liquidación Tributaria e Inocuidad Operativa:**
+   - Desglose del impuesto a las ventas por ítem (`iva_rate`) y agregación en el pie de página de Subtotal, Impuestos (IVA) y Total General en COP con números tabulares.
+   - Sello de Garantía Operativa FruFresco B2B: Cero Intermediarios (abastecimiento directo de campo y Corabastos), Puntualidad Suiza (despachos matutinos en ventana acordada antes de apertura de cocina) y Cero Desperdicio (pesaje exacto con control de merma).
+   - Cláusulas legales de fuerza mayor y bloque bilateral de firmas (Investments Cortés S.A.S. NIT 901.393.217 vs Aceptación del Cliente con firma, sello y NIT).
+5. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - Ausencia total de `alert()`, `confirm()` o diálogos nativos.
+   - Botón interactivo superior `.no-print` con llamada a `printViaNewWindow` y fallback seguro a `window.print()`.
+
+---
+
+#### Escenario 192: Generación e Impresión de Acuerdo Comercial Institucional Golden Print (SDD v1.9.156)
+- **Given** un cliente corporativo que negoció un acuerdo de precios institucionales para 35 productos agrícolas y recibe el enlace público `/quotes/quote-uuid-8891/print`.
+- **When** abre el enlace en su navegador o dispositivo:
+- **Then**:
+  1. El sistema recupera la cotización y perfiles vinculados, renderizando el membrete formal `Letterhead` con marca de agua y badge `[ACUERDO VIGENTE]`.
+  2. Los 35 insumos se ordenan y clasifican en sus respectivas categorías (Frutas, Verduras, etc.) con sus unidades mínimas y precios unitarios.
+  3. El pie de página totaliza el acuerdo y despliega la cláusula legal de estabilidad de precios y las condiciones de crédito (ej. 30 días).
+  4. Al pulsar `[🖨️ Imprimir / Descargar PDF]`, el sistema abre el diálogo de impresión con estilos CSS `@page { size: letter portrait; margin: 1.0cm 1.2cm; }`, excluyendo la barra de herramientas y preservando los saltos de página limpios para archivo digital o firma física.
 
 
 

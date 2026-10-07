@@ -2402,6 +2402,14 @@ function OrderLoadingContent() {
             exceptionStamp = ` [DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${editDeliveryRestrictionStatus.targetDayName})]`;
         }
 
+        // Poka-Yoke Corporativo Colsubsidio: Exigir al menos OC o SOLPED
+        const cleanOc = editPurchaseOrder.trim();
+        const cleanSolped = editSolped.trim();
+        if (isSelectedOrderColsubsidio && !cleanOc && !cleanSolped) {
+            alert('❌ Regla Corporativa Colsubsidio: Es OBLIGATORIO ingresar al menos el número de Orden de Compra (OC) o Solicitud de Pedido (SOLPED).');
+            return;
+        }
+
         setUpdateLoading(true);
         console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
         
@@ -2410,7 +2418,22 @@ function OrderLoadingContent() {
             const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
             const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
             const auditStamp = ` [Audit ${nowTimeStr}: Edición por ${userTag}]`;
-            const updatedAdminNotes = `${selectedOrder.admin_notes || ''}${exceptionStamp}${auditStamp}`.trim();
+            let updatedAdminNotes = `${selectedOrder.admin_notes || ''}${exceptionStamp}${auditStamp}`.trim();
+
+            if (cleanOc) {
+                if (updatedAdminNotes.includes('OC:')) {
+                    updatedAdminNotes = updatedAdminNotes.replace(/\bOC:\s*([A-Za-z0-9\-_]+)/i, `OC: ${cleanOc}`);
+                } else {
+                    updatedAdminNotes = `OC: ${cleanOc} | ${updatedAdminNotes}`.trim();
+                }
+            }
+            if (cleanSolped) {
+                if (updatedAdminNotes.includes('SOLPED:')) {
+                    updatedAdminNotes = updatedAdminNotes.replace(/\bSOLPED:\s*([A-Za-z0-9\-_]+)/i, `SOLPED: ${cleanSolped}`);
+                } else {
+                    updatedAdminNotes = `SOLPED: ${cleanSolped} | ${updatedAdminNotes}`.trim();
+                }
+            }
 
             // 2. Consultar ítems originales para detectar eliminaciones reales
             const { data: originalItems, error: fetchErr } = await supabase
@@ -2463,9 +2486,14 @@ function OrderLoadingContent() {
             };
 
             // 5. Llamada segura al backend (inmune a restricciones RLS de clientes o líderes)
+            const effectivePoNumber = cleanOc || (cleanSolped ? `SOLPED: ${cleanSolped}` : null);
             const updatedLogisticsData = {
                 ...(selectedOrder.logistics_data || {}),
-                cancelled_items: cancelledOrderItems
+                cancelled_items: cancelledOrderItems,
+                purchase_order_number: cleanOc || null,
+                solped_number: cleanSolped || null,
+                is_colsubsidio: isSelectedOrderColsubsidio || selectedOrder.logistics_data?.is_colsubsidio,
+                colsubsidio_status: cleanOc ? 'oc_formalizada' : (cleanSolped ? 'solped_provisional' : 'none')
             };
 
             const response = await fetch('/api/orders/update', {
@@ -2480,6 +2508,7 @@ function OrderLoadingContent() {
                         latitude: editLatitude,
                         longitude: editLongitude,
                         geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
+                        purchase_order_number: effectivePoNumber,
                         total: currentTotal,
                         total_weight_kg: currentWeight,
                         subtotal: currentSubtotal,
@@ -2512,6 +2541,7 @@ function OrderLoadingContent() {
                 latitude: editLatitude,
                 longitude: editLongitude,
                 geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
+                purchase_order_number: effectivePoNumber,
                 total: currentTotal,
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
@@ -2528,6 +2558,7 @@ function OrderLoadingContent() {
                 latitude: editLatitude,
                 longitude: editLongitude,
                 geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
+                purchase_order_number: effectivePoNumber,
                 total: currentTotal,
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
@@ -4834,7 +4865,54 @@ function OrderLoadingContent() {
 
                                         {(() => {
                                             const proc = getOrderProcurementReferences(selectedOrder);
-                                            if (proc.status === 'none') return null;
+                                            if (proc.status === 'none' && !proc.isColsubsidio) return null;
+
+                                            if (proc.status === 'none' && proc.isColsubsidio) {
+                                                return (
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{
+                                                            padding: '4px 12px',
+                                                            borderRadius: '20px',
+                                                            fontSize: '0.74rem',
+                                                            fontWeight: '900',
+                                                            backgroundColor: '#FEF2F2',
+                                                            color: '#991B1B',
+                                                            border: '1.5px solid #F87171',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <AlertTriangle size={12} strokeWidth={2.8} />
+                                                            <span>COLSUBSIDIO: Sin OC / SOLPED</span>
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShowFormalizeOcModal(true);
+                                                                setFormalizeOcInput('');
+                                                            }}
+                                                            style={{
+                                                                backgroundColor: '#DC2626',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                padding: '4px 10px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                boxShadow: '0 1px 3px rgba(220, 38, 38, 0.25)'
+                                                            }}
+                                                            title="Ingresar la Orden de Compra (OC) o SOLPED obligatoria de Colsubsidio"
+                                                        >
+                                                            <Edit3 size={11} /> Asignar OC
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
+
                                             return (
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                                     <span style={{
@@ -4992,7 +5070,12 @@ function OrderLoadingContent() {
                                         </div>
                                     ) : !editMode ? (
                                         <button 
-                                            onClick={() => setEditMode(true)}
+                                            onClick={() => {
+                                                const proc = getOrderProcurementReferences(selectedOrder);
+                                                setEditPurchaseOrder(proc.purchaseOrderNumber || '');
+                                                setEditSolped(proc.solpedNumber || '');
+                                                setEditMode(true);
+                                            }}
                                             style={{
                                                 backgroundColor: '#0891B2',
                                                 color: 'white',
@@ -5305,6 +5388,99 @@ function OrderLoadingContent() {
                                                         )}
                                                     </div>
                                                 )}
+                                            </div>
+                                        </div>
+
+                                        {/* Campos de Referencia Comercial / Compras (OC & SOLPED) */}
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr',
+                                            gap: '1.5rem',
+                                            marginBottom: '1.5rem',
+                                            padding: isSelectedOrderColsubsidio ? '1rem 1.25rem' : '0.85rem 1rem',
+                                            backgroundColor: isSelectedOrderColsubsidio ? '#EFF6FF' : '#FFFFFF',
+                                            borderRadius: '10px',
+                                            border: isSelectedOrderColsubsidio ? '1.5px solid #93C5FD' : '1px solid #D1FAE5',
+                                            boxShadow: isSelectedOrderColsubsidio ? '0 1px 3px rgba(37, 99, 235, 0.08)' : 'none'
+                                        }}>
+                                            {/* Orden de Compra (OC) */}
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '800', color: isSelectedOrderColsubsidio ? '#1E40AF' : '#065F46' }}>
+                                                        <FileText size={13} /> # ORDEN DE COMPRA (OC)
+                                                    </label>
+                                                    {isSelectedOrderColsubsidio && (
+                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 8px', borderRadius: '10px', fontWeight: '800', border: '1px solid #BFDBFE' }}>
+                                                            🏢 Regla Colsubsidio
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <input 
+                                                    type="text"
+                                                    value={editPurchaseOrder}
+                                                    onChange={(e) => setEditPurchaseOrder(e.target.value)}
+                                                    placeholder="Ej: 4500123456"
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '9px 12px',
+                                                        borderRadius: '8px',
+                                                        border: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '1.5px solid #F87171' : '1px solid #CBD5E1',
+                                                        backgroundColor: '#FFFFFF',
+                                                        fontSize: '0.88rem',
+                                                        fontWeight: '700',
+                                                        color: '#1E293B',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '#DC2626' : '#64748B', fontWeight: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '700' : 'normal' }}>
+                                                    {isSelectedOrderColsubsidio 
+                                                        ? (!editPurchaseOrder.trim() && !editSolped.trim() ? '⚠️ Obligatorio ingresar OC o SOLPED para Colsubsidio' : 'Número oficial de OC. Se imprime en remisión y factura.')
+                                                        : 'Número de orden de compra oficial del cliente (opcional).'}
+                                                </p>
+                                            </div>
+
+                                            {/* SOLPED */}
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '800', color: isSelectedOrderColsubsidio ? '#1E40AF' : '#065F46' }}>
+                                                        <Clock size={13} /> # SOLICITUD DE PEDIDO (SOLPED)
+                                                    </label>
+                                                    {isSelectedOrderColsubsidio && (
+                                                        <span style={{ 
+                                                            fontSize: '0.65rem', 
+                                                            backgroundColor: editSolped.trim() && !editPurchaseOrder.trim() ? '#FEF3C7' : '#F1F5F9', 
+                                                            color: editSolped.trim() && !editPurchaseOrder.trim() ? '#B45309' : '#64748B', 
+                                                            padding: '1px 8px', 
+                                                            borderRadius: '10px', 
+                                                            fontWeight: '800',
+                                                            border: editSolped.trim() && !editPurchaseOrder.trim() ? '1px solid #FCD34D' : '1px solid #E2E8F0'
+                                                        }}>
+                                                            {editSolped.trim() && !editPurchaseOrder.trim() ? '⏳ Estado Provisional' : 'Referencia Inicial'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <input 
+                                                    type="text"
+                                                    value={editSolped}
+                                                    onChange={(e) => setEditSolped(e.target.value)}
+                                                    placeholder="Ej: 1000987654"
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '9px 12px',
+                                                        borderRadius: '8px',
+                                                        border: isSelectedOrderColsubsidio && !editPurchaseOrder.trim() && !editSolped.trim() ? '1.5px solid #F87171' : '1px solid #CBD5E1',
+                                                        backgroundColor: '#FFFFFF',
+                                                        fontSize: '0.88rem',
+                                                        fontWeight: '700',
+                                                        color: '#1E293B',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#64748B' }}>
+                                                    {isSelectedOrderColsubsidio 
+                                                        ? 'Número de SOLPED si Colsubsidio aún no ha formalizado la OC.' 
+                                                        : 'Código o referencia interna previa de compra (opcional).'}
+                                                </p>
                                             </div>
                                         </div>
 
