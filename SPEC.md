@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.150 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.1 Landing & Catálogo)
+> **Versión:** 1.9.151 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.2 Ficha Técnica SKU)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8625,6 +8625,44 @@ El Dominio 1 (`src/app/`, `src/app/products/[id]`, `src/app/checkout/`, `src/app
   2. `ProductGridContainer` renderiza instantáneamente los productos coincidentes sin recargar la página.
   3. Cada tarjeta (`ProductCard`) muestra el precio por kilogramo o unidad de presentación, distintivo de disponibilidad en inventario y selector de incremento/decremento de unidades.
   4. Al pulsar `[Agregar al Carrito]`, el producto se almacena en el carrito local con su factor de peso nominal, actualizando el contador flotante del carrito en el encabezado.
+
+---
+
+### 40.3 Ficha Técnica y Detalle de SKU (`/products/[id]` - `src/app/products/[id]/page.tsx`) (SDD v1.9.151)
+
+#### A. Misión y Alcance de la Ficha Técnica de Producto
+La ficha técnica de SKU (`src/app/products/[id]/page.tsx` y su cliente `src/components/ProductDetailClient.tsx`) constituye el punto de inspección granular, configuración de variantes y conversión de unidades físicas/comerciales para el consumidor final e institucional. Despliega la fotografía en alta resolución con marca de agua oficial de FruFresco, desglose de calibres, maduración y presentaciones ponderadas, cálculo dinámico de subtotales, detección de insumo preexistente en el pedido y recomendaciones de SKUs complementarios ("También te puede interesar").
+
+#### B. Arquitectura de Precios, Acuerdos B2B y Campañas Activas
+1. **Inyección en Servidor del Precio Pactado:**
+   - La página resuelve en SSR la sesión del usuario (`serverSupabase.auth.getSession()`). Si el usuario pertenece a una cuenta corporativa B2B (`profiles`), consulta si existe un acuerdo comercial activo (`quotes.status = 'agreement'`) asociado a su `client_id` o a su matriz (`parent_id`).
+   - Si el SKU consultado figura en `quote_items`, su precio unitario sobreescribe de forma transparente el modelo de precios general, garantizando que el comprador institucional visualice su tarifa pactada contractualmente.
+   - Idéntica prevalencia se aplica de manera masiva sobre los 6 productos sugeridos de la sección de relacionados (`relatedProducts`).
+2. **Modulación por Campañas Promocionales (`campaign_info`):**
+   - Cuando un SKU participa en una campaña activa de modulación de margen o precio fijo, la interfaz proyecta el precio de oferta en rojo vivo junto al precio de lista tachado y un badge con el nombre de la campaña y el descuento aplicado.
+3. **Conversión Poka-Yoke de Presentaciones y Pesos:**
+   - Normalización de opciones provenientes de `options_config` auditadas contra el maestro `product_attributes_master` (excluyendo atributos internos de bodega `show_in_picking = true`).
+   - Para productos cuya unidad base es Kilogramo (`kg`, `kilo`), si carecen de selector explícito de presentación, se inyecta automáticamente la opción canónica `"Libra 500g|500"` (o `"Pound 500g|500"` en inglés).
+   - Extracción matemática del peso en kilogramos (`getParsedWeight`) para inyectar `weight_kg` en el ítem del carrito, asegurando que el motor de cubicaje y liquidación de transporte reciba la masa física real.
+
+#### C. Control de Insumo Preexistente & Erradicación de Alertas
+1. **Alerta Preventiva No Bloqueante en UI:**
+   - Si el producto ya se encuentra en el carrito de compras, se proyecta un banner informativo ámbar (`🛒 Insumo ya incluido en tu pedido`) indicando la cantidad actual en el carrito, las unidades adicionales a incorporar y el total neto consolidado.
+2. **Erradicación Militar de Diálogos Nativos:** Cero uso de `alert()` o `confirm()`. Las transiciones de agregar al pedido disparan notificaciones Toast (`showToast`) y redirección no disruptiva.
+3. **Control de Disponibilidad:** Validación de precio mayor a cero (`isPriceValid`). En caso de precio nulo o no parametrizado, los botones de compra se bloquean proyectando *"Precio a consultar"*, impidiendo pedidos con tarifa $0 COP.
+
+---
+
+#### Escenario 187: Consulta de Ficha Técnica, Variantes de Presentación y Prevalencia de Acuerdos B2B (SDD v1.9.151)
+- **Given** un comprador institucional autenticado cuya empresa posee un Acuerdo Comercial pactado con FruFresco donde el Aguacate Hass está fijado en $6.800 COP/kg.
+- **When** ingresa a la ficha técnica `/products/[id]` del Aguacate Hass:
+- **Then**:
+  1. El servidor recupera el acuerdo comercial y presenta como precio base $6.800 COP en lugar del precio de lista general ($8.500 COP).
+  2. Los selectores de variantes despliegan las opciones de maduración ("Pintón", "Maduro") y presentación ("Libra 500g", "Kilo", "Caja 4 kg").
+  3. Al seleccionar "Libra 500g", el subtotal reactivo calcula exactamente $3.400 COP ($6.800 $\times$ 0.5 kg).
+  4. Si el cliente ya había añadido 2 libras al carrito, la interfaz muestra el banner preventivo *"Ya tienes 2 Libra 500g en tu pedido. Al adicionar 1 Libra 500g el nuevo total será 3 Libra 500g"*.
+  5. Al presionar `[Agregar al Pedido]`, el carrito acumula la masa física real ($1.5 \text{ kg}$) y retorna al catálogo con notificación Toast de éxito.
+
 
 
 
