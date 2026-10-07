@@ -1042,7 +1042,12 @@ export default function ContingencyPrintPage() {
                     const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
                     const subtotal = order.subtotal || order.total || 0;
-                    const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici');
+                    const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici') || Boolean(order.logistics_data?.is_replacement);
+                    const parentSeq = order.logistics_data?.parent_order_sequence || (() => {
+                        const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
+                        const m = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) || notes.match(/#ped-(\d{3,})/i);
+                        return m ? m[1] : null;
+                    })();
                     const remissionPrefix = isReposicion ? 'REPOSICIÓN' : 'REMISIÓN';
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
                         ? formatSpaceLabel(order.warehouse_spaces)
@@ -1066,7 +1071,7 @@ export default function ContingencyPrintPage() {
                             return (
                                 <Letterhead
                                     key={`remission-${order.id}-copy-${copyIdx}-page-${pageIdx}`}
-                                    title={`${remissionPrefix} #${orderNum}`}
+                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : `REMISIÓN #${orderNum}`}
                                     subtitle={pageSubtitle}
                                     date={order.delivery_date}
                                     badge={copyInfo.copyType}
@@ -1078,8 +1083,9 @@ export default function ContingencyPrintPage() {
                                 >
                                     {/* Poka-Yoke Banner Reposición si aplica */}
                                     {isReposicion && (
-                                        <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#991B1B', fontWeight: 'bold' }}>
-                                            RECUERDE: Los productos en este documento NO TIENEN COBRO (Reposición de Calidad autorizada por Servicio al Cliente).
+                                        <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#991B1B', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>RECUERDE: Los productos en este documento NO TIENEN COBRO ($0 COP - Reposición de Calidad autorizada).</span>
+                                            {parentSeq && <span style={{ color: '#B91C1C' }}>Ampara Pedido #{parentSeq}</span>}
                                         </div>
                                     )}
 

@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity, getOrderReplacementInfo } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -4728,6 +4728,28 @@ function OrderLoadingContent() {
                                             {getStatusLabel(selectedOrder.status)}
                                         </span>
 
+                                        {(() => {
+                                            const rep = getOrderReplacementInfo(selectedOrder);
+                                            if (!rep.isReplacement) return null;
+                                            return (
+                                                <span style={{
+                                                    padding: '4px 12px',
+                                                    borderRadius: '20px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '900',
+                                                    backgroundColor: '#EEF2FF',
+                                                    color: '#4338CA',
+                                                    border: '1.5px solid #818CF8',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px'
+                                                }}>
+                                                    <RotateCcw size={13} strokeWidth={2.8} />
+                                                    REPOSICIÓN POR CALIDAD {rep.parentSequenceId ? `(AMPARA #${rep.parentSequenceId})` : '($0 COP)'}
+                                                </span>
+                                            );
+                                        })()}
+
                                         {selectedOrder.created_at && (
                                             <div style={{
                                                 display: 'inline-flex',
@@ -7251,6 +7273,31 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                             <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <span>{isB2B ? 'CORPORATIVO' : 'CONSUMIDOR'}</span>
                                 {getChannelBadge(order.origin_source)}
+                                {(() => {
+                                    const rep = getOrderReplacementInfo(order);
+                                    if (!rep.isReplacement) return null;
+                                    return (
+                                        <span 
+                                            title={rep.parentSequenceId ? `Reposición vinculada al Pedido #${rep.parentSequenceId}` : 'Reposición de Garantía por Calidad ($0 COP)'}
+                                            style={{
+                                                backgroundColor: '#EEF2FF',
+                                                color: '#4338CA',
+                                                border: '1.2px solid #818CF8',
+                                                borderRadius: '5px',
+                                                padding: '1px 6px',
+                                                fontSize: '0.66rem',
+                                                fontWeight: '900',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px',
+                                                boxShadow: '0 1px 2px rgba(67, 56, 202, 0.12)'
+                                            }}
+                                        >
+                                            <RotateCcw size={10} strokeWidth={2.8} />
+                                            <span>REPOSICIÓN {rep.parentSequenceId ? `DE #${rep.parentSequenceId}` : '($0)'}</span>
+                                        </span>
+                                    );
+                                })()}
                                 {duplicateInfo && (
                                     <span style={{
                                         backgroundColor: '#DC2626',

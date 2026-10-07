@@ -401,6 +401,19 @@ function CreateOrderContent() {
 
     const activeCustomerId = selectedClient || (clientType === 'B2C' && selectedClientB2C ? selectedClientB2C : null);
 
+    // SDD §7.5.8: Naturaleza del Pedido (Venta Ordinaria vs Reposición por Calidad $0 COP)
+    const [orderNature, setOrderNature] = useState<'regular' | 'replacement'>(
+        (searchParams.get('replacement') === 'true' || searchParams.get('isReplacement') === 'true') ? 'replacement' : 'regular'
+    );
+    const [parentOrderId, setParentOrderId] = useState<string | null>(
+        searchParams.get('parentOrderId') || searchParams.get('parent_order_id') || null
+    );
+    const [parentOrderFriendlyId, setParentOrderFriendlyId] = useState<string | null>(
+        searchParams.get('parentOrderSequence') || searchParams.get('parent_sequence') || null
+    );
+    const [clientPastOrders, setClientPastOrders] = useState<any[]>([]);
+    const [loadingPastOrders, setLoadingPastOrders] = useState(false);
+
     useEffect(() => {
         if (!activeCustomerId) {
             setClientExceptions([]);
@@ -458,6 +471,101 @@ function CreateOrderContent() {
         }
         fetchClientData();
     }, [activeCustomerId]);
+
+    // SDD §7.5.8: Carga de pedidos anteriores para vinculación obligatoria de reposición
+    useEffect(() => {
+        if (!activeCustomerId || orderNature !== 'replacement') {
+            setClientPastOrders([]);
+            return;
+        }
+        let isMounted = true;
+        async function fetchPastOrders() {
+            setLoadingPastOrders(true);
+            try {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select('id, sequence_id, created_at, delivery_date, total, status, admin_notes, order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, products(id, name, base_price, unit_of_measure, weight_kg))')
+                    .eq('profile_id', activeCustomerId)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                if (!error && data && isMounted) {
+                    setClientPastOrders(data);
+                    if (parentOrderId) {
+                        const matched = data.find((o: any) => o.id === parentOrderId || String(o.sequence_id) === String(parentOrderId));
+                        if (matched) {
+                            if (parentOrderId !== matched.id) setParentOrderId(matched.id);
+                            setParentOrderFriendlyId(String(matched.sequence_id));
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching client past orders for replacement:', err);
+            } finally {
+                if (isMounted) setLoadingPastOrders(false);
+            }
+        }
+        fetchPastOrders();
+        return () => { isMounted = false; };
+    }, [activeCustomerId, orderNature, parentOrderId]);
+
+    const handleToggleOrderNature = (nature: 'regular' | 'replacement') => {
+        setOrderNature(nature);
+        if (nature === 'replacement') {
+            // Forzar $0 COP en todos los ítems actuales del carrito
+            setCart(prev => prev.map(item => ({
+                ...item,
+                price: 0,
+                observations: item.observations ? item.observations : 'Reposición de Garantía ($0 COP)'
+            })));
+            showToast('🔄 Modo Reposición Activo: Todos los productos se liquidarán a $0 COP.', 'info');
+        } else {
+            // Restaurar precios de catálogo/acuerdo
+            setParentOrderId(null);
+            setParentOrderFriendlyId(null);
+            setCart(prev => prev.map(item => {
+                const p = item.product;
+                const rePrice = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
+                    ? contractPrices[p.id]
+                    : (clientType === 'B2B' && p.base_price
+                        ? Math.ceil((p.base_price / 1.19) / 50) * 50
+                        : (p.base_price || 0));
+                return {
+                    ...item,
+                    price: rePrice
+                };
+            }));
+            showToast('📦 Modo Venta Ordinaria Restaurado.', 'info');
+        }
+    };
+
+    const handleImportItemsFromParentOrder = (pOrder: any) => {
+        if (!pOrder?.order_items || pOrder.order_items.length === 0) {
+            showToast('El pedido seleccionado no tiene artículos registrados.', 'info');
+            return;
+        }
+        const itemsToAdd: any[] = [];
+        for (const oi of pOrder.order_items) {
+            const prod = oi.products || products.find((p: any) => p.id === oi.product_id);
+            if (!prod) continue;
+            itemsToAdd.push({
+                product: prod,
+                qty: Number(oi.quantity || 1),
+                originalQty: Number(oi.quantity || 1),
+                originalUnit: oi.unit || prod.unit_of_measure || 'Kg',
+                conversion_factor: 1,
+                price: 0,
+                variant_label: oi.variant_label || undefined,
+                nickname: oi.nickname || prod.name,
+                observations: `Reposición ampara Pedido #${pOrder.sequence_id}`
+            });
+        }
+        if (itemsToAdd.length === 0) {
+            showToast('No se pudieron vincular los artículos del pedido con el catálogo activo.', 'error');
+            return;
+        }
+        setCart(itemsToAdd);
+        showToast(`✅ Se cargaron ${itemsToAdd.length} artículos del Pedido #${pOrder.sequence_id} a $0 COP. Elimina los ítems conformes y ajusta cantidades de los averiados.`, 'success');
+    };
 
     // --- CUSTOMER STRUCTURED PREFERENCES (PINNED COMBINATIONS) ---
     const [savingPreference, setSavingPreference] = useState(false);
@@ -1932,11 +2040,18 @@ function CreateOrderContent() {
             }
         }
 
-        const resolvedPrice = (contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
-            ? contractPrices[product.id]
-            : (clientType === 'B2B' && product.base_price
-                ? Math.ceil((product.base_price / 1.19) / 50) * 50
-                : (product.base_price || 0));
+        const resolvedPrice = orderNature === 'replacement'
+            ? 0
+            : ((contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
+                ? contractPrices[product.id]
+                : (clientType === 'B2B' && product.base_price
+                    ? Math.ceil((product.base_price / 1.19) / 50) * 50
+                    : (product.base_price || 0)));
+
+        const defaultObservations = orderNature === 'replacement'
+            ? (parentOrderFriendlyId ? `Reposición de garantía (Ampara #${parentOrderFriendlyId})` : 'Reposición de garantía ($0 COP)')
+            : '';
+
         setCart(prev => [{ 
             product, 
             qty: baseQty, 
@@ -1947,6 +2062,7 @@ function CreateOrderContent() {
             variant_label: finalLabel || undefined, 
             selected_options: optionsRaw || {},
             nickname: finalNickname,
+            observations: defaultObservations,
             picking_note: exc?.picking_note || undefined,
             delivery_note: exc?.delivery_note || undefined
         }, ...prev]);
@@ -2736,6 +2852,7 @@ function CreateOrderContent() {
     };
 
     const calculateTotal = () => {
+        if (orderNature === 'replacement') return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
@@ -2765,6 +2882,7 @@ function CreateOrderContent() {
     };
 
     const calculateTotalTax = () => {
+        if (orderNature === 'replacement') return 0;
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
@@ -2775,6 +2893,7 @@ function CreateOrderContent() {
     };
 
     const calculateSubtotal = () => {
+        if (orderNature === 'replacement') return 0;
         return calculateTotal() - calculateTotalTax();
     };
 
@@ -4475,15 +4594,21 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
-        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement
+        // Block Zero Margin / Zero Price ONLY IF NOT covered by an open agreement AND NOT replacement
         const zeroPriceItem = cart.find(item => {
+            if (orderNature === 'replacement') return false; // SDD §7.5.8: Reposición de garantía exonerada a $0 COP
             const isZero = !item.price || parseFloat(item.price.toString()) === 0;
             if (!isZero) return false;
             const isCoveredByAgreement = agreementProductIds.has(item.product.id) && contractPrices[item.product.id] === 0;
             return !isCoveredByAgreement;
         });
         if (zeroPriceItem) {
-            return showToast(`❌ No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`, 'error');
+            return showToast(`❌ No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Parametrice el precio en el Módulo de Acuerdos Comerciales.`, 'error');
+        }
+
+        // Poka-Yoke SDD §7.5.8: Reposición debe estar ligada a un Pedido Original
+        if (orderNature === 'replacement' && !parentOrderId) {
+            return showToast('❌ Atención: Todo pedido de reposición debe estar vinculado a un Pedido Original para trazabilidad de calidad.', 'error');
         }
 
         // Manual Delivery Validation
@@ -4546,6 +4671,11 @@ function CreateOrderContent() {
             let finalAdminNotes = poTokens.length > 0 
                 ? (adminNotes ? `${poTokens.join(' | ')} | ${adminNotes}` : poTokens.join(' | '))
                 : adminNotes;
+            
+            if (orderNature === 'replacement') {
+                const parentTag = parentOrderFriendlyId ? `#PED-${parentOrderFriendlyId}` : (parentOrderId ? parentOrderId.substring(0, 8) : 'S/F');
+                finalAdminNotes = `[REPOSICIÓN DE GARANTÍA $0 COP - VINCULADA AL PEDIDO ${parentTag}]\n${finalAdminNotes}`.trim();
+            }
             
             if (clientType === 'B2B' && selectedClientDetails && !deliveryRestrictionStatus.isValid) {
                 finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.targetDayName})]\n${finalAdminNotes}`.trim();
@@ -4675,8 +4805,8 @@ function CreateOrderContent() {
                 }
             }
 
-            // GAP-01: Interbloqueo de Crédito y Cartera para clientes B2B
-            if (clientType === 'B2B' && finalProfileId) {
+            // GAP-01: Interbloqueo de Crédito y Cartera para clientes B2B (Solo ventas ordinarias con cobro)
+            if (clientType === 'B2B' && finalProfileId && orderNature !== 'replacement') {
                 const creditCheck = await checkClientCreditStatus(finalProfileId, calculateTotal());
                 if (!creditCheck.allowed) {
                     showToast(creditCheck.reason || 'Operación cancelada por control de crédito.', 'error');
@@ -4684,19 +4814,26 @@ function CreateOrderContent() {
                 }
             }
 
+            const finalLogisticsData = {
+                ...(logisticsOverride || {}),
+                is_replacement: orderNature === 'replacement',
+                parent_order_id: parentOrderId || null,
+                parent_order_sequence: parentOrderFriendlyId || null
+            };
+
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
                     profile_id: finalProfileId,
-                    total: calculateTotal(),
+                    total: orderNature === 'replacement' ? 0 : calculateTotal(),
                     total_weight_kg: calculateTotalWeight(),
-                    subtotal: calculateSubtotal(),
-                    tax: calculateTotalTax(),
+                    subtotal: orderNature === 'replacement' ? 0 : calculateSubtotal(),
+                    tax: orderNature === 'replacement' ? 0 : calculateTotalTax(),
                     status: 'pending_approval',
-                    payment_status: 'Pendiente',
-                    payment_method: paymentMethod,
+                    payment_status: orderNature === 'replacement' ? 'Exonerado' : 'Pendiente',
+                    payment_method: orderNature === 'replacement' ? 'reposicion_garantia' : paymentMethod,
                     origin: 'Admin Panel',
-                    origin_source: originSource, // Enviar canal de origen
+                    origin_source: orderNature === 'replacement' && originSource === 'phone' ? 'customer_service' : originSource,
                     delivery_date: deliveryDate,
                     delivery_slot: finalDeliverySlot,
                     admin_notes: finalAdminNotes, // Guardar notas sin redundancia de origen
@@ -4708,7 +4845,7 @@ function CreateOrderContent() {
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: logisticsOverride,
+                    logistics_data: finalLogisticsData,
                     document_url: permanentDocumentUrl || null
                 })
                 .select()
@@ -4721,7 +4858,7 @@ function CreateOrderContent() {
 
             const itemsData = cart.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
+                const unitPrice = orderNature === 'replacement' ? 0 : (item.price !== undefined && item.price !== null ? item.price : item.product.base_price);
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -5305,6 +5442,49 @@ function CreateOrderContent() {
                             >
                                 <Home size={13} strokeWidth={2} />
                                 <span>Hogar</span>
+                            </button>
+                        </div>
+
+                        {/* SDD §7.5.8: ORDER NATURE TOGGLE (VENTA ORDINARIA VS REPOSICIÓN POR CALIDAD $0 COP) */}
+                        <div style={{
+                            display: 'flex',
+                            gap: '3px',
+                            padding: '2px',
+                            backgroundColor: orderNature === 'replacement' ? '#FEF2F2' : '#E2E8F0',
+                            border: orderNature === 'replacement' ? '1.5px solid #FCA5A5' : '1px solid transparent',
+                            borderRadius: '8px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => handleToggleOrderNature('regular')}
+                                style={{
+                                    padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: orderNature === 'regular' ? '#FFFFFF' : 'transparent',
+                                    color: orderNature === 'regular' ? '#0F172A' : '#64748B',
+                                    fontWeight: '700', cursor: 'pointer',
+                                    boxShadow: orderNature === 'regular' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <Package size={13} strokeWidth={2} />
+                                <span>Venta Ordinaria</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleToggleOrderNature('replacement')}
+                                style={{
+                                    padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none',
+                                    backgroundColor: orderNature === 'replacement' ? '#DC2626' : 'transparent',
+                                    color: orderNature === 'replacement' ? '#FFFFFF' : '#64748B',
+                                    fontWeight: '800', cursor: 'pointer',
+                                    boxShadow: orderNature === 'replacement' ? '0 1px 3px rgba(220,38,38,0.3)' : 'none',
+                                    transition: 'all 0.15s', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                                }}
+                            >
+                                <RotateCcw size={13} strokeWidth={2.4} />
+                                <span>Reposición por Calidad ($0 COP)</span>
                             </button>
                         </div>
                     </div>
@@ -8126,6 +8306,135 @@ function CreateOrderContent() {
                         </div>
                         )}
 
+                        {/* SDD §7.5.8: PANEL DE REPOSICIÓN POR CALIDAD ($0 COP) Y VINCULACIÓN A PEDIDO PADRE */}
+                        {orderNature === 'replacement' && (
+                            <div style={{
+                                marginBottom: '1.25rem',
+                                padding: '1.2rem',
+                                backgroundColor: '#F5F3FF',
+                                border: '1.8px solid #C4B5FD',
+                                borderRadius: '12px',
+                                boxShadow: '0 2px 8px rgba(109, 40, 217, 0.08)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#EDE9FE', color: '#6D28D9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <RotateCcw size={18} strokeWidth={2.5} />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: '#4C1D95' }}>
+                                                Reposición por Calidad • Amparo de Garantía ($0 COP)
+                                            </h3>
+                                            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#6D28D9' }}>
+                                                Este pedido se generará a $0 COP con folio independiente y respaldará legalmente al pedido original seleccionado.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {parentOrderFriendlyId && (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#DDD6FE', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '800', color: '#4C1D95' }}>
+                                            <ShieldCheck size={14} />
+                                            <span>Vinculado a Pedido #{parentOrderFriendlyId}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* SELECTOR DE PEDIDO ORIGINAL */}
+                                {!activeCustomerId ? (
+                                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px dashed #A78BFA', fontSize: '0.8rem', color: '#6D28D9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Info size={16} />
+                                        <span>Por favor selecciona primero un Cliente (Institucional o Hogar) para listar sus pedidos anteriores y asociar la reposición.</span>
+                                    </div>
+                                ) : loadingPastOrders ? (
+                                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E9D5FF', fontSize: '0.8rem', color: '#6D28D9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        <span>Buscando historial de pedidos de este cliente...</span>
+                                    </div>
+                                ) : clientPastOrders.length === 0 ? (
+                                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px dashed #A78BFA', fontSize: '0.8rem', color: '#6D28D9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <AlertCircle size={16} />
+                                        <span>No se registraron pedidos anteriores para este cliente. Si es una excepción directa, escribe el folio original en las notas administrativas.</span>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#5B21B6', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                                                Seleccionar Pedido Original a Reponer <span style={{ color: '#DC2626' }}>*</span>
+                                            </label>
+                                            <select
+                                                value={parentOrderId || ''}
+                                                onChange={(e) => {
+                                                    const selId = e.target.value;
+                                                    setParentOrderId(selId);
+                                                    const matched = clientPastOrders.find(o => o.id === selId);
+                                                    if (matched) {
+                                                        setParentOrderFriendlyId(String(matched.sequence_id));
+                                                    } else {
+                                                        setParentOrderFriendlyId(null);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.65rem 0.85rem',
+                                                    borderRadius: '8px',
+                                                    border: '1.5px solid #8B5CF6',
+                                                    backgroundColor: '#FFFFFF',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: '700',
+                                                    color: '#1E1B4B',
+                                                    outline: 'none',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                <option value="">-- Elige el pedido original que presentó novedad ({clientPastOrders.length} encontrados) --</option>
+                                                {clientPastOrders.map(p => {
+                                                    const pDate = p.delivery_date || p.created_at?.split('T')[0];
+                                                    const pItemsCount = p.order_items?.length || 0;
+                                                    return (
+                                                        <option key={p.id} value={p.id}>
+                                                            Pedido #{p.sequence_id} · Entrega: {pDate} · Total: {formatMoney(p.total)} · {pItemsCount} productos · ({p.status || 'Registrado'})
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                        </div>
+
+                                        {parentOrderId && (() => {
+                                            const selOrder = clientPastOrders.find(o => o.id === parentOrderId);
+                                            if (!selOrder) return null;
+                                            return (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid #DDD6FE', flexWrap: 'wrap', gap: '8px' }}>
+                                                    <div style={{ fontSize: '0.78rem', color: '#4C1D95' }}>
+                                                        <strong>Pedido #{selOrder.sequence_id}</strong> · {selOrder.order_items?.length || 0} ítems registrados · Total original: {formatMoney(selOrder.total)}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleImportItemsFromParentOrder(selOrder)}
+                                                        style={{
+                                                            backgroundColor: '#7C3AED',
+                                                            color: '#FFFFFF',
+                                                            border: 'none',
+                                                            padding: '0.4rem 0.75rem',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            boxShadow: '0 1px 3px rgba(124, 58, 237, 0.3)'
+                                                        }}
+                                                    >
+                                                        <Sparkles size={13} />
+                                                        <span>Importar ítems de este pedido a $0 COP</span>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* 2. PRODUCT SEARCH (Visible only if NOT importing a document) */}
                         {originSource !== 'file_upload' && (
                             <div style={{ marginBottom: '1.25rem', position: 'relative' }}>
@@ -8609,26 +8918,30 @@ function CreateOrderContent() {
                                                         );
                                                     })()}
 
-                                                    {/* Unit Price (Read-only, Protected by Commercial Agreement / Catalog) */}
+                                                    {/* Unit Price (Read-only, Protected by Commercial Agreement / Catalog / $0 Replacement) */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '2px' }}>
                                                         <div style={{ 
                                                             fontWeight: '800', 
                                                             fontSize: '0.95rem', 
-                                                            color: isZeroPrice ? '#DC2626' : '#1E293B',
+                                                            color: orderNature === 'replacement' ? '#6D28D9' : isZeroPrice ? '#DC2626' : '#1E293B',
                                                             fontVariantNumeric: 'tabular-nums'
                                                         }}>
-                                                            {formatMoney(unitPrice)}
+                                                            {formatMoney(orderNature === 'replacement' ? 0 : unitPrice)}
                                                         </div>
-                                                        {isZeroPrice && (
+                                                        {orderNature === 'replacement' ? (
+                                                            <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#EDE9FE', border: '1px solid #C4B5FD', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <RotateCcw size={10} color="#6D28D9" /> Reposición $0
+                                                            </span>
+                                                        ) : isZeroPrice ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 <AlertCircle size={11} color="#DC2626" /> Sin Precio
                                                             </span>
-                                                        )}
+                                                        ) : null}
                                                     </div>
 
                                                     {/* Subtotal */}
-                                                    <div style={{ textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.95rem' }}>
-                                                        {formatMoney(unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0'))}
+                                                    <div style={{ textAlign: 'right', fontWeight: '800', color: orderNature === 'replacement' ? '#6D28D9' : '#111827', fontSize: '0.95rem' }}>
+                                                        {formatMoney(orderNature === 'replacement' ? 0 : (unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0')))}
                                                     </div>
 
                                                     {/* Actions (Edit and Delete) */}
@@ -9069,9 +9382,16 @@ function CreateOrderContent() {
                                     </div>
                                     <div style={{ height: '1px', backgroundColor: '#E2E8F0', margin: '0.25rem 0' }} />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                        <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>Total a Pagar</span>
-                                        <span style={{ fontSize: '1.45rem', fontWeight: '900', color: '#0D7A57', letterSpacing: '-0.02em' }}>
+                                        <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
+                                            {orderNature === 'replacement' ? 'Total Reposición' : 'Total a Pagar'}
+                                        </span>
+                                        <span style={{ fontSize: '1.45rem', fontWeight: '900', color: orderNature === 'replacement' ? '#6D28D9' : '#0D7A57', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             {formatMoney(calculateTotal())}
+                                            {orderNature === 'replacement' && (
+                                                <span style={{ fontSize: '0.65rem', backgroundColor: '#EDE9FE', color: '#6D28D9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #C4B5FD', fontWeight: '800' }}>
+                                                    GARANTÍA $0
+                                                </span>
+                                            )}
                                         </span>
                                     </div>
                                 </div>
@@ -11114,15 +11434,21 @@ function CreateOrderContent() {
                         </div>
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total a Pagar</span>
-                            <span style={{ fontSize: '1.5rem', fontWeight: 950, color: '#059669' }}>{formatMoney(calculateTotal())}</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                {orderNature === 'replacement' ? 'Total Reposición' : 'Total a Pagar'}
+                            </span>
+                            <span style={{ fontSize: '1.5rem', fontWeight: 950, color: orderNature === 'replacement' ? '#6D28D9' : '#059669' }}>
+                                {formatMoney(calculateTotal())}
+                            </span>
                         </div>
                     </div>
 
                     {/* Acciones */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', maxWidth: '220px', textAlign: 'right', lineHeight: '1.3' }}>
-                            El pedido se creará en estado &quot;Recibido&quot; para aprobación.
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', maxWidth: '240px', textAlign: 'right', lineHeight: '1.3' }}>
+                            {orderNature === 'replacement' 
+                                ? 'Se generará remisión oficial de garantía ($0 COP) ligada al pedido original.' 
+                                : 'El pedido se creará en estado "Recibido" para aprobación.'}
                         </span>
                         <button
                             onClick={handleSubmit}
@@ -11130,7 +11456,7 @@ function CreateOrderContent() {
                             style={{
                                 padding: '0.75rem 2rem',
                                 borderRadius: '12px',
-                                backgroundColor: '#1E293B',
+                                backgroundColor: orderNature === 'replacement' ? '#6D28D9' : '#1E293B',
                                 color: 'white',
                                 border: 'none',
                                 fontWeight: '800',
@@ -11138,16 +11464,16 @@ function CreateOrderContent() {
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
                                 opacity: (loading || cart.length === 0) ? 0.5 : 1,
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                boxShadow: orderNature === 'replacement' ? '0 4px 12px rgba(109, 40, 217, 0.3)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                             }}
                             onMouseEnter={e => {
-                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = '#0F172A';
+                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = orderNature === 'replacement' ? '#5B21B6' : '#0F172A';
                             }}
                             onMouseLeave={e => {
-                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = '#1E293B';
+                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = orderNature === 'replacement' ? '#6D28D9' : '#1E293B';
                             }}
                         >
-                            {loading ? 'Creando...' : 'Confirmar Pedido'}
+                            {loading ? 'Creando...' : orderNature === 'replacement' ? '⚡ Confirmar Reposición ($0 COP)' : 'Confirmar Pedido'}
                         </button>
                     </div>
                 </div>

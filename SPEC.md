@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.140 (Certificación Dominio 6.5: Panel Maestro de Conductores, Licencias & Disponibilidad Operativa - TMS-05 & Cierre Dominio 6 al 100%)
+> **Versión:** 1.9.142 (Certificación Dominio 8.1: Mesa de Facturación Masiva, Cortes AM/PM/ADJ, Exportación World Office & Cartera B2B - FAC-01)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -601,6 +601,31 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 3. **Justificación de Negocio, Control Fiscal y Anti-Fraude:**
    - La alteración manual de precios en caliente durante la toma de pedidos destruye la trazabilidad del margen operativo, burla los convenios vinculantes con clientes institucionales auditados (ej. Colsubsidio), introduce descuadres en la causación fiscal de facturas ante la DIAN y expone a la compañía a vulnerabilidades de colusión o venta involuntaria por debajo del costo de abastecimiento en Corabastos.
 
+#### 7.5.8 Arquitectura Canónica de Pedidos de Reposición por Calidad (Linked & Independent Replacement Lifecycle)
+
+1. **Doble Naturaleza Operativa del Pedido en FruFresco:**
+   Todo pedido ingresado al sistema se clasifica formalmente bajo una de dos naturalezas operativas mutuamente excluyentes:
+   - **Venta Ordinaria (`nature: 'regular'`):** Transacción comercial ordinaria (B2B/B2C). Los productos se liquidan según las listas de precios vinculantes del acuerdo comercial o catálogo base minorista, calculan impuestos (IVA), pasan por control de crédito y cartera (GAP-01), y generan factura o remisión valorizada estándar.
+   - **Reposición por Calidad (`nature: 'replacement'`):** Despacho operativo de garantía física sin costo comercial ($0 COP) autorizado por Servicio al Cliente o Gerencia de Operaciones para resarcir una novedad de calidad, producto averiado, faltante en ruta o inconformidad contractual previa.
+
+2. **Principio de Vínculo Canónico y Autonomía Operativa (Linked & Independent Order):**
+   - **Vinculación Obligatoria al Pedido Original (`parent_order_id`):** Ninguna reposición puede crearse en el vacío. Al conmutar la naturaleza a *Reposición*, el sistema exige seleccionar deterministamente el pedido original del cliente (`parent_order_id`, número de folio `#PED-XXXX`). El vínculo se preserva de forma inmutable en `orders.admin_notes` y en el objeto `orders.logistics_data.parent_order_id`.
+   - **Autonomía Operativa en Planta y Transporte:** La reposición se trata como un **pedido logístico independiente con su propio folio consecutivo (`sequence_id`)**. Se procesa a través de todo el flujo de bodega: compras/abastecimiento si requiere inventario fresco, alistamiento en células de picking con pesaje neto/tara, cubicaje físico en TMS y asignación de ruta/conductor.
+
+3. **Doctrina de Tarifa Inviolable de $0 COP y Exoneración de Margen:**
+   - En una reposición, el sistema sobreescribe automáticamente las tarifas de todos los ítems agregados a `unit_price: 0`, `total: 0`, `subtotal: 0` e `iva: 0`.
+   - Se exonera del bloqueo Poka-Yoke de margen cero (`zeroPriceItem`), permitiendo confirmar y guardar la orden de reposición sin exigir precio manual alguno, salvaguardando la Ley de Inmutabilidad Tarifaria (§7.5.7).
+
+4. **Telemetría y Diferenciación Visual en Torre de Control (`/admin/orders/loading`):**
+   - En la tarjeta del pedido (`OrderCard`), vistas de lista y panel lateral de detalles, se despliega una píldora prominente de alta visibilidad:
+     `[ 🔄 REPOSICIÓN • DE PEDIDO #PED-XXXX ]`
+   - Permite a los jefes de despacho, supervisores de bodega y conductores identificar instantáneamente que el paquete corresponde a una garantía prioritaria de cliente.
+
+5. **Estatuto Jurídico de Nueva Remisión Oficial de Entrega (`contingency-print`):**
+   - El documento impreso (físico o PDF digital) asume la identidad canónica de **«REMISIÓN OFICIAL DE REPOSICIÓN • GARANTÍA DE CALIDAD»**.
+   - Incorpora la leyenda legal vinculante: *«Ampara novedad y sustituye entrega del Pedido Original #PED-XXXX. Mercancía entregada a título de reposición comercial ($0 COP) - NO COBRAR AL CLIENTE»*.
+   - Cumple la función legal y probatoria de nueva remisión física oficial con soporte de firma y recibido a satisfacción por parte del cliente.
+
 ### 7.6 Matriz de Tareas Atómicas de Alineación (SDD Roadmap)
 - [x] **Tarea COM-1:** Actualizar `src/lib/pricingUtils.ts` para que la función `recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices` usen la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - M}$ y mantengan el redondeo a $50 COP antes de impuestos.
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
@@ -642,6 +667,7 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 - [x] **Tarea COM-38 (Limpieza UX / Deprecación Botón Modelo General):** Retirar el botón legado `[ ✨ Modelo General ]` de la barra de herramientas de `CommercialAgreementsModule.tsx`, unificando la creación y gestión de listas maestras exclusivamente bajo el botón canónico `[ + Nuevo Acuerdo ]` con presets de vigencia y efecto cascada.
 - [x] **Tarea COM-39 (Pedidos / Mesa de Trabajo Multicanal: Aislamiento Estricto Hogar vs Institucional, Selector In-Situ y Desbloqueo de Inyección B2C):** Desacoplar la Mesa de Trabajo (Staging en `/admin/orders/create`) para que opere de forma nativa en modo Hogar (B2C) e Institucional (B2B): (1) Conmutador visible in-situ `[ 🏢 Institucional (B2B) ]` | `[ 🏠 Hogar (B2C) ]` en la cabecera de auditoría; (2) En modo Hogar, erradicar validaciones corporativas de NIT/Empresas y habilitar búsqueda express de clientes hogar existentes o formulario inline de cliente nuevo (Nombre, Celular, Dirección); (3) Corregir compuerta bloqueante de `handleConfirmImport` para validar `selectedClientB2C` o `guestInfo` en lugar de exigir `selectedClient` corporativo; (4) Garantizar que los ítems inyectados en Hogar tomen la tarifa base minorista (`products.base_price`).
 - [x] **Tarea COM-40 (Pedidos / Blindaje Contractual e Inmutabilidad Tarifaria: Erradicación de Modificación Manual de Precio en Pedidos y Exclusividad del Módulo de Acuerdos Comerciales):** Resolver el hallazgo de control y seguridad comercial en la creación de pedidos (`/admin/orders/create`) formalizando la Ley de Inmutabilidad Tarifaria (§7.5.7): (1) **El precio NO es editable bajo ninguna circunstancia desde el entorno de nuevo pedido** para ningún rol de usuario; (2) **Cualquier modificación o fijación de precios solo se puede realizar formalmente desde el Módulo de Acuerdos Comerciales (`/admin/commercial`)** o mediante listas maestras compartidas en cascada; (3) Se elimina definitivamente el elemento `<input>` editable de la columna 'PRECIO UNIT.' en el carrito, reemplazándolo por un valor de solo lectura renderizado mediante `formatMoney(unitPrice)` para erradicar alteraciones arbitrarias o errores de digitación por parte de los operadores; (4) Se preserva la alerta visual `⚠️ Sin Precio` cuando un producto no tiene tarifa registrada para exigir su parametrización comercial oficial previa al despacho.
+- [x] **Tarea COM-41 (Pedidos / Reposición por Calidad: Conmutador de Naturaleza, Vinculación Canónica a Pedido Padre, Tarifa $0 COP Inviolable y Nueva Remisión Oficial):** Implementar la arquitectura integral de reposiciones por calidad (§7.5.8): (1) En `/admin/orders/create`, incorporar conmutador de cabecera `[ 📦 Pedido de Venta Ordinaria ]` | `[ 🔄 Pedido de Reposición ($0 COP) ]`; (2) Al activar reposición, desplegar selector asistido de pedidos recientes del cliente (`parent_order_id`, `#PED-XXXX`), indexando el vínculo en `orders.admin_notes` y `logistics_data`; (3) Forzar automáticamente a $0 COP todos los productos del carrito y exonerar la orden del bloqueo de margen cero; (4) En Torre de Control (`/admin/orders/loading` y `OrderCard`), renderizar la insignia distintiva `[ 🔄 REPOSICIÓN DE #PED-XXXX ]`; (5) En el motor de remisiones (`contingency-print`), certificar el encabezado formal 'REMISIÓN OFICIAL DE REPOSICIÓN • GARANTÍA DE CALIDAD' con referencia explícita al pedido padre y liquidación neta $0 COP.
 
 ### 7.7 Módulo de Facturación Comercial, Remisiones y Cartera (Billing & Portfolio)
 
@@ -8377,6 +8403,42 @@ El Panel de Conductores (`ConductorPanel.tsx`) centraliza la gestión del capita
   3. Los indicadores KPI de cabecera (Total, Activos, Asignados, Disponibles) se recalculan automáticamente reflejando la nueva distribución de la flota.
   4. Si ocurre un error de red o de permisos en Supabase, el error se captura y despliega en un banner de advertencia visual no invasivo.
   5. Al hacer clic sobre el perfil de un conductor, se abre el modal de telemetría calculando en tiempo real su tasa de efectividad de entrega y volumen de kilogramos transportados en las últimas rutas.
+
+---
+
+## 39. Mesa de Facturación Masiva, Generación de Cortes (AM/PM/ADJ), Exportación World Office & Cartera B2B (`/admin/commercial/billing`) (SDD v1.9.142)
+
+### 39.1 Misión y Principio Rector de la Mesa de Facturación
+La mesa de facturación (`/admin/commercial/billing`) centraliza la emisión masiva de documentos fiscales y comerciales de FruFresco. Asegura la coherencia tributaria ante la DIAN (resolución DIAN, prefijos, rangos autorizados y consecutivos inmutables), la sincronización con el sistema contable World Office mediante planos normalizados de 57 columnas, el control de cartera y crédito B2B (`client_credit_dossiers`), y la liquidación rigurosa de pedidos con tarifa abierta o precio cero antes de su emisión definitiva.
+
+### 39.2 Arquitectura del Motor de Facturación & Lógica Poka-Yoke
+1. **Poka-Yoke Canónico Anti-Facturación de Tarifa Cero o Consumo Abierto:**
+   - Queda estrictamente prohibida la emisión de un corte oficial o factura electrónica definitiva sobre pedidos cuyo total neto sea \$0 COP o contengan anotaciones de despacho sin precio (`DESPACHADO SIN PRECIO`, `SE DESPACHÓ SIN PRECIO`, `CONSUMO ABIERTO`).
+   - La compuerta de validación en la previsualización del corte bloquea la confirmación y despliega una advertencia prominente en pantalla, exigiendo que el área comercial asigne precio o liquide el pedido a costo vigente previo a la expedición del documento.
+2. **Liquidación a Costo Vigente en Lote sin Ventanas Nativas Bloqueantes:**
+   - La función de liquidación en lote (`handleLiquidateSelectedOrAllOpenOrders`) consulta `/api/commercial/billing/liquidate-open-order` para recalcular los precios basándose en la matriz de costos comerciales vigentes (`commercial_cost_matrix`).
+   - El gatillo de confirmación opera como una compuerta de dos pasos dentro de la propia interfaz (botón interactivo púrpura que pasa a rojo de confirmación `¿Confirmar Liquidar N?` con botón de cancelación), erradicando las llamadas a `window.confirm()`.
+3. **Erradicación de Alertas Nativas & Sistema de Notificación Reactiva Flotante:**
+   - Eliminación integral de 21 llamadas a `alert()` en los flujos de guardado de expedientes de crédito, liquidación de pedidos, auditoría de cortes, conciliación de devoluciones, pagos de facturas y exportaciones a hojas de cálculo.
+   - Implementación de un contenedor de notificaciones toast flotante de alta visibilidad (`toasts`), clasificado cromáticamente por severidad (`success` esmeralda, `error` carmesí, `warning` ámbar, `info` cobalto) con auto-cierre temporizado y descarte manual instantáneo.
+4. **Segmentación de Cortes AM, PM y Ajustes (ADJ):**
+   - Corte AM: Procesa los pedidos entregados durante la franja de madrugada/mañana.
+   - Corte PM: Procesa los repartos vespertinos.
+   - Corte ADJ: Emisión exclusiva de Notas Crédito (`NC`) derivadas de novedades de calidad, faltantes o devoluciones aprobadas, ajustando la base y el impuesto de forma atómica en `billing_invoices`.
+5. **Generación de Planos World Office (Plantilla Contable 57 Columnas):**
+   - Mapeo determinístico de cada pedido a filas contables (`FV` para facturas y `NC` para notas crédito), discriminando base gravable, tasa de IVA (19% o exento), identificación fiscal del tercero (NIT sin dígito de verificación ni caracteres especiales), forma de pago (Crédito con plazo de cartera vs Contado) y código de producto (SKU oficial).
+
+---
+
+#### Escenario 182: Facturación Masiva, Poka-Yoke de Tarifa Cero y Exportación World Office (SDD v1.9.142)
+- **Given** el Analista de Facturación y Cartera en `/admin/commercial/billing` con pedidos pendientes de facturar para la fecha.
+- **When** abre el modal de previsualización de corte (AM/PM) e intenta emitir el corte:
+- **Then**:
+  1. El sistema inspecciona cada pedido del corte; si alguno fue despachado sin precio o con total \$0, se activa el Poka-Yoke de Facturación, desplegando un banner de advertencia en el modal y una notificación toast de alta severidad, impidiendo la generación de la factura.
+  2. El analista utiliza el botón "Liquidar Costo Vigente", el cual solicita confirmación visual en UI en dos pasos (sin recurrir a `window.confirm`), invocando la API de liquidación para actualizar los precios con base en la matriz comercial vigente.
+  3. Tras liquidar el pedido, el analista confirma el corte oficial: se genera el registro en `billing_cuts`, se insertan las facturas en `billing_invoices` con consecutivo correlativo DIAN, se actualiza la secuencia en `app_settings` y se emite una notificación de éxito con el rango de facturas generadas.
+  4. Al presionar "Descargar Excel (.xlsx)" para World Office, se genera y descarga el archivo plano estructurado de 57 columnas con desglose contable de cada ítem, sin interrupciones por alertas nativas del navegador.
+
 
 
 

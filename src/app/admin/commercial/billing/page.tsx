@@ -530,6 +530,30 @@ export default function BillingDashboard() {
     const [paymentMethod, setPaymentMethod] = useState('Transferencia');
     const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
 
+    // Toast Notification & Action Confirmation States (Poka-Yoke Zero-Alert Standard)
+    const [toasts, setToasts] = useState<Array<{ id: string; type: 'success' | 'error' | 'warning' | 'info'; title?: string; message: string }>>([]);
+    const [confirmBatchLiquidation, setConfirmBatchLiquidation] = useState(false);
+    const [previewCutPokaYokeError, setPreviewCutPokaYokeError] = useState<string | null>(null);
+
+    const showToast = useCallback((toast: { type: 'success' | 'error' | 'warning' | 'info'; title?: string; message: string }) => {
+        const id = Math.random().toString(36).substring(2, 9);
+        setToasts(prev => [...prev.slice(-3), { ...toast, id }]);
+    }, []);
+
+    const removeToast = useCallback((id: string) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    }, []);
+
+    useEffect(() => {
+        if (toasts.length > 0) {
+            const first = toasts[0];
+            const timer = setTimeout(() => {
+                setToasts(prev => prev.filter(t => t.id !== first.id));
+            }, first.type === 'error' ? 8000 : 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [toasts]);
+
     // Global Search & Date Filters
     const [billingSearchQuery, setBillingSearchQuery] = useState('');
     const [includeAllStatuses, setIncludeAllStatuses] = useState(true);
@@ -891,14 +915,14 @@ export default function BillingDashboard() {
             if (selectedB2bClient.id === 'new') {
                 if (!isRegisteringNewClient) {
                     if (!selectedB2bClientAssocId) {
-                        alert('Por favor selecciona un cliente B2B existente.');
+                        showToast({ type: 'warning', message: 'Por favor selecciona un cliente B2B existente.' });
                         setIsSavingDossier(false);
                         return;
                     }
                     targetProfileId = selectedB2bClientAssocId;
                 } else {
                     if (!dossierForm.nombre_comercial || !dossierForm.nit) {
-                        alert('Por favor completa el Nombre Comercial y NIT del nuevo cliente.');
+                        showToast({ type: 'warning', message: 'Por favor completa el Nombre Comercial y NIT del nuevo cliente.' });
                         setIsSavingDossier(false);
                         return;
                     }
@@ -939,12 +963,12 @@ export default function BillingDashboard() {
 
             if (error) throw error;
             
-            alert('Formulario de crédito guardado exitosamente.');
+            showToast({ type: 'success', message: 'Formulario de crédito guardado exitosamente.' });
             setIsDossierModalOpen(false);
             fetchDossiersData();
         } catch (err: any) {
             console.error('Error saving dossier:', err);
-            alert('Error al guardar el formulario: ' + err.message);
+            showToast({ type: 'error', message: `Error al guardar el formulario: ${err.message}` });
         } finally {
             setIsSavingDossier(false);
         }
@@ -1107,11 +1131,11 @@ export default function BillingDashboard() {
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Error al liquidar pedido');
-            alert(json.message || 'Pedido liquidado a costo vigente exitosamente.');
+            showToast({ type: 'success', message: json.message || 'Pedido liquidado a costo vigente exitosamente.' });
             await fetchData();
         } catch (err: any) {
             console.error('Error liquidating order:', err);
-            alert('Error al liquidar pedido: ' + err.message);
+            showToast({ type: 'error', message: `Error al liquidar pedido: ${err.message}` });
         } finally {
             setIsProcessing(false);
         }
@@ -1123,12 +1147,9 @@ export default function BillingDashboard() {
             : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).map(o => o.id);
 
         if (targetIds.length === 0) {
-            alert('No hay pedidos con tarifa $0, despachados sin precio o sobre lista abierta a consumo para liquidar.');
+            showToast({ type: 'info', message: 'No hay pedidos con tarifa $0, despachados sin precio o sobre lista abierta a consumo para liquidar.' });
             return;
         }
-
-        const confirmMsg = `¿Deseas liquidar ${targetIds.length} pedido(s) actualizando sus productos al costo base comercial vigente?`;
-        if (!window.confirm(confirmMsg)) return;
 
         setIsProcessing(true);
         try {
@@ -1139,13 +1160,14 @@ export default function BillingDashboard() {
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Error al liquidar pedidos');
-            alert(json.message || 'Pedidos liquidados a costo vigente con éxito.');
+            showToast({ type: 'success', message: json.message || 'Pedidos liquidados a costo vigente con éxito.' });
             await fetchData();
         } catch (err: any) {
             console.error('Error in batch liquidation:', err);
-            alert('Error al liquidar pedidos en lote: ' + err.message);
+            showToast({ type: 'error', message: `Error al liquidar pedidos en lote: ${err.message}` });
         } finally {
             setIsProcessing(false);
+            setConfirmBatchLiquidation(false);
         }
     };
 
@@ -1572,7 +1594,7 @@ export default function BillingDashboard() {
             setPreviewOrders(mapped);
         } catch (err: any) {
             console.error('Error generating preview:', err);
-            alert('Error al cargar la previsualización: ' + err.message);
+            showToast({ type: 'error', message: `Error al cargar la previsualización: ${err.message}` });
         } finally {
             setLoadingPreview(false);
         }
@@ -1581,6 +1603,7 @@ export default function BillingDashboard() {
     // Execute Official Cut Generation
     const handleConfirmGenerateCut = async () => {
         if (previewOrders.length === 0) return;
+        setPreviewCutPokaYokeError(null);
 
         // Poka-Yoke Canónico (Escenario 121 SDD):
         // Se prohíbe emitir corte o factura definitiva sobre pedidos despachados sin precio o consumo abierto no liquidado
@@ -1590,7 +1613,13 @@ export default function BillingDashboard() {
             o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')
         );
         if (unpricedOrder) {
-            alert(`⛔ POKA-YOKE DE FACTURACIÓN ACTIVO:\n\nEl pedido #${unpricedOrder.sequence_id || unpricedOrder.id.slice(0, 8)} fue despachado sin precio (o sobre consumo abierto no liquidado).\n\nAcción requerida: El Área Comercial debe fijar la tarifa o se debe liquidar el pedido a costo vigente antes de emitir la factura electrónica.`);
+            const errorMsg = `El pedido #${unpricedOrder.sequence_id || unpricedOrder.id.slice(0, 8)} fue despachado sin precio (o sobre consumo abierto no liquidado). Acción requerida: El Área Comercial debe fijar la tarifa o se debe liquidar el pedido a costo vigente antes de emitir la factura electrónica.`;
+            setPreviewCutPokaYokeError(errorMsg);
+            showToast({
+                type: 'error',
+                title: '⛔ Poka-Yoke de Facturación Activo',
+                message: errorMsg
+            });
             return;
         }
 
@@ -1700,13 +1729,18 @@ export default function BillingDashboard() {
                 setInvoiceNextNumber(newNextNumber);
             }
 
-            alert(`¡Corte ${previewSlot} generado con éxito! ${previewOrders.length} facturas emitidas (Rango: ${previewOrders[0]?.projectedInvoiceNumber} al ${previewOrders[previewOrders.length - 1]?.projectedInvoiceNumber}).`);
+            showToast({
+                type: 'success',
+                title: `¡Corte ${previewSlot} Generado con Éxito!`,
+                message: `${previewOrders.length} facturas emitidas (Rango: ${previewOrders[0]?.projectedInvoiceNumber} al ${previewOrders[previewOrders.length - 1]?.projectedInvoiceNumber}).`
+            });
             setIsPreviewModalOpen(false);
+            setPreviewCutPokaYokeError(null);
             setSelectedOrderIds([]);
             fetchData();
         } catch (err: any) {
             console.error('Error generating cut:', err);
-            alert('Error al generar el corte: ' + err.message);
+            showToast({ type: 'error', message: `Error al generar el corte: ${err.message}` });
         } finally {
             setIsProcessing(false);
         }
@@ -1759,11 +1793,14 @@ export default function BillingDashboard() {
 
                 await supabase.from('billing_returns').update({ status: 'approved' }).eq('id', ret.id);
             }
-            alert(`Novedad procesada: ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'}`);
+            showToast({
+                type: 'success',
+                message: `Novedad procesada: ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'}`
+            });
             fetchData();
         } catch (err: any) {
             console.error('Error processing return:', err);
-            alert('Error al procesar la devolución: ' + err.message);
+            showToast({ type: 'error', message: `Error al procesar la devolución: ${err.message}` });
         }
     };
 
@@ -1782,13 +1819,13 @@ export default function BillingDashboard() {
                 .eq('id', selectedInvoice.id);
 
             if (error) throw error;
-            alert('Pago registrado exitosamente.');
+            showToast({ type: 'success', message: 'Pago registrado exitosamente.' });
             setIsPaymentModalOpen(false);
             setSelectedInvoice(null);
             fetchData();
         } catch (err: any) {
             console.error('Error registering payment:', err);
-            alert('Error al registrar el pago: ' + err.message);
+            showToast({ type: 'error', message: `Error al registrar el pago: ${err.message}` });
         } finally {
             setIsProcessing(false);
         }
@@ -1818,7 +1855,7 @@ export default function BillingDashboard() {
 
             if (cutOrdersErr) throw cutOrdersErr;
             if (!cutOrders || cutOrders.length === 0) {
-                alert('No se encontraron pedidos asociados a este corte.');
+                showToast({ type: 'warning', message: 'No se encontraron pedidos asociados a este corte.' });
                 return;
             }
 
@@ -1883,7 +1920,7 @@ export default function BillingDashboard() {
             });
 
             if (exportRows.length === 0) {
-                alert('Los pedidos de este corte no contienen ítems para exportar.');
+                showToast({ type: 'warning', message: 'Los pedidos de este corte no contienen ítems para exportar.' });
                 return;
             }
 
@@ -1900,11 +1937,15 @@ export default function BillingDashboard() {
                 })
                 .eq('id', cutId);
 
-            alert(`¡Plano World Office exportado con éxito! Se generaron ${exportRows.length} líneas de detalle.`);
+            showToast({
+                type: 'success',
+                title: 'Plano World Office Exportado',
+                message: `Se generaron ${exportRows.length} líneas de detalle para el corte.`
+            });
             fetchData();
         } catch (err: any) {
             console.error('Export error:', err);
-            alert('Error al exportar plano para World Office: ' + err.message);
+            showToast({ type: 'error', message: `Error al exportar plano para World Office: ${err.message}` });
         }
     };
 
@@ -1915,7 +1956,7 @@ export default function BillingDashboard() {
             : filteredPendingOrders;
 
         if (targetOrders.length === 0) {
-            alert('No hay pedidos seleccionados o disponibles para exportar.');
+            showToast({ type: 'warning', message: 'No hay pedidos seleccionados o disponibles para exportar.' });
             return;
         }
 
@@ -1940,7 +1981,7 @@ export default function BillingDashboard() {
 
             if (ordersErr) throw ordersErr;
             if (!fullOrders || fullOrders.length === 0) {
-                alert('No se encontraron detalles de productos para los pedidos seleccionados.');
+                showToast({ type: 'warning', message: 'No se encontraron detalles de productos para los pedidos seleccionados.' });
                 return;
             }
 
@@ -1993,7 +2034,7 @@ export default function BillingDashboard() {
             });
 
             if (exportRows.length === 0) {
-                alert('Los pedidos seleccionados no tienen ítems registrados para exportar.');
+                showToast({ type: 'warning', message: 'Los pedidos seleccionados no tienen ítems registrados para exportar.' });
                 return;
             }
 
@@ -2003,10 +2044,14 @@ export default function BillingDashboard() {
                 `WorldOffice_Pedidos_${dateLabel}_${targetOrders.length}_pedidos`
             );
 
-            alert(`¡Plano World Office descargado con éxito! Se exportaron ${targetOrders.length} pedidos (${exportRows.length} líneas de producto).`);
+            showToast({
+                type: 'success',
+                title: 'Plano World Office Descargado',
+                message: `Se exportaron ${targetOrders.length} pedidos (${exportRows.length} líneas de producto).`
+            });
         } catch (err: any) {
             console.error('Error exporting pending orders to Excel:', err);
-            alert('Error al descargar plano para World Office: ' + err.message);
+            showToast({ type: 'error', message: `Error al descargar plano para World Office: ${err.message}` });
         } finally {
             setIsProcessing(false);
         }
@@ -2036,7 +2081,7 @@ export default function BillingDashboard() {
 
             if (ordersErr) throw ordersErr;
             if (!fullOrders || fullOrders.length === 0) {
-                alert('No se encontraron detalles de productos para la previsualización.');
+                showToast({ type: 'warning', message: 'No se encontraron detalles de productos para la previsualización.' });
                 return;
             }
 
@@ -2102,10 +2147,14 @@ export default function BillingDashboard() {
                 `WorldOffice_PreCorte_${previewSlot}_${selectedBillingDate}_${previewOrders.length}_pedidos`
             );
 
-            alert(`¡Plano World Office descargado con éxito! Se exportaron ${previewOrders.length} pedidos.`);
+            showToast({
+                type: 'success',
+                title: 'Plano World Office Descargado',
+                message: `Se exportaron ${previewOrders.length} pedidos de la previsualización.`
+            });
         } catch (err: any) {
             console.error('Error exporting preview to Excel:', err);
-            alert('Error al descargar plano para World Office: ' + err.message);
+            showToast({ type: 'error', message: `Error al descargar plano para World Office: ${err.message}` });
         } finally {
             setIsProcessing(false);
         }
@@ -2139,11 +2188,11 @@ export default function BillingDashboard() {
                     }, { onConflict: 'key' });
             }
 
-            alert('¡Configuración fiscal y secuencias guardadas con éxito!');
+            showToast({ type: 'success', message: '¡Configuración fiscal y secuencias guardadas con éxito!' });
             fetchData();
         } catch (err: any) {
             console.error('Error saving config:', err);
-            alert('Error al guardar configuración: ' + err.message);
+            showToast({ type: 'error', message: `Error al guardar configuración: ${err.message}` });
         } finally {
             setSavingConfig(false);
         }
@@ -2319,6 +2368,59 @@ export default function BillingDashboard() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
+            {/* FLOATING TOAST NOTIFICATIONS (POKA-YOKE SYSTEM) */}
+            <div style={{
+                position: 'fixed',
+                top: '20px',
+                right: '24px',
+                zIndex: 99999,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                maxWidth: '440px',
+                pointerEvents: 'none'
+            }}>
+                {toasts.map(t => (
+                    <div key={t.id} style={{
+                        pointerEvents: 'auto',
+                        padding: '0.85rem 1.1rem',
+                        borderRadius: '10px',
+                        backgroundColor: t.type === 'success' ? '#ECFDF5' : t.type === 'error' ? '#FEF2F2' : t.type === 'warning' ? '#FFFBEB' : '#EFF6FF',
+                        border: `1px solid ${t.type === 'success' ? '#A7F3D0' : t.type === 'error' ? '#FECACA' : t.type === 'warning' ? '#FDE68A' : '#BFDBFE'}`,
+                        color: t.type === 'success' ? '#065F46' : t.type === 'error' ? '#991B1B' : t.type === 'warning' ? '#92400E' : '#1E40AF',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                        animation: 'slideInRight 0.25s ease-out'
+                    }}>
+                        {t.type === 'success' && <CheckCircle2 size={18} color="#059669" style={{ flexShrink: 0, marginTop: '2px' }} />}
+                        {t.type === 'error' && <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />}
+                        {t.type === 'warning' && <AlertCircle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />}
+                        {t.type === 'info' && <Sparkles size={18} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />}
+                        <div style={{ flex: 1 }}>
+                            {t.title && <div style={{ fontWeight: '800', fontSize: '0.84rem', marginBottom: '2px' }}>{t.title}</div>}
+                            <div style={{ fontSize: '0.8rem', fontWeight: '600', lineHeight: 1.35 }}>{t.message}</div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => removeToast(t.id)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'inherit',
+                                padding: '2px',
+                                opacity: 0.7,
+                                marginTop: '1px'
+                            }}
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+
             {/* Contenedor Maestro Universal 1600px */}
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.6rem 1.2rem 2.5rem' }}>
 
@@ -3157,29 +3259,84 @@ export default function BillingDashboard() {
                                         </div>
 
                                         {openConsumptionCount > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={handleLiquidateSelectedOrAllOpenOrders}
-                                                disabled={isProcessing}
-                                                style={{
-                                                    backgroundColor: '#7C3AED',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    padding: '0.4rem 0.8rem',
-                                                    borderRadius: '8px',
-                                                    fontWeight: '800',
-                                                    fontSize: '0.74rem',
-                                                    cursor: isProcessing ? 'wait' : 'pointer',
-                                                    opacity: isProcessing ? 0.7 : 1,
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)'
-                                                }}
-                                                title="Liquidar precios de pedidos en lista abierta aplicando el costo vigente actual"
-                                            >
-                                                <Zap size={13} className={isProcessing ? "animate-spin" : ""} /> {isProcessing ? 'Liquidando...' : `Liquidar Costo Vigente (${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`})`}
-                                            </button>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                {confirmBatchLiquidation ? (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleLiquidateSelectedOrAllOpenOrders}
+                                                            disabled={isProcessing}
+                                                            style={{
+                                                                backgroundColor: '#DC2626',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                padding: '0.4rem 0.8rem',
+                                                                borderRadius: '8px',
+                                                                fontWeight: '800',
+                                                                fontSize: '0.74rem',
+                                                                cursor: isProcessing ? 'wait' : 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)'
+                                                            }}
+                                                        >
+                                                            <CheckCircle2 size={13} className={isProcessing ? "animate-spin" : ""} />
+                                                            {isProcessing ? 'Liquidando...' : `¿Confirmar Liquidar ${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`}?`}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmBatchLiquidation(false)}
+                                                            style={{
+                                                                backgroundColor: '#F1F5F9',
+                                                                color: '#64748B',
+                                                                border: '1px solid #CBD5E1',
+                                                                padding: '0.4rem 0.6rem',
+                                                                borderRadius: '8px',
+                                                                fontSize: '0.74rem',
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            Cancelar
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const targetIds = selectedOrderIds.length > 0 
+                                                                ? selectedOrderIds 
+                                                                : pendingOrders.filter(o => o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO') || o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')).map(o => o.id);
+                                                            if (targetIds.length === 0) {
+                                                                showToast({ type: 'info', message: 'No hay pedidos con tarifa $0 o sobre lista abierta para liquidar.' });
+                                                                return;
+                                                            }
+                                                            setConfirmBatchLiquidation(true);
+                                                        }}
+                                                        disabled={isProcessing}
+                                                        style={{
+                                                            backgroundColor: '#7C3AED',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            padding: '0.4rem 0.8rem',
+                                                            borderRadius: '8px',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.74rem',
+                                                            cursor: isProcessing ? 'wait' : 'pointer',
+                                                            opacity: isProcessing ? 0.7 : 1,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)'
+                                                        }}
+                                                        title="Liquidar precios de pedidos en lista abierta aplicando el costo vigente actual"
+                                                    >
+                                                        <Zap size={13} className={isProcessing ? "animate-spin" : ""} />
+                                                        {`Liquidar Costo Vigente (${selectedOrderIds.length > 0 ? `${selectedOrderIds.length} sel` : `${openConsumptionCount}`})`}
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
 
                                         <button
@@ -4728,6 +4885,33 @@ export default function BillingDashboard() {
                                 )}
                             </div>
 
+                            {previewCutPokaYokeError && (
+                                <div style={{
+                                    margin: '0.75rem 0',
+                                    padding: '0.85rem 1rem',
+                                    backgroundColor: '#FEF2F2',
+                                    border: '1px solid #FECACA',
+                                    borderRadius: '10px',
+                                    color: '#991B1B',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px'
+                                }}>
+                                    <AlertTriangle size={18} style={{ color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: '800', fontSize: '0.82rem', marginBottom: '2px' }}>⛔ Poka-Yoke de Facturación Activo</div>
+                                        <div style={{ fontSize: '0.76rem', color: '#B91C1C', lineHeight: 1.4, fontWeight: '600' }}>{previewCutPokaYokeError}</div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPreviewCutPokaYokeError(null)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991B1B', padding: '2px' }}
+                                    >
+                                        <X size={15} />
+                                    </button>
+                                </div>
+                            )}
+
                             <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                                 <div style={{ fontSize: '0.82rem', color: '#334155' }}>
                                     Total Corte: <strong>{formatMoney(previewOrders.reduce((sum, o) => sum + o.netTotal, 0))}</strong> · <strong>{previewOrders.length} facturas</strong>
@@ -5170,6 +5354,17 @@ export default function BillingDashboard() {
                 })()}
 
             </div>
+
+            <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(-4px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}} />
         </main>
     );
 }

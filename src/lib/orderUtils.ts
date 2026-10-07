@@ -648,5 +648,53 @@ export function resolveProductCharacteristicsBadges(item: {
     return badges;
 }
 
+/**
+ * Detects whether an order is a Quality Replacement ($0 COP)
+ * and extracts its linked parent order sequence / id if available.
+ */
+export interface OrderReplacementInfo {
+    isReplacement: boolean;
+    parentSequenceId?: string;
+    parentOrderId?: string;
+    notes?: string;
+}
+
+export const getOrderReplacementInfo = (order: any): OrderReplacementInfo => {
+    if (!order) return { isReplacement: false };
+
+    const logistics = order.logistics_data || {};
+    const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+    
+    const isRep = Boolean(
+        logistics.is_replacement ||
+        logistics.parent_order_id ||
+        notes.includes('reposici') ||
+        order.origin_source === 'customer_service' ||
+        (order.total === 0 && (notes.includes('pqr') || notes.includes('garantía') || notes.includes('garantia')))
+    );
+
+    if (!isRep) return { isReplacement: false };
+
+    let parentSeq = logistics.parent_order_sequence;
+    let parentId = logistics.parent_order_id;
+
+    if (!parentSeq) {
+        // Regex to extract folio/sequence like #PED-10425 or Pedido #10425 or Pedido 10425
+        const match = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) ||
+                      notes.match(/#ped-(\d{3,})/i) ||
+                      notes.match(/#(\d{4,})/i);
+        if (match) {
+            parentSeq = match[1];
+        }
+    }
+
+    return {
+        isReplacement: true,
+        parentSequenceId: parentSeq ? String(parentSeq) : undefined,
+        parentOrderId: parentId,
+        notes: order.admin_notes || order.special_notes
+    };
+};
+
 
 
