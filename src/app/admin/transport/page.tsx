@@ -38,7 +38,9 @@ import {
     Phone,
     Navigation,
     ExternalLink,
-    Clock
+    Clock,
+    Radio,
+    Smartphone
 } from 'lucide-react';
 
 function SubtabSkeleton({ title }: { title: string }) {
@@ -205,6 +207,7 @@ export default function TransportControlTower() {
     };
     const [loading, setLoading] = useState(true);
     const isMounted = useRef(true);
+    const hasInitialLoaded = useRef(false);
 
     const hasPermission = (permission: string) => {
         return checkUserPermission(profile, permission, roles);
@@ -242,22 +245,24 @@ export default function TransportControlTower() {
             const res = await fetch('/api/transport/sync-gps');
             const data = await res.json();
             if (data.success) {
-                setGpsSyncMessage(`✓ ${data.synced_count || 0} vehículos OK`);
-                await fetchTransportData();
+                setGpsSyncMessage(`${data.synced_count || 0} vehículos sincronizados`);
+                await fetchTransportData(undefined, true);
             } else {
-                setGpsSyncMessage('⚠ ' + (data.message || 'Error GPS'));
+                setGpsSyncMessage(data.message || 'Error GPS');
             }
         } catch {
-            setGpsSyncMessage('⚠ Error de red');
+            setGpsSyncMessage('Error de red al sincronizar');
         } finally {
             setIsSyncingGps(false);
             setTimeout(() => setGpsSyncMessage(null), 4000);
         }
     };
 
-    const fetchTransportData = useCallback(async (signal?: AbortSignal) => {
+    const fetchTransportData = useCallback(async (signal?: AbortSignal, isSilent = false) => {
         try {
-            setLoading(true);
+            if (!isSilent && !hasInitialLoaded.current) {
+                setLoading(true);
+            }
 
             // Fetch system_roles from app_settings
             const { data: rolesData, error: rolesError } = await supabase
@@ -395,35 +400,51 @@ export default function TransportControlTower() {
             if (!isMounted.current) return;
             console.error('Error fetching transport data:', err.message || err.details || err.code || err);
         } finally {
+            hasInitialLoaded.current = true;
             if (isMounted.current) setLoading(false);
         }
     }, []);
 
+    // Carga inicial al montar la página + primera sincronización satelital en caliente
     useEffect(() => {
         isMounted.current = true;
         const controller = new AbortController();
+        
+        // 1. Carga inmediata de estado local
         fetchTransportData(controller.signal);
 
-        // Polling telemático satelital en vivo cada 30 segundos cuando está en el mapa
-        const interval = setInterval(() => {
-            if (isMounted.current && activeTab === 'map') {
-                fetch('/api/transport/sync-gps')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success && isMounted.current) {
-                            fetchTransportData();
-                        }
-                    })
-                    .catch(() => {});
-            }
-        }, 30000);
+        // 2. Sincronización satelital en caliente desde Apps-360 al segundo 1
+        fetch('/api/transport/sync-gps')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && isMounted.current) {
+                    fetchTransportData(undefined, true);
+                }
+            })
+            .catch(() => {});
 
         return () => { 
             isMounted.current = false;
             controller.abort();
-            clearInterval(interval);
         };
-    }, [fetchTransportData, activeTab]);
+    }, [fetchTransportData]);
+
+    // Polling telemático satelital en segundo plano (cada 25s, 100% silencioso sin pantalla blanca)
+    useEffect(() => {
+        if (activeTab !== 'map') return;
+        const interval = setInterval(async () => {
+            if (!isMounted.current) return;
+            try {
+                const res = await fetch('/api/transport/sync-gps');
+                const data = await res.json();
+                if (data.success && isMounted.current) {
+                    await fetchTransportData(undefined, true);
+                }
+            } catch (_) {}
+        }, 25000);
+
+        return () => clearInterval(interval);
+    }, [activeTab, fetchTransportData]);
 
     if (loading) {
         return (
@@ -800,7 +821,7 @@ export default function TransportControlTower() {
                                                 const activeRoute = activeRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
                                                 
                                                 const pos = v.last_latitude && v.last_longitude 
-                                                    ? { lat: v.last_latitude, lng: v.last_longitude }
+                                                    ? { lat: Number(v.last_latitude), lng: Number(v.last_longitude) }
                                                     : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
 
                                                 const isMoving = (v.speed || 0) > 0;
@@ -840,7 +861,7 @@ export default function TransportControlTower() {
                                                                 height: isPopoverOpen ? '38px' : '32px', 
                                                                 borderRadius: '10px', 
                                                                 background: isMoving
-                                                                    ? 'linear-gradient(135deg, #2563EB 0%, #0284C7 100%)' // Azul Eléctrico en Movimiento
+                                                                    ? 'linear-gradient(135deg, #FF6B00 0%, #EA580C 100%)' // Naranja Fuego en Movimiento
                                                                     : isInRoute 
                                                                         ? 'linear-gradient(135deg, #0284C7 0%, #0D7A57 100%)' 
                                                                         : isAvailable 
@@ -853,18 +874,34 @@ export default function TransportControlTower() {
                                                                 fontWeight: '900', 
                                                                 fontSize: isPopoverOpen ? '0.85rem' : '0.75rem',
                                                                 boxShadow: isMoving
-                                                                    ? '0 0 16px rgba(37, 99, 235, 0.8), 0 4px 10px rgba(0,0,0,0.22)'
+                                                                    ? '0 0 18px rgba(255, 107, 0, 0.9), 0 4px 10px rgba(0,0,0,0.22)'
                                                                     : isPopoverOpen 
                                                                         ? '0 8px 18px rgba(13, 122, 87, 0.4)' 
                                                                         : '0 4px 10px rgba(0,0,0,0.18)',
                                                                 border: isMoving
-                                                                    ? '2px solid #BFDBFE'
+                                                                    ? '2px solid #FED7AA'
                                                                     : isPopoverOpen ? '3px solid white' : '2px solid white',
                                                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                                transform: isPopoverOpen ? 'scale(1.1)' : 'scale(1)'
+                                                                transform: isPopoverOpen ? 'scale(1.1)' : 'scale(1)',
+                                                                position: 'relative'
                                                             }}>
+                                                                {isMoving && (
+                                                                    <span 
+                                                                        style={{
+                                                                            position: 'absolute',
+                                                                            top: -3,
+                                                                            left: -3,
+                                                                            right: -3,
+                                                                            bottom: -3,
+                                                                            borderRadius: '12px',
+                                                                            border: '2px solid rgba(255, 107, 0, 0.8)',
+                                                                            animation: 'pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                                                                            pointerEvents: 'none'
+                                                                        }}
+                                                                    />
+                                                                )}
                                                                 {v.speed > 0 && v.heading !== undefined ? (
-                                                                    <Navigation size={14} style={{ transform: `rotate(${v.heading}deg)`, transition: 'transform 0.3s ease' }} />
+                                                                    <Navigation size={14} style={{ transform: `rotate(${v.heading}deg)`, transition: 'transform 0.4s ease' }} />
                                                                 ) : (
                                                                     initials || <Truck size={14} />
                                                                 )}
@@ -872,15 +909,15 @@ export default function TransportControlTower() {
 
                                                             {/* VEHICLE PLATE BADGE */}
                                                             <div style={{ 
-                                                                backgroundColor: isMoving ? '#2563EB' : isPopoverOpen ? THEME.colors.primary : 'white', 
+                                                                backgroundColor: isMoving ? '#EA580C' : isPopoverOpen ? THEME.colors.primary : 'white', 
                                                                 color: isMoving || isPopoverOpen ? 'white' : THEME.colors.textMain, 
                                                                 padding: '1px 6px', 
                                                                 borderRadius: '4px', 
                                                                 fontSize: '0.55rem', 
                                                                 fontWeight: '900', 
                                                                 marginTop: '2px',
-                                                                border: `1px solid ${isMoving ? '#1D4ED8' : isPopoverOpen ? THEME.colors.primary : THEME.colors.border}`,
-                                                                boxShadow: isMoving ? '0 2px 6px rgba(37, 99, 235, 0.4)' : '0 2px 4px rgba(0,0,0,0.08)',
+                                                                border: `1px solid ${isMoving ? '#C2410C' : isPopoverOpen ? THEME.colors.primary : THEME.colors.border}`,
+                                                                boxShadow: isMoving ? '0 2px 8px rgba(234, 88, 12, 0.45)' : '0 2px 4px rgba(0,0,0,0.08)',
                                                                 transition: 'all 0.15s ease',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
@@ -891,7 +928,7 @@ export default function TransportControlTower() {
                                                                 {isMoving && (
                                                                     <span style={{ 
                                                                         fontSize: '0.5rem', 
-                                                                        backgroundColor: 'rgba(255,255,255,0.28)', 
+                                                                        backgroundColor: 'rgba(0,0,0,0.3)', 
                                                                         padding: '0 3px', 
                                                                         borderRadius: '3px',
                                                                         fontWeight: '900'
@@ -938,16 +975,16 @@ export default function TransportControlTower() {
                                                                             fontWeight: '900',
                                                                             padding: '2px 7px',
                                                                             borderRadius: '6px',
-                                                                            backgroundColor: isMoving ? '#EFF6FF' : isInRoute ? '#EFF6FF' : isAvailable ? '#ECFDF5' : '#FEF3C7',
-                                                                            color: isMoving ? '#2563EB' : isInRoute ? '#1D4ED8' : isAvailable ? '#065F46' : '#B45309',
-                                                                            border: isMoving ? '1px solid #BFDBFE' : isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                                                                            backgroundColor: isMoving ? '#FFF7ED' : isInRoute ? '#EFF6FF' : isAvailable ? '#ECFDF5' : '#FEF3C7',
+                                                                            color: isMoving ? '#EA580C' : isInRoute ? '#1D4ED8' : isAvailable ? '#065F46' : '#B45309',
+                                                                            border: isMoving ? '1px solid #FDBA74' : isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             gap: '4px'
                                                                         }}>
                                                                             {isMoving ? (
                                                                                 <>
-                                                                                    <Navigation size={10} strokeWidth={2.5} style={{ color: '#2563EB' }} />
+                                                                                    <Navigation size={10} strokeWidth={2.5} style={{ color: '#EA580C' }} />
                                                                                     <span>EN MOVIMIENTO ({Math.round(v.speed)} km/h)</span>
                                                                                 </>
                                                                             ) : isInRoute ? (
@@ -1030,11 +1067,36 @@ export default function TransportControlTower() {
                                                                     {/* Telemetry & GPS Hardware Status Block */}
                                                                     <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0.45rem 0.6rem', marginBottom: '0.6rem', border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem' }}>
-                                                                            <span style={{ fontWeight: '800', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                {v.tracking_source === 'mobile_app' ? '📱 Tracker Móvil (60s)' : '🛰️ GPS Satelital (Apps-360)'}
+                                                                            <span style={{ fontWeight: '800', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                                {v.tracking_source === 'mobile_app' ? (
+                                                                                    <>
+                                                                                        <Smartphone size={11} color={THEME.colors.textSecondary} />
+                                                                                        <span>Tracker Móvil (60s)</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <Radio size={11} color={THEME.colors.textSecondary} />
+                                                                                        <span>GPS Satelital (Apps-360)</span>
+                                                                                    </>
+                                                                                )}
                                                                             </span>
-                                                                            <span style={{ fontWeight: '900', color: (v.speed || 0) > 0 ? '#0D7A57' : (v.ignition_status ? '#D97706' : '#64748B') }}>
-                                                                                {(v.speed || 0) > 0 ? `🟢 ${v.speed} km/h` : (v.ignition_status ? '🟡 Ralentí' : '⚪ Motor OFF')}
+                                                                            <span style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '4px', color: (v.speed || 0) > 0 ? '#EA580C' : (v.ignition_status ? '#D97706' : '#64748B') }}>
+                                                                                {(v.speed || 0) > 0 ? (
+                                                                                    <>
+                                                                                        <Navigation size={11} style={{ color: '#EA580C' }} />
+                                                                                        <span>{Math.round(v.speed)} km/h</span>
+                                                                                    </>
+                                                                                ) : v.ignition_status ? (
+                                                                                    <>
+                                                                                        <Activity size={11} style={{ color: '#D97706' }} />
+                                                                                        <span>Ralentí</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <Clock size={11} style={{ color: '#64748B' }} />
+                                                                                        <span>Motor OFF</span>
+                                                                                    </>
+                                                                                )}
                                                                             </span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', color: THEME.colors.textSecondary }}>
@@ -1043,8 +1105,9 @@ export default function TransportControlTower() {
                                                                         </div>
                                                                         {/* Watchdog Signal Loss Warning (> 15 mins) */}
                                                                         {isInRoute && v.last_gps_sync && (Date.now() - new Date(v.last_gps_sync).getTime() > 15 * 60 * 1000) && (
-                                                                            <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '4px', padding: '2px 5px', fontSize: '0.6rem', fontWeight: '800', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                <AlertTriangle size={10} /> ⚠️ Sin reporte hace &gt; 15 min
+                                                                            <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '4px', padding: '3px 6px', fontSize: '0.62rem', fontWeight: '800', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                                <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+                                                                                <span>Sin reporte telemático reciente (&gt; 15 min)</span>
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -1148,7 +1211,7 @@ export default function TransportControlTower() {
                                                 <span>Flota en Patio ({vehiclesAvailable})</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#2563EB', boxShadow: '0 0 6px rgba(37,99,235,0.7)' }}></div>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FF6B00', boxShadow: '0 0 6px rgba(255,107,0,0.85)' }}></div>
                                                 <span>En Movimiento ({vehiclesOnRoute})</span>
                                             </div>
                                         </div>

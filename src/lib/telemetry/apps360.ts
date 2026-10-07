@@ -1,7 +1,7 @@
 /**
  * FruFresco ERP/TMS - Telemetry & GPS M2M Connector
- * Integración con plataforma satelital apps-360.online (GPSWOX / GPS-Server Engine)
- * SPEC.md v1.9.75 - Dominio de Transporte
+ * Integración de Alta Resiliencia con Apps-360.online (GPSWOX / Traccar Engine)
+ * Estandarizado bajo especialista-api (SPEC.md Dominio 6 - TMS)
  */
 
 export interface NormalizedTelemetry {
@@ -28,11 +28,20 @@ export interface Apps360RawDevice {
     altitude?: number | string;
     time?: string;
     online?: string;
+    timestamp?: number;
+    moved_timestamp?: number;
     device_data?: {
         id?: number | string;
         imei?: string;
         plate_number?: string;
         name?: string;
+        time?: string;
+        traccar?: {
+            time?: string;
+            speed?: string | number;
+            course?: string | number;
+            [key: string]: any;
+        };
         [key: string]: any;
     };
     sensors?: Array<{
@@ -51,17 +60,67 @@ export interface Apps360RawDevice {
 }
 
 /**
+ * Cliente HTTP resiliente con AbortController y timeout defensivo (Mandamiento 4)
+ */
+async function fetchWithTimeout(url: string, options: RequestInit & { timeoutMs?: number } = {}) {
+    const { timeoutMs = 12000, ...fetchOpts } = options;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const res = await fetch(url, {
+            ...fetchOpts,
+            signal: controller.signal
+        });
+        return res;
+    } catch (err: any) {
+        if (err.name === 'AbortError' || err.code === 20) {
+            throw new Error(`Upstream timeout: El servidor de Apps-360 (${url.split('?')[0]}) no respondió en ${timeoutMs}ms`);
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+/**
+ * Parsea fechas de telemetría provenientes de GPSWOX/Traccar a ISO UTC
+ * Soporta DD-MM-YYYY HH:mm:ss, ISO strings y timestamps Unix
+ */
+export function parseTelemetryDate(raw: any, fallbackTimestamp?: number): string {
+    if (typeof raw === 'number' && !isNaN(raw)) {
+        return new Date(raw * 1000).toISOString();
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+        const str = raw.trim();
+        // Formato Bogotá local "DD-MM-YYYY HH:mm:ss" (ej. "07-10-2026 12:20:54")
+        const ddmmyyyyMatch = str.match(/^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+        if (ddmmyyyyMatch) {
+            const [_, day, month, year, hours, minutes, seconds] = ddmmyyyyMatch;
+            const isoStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-05:00`;
+            const parsed = new Date(isoStr);
+            if (!isNaN(parsed.getTime())) return parsed.toISOString();
+        }
+        // Formato estándar ISO o "YYYY-MM-DD HH:mm:ss"
+        const standardDate = new Date(str.includes('T') ? str : str.replace(' ', 'T') + 'Z');
+        if (!isNaN(standardDate.getTime())) return standardDate.toISOString();
+    }
+    if (fallbackTimestamp && typeof fallbackTimestamp === 'number') {
+        return new Date(fallbackTimestamp * 1000).toISOString();
+    }
+    return new Date().toISOString();
+}
+
+/**
  * Extrae y limpia la placa vehicular colombiana (ej. 'WFW369', 'WFW-369', 'Camión 1 WFW369' -> 'WFW369')
  */
 export function extractCleanPlate(rawStr: string): string | null {
     if (!rawStr) return null;
     const cleanStr = rawStr.toUpperCase().trim();
-    // Búsqueda de patrón de placa colombiana estándar (3 letras y 3 números)
     const match = cleanStr.match(/[A-Z]{3}[-\s]?[0-9]{3}/);
     if (match) {
         return match[0].replace(/[-\s]/g, '');
     }
-    // Si no coincide con regex estricto, retornar texto alfanumérico limpio si tiene longitud válida
     const alphanumeric = cleanStr.replace(/[^A-Z0-9]/g, '');
     return alphanumeric.length >= 5 ? alphanumeric : null;
 }
@@ -77,7 +136,6 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
         return null;
     }
 
-    // Extracción robusta de placa (device_data.plate_number > plate_number > name > plate)
     const candidateName = obj.device_data?.plate_number || obj.plate_number || obj.name || (obj as any).plate || '';
     const plate = extractCleanPlate(candidateName);
     if (!plate) return null;
@@ -85,8 +143,7 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
     const speed = typeof obj.speed === 'string' ? parseFloat(obj.speed) : (obj.speed || 0);
     const heading = typeof obj.course === 'string' ? parseFloat(obj.course) : (obj.course || 0);
     
-    // Extracción de estado de ignición (ACC):
-    // 1. Revisar sensores de GPSWOX
+    // Extracción de estado de ignición (ACC)
     let isIgnitionOn = true;
     if (Array.isArray(obj.sensors) && obj.sensors.length > 0) {
         const accSensor = obj.sensors.find(s => {
@@ -119,15 +176,8 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
     }
 
     const imei = obj.device_data?.imei || (obj as any).imei;
-    let lastGpsSync = new Date().toISOString();
-    if (obj.timestamp && typeof obj.timestamp === 'number') {
-        lastGpsSync = new Date(obj.timestamp * 1000).toISOString();
-    } else if (obj.time || (obj as any).dt_tracker || (obj as any).dt_server) {
-        const rawTime = obj.time || (obj as any).dt_tracker || (obj as any).dt_server;
-        try {
-            lastGpsSync = new Date(rawTime).toISOString();
-        } catch (_) {}
-    }
+    const rawTimeCandidate = obj.device_data?.traccar?.time || obj.time || obj.device_data?.time || (obj as any).dt_tracker || (obj as any).dt_server;
+    const lastGpsSync = parseTelemetryDate(rawTimeCandidate, obj.timestamp || obj.moved_timestamp);
 
     return {
         plate,
@@ -158,20 +208,20 @@ export async function loginApps360(email?: string, password?: string, baseUrl?: 
         return null;
     }
 
-    // Reutilizar token si aún es válido
     if (cachedUserApiHash && cachedUserApiHash.expiresAt > Date.now()) {
         return cachedUserApiHash.hash;
     }
 
     try {
-        const res = await fetch(`${host}/api/login`, {
+        const res = await fetchWithTimeout(`${host}/api/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
             body: JSON.stringify({ email: userEmail.trim(), password: userPass.trim() }),
-            next: { revalidate: 0 }
+            next: { revalidate: 0 },
+            timeoutMs: 10000
         });
 
         if (!res.ok) {
@@ -202,11 +252,9 @@ export async function loginApps360(email?: string, password?: string, baseUrl?: 
 export async function fetchApps360Fleet(userHashOrKey?: string, baseUrl?: string): Promise<NormalizedTelemetry[]> {
     const host = baseUrl || process.env.APPS360_BASE_URL || 'https://plataforma.apps-360.online';
     
-    // 1. Obtener clave/hash: parámetro directo, env user_api_hash, env api_key o login automático
     let apiHash = userHashOrKey || process.env.APPS360_USER_API_HASH || process.env.APPS360_API_KEY || process.env.NEXT_PUBLIC_APPS360_API_KEY;
 
     if (!apiHash) {
-        // Intento de auto-login usando APPS360_EMAIL y APPS360_PASSWORD
         apiHash = await loginApps360(undefined, undefined, host) || undefined;
     }
 
@@ -216,21 +264,20 @@ export async function fetchApps360Fleet(userHashOrKey?: string, baseUrl?: string
     }
 
     try {
-        // 2. Consulta de dispositivos mediante endpoint GPSWOX (/api/get_devices)
         const devicesUrl = `${host}/api/get_devices?user_api_hash=${encodeURIComponent(apiHash)}`;
-        const res = await fetch(devicesUrl, {
+        const res = await fetchWithTimeout(devicesUrl, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json'
             },
-            next: { revalidate: 0 } // Cero cache para telemetría en vivo
+            next: { revalidate: 0 },
+            timeoutMs: 12000
         });
 
         if (res.ok) {
             const data = await res.json();
             const normalized: NormalizedTelemetry[] = [];
 
-            // GPSWOX devuelve los dispositivos dentro de grupos: [ { items: [ device1, device2 ] } ] o un array plano
             const extractItems = (input: any): any[] => {
                 if (Array.isArray(input)) {
                     const items: any[] = [];
@@ -259,12 +306,13 @@ export async function fetchApps360Fleet(userHashOrKey?: string, baseUrl?: string
             return normalized;
         }
 
-        // 3. Fallback retrocompatible con GPS-Server.net clásico (/api/api.php)
+        // Fallback retrocompatible con GPS-Server.net clásico (/api/api.php)
         const legacyUrl = `${host}/api/api.php?api=user&key=${encodeURIComponent(apiHash)}&cmd=USER_GET_OBJECTS`;
-        const legacyRes = await fetch(legacyUrl, {
+        const legacyRes = await fetchWithTimeout(legacyUrl, {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
-            next: { revalidate: 0 }
+            next: { revalidate: 0 },
+            timeoutMs: 10000
         });
 
         if (legacyRes.ok) {

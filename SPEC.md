@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.111 (Mesa de Trabajo Multicanal: Aislamiento Estricto Hogar vs Institucional y Desbloqueo B2C)
+> **Versión:** 1.9.136 (Blindaje de APIs Telemáticas M2M, Validación Zod, RFC 7807 y AbortController)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8110,6 +8110,111 @@ El módulo `/ops` opera como el centro neurálgico de mando y portal de lanzamie
      - Al presionar el botón, navega directamente a la sábana de conteo `/ops/inventory`.
   3. Los transportadores que ingresan al portal visualizan la tarjeta "TRANSPORTE" resaltada con borde esmeralda `card-op-highlight` y acceden fluidamente a `/ops/driver`.
   4. Los 10 módulos core se encuentran interconectados sin enlaces rotos ni colisiones de permisos.
+
+---
+
+## 38. Dominio 6: Logística, Transporte, Flota y Conductores (TMS Ecosistema)
+
+### 38.1 Torre de Control de Transporte, Monitoreo Satelital GPS & Gestión de Rutas (`/admin/transport`)
+
+#### A. Misión Crítica y Contexto Físico en Planta (Torre de Control Logístico)
+La Torre de Control `/admin/transport` es el epicentro de gobernanza del Transporte Management System (TMS) de FruFresco. Su objetivo es orquestar la flota vehicular pesada y liviana en tiempo real, visualizar el cumplimiento de entregas sobre el mapa satelital de Bogotá y Cundinamarca, sincronizar telemetría física de rastreadores satelitales (Apps-360 / GPSWOX), gestionar el kardex de canastillas plásticas en comodato y permitir el cubicaje algorítmico y despacho de rutas hacia clientes corporativos (HORECA) y hogares.
+
+#### B. Entidades de Datos y Contrato de Persistencia
+1. **`fleet_vehicles` (Maestro de Flota y Telemetría Viva):**
+   - Columnas satelitales activas: `last_latitude`, `last_longitude`, `speed` (km/h), `heading` (grados azimuth $0^\circ - 360^\circ$), `ignition_status` (true/false), `last_gps_sync` (timestamptz), `tracking_source` (`apps360`), `gps_imei`.
+   - Estado operativo: `status` (`available`, `in_route`, `maintenance`, `inactive`).
+2. **`vehicle_gps_logs` (Bitácora Histórica de Telemetría):**
+   - Registro de posiciones geográficas, velocidad y rumbo reportados por la flota para auditoría forense de tiempos, kilometraje y velocidad.
+3. **`routes` & `route_stops` (Rutas y Paradas Activas):**
+   - Enlace relacional a órdenes de compra (`orders`), conductores (`collaborators`) y comprobantes de entrega (POD).
+4. **`profiles.crate_balance` & `asset_movements` (Kardex de Canastillas):**
+   - Control en tiempo real del saldo de canastillas plásticas entregadas en custodia temporal a clientes y stock en patio (`warehouse_crate_stock`).
+
+#### C. Algoritmos Gemba y Reglas Poka-Yoke Innegociables
+1. **Arquitectura Telemática Satelital GPSWOX (Apps-360 Live Link):**
+   - Autenticación segura mediante `POST /api/login` contra el endpoint corporativo `https://plataforma.apps-360.online`.
+   - Consulta masiva de estados con `GET /api/get_devices` consumiendo `user_api_hash`.
+   - Mapeo exacto de placas vehiculares mediante expresión regular normalizada (`/^[A-Z]{3}[-\s]?[0-9]{3}$/i`) cruzada contra `fleet_vehicles.plate`.
+   - Conversión de timestamps Unix (`raw.timestamp * 1000`) a formato ISO Timestamptz.
+2. **Diferenciación Telemática: Paquetes Discretos vs Animación Continua:**
+   - Por diseño físico de los dispositivos satelitales GPS vehiculares con tarjeta SIM M2M, las coordenadas se transmiten en ráfagas discretas periódicas (cada 30 a 60 segundos o giros bruscos) para preservar batería y datos celulares.
+   - La velocidad (`speed`) reportada en el HUD y en el popover refleja la velocidad instantánea del furgón en el momento del reporte del satélite.
+3. **Zero-Flicker Background Polling (Prevención de Pantalla Blanca):**
+   - El refresco telemático periódico en segundo plano se ejecuta cada 35 segundos exclusivamente en la pestaña del mapa (`activeTab === 'map'`).
+   - Implementa el patrón silencioso con `hasInitialLoadedRef`: una vez montado el componente, las consultas a `/api/transport/sync-gps` y el refetch de datos se ejecutan en modo `isSilent = true`, prohibiendo llamadas a `setLoading(true)` para impedir el desmontaje del canvas de Google Maps y erradicar el parpadeo en blanco.
+4. **Señalética Visual de Alta Visibilidad (Naranja Fuego en Movimiento):**
+   - Los vehículos en movimiento (`speed > 0`) se renderizan con avatar y píldora en degradado Naranja Fuego (`linear-gradient(135deg, #FF6B00 0%, #EA580C 100%)`) con halo de radar pulsante (`box-shadow: 0 0 18px rgba(255, 107, 0, 0.9)`), flecha de orientación angular con rotación exacta en grados (`transform: rotate(heading deg)`), y badge de velocidad en km/h visible en cabecera.
+   - Vehículos en patio o detenidos se distinguen con Verde Esmeralda (`#0D7A57`) para evitar fatiga visual del despachador.
+5. **Popover Operativo y Kardex de Canastillas:**
+   - Clic en marcador despliega Popover con telemetría completa: conductor asignado, teléfono con acceso directo a WhatsApp/Llamada, ruta activa, peso transportado y estado de canastillas plásticas.
+   - Pestaña de Muelle / Bahías (`staging`) con acceso al mapa de alistamiento de 150 bahías.
+
+---
+
+#### Escenario 176: Telemetría Satelital GPS en Vivo, Zero-Flicker Polling y Señalética Naranja de Alta Visibilidad (SDD v1.9.135)
+- **Given** el Coordinador de Transporte monitoreando la flota de reparto en `/admin/transport`.
+- **When** se monta la pantalla en la pestaña principal del mapa:
+- **Then**:
+  1. El mapa de Google Maps carga de manera estable con la posición geográfica real de los vehículos registrados (`fleet_vehicles`).
+  2. Los vehículos transmitiendo telemetría con velocidad mayor a cero (`speed > 0`, ej. `NHP287` a 19 km/h) se destacan en color Naranja Fuego (`#FF6B00` / `#EA580C`) con halo de pulso radar y flecha apuntando a su rumbo (`heading`).
+  3. Cada 35 segundos, el sistema consulta silenciosamente `/api/transport/sync-gps` y actualiza las posiciones satelitales en Supabase y en la pantalla sin parpadear en blanco ni desmontar el canvas del mapa.
+  4. Al hacer clic sobre el marcador de cualquier camión, se abre el popover operativo con datos del conductor, teléfono con enlace WhatsApp y detalle de carga.
+  5. El HUD flotante de convenciones en la esquina inferior izquierda indica claramente la convención de colores: Verde (Bodega/Patio) y Naranja Fuego (En Movimiento).
+
+---
+
+### 38.2 Contrato de APIs Telemáticas M2M & Resiliencia Backend (`/api/transport/sync-gps` & `/api/transport/telemetry`)
+
+#### A. Misión y Principio Rector de Arquitectura de APIs
+Bajo el estándar `especialista-api`, ningún endpoint telemático opera como script improvisado. Todo intercambio HTTP cumple con la regla de oro: **"Si entra o sale por HTTP, tiene un contrato estricto con Zod, tiene un timeout defensivo con AbortController, propaga trazabilidad con `x-request-id` y es estandarizado bajo RFC 7807."**
+
+#### B. Endpoints del Dominio de Transporte
+
+##### 1. `GET /api/transport/sync-gps` (Sincronizador Satelital Batch)
+- **Propósito:** Conecta con la plataforma Apps-360 / GPSWOX, extrae la telemetría viva de la flota y actualiza concurrentemente las tablas `fleet_vehicles` y `vehicle_gps_logs` mediante cliente administrativo con clave de servicio (`SUPABASE_SERVICE_ROLE_KEY`).
+- **Validación Zod (`SyncQuerySchema`):**
+  - `key` (string, opcional, 5 a 256 caracteres): Hash de API personalizado.
+  - `force` (enum `'true' | 'false'`, opcional): Forzado de sincronización sin caché.
+  - `plate` (string, opcional, 5 a 10 caracteres): Filtro para sincronizar un solo camión.
+- **Resiliencia & Timeouts:** Peticiones HTTP hacia Apps-360 gobernadas por `fetchWithTimeout` con `AbortController` (10s para login, 12s para get_devices). Si el tercero no responde, emite `504 Gateway Timeout` sin colgar el servidor Next.js.
+- **Concurrencia O(1):** Las actualizaciones en base de datos se ejecutan en paralelo mediante `Promise.allSettled`.
+- **Estructura Canónica de Respuesta (200 OK):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "total_fetched": 3,
+      "synced_count": 3,
+      "synced_plates": ["NHP287", "WFH273", "WNM153"],
+      "errors_count": 0,
+      "vehicles": [
+        { "plate": "WFH273", "speed": 45, "heading": 34, "ignition": true, "lastSync": "2026-10-07T17:58:40.000Z" }
+      ]
+    },
+    "meta": {
+      "timestamp": "2026-10-07T17:58:11.068Z",
+      "requestId": "bb0d1e9e-31bb-420f-a404-992d50823fb6",
+      "durationMs": 1533
+    }
+  }
+  ```
+
+##### 2. `POST /api/transport/telemetry` (Receptor de Heartbeats Móviles & Sensores)
+- **Propósito:** Ingesta de pulsos telemáticos enviados por la aplicación móvil del conductor (`/ops/driver`) o dispositivos IoT.
+- **Validación Zod (`TelemetryPayloadSchema`):** Soporta objeto único o array de pings con validación de rangos geográficos (latitud $[-90, 90]$, longitud $[-180, 180]$, velocidad $[0, 250]$ km/h, rumbo $[0, 360]^\circ$).
+- **Persistencia Segura:** Ingesta con `getSupabaseAdmin()` para evitar bloqueos por RLS y escritura asíncrona no bloqueante en `vehicle_gps_logs`.
+
+---
+
+#### Escenario 177: Resiliencia Telemática HTTP, Validación Zod y Concurrencia O(1) en APIs de Transporte (SDD v1.9.136)
+- **Given** un cliente externo o la consola de control invocando `GET /api/transport/sync-gps` o `POST /api/transport/telemetry`.
+- **When** se envía la solicitud:
+- **Then**:
+  1. Si se envían parámetros inválidos (ej. `?force=invalido`), la API responde de inmediato con código `422 Unprocessable Entity` y el desglose RFC 7807 indicando el campo y la regla violada.
+  2. Cada respuesta exitosa o de error incluye el encabezado `x-request-id` y el bloque `meta: { timestamp, requestId, durationMs }`.
+  3. Las peticiones externas hacia Apps-360 no pueden superar los 12.000 ms; ante una caída del proveedor, la API falla de inmediato con `504 Gateway Timeout`.
+  4. La sincronización de múltiples vehículos en base de datos se procesa de forma concurrente con `Promise.allSettled`, reduciendo la latencia de actualización a menos de 200 ms por camión.
 
 
 
