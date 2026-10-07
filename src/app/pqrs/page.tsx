@@ -64,6 +64,17 @@ function PqrsContent() {
         unit?: string;
         reason?: string;
     } | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+
+    const notifyError = (msg: string) => {
+        setFormError(msg);
+        if (typeof window !== 'undefined' && (window as any).showToast) {
+            (window as any).showToast(msg, 'error');
+        }
+        setTimeout(() => {
+            setFormError(prev => (prev === msg ? null : prev));
+        }, 7000);
+    };
 
     // Check localStorage on mount
     useEffect(() => {
@@ -224,27 +235,29 @@ function PqrsContent() {
         e.preventDefault();
         if (!order?.id) return;
 
+        setFormError(null);
+
         if (reportType === 'product') {
             if (!selectedItemId) {
-                alert('Por favor selecciona el producto afectado.');
+                notifyError('Por favor selecciona el producto afectado.');
                 return;
             }
             if (!affectedQty || Number(affectedQty) <= 0) {
-                alert('Por favor especifica la cantidad afectada.');
+                notifyError('Por favor especifica la cantidad afectada.');
                 return;
             }
             if (selectedItem && Number(affectedQty) > Number(selectedItem.quantity)) {
-                alert(`La cantidad no puede superar lo despachado (${selectedItem.quantity} ${selectedItem.products?.unit_of_measure || 'unidades'}).`);
+                notifyError(`La cantidad no puede superar lo despachado (${selectedItem.quantity} ${selectedItem.products?.unit_of_measure || 'unidades'}).`);
                 return;
             }
             if (!photoFile) {
-                alert('Por favor adjunta una fotografía del producto para soportar la garantía técnica de calidad.');
+                notifyError('Por favor adjunta una fotografía del producto para soportar la garantía técnica de calidad.');
                 return;
             }
         }
 
         if (!description.trim()) {
-            alert('Por favor ingresa una breve explicación de lo ocurrido.');
+            notifyError('Por favor ingresa una breve explicación de lo ocurrido.');
             return;
         }
 
@@ -328,7 +341,7 @@ function PqrsContent() {
 
         } catch (err: any) {
             console.error('Error submitting PQRS:', err);
-            alert('Error al radicar la novedad: ' + (err.message || 'Intente nuevamente.'));
+            notifyError('Error al radicar la novedad: ' + (err.message || 'Intente nuevamente.'));
         } finally {
             setSubmitting(false);
         }
@@ -1098,6 +1111,26 @@ function PqrsContent() {
                         </div>
                     </div>
                 </div>
+
+                {/* Form Error Banner */}
+                {formError && (
+                    <div style={{
+                        padding: '0.85rem 1rem',
+                        borderRadius: '12px',
+                        backgroundColor: '#FEF2F2',
+                        border: '1.5px solid #FCA5A5',
+                        color: '#991B1B',
+                        fontSize: '0.86rem',
+                        fontWeight: '700',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(220, 38, 38, 0.08)'
+                    }}>
+                        <AlertTriangle size={18} style={{ flexShrink: 0, color: '#DC2626' }} />
+                        <span style={{ flex: 1, lineHeight: 1.4 }}>{formError}</span>
+                    </div>
+                )}
 
                 {/* Submit Action */}
                 <button

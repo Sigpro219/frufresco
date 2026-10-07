@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity, getOrderReplacementInfo, getOrderProcurementReferences } from '@/lib/orderUtils';
+import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity, getOrderReplacementInfo, getOrderProcurementReferences, isColsubsidioProfile } from '@/lib/orderUtils';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -455,6 +455,15 @@ function OrderLoadingContent() {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [geocodedMessage, setGeocodedMessage] = useState<string | null>(null);
     const [showAddressInput, setShowAddressInput] = useState(false);
+    const [editPurchaseOrder, setEditPurchaseOrder] = useState('');
+    const [editSolped, setEditSolped] = useState('');
+
+    const isSelectedOrderColsubsidio = useMemo(() => {
+        if (!selectedOrder) return false;
+        return Boolean(selectedOrder.logistics_data?.is_colsubsidio) || 
+            isColsubsidioProfile(selectedOrder.profiles) || 
+            isColsubsidioProfile({ company_name: selectedOrder.customer_name, nit: selectedOrder.customer_nit });
+    }, [selectedOrder]);
 
     // GPS Interactive Map Modal States
     const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
@@ -1125,6 +1134,8 @@ function OrderLoadingContent() {
                 setEditLongitude(null);
                 setGeocodedMessage(null);
                 setShowAddressInput(false);
+                setEditPurchaseOrder('');
+                setEditSolped('');
                 return;
             }
 
@@ -1133,6 +1144,10 @@ function OrderLoadingContent() {
             setEditLongitude(selectedOrder.longitude ?? selectedOrder.profiles?.longitude ?? null);
             setGeocodedMessage(null);
             setShowAddressInput(false);
+
+            const proc = getOrderProcurementReferences(selectedOrder);
+            setEditPurchaseOrder(proc.purchaseOrderNumber || '');
+            setEditSolped(proc.solpedNumber || '');
 
             const profileObj = selectedOrder.profiles;
             const effectiveClientId = profileObj?.parent_id || profileObj?.id;
@@ -1711,6 +1726,9 @@ function OrderLoadingContent() {
         setShowCancelledSection(false);
         setEditStatus(order.status);
         setEditDeliveryDate(order.delivery_date);
+        const proc = getOrderProcurementReferences(order);
+        setEditPurchaseOrder(proc.purchaseOrderNumber || '');
+        setEditSolped(proc.solpedNumber || '');
         setEditMode(false);
         setLoadingItems(true);
         setOrderItems([]);

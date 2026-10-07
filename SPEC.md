@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.154 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.5 Sandbox de Pagos)
+> **Versión:** 1.9.155 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.6 Portal Público de Radicación de PQRS y Devoluciones)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8762,6 +8762,47 @@ El simulador transaccional (`src/app/payments/simulator/page.tsx`) proporciona u
   2. Genera el ID transaccional (ej. `sim-x8k2j1m`) y despacha la notificación `transaction.updated` a `/api/payments/wompi/webhook`.
   3. El webhook actualiza la orden en base de datos a estado `approved` o `paid`.
   4. La pantalla redirige fluidamente a `/checkout/result?id=${reference}` donde se proyecta la confirmación verde y el número de pedido oficial.
+
+---
+
+### 40.7 Portal Público de Radicación de PQRS y Devoluciones de Clientes (`/pqrs` - `src/app/pqrs/page.tsx`) (SDD v1.9.155)
+
+#### A. Misión y Alcance del Módulo de Garantías y PQRS
+El portal público de novedades (`src/app/pqrs/page.tsx`) constituye el canal oficial de atención posventa, garantía de producto y recepción de reclamos tanto para clientes residenciales (B2C) como institucionales (B2B). Su arquitectura Poka-Yoke permite tramitar no conformidades con trazabilidad inmediata hacia la orden de compra original, reduciendo el tiempo de resolución a menos de 4 horas hábiles y garantizando la recolección de evidencia fotográfica probatoria.
+
+#### B. Arquitectura de Radicación & Validación Poka-Yoke
+1. **Búsqueda y Vinculación Transaccional de Pedidos:**
+   - Admite búsqueda en tiempo real por número amigable (ej. `#PED-0482`, `PED-0482`) o UUID de la orden.
+   - Consulta reactiva contra base de datos que desglosa automáticamente los ítems facturados en el pedido (`items`), su cantidad original despachada y la unidad de medida.
+2. **Tipificación de Novedades y Clasificación Taxonómica:**
+   - Soporta cinco (5) tipos canónicos de radicación con codificación de color:
+     - `quality_issue`: Problemas de frescura, maduración, golpe o descomposición física.
+     - `missing_item`: Producto facturado no entregado físicamente en la recepción.
+     - `delivery_issue`: Retraso significativo o incumplimiento de la ventana horaria pactada.
+     - `billing_issue`: Discrepancia en precios, cobro indebido o error en tarifa de flete.
+     - `general_query`: Petición, queja o felicitación sin afectación de mercancía.
+3. **Selección Granular de Ítems Afectados y Cantidad Reclamada:**
+   - Permite al cliente marcar exactamente qué productos del pedido presentaron novedades, especificando la cantidad o peso afectado.
+   - Poka-Yoke de límite: no permite reclamar una cantidad superior a la efectivamente despachada en la orden.
+4. **Captura de Evidencia Fotográfica y Cadena de Custodia:**
+   - Carga drag-and-drop o selector de archivos de múltiples imágenes en alta resolución con previsualización en miniatura y remoción individual.
+   - Soporta adjuntar URLs externas de almacenamiento seguro.
+5. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - Erradicación total de los seis (6) `alert()` nativos presentes en el flujo de validación y captura de excepciones.
+   - Sustitución por un banner reactivo in-UI `formError` con icono Lucide `<AlertTriangle />` y sincronización con el sistema global `showToast`, manteniendo al usuario en el contexto del formulario sin bloquear el navegador.
+
+---
+
+#### Escenario 191: Radicación Asistida de PQRS con Trazabilidad de Pedido (SDD v1.9.155)
+- **Given** un cliente que recibió un pedido con una novedad de calidad en fresas y un ítem faltante de aguacate.
+- **When** ingresa a `/pqrs`, digita su número de orden (ej. `#PED-0482`) y pulsa `[Buscar Pedido]`:
+- **Then**:
+  1. El sistema recupera la orden y despliega la lista interactiva de productos contenidos en la entrega.
+  2. El cliente selecciona `Calidad de Producto`, marca el SKU de fresas, digita la cantidad afectada y adjunta la fotografía del estado del fruto.
+  3. Adicionalmente marca `Producto Faltante` e indica el aguacate hass faltante.
+  4. Ingresa sus datos de contacto y pulsa `[Radicar PQRS & Solicitar Garantía]`.
+  5. Si omite un campo mandatorio (descripción o contacto), el sistema muestra un banner in-UI de advertencia de alta visibilidad sin interrumpir la sesión con popups invasivos.
+  6. Al validar exitosamente, se genera el radicado oficial en la tabla `pqrs`, se notifica a la Torre de Control de Calidad y se despliega la pantalla de confirmación con el número de seguimiento.
 
 
 
