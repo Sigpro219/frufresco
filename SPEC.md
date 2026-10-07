@@ -1,12 +1,12 @@
 # FruFresco - Especificación de Arquitectura & Contrato Canónico de Negocio (SDD)
 ## Supply Chain Operating System (SCOS) — Contrato Integral de 10 Dominios Operativos & 76 Pantallas Físicas Certificadas
 
-> **Versión:** 1.9.171 (Estructuración Canónica B2B en CRM: Selector Tri-Estado Casa Matriz, Sucursal Vinculada y Cuenta Individual con Poka-Yoke Anti-Huérfanos — 76/76 Pantallas Certificadas)  
+> **Versión:** 1.9.172 (Protocolo Canónico de Traspaso de Sedes Operativas por Extinción o Escisión de Casa Matriz: Clonación con Nuevo ID Fiscal e Inactivación Histórica — 76/76 Pantallas Certificadas)  
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato — Cierre Total del Ecosistema (76/76 Pantallas Certificadas)  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 206 Escenarios BDD Ininterrumpidos (1..206)
+> **Cobertura Canónica:** 10 Dominios, 76 Pantallas Físicas, 43 Capítulos Arquitectónicos, 207 Escenarios BDD Ininterrumpidos (1..207)
 
 ---
 
@@ -22,12 +22,12 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141 (§31.1 - §31.11) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 (§7.1 - §7.18) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207 (§7.1 - §7.18) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185 (§39.1 - §39.5) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Backlog Priorizado (P0 a P2) | 🟡 Mantenimiento |
-| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **206 Escenarios Canónicos (1..206)** | **🟢 100%** |
+| **TOTAL** | **SCOS FRUFRESCO FULL-STACK** | **76** | **43 Capítulos** | **207 Escenarios Canónicos (1..207)** | **🟢 100%** |
 
 ---
 
@@ -1243,6 +1243,25 @@ Toda cuenta institucional cuenta con su expediente estructurado:
    - Si el operador intenta guardar una Sucursal sin haber seleccionado una Casa Matriz válida en el buscador, el motor intercepta la acción antes del envío (`payload.parent_id = null`), detiene el guardado y emite una notificación en pantalla: *"Por favor selecciona una Casa Matriz para vincular la sucursal, o elige Cuenta Individual."*.
 4. **Acceso Rápido desde Expediente de Matriz (`[+ Nueva Sucursal Vinculada]`):**
    - Desde la tabla de *Sucursales Vinculadas* de una Casa Matriz existente, se incorpora el gatillo `[+ Nueva Sucursal Vinculada]`, el cual conmuta inmediatamente el modal en modo `sucursal`, pre-asigna el `parent_id` de la matriz activa y pre-carga la razón social y modelo de precios, eliminando la doble digitación.
+
+#### G. Protocolo Canónico de Traspaso de Sedes Operativas por Extinción o Escisión de Casa Matriz: Clonación con Nuevo ID Fiscal e Inactivación Histórica (`BranchTransferModal`) (SDD v1.9.172)
+1. **Problema Gemba & Principio de Intangibilidad Contable (Zero-Contamination):**
+   - Cuando una Casa Matriz corporativa se disuelve, liquida, o cede sus operaciones a una nueva sociedad comercial, sus sedes físicas (puntos de venta, cocinas de producción, restaurantes) continúan existiendo en el mundo real y requieren seguir recibiendo suministros de FruFresco.
+   - **Veto Arquitectónico a la Mutación Directa de `parent_id` / `nit`:** Bajo ninguna circunstancia se permite reasignar directamente el `parent_id` o el `nit` de la sucursal preexistente. Las órdenes históricas despachadas (`orders`), las facturas electrónicas emitidas (`billing_invoices`), las remisiones físicas, los recibos de caja y los reportes de cartera para World Office están vinculados de forma inmutable al UUID (`client_id`) del cliente. Mutar el registro original provocaría contaminación cruzada en la información exógena ante la DIAN, distorsionaría el historial tributario y mezclaría deudas de una persona jurídica extinguida con la nueva entidad.
+2. **Protocolo "Clonar Ficha Operativa & Archivar Histórica":**
+   - La sede original debe **"morir" en el plano fiscal** y **"renacer" con un nuevo identificador global:**
+     * **Generación de Nuevo ID Transaccional:** Se genera un nuevo UUID (`crypto.randomUUID()`) en `profiles` con `is_active: true`.
+     * **Enlace a la Nueva Casa Matriz:** Hereda estrictamente las credenciales tributarias de la nueva matriz receptora: `parent_id = newMatrix.id`, `nit = newMatrix.nit`, `razon_social = newMatrix.razon_social || newMatrix.company_name`, `pricing_model_id = newMatrix.pricing_model_id`, `payment_days = newMatrix.payment_days`, `document_type = newMatrix.document_type`.
+     * **Preservación Íntegra de Atributos Físicos del Gemba:** Se clonan sin pérdida los datos logísticos: nombre comercial (`company_name`), código de sede (`branch_id`), dirección física (`address`, `address_complement`), municipio y departamento, geocercas satelitales exactas (`latitude`, `longitude`, `geocoding_status`), contacto de recepción en puerta (`contact_name`, `phone`, `email`), restricciones horarias (`delivery_restrictions`, `logistics_data`), requerimiento de canastillas (`needs_crates`) y copias de remisión (`remission_copies`).
+     * **Clonación Opcional de Preferencias de Cocina (`product_nicknames`):** Si la casilla está seleccionada, el motor replica masivamente todas las excepciones de picking, alias de insumos, notas de empaque y sustitutos automáticos autorizados asignándolos al nuevo UUID (`customer_id = newBranchId`).
+     * **Traspaso de Saldo de Canastillas Físicas (`crate_balance`):** Si está activado, transfiere el saldo vivo de canastillas plásticas en poder de la sede a la nueva ficha y resetea a 0 el saldo en la ficha previa, impidiendo la doble contabilización en el arqueo de envases.
+     * **Inactivación Histórica y Bitácora Forense:** La ficha antigua se actualiza a `is_active: false` y se le anexa en `delivery_restrictions` una nota indeleble de trazabilidad: `[TRASPASO CORPORATIVO DD/MM/AAAA] INACTIVADA: Sede transferida a Casa Matriz <Nombre> (NIT: <NIT>) bajo nuevo ID: <UUID>`.
+3. **Puntos de Entrada Bidireccionales en UI & Ergonomía Industrial:**
+   - **Desde la Ficha de la Nueva Casa Matriz (`mode: 'from_matrix'`):**
+     * En la cabecera de *Sucursales Vinculadas*, se incorpora el botón `[Traspasar Sede Existente]` (ícono `CopyPlus` de Lucide). Despliega el buscador omnibox para localizar cualquier sucursal externa (activa o de matrices inactivadas), verificar sus datos y ejecutar el traspaso hacia la matriz en visualización.
+   - **Desde la Ficha de la Sucursal en Edición (`mode: 'from_branch'`):**
+     * En el banner informativo superior de sucursal vinculada, se incorpora el botón `[Traspasar a Nueva Matriz]` (ícono `ArrowRightLeft` de Lucide). Despliega el selector de Casas Matrices habilitadas, permitiendo migrar la sede actual a una nueva matriz y conmutando automáticamente la sesión visual a la nueva ficha generada.
+   - **Iconografía Exclusiva:** Estricto uso de la librería estándar `lucide-react` (`ArrowRightLeft`, `CopyPlus`, `Building2`, `MapPin`, `Search`, `CheckCircle2`, `X`, `Loader2`, `Package`, `Sliders`, `ShieldCheck`).
 
 ---
 
@@ -8597,6 +8616,19 @@ En días de pico de demanda (martes, sábados o temporadas festivas), la capacid
   3. Si el usuario conmuta al botón **🏢 Sucursal de Matriz**, el título cambia a *"Nueva Sucursal Institucional"*, se despliega el buscador predictivo de Casa Matriz, y si intenta guardar sin vincular una matriz, el Poka-Yoke anti-huérfanos bloquea el submit emitiendo la notificación correctiva.
   4. Si el usuario conmuta al botón **👤 Cuenta Individual**, el título cambia a *"Nueva Cuenta B2B Individual"*, se oculta el selector de matriz y se habilitan tanto la ficha comercial independiente como la localización satelital y modelo de precios directo.
   5. Al consultar una Casa Matriz existente con sucursales creadas, el botón `[+ Nueva Sucursal Vinculada]` precarga de forma inmediata la jerarquía corporativa sin fricción operativa.
+
+---
+
+#### Escenario 207: Traspaso de Sede Operativa desde Matriz Extinta a Nueva Casa Matriz con Preservación Física y Nuevo ID Fiscal (SDD v1.9.172)
+- **Given** una Casa Matriz anterior que cesa actividades, se liquida o se escinde comercialmente, pero cuyas sedes físicas (restaurantes, hoteles, cocinas de producción) continúan operando físicamente y consumiendo frutas y verduras como clientes de FruFresco bajo una nueva persona jurídica o sociedad.
+- **When** el analista comercial ejecuta el protocolo de traspaso mediante el modal `BranchTransferModal` (ya sea desde la nueva Casa Matriz receptora con `[Traspasar Sede Existente]` o desde la propia sucursal con `[Traspasar a Nueva Matriz]`):
+- **Then**:
+  1. El sistema **NUNCA muta el `parent_id` ni el `nit` de la ficha original** en `profiles`, protegiendo de forma inviolable la trazabilidad de facturas DIAN previas, remisiones de entrega ejecutadas y planos de cartera para World Office.
+  2. Se genera un **nuevo UUID fiscal e independiente** en `profiles` con `is_active: true`, vinculado a la nueva Casa Matriz (`parent_id = newMatrix.id`, `nit = newMatrix.nit`, `razon_social = newMatrix.razon_social`, `pricing_model_id = newMatrix.pricing_model_id`, `payment_days = newMatrix.payment_days`).
+  3. La nueva ficha hereda íntegramente la realidad física del Gemba: nombre comercial de la sede, dirección y complementos, georreferenciación satelital (coordenadas GPS lat/lng validadas), datos de contacto en cocina/recepción y restricciones horarias de entrega.
+  4. Si la opción de clonar excepciones está marcada, se copian de forma masiva todas las notas de picking, alias de producto y sustitutos autorizados de `product_nicknames` asociándolos al nuevo UUID del cliente.
+  5. Si la opción de transferir canastillas está marcada, el saldo físico de `crate_balance` se migra a la nueva sede y se establece en 0 en la ficha antigua, previniendo la duplicación en el censo de activos de transporte.
+  6. La sede original en la matriz extinta se marca con `is_active: false` y se le anexa en `delivery_restrictions` una bitácora forense indeleble con fecha, nuevo UUID y NIT de la matriz receptora, quedando disponible como archivo histórico de consulta contable.
 
 ---
 

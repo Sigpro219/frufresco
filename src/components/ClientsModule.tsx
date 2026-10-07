@@ -70,7 +70,9 @@ import {
     BookOpen,
     Palette,
     Tag,
-    Upload
+    Upload,
+    CopyPlus,
+    ArrowRightLeft
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule, { extractRowsFromExcelSheet } from './CommercialAgreementsModule';
@@ -91,10 +93,13 @@ interface Profile {
     phone?: string;
     contact_phone?: string;
     email?: string;
+    contact_email?: string;
     address?: string;
+    address_complement?: string;
     city?: string;
     municipality?: string;
     department?: string;
+    crate_balance?: number;
     role: string;
     pricing_model_id?: string;
     credit_limit?: number;
@@ -5445,6 +5450,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [exceptionCount, setExceptionCount] = useState(0);
     const [applyConfigToBranches, setApplyConfigToBranches] = useState(true);
     const [syncingBranches, setSyncingBranches] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [transferModalMode, setTransferModalMode] = useState<'from_matrix' | 'from_branch'>('from_matrix');
 
     const fetchExceptionCount = async () => {
         if (!editData?.id) return;
@@ -6462,30 +6469,61 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: '800', color: '#1E40AF' }}>
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2 size={15} style={{ color: '#1D4ED8' }} /> Sucursal vinculada a Casa Matriz</span>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            const { data } = await supabase.from('profiles').select('*').eq('id', formData.parent_id).single();
-                                            if (data && onSwitchClient) onSwitchClient(data as Profile);
-                                        }}
-                                        style={{
-                                            padding: '0.4rem 0.9rem',
-                                            backgroundColor: '#1D4ED8',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: '800',
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            boxShadow: '0 2px 4px rgba(29,78,216,0.25)',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <ArrowLeft size={14} /> Volver a Casa Matriz
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        {!isReadOnly && isEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTransferModalMode('from_branch');
+                                                    setIsTransferModalOpen(true);
+                                                }}
+                                                style={{
+                                                    padding: '0.4rem 0.9rem',
+                                                    backgroundColor: '#FEF3C7',
+                                                    color: '#92400E',
+                                                    border: '1px solid #FCD34D',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FDE68A'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF3C7'}
+                                                title="Traspasar esta sede física a una nueva Casa Matriz (crea un nuevo ID fiscal y archiva esta ficha histórica)"
+                                            >
+                                                <ArrowRightLeft size={14} /> Traspasar a Nueva Matriz
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                const { data } = await supabase.from('profiles').select('*').eq('id', formData.parent_id).single();
+                                                if (data && onSwitchClient) onSwitchClient(data as Profile);
+                                            }}
+                                            style={{
+                                                padding: '0.4rem 0.9rem',
+                                                backgroundColor: '#1D4ED8',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 4px rgba(29,78,216,0.25)',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            <ArrowLeft size={14} /> Volver a Casa Matriz
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Override Toggle para la Sucursal */}
@@ -7003,41 +7041,70 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <h4 style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
                                     </div>
                                     {!isReadOnly && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (onSwitchClient) {
-                                                    onSwitchClient({
-                                                        role: 'b2b_client',
-                                                        parent_id: (editData as Profile).id,
-                                                        nit: formData.nit,
-                                                        razon_social: formData.razon_social || formData.company_name,
-                                                        email: formData.email,
-                                                        pricing_model_id: formData.pricing_model_id,
-                                                        is_corporate_parent: false
-                                                    } as any);
-                                                }
-                                            }}
-                                            style={{
-                                                padding: '0.45rem 0.9rem',
-                                                borderRadius: '8px',
-                                                backgroundColor: '#1E3A8A',
-                                                color: 'white',
-                                                border: 'none',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '800',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                boxShadow: '0 2px 4px rgba(30, 58, 138, 0.25)',
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1E3A8A'}
-                                        >
-                                            <Plus size={14} /> Nueva Sucursal Vinculada
-                                        </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTransferModalMode('from_matrix');
+                                                    setIsTransferModalOpen(true);
+                                                }}
+                                                style={{
+                                                    padding: '0.45rem 0.9rem',
+                                                    borderRadius: '8px',
+                                                    backgroundColor: '#F8FAFC',
+                                                    color: '#0F172A',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#EFF6FF'; e.currentTarget.style.borderColor = '#93C5FD'; e.currentTarget.style.color = '#1D4ED8'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#0F172A'; }}
+                                                title="Traspasar sedes físicas (dirección, GPS, cocina) desde matrices extintas bajo un nuevo ID fiscal"
+                                            >
+                                                <CopyPlus size={14} /> Traspasar Sede Existente
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (onSwitchClient) {
+                                                        onSwitchClient({
+                                                            role: 'b2b_client',
+                                                            parent_id: (editData as Profile).id,
+                                                            nit: formData.nit,
+                                                            razon_social: formData.razon_social || formData.company_name,
+                                                            email: formData.email,
+                                                            pricing_model_id: formData.pricing_model_id,
+                                                            is_corporate_parent: false
+                                                        } as any);
+                                                    }
+                                                }}
+                                                style={{
+                                                    padding: '0.45rem 0.9rem',
+                                                    borderRadius: '8px',
+                                                    backgroundColor: '#1E3A8A',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    boxShadow: '0 2px 4px rgba(30, 58, 138, 0.25)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1E3A8A'}
+                                            >
+                                                <Plus size={14} /> Nueva Sucursal Vinculada
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                                 {branches.length === 0 ? (
@@ -8812,6 +8879,31 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     </div>
                 </div>
             )}
+
+            {/* MODAL DE TRASPASO DE SUCURSAL A NUEVA MATRIZ */}
+            {isTransferModalOpen && (
+                <BranchTransferModal
+                    mode={transferModalMode}
+                    currentMatrix={transferModalMode === 'from_matrix' ? (editData as Profile) : null}
+                    sourceBranch={transferModalMode === 'from_branch' ? (editData as Profile) : null}
+                    potentialParents={potentialParents}
+                    pricingModels={pricingModels}
+                    onClose={() => setIsTransferModalOpen(false)}
+                    onSuccess={async (newBranch) => {
+                        setIsTransferModalOpen(false);
+                        if (transferModalMode === 'from_matrix') {
+                            await fetchBranches();
+                        } else {
+                            if (onSwitchClient && newBranch) {
+                                onSwitchClient(newBranch);
+                            } else {
+                                onRefresh();
+                                onClose();
+                            }
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 }
@@ -10199,6 +10291,520 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                             })
                         )}
                     </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+interface BranchTransferModalProps {
+    mode: 'from_matrix' | 'from_branch';
+    currentMatrix: Profile | null;
+    sourceBranch: Profile | null;
+    potentialParents: Profile[];
+    pricingModels: PricingModel[];
+    onClose: () => void;
+    onSuccess: (newBranch: Profile) => void;
+}
+
+function BranchTransferModal({
+    mode,
+    currentMatrix,
+    sourceBranch,
+    potentialParents,
+    pricingModels,
+    onClose,
+    onSuccess
+}: BranchTransferModalProps) {
+    const [selectedBranch, setSelectedBranch] = useState<Profile | null>(sourceBranch || null);
+    const [selectedParent, setSelectedParent] = useState<Profile | null>(currentMatrix || null);
+    const [searchBranchTerm, setSearchBranchTerm] = useState('');
+    const [searchParentTerm, setSearchParentTerm] = useState('');
+    const [branchSearchResults, setBranchSearchResults] = useState<Profile[]>([]);
+    const [searchingBranches, setSearchingBranches] = useState(false);
+    const [copyNicknames, setCopyNicknames] = useState(true);
+    const [transferCrates, setTransferCrates] = useState(true);
+    const [isExecuting, setIsExecuting] = useState(false);
+
+    // Initial search for branches if mode === 'from_matrix'
+    useEffect(() => {
+        if (mode === 'from_matrix') {
+            loadBranches('');
+        }
+    }, [mode]);
+
+    const loadBranches = async (query: string) => {
+        setSearchingBranches(true);
+        try {
+            let q = supabase
+                .from('profiles')
+                .select('*')
+                .eq('role', 'b2b_client')
+                .eq('is_corporate_parent', false);
+
+            if (currentMatrix?.id) {
+                q = q.neq('parent_id', currentMatrix.id);
+            }
+
+            if (query.trim()) {
+                q = q.or(`company_name.ilike.%${query.trim()}%,address.ilike.%${query.trim()}%,nit.ilike.%${query.trim()}%`);
+            } else {
+                q = q.order('company_name', { ascending: true }).limit(25);
+            }
+
+            const { data, error } = await q;
+            if (error) throw error;
+            setBranchSearchResults((data as Profile[]) || []);
+        } catch (err: any) {
+            console.error('Error loading branches for transfer:', err);
+        } finally {
+            setSearchingBranches(false);
+        }
+    };
+
+    // Filter potential parents if mode === 'from_branch'
+    const filteredParents = useMemo(() => {
+        const query = searchParentTerm.toLowerCase().trim();
+        return potentialParents.filter(p => {
+            if (sourceBranch?.parent_id && p.id === sourceBranch.parent_id) return false;
+            if (!query) return true;
+            return (
+                (p.company_name && p.company_name.toLowerCase().includes(query)) ||
+                (p.nit && p.nit.includes(query)) ||
+                (p.razon_social && p.razon_social.toLowerCase().includes(query))
+            );
+        });
+    }, [potentialParents, searchParentTerm, sourceBranch?.parent_id]);
+
+    const targetPricingModel = pricingModels.find(m => m.id === selectedParent?.pricing_model_id);
+
+    const handleExecuteTransfer = async () => {
+        if (!selectedBranch || !selectedParent) {
+            window.showToast?.('Selecciona tanto la sede a traspasar como la Casa Matriz destino.', 'info');
+            return;
+        }
+
+        setIsExecuting(true);
+        try {
+            const newBranchId = crypto.randomUUID();
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('es-CO');
+
+            // 1. Prepare cloned branch payload
+            const newBranchPayload: any = {
+                id: newBranchId,
+                role: 'b2b_client',
+                is_corporate_parent: false,
+                parent_id: selectedParent.id,
+                company_name: selectedBranch.company_name || 'Sucursal Traspasada',
+                branch_id: selectedBranch.branch_id || selectedBranch.company_name || 'SEDE',
+                razon_social: selectedParent.razon_social || selectedParent.company_name || '',
+                nit: selectedParent.nit || '',
+                document_type: selectedParent.document_type || selectedBranch.document_type || 'factura_electronica',
+                pricing_model_id: selectedParent.pricing_model_id || selectedBranch.pricing_model_id || null,
+                payment_days: selectedParent.payment_days !== undefined ? selectedParent.payment_days : (selectedBranch.payment_days || 0),
+                address: selectedBranch.address || '',
+                address_complement: selectedBranch.address_complement || '',
+                city: selectedBranch.city || selectedBranch.municipality || 'Bogotá',
+                municipality: selectedBranch.municipality || selectedBranch.city || 'Bogotá',
+                department: selectedBranch.department || 'Cundinamarca',
+                latitude: selectedBranch.latitude || null,
+                longitude: selectedBranch.longitude || null,
+                geocoding_status: selectedBranch.geocoding_status || 'verified',
+                contact_name: selectedBranch.contact_name || '',
+                phone: selectedBranch.phone || '',
+                contact_phone: selectedBranch.contact_phone || selectedBranch.phone || '',
+                email: selectedBranch.email || '',
+                contact_email: selectedBranch.contact_email || selectedBranch.email || '',
+                delivery_restrictions: selectedBranch.delivery_restrictions || '',
+                logistics_data: selectedBranch.logistics_data || null,
+                needs_crates: selectedBranch.needs_crates ?? true,
+                remission_copies: selectedParent.remission_copies ?? selectedBranch.remission_copies ?? 2,
+                remission_with_prices: selectedParent.remission_with_prices ?? selectedBranch.remission_with_prices ?? false,
+                print_invoice: selectedParent.print_invoice ?? selectedBranch.print_invoice ?? false,
+                crate_balance: transferCrates ? (Number((selectedBranch as any).crate_balance) || 0) : 0,
+                is_active: true
+            };
+
+            // 2. Insert new branch
+            const { error: insertErr } = await supabase.from('profiles').insert([newBranchPayload]);
+            if (insertErr) throw insertErr;
+
+            // 3. Clone product_nicknames (kitchen exceptions, picking notes, substitutions)
+            if (copyNicknames) {
+                const { data: sourceNicknames, error: nickErr } = await supabase
+                    .from('product_nicknames')
+                    .select('*')
+                    .eq('customer_id', selectedBranch.id);
+
+                if (!nickErr && sourceNicknames && sourceNicknames.length > 0) {
+                    const clonedNicknames = sourceNicknames.map((n: any) => ({
+                        customer_id: newBranchId,
+                        product_id: n.product_id,
+                        nickname: n.nickname,
+                        picking_note: n.picking_note,
+                        delivery_note: n.delivery_note,
+                        substitution_product_id: n.substitution_product_id,
+                        preferred_options: n.preferred_options
+                    }));
+                    await supabase.from('product_nicknames').insert(clonedNicknames);
+                }
+            }
+
+            // 4. Archive/inactivate source branch to isolate past invoices and portfolio
+            const auditTrailNote = `\n[TRASPASO CORPORATIVO ${dateStr}] INACTIVADA: Sede transferida a Casa Matriz ${selectedParent.company_name} (NIT: ${selectedParent.nit}) bajo nuevo ID: ${newBranchId}.`;
+            const updatedRestrictions = `${selectedBranch.delivery_restrictions || ''}${auditTrailNote}`.trim();
+
+            const updateSourcePayload: any = {
+                is_active: false,
+                delivery_restrictions: updatedRestrictions
+            };
+            if (transferCrates && Number((selectedBranch as any).crate_balance) > 0) {
+                updateSourcePayload.crate_balance = 0;
+            }
+
+            const { error: updateErr } = await supabase
+                .from('profiles')
+                .update(updateSourcePayload)
+                .eq('id', selectedBranch.id);
+
+            if (updateErr) {
+                console.warn('Advertencia al inactivar ficha fuente:', updateErr);
+            }
+
+            window.showToast?.(`✅ Sede traspasada con éxito. Nuevo ID fiscal generado bajo ${selectedParent.company_name}`, 'success');
+            onSuccess(newBranchPayload as Profile);
+        } catch (err: any) {
+            console.error('Error in handleExecuteTransfer:', err);
+            window.showToast?.(`Error al traspasar sede: ${err.message || 'Error de red'}`, 'error');
+        } finally {
+            setIsExecuting(false);
+        }
+    };
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, padding: '1rem' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '820px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column' }}>
+                {/* Header */}
+                <div style={{ padding: '1.5rem 1.8rem', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderTopLeftRadius: '24px', borderTopRightRadius: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '42px', height: '42px', backgroundColor: '#EFF6FF', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #BFDBFE' }}>
+                            <ArrowRightLeft size={22} style={{ color: '#1D4ED8' }} />
+                        </div>
+                        <div>
+                            <h3 style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>
+                                Traspaso Corporativo de Sede Operativa
+                            </h3>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '500' }}>
+                                Protocolo Zero-Downtime: Generación de Nuevo ID Fiscal y Archivo de Ficha Previa
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        style={{ width: '36px', height: '36px', borderRadius: '10px', border: '1px solid #E2E8F0', backgroundColor: 'white', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; e.currentTarget.style.color = '#EF4444'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.color = '#64748B'; }}
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {/* Alerta de Blindaje Contable */}
+                    <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '1rem 1.25rem', borderRadius: '16px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <ShieldCheck size={20} style={{ color: '#1D4ED8', flexShrink: 0, marginTop: '2px' }} />
+                        <div style={{ fontSize: '0.78rem', color: '#1E3A8A', lineHeight: '1.45' }}>
+                            <strong style={{ display: 'block', marginBottom: '2px', fontWeight: '800' }}>Blindaje Contable y Fiscal DIAN (Ficha Limpia):</strong>
+                            Para resguardar la información exógena, cartera y facturas históricas, la sede en la matriz extinta queda <strong>archivada e inactiva</strong>. Se crea una nueva ficha con <strong>nuevo UUID fiscal</strong> bajo la nueva Casa Matriz, preservando automáticamente dirección, geocerca GPS, teléfonos y notas de cocina.
+                        </div>
+                    </div>
+
+                    {/* Paso 1: Selección de Sede / Matriz */}
+                    {mode === 'from_matrix' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03rem' }}>
+                                    1. Buscar Sede Operativa a Traspasar
+                                </label>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                    Destino: <strong>{currentMatrix?.company_name}</strong> (NIT: {currentMatrix?.nit})
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por nombre de sucursal, dirección o NIT actual..."
+                                        value={searchBranchTerm}
+                                        onChange={(e) => {
+                                            setSearchBranchTerm(e.target.value);
+                                            loadBranches(e.target.value);
+                                        }}
+                                        style={{ width: '100%', height: '40px', padding: '0 1rem 0 2.5rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '0.82rem', fontWeight: '600', outline: 'none' }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Resultados de Búsqueda de Sucursales */}
+                            <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '14px', backgroundColor: '#F8FAFC' }}>
+                                {searchingBranches ? (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <Loader2 size={16} className="animate-spin" /> Buscando sucursales disponibles...
+                                    </div>
+                                ) : branchSearchResults.length === 0 ? (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                        No se encontraron sucursales externas que coincidan con la búsqueda.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        {branchSearchResults.map(b => {
+                                            const isSelected = selectedBranch?.id === b.id;
+                                            return (
+                                                <div
+                                                    key={b.id}
+                                                    onClick={() => setSelectedBranch(b)}
+                                                    style={{
+                                                        padding: '0.75rem 1rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        borderBottom: '1px solid #E2E8F0',
+                                                        backgroundColor: isSelected ? '#EFF6FF' : 'white',
+                                                        cursor: 'pointer',
+                                                        transition: 'background-color 0.15s'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: isSelected ? '#DBEAFE' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Building2 size={16} style={{ color: isSelected ? '#1D4ED8' : '#64748B' }} />
+                                                        </div>
+                                                        <div>
+                                                            <div style={{ fontWeight: '800', fontSize: '0.82rem', color: isSelected ? '#1E3A8A' : '#1E293B' }}>
+                                                                {b.company_name}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', gap: '8px' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><MapPin size={11} /> {b.address || 'Sin dirección'}</span>
+                                                                {b.nit && <span>• NIT: {b.nit}</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {isSelected ? (
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#1D4ED8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <CheckCircle2 size={14} /> Seleccionada
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#475569', fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer' }}
+                                                        >
+                                                            Elegir
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03rem' }}>
+                                    1. Seleccionar Nueva Casa Matriz Receptora
+                                </label>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                    Sede a transferir: <strong>{sourceBranch?.company_name}</strong>
+                                </span>
+                            </div>
+
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar Casa Matriz por razón social, nombre o NIT..."
+                                    value={searchParentTerm}
+                                    onChange={(e) => setSearchParentTerm(e.target.value)}
+                                    style={{ width: '100%', height: '40px', padding: '0 1rem 0 2.5rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '0.82rem', fontWeight: '600', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '14px', backgroundColor: '#F8FAFC' }}>
+                                {filteredParents.length === 0 ? (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                        No se encontraron Casas Matrices disponibles.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        {filteredParents.map(p => {
+                                            const isSelected = selectedParent?.id === p.id;
+                                            return (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => setSelectedParent(p)}
+                                                    style={{
+                                                        padding: '0.75rem 1rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        borderBottom: '1px solid #E2E8F0',
+                                                        backgroundColor: isSelected ? '#EFF6FF' : 'white',
+                                                        cursor: 'pointer',
+                                                        transition: 'background-color 0.15s'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: isSelected ? '#DBEAFE' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Building2 size={16} style={{ color: isSelected ? '#1D4ED8' : '#64748B' }} />
+                                                        </div>
+                                                        <div>
+                                                            <div style={{ fontWeight: '800', fontSize: '0.82rem', color: isSelected ? '#1E3A8A' : '#1E293B' }}>
+                                                                👑 {p.company_name}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', gap: '8px' }}>
+                                                                <span>NIT: {p.nit}</span>
+                                                                {p.razon_social && <span>• {p.razon_social}</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {isSelected ? (
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#1D4ED8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <CheckCircle2 size={14} /> Seleccionada
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#475569', fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer' }}
+                                                        >
+                                                            Elegir
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Paso 2: Resumen del Traspaso (Doble Columna) */}
+                    {selectedBranch && selectedParent && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03rem' }}>
+                                2. Verificación de Ficha Operativa vs Nueva Matriz
+                            </label>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                {/* Tarjeta Sede Origen */}
+                                <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1rem 1.25rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase' }}>Sede Operativa Física</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEF3C7', color: '#B45309' }}>SE CLONA CON NUEVO ID</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#78350F' }}>
+                                        {selectedBranch.company_name}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#92400E', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={13} /> {selectedBranch.address || 'Sin dirección declarada'}</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={13} /> {selectedBranch.contact_name || 'Contacto no definido'} ({selectedBranch.phone || 'S/N'})</span>
+                                        {selectedBranch.latitude && selectedBranch.longitude && (
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Sliders size={13} /> GPS: {Number(selectedBranch.latitude).toFixed(4)}, {Number(selectedBranch.longitude).toFixed(4)} (Geocerca Activa)</span>
+                                        )}
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Package size={13} /> Canastillas Físicas: <strong>{Number((selectedBranch as any).crate_balance) || 0} unds</strong></span>
+                                    </div>
+                                </div>
+
+                                {/* Tarjeta Matriz Destino */}
+                                <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '1rem 1.25rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#166534', textTransform: 'uppercase' }}>Nueva Casa Matriz Receptora</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D' }}>NUEVO ENLACE FISCAL</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#14532D' }}>
+                                        👑 {selectedParent.company_name}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#166534', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span>NIT: <strong>{selectedParent.nit}</strong></span>
+                                        <span>Razón Social: {selectedParent.razon_social || selectedParent.company_name}</span>
+                                        <span>Modelo Precios: <strong>{targetPricingModel?.name || 'Tarifa Estándar'}</strong></span>
+                                        <span>Términos de Pago: <strong>{selectedParent.payment_days !== undefined ? `${selectedParent.payment_days} días` : 'Contado'}</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Opciones Adicionales de Traspaso */}
+                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Opciones del Traspaso:</span>
+                                
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.78rem', color: '#1E293B', fontWeight: '600', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={copyNicknames}
+                                        onChange={(e) => setCopyNicknames(e.target.checked)}
+                                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                    />
+                                    Clonar notas de cocina, instrucciones de empaque (picking) y sustitutos de producto (product_nicknames)
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.78rem', color: '#1E293B', fontWeight: '600', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={transferCrates}
+                                        onChange={(e) => setTransferCrates(e.target.checked)}
+                                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                    />
+                                    Traspasar saldo de canastillas en poder de la sede ({Number((selectedBranch as any)?.crate_balance) || 0} canastillas) y limpiar saldo de la ficha previa
+                                </label>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Buttons */}
+                <div style={{ padding: '1.25rem 1.8rem', borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isExecuting}
+                        style={{ padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#475569', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        disabled={isExecuting || !selectedBranch || !selectedParent}
+                        onClick={handleExecuteTransfer}
+                        style={{
+                            padding: '0.75rem 1.5rem',
+                            borderRadius: '12px',
+                            border: 'none',
+                            backgroundColor: (!selectedBranch || !selectedParent) ? '#94A3B8' : '#1D4ED8',
+                            color: 'white',
+                            fontSize: '0.8rem',
+                            fontWeight: '800',
+                            cursor: (!selectedBranch || !selectedParent || isExecuting) ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 12px rgba(29, 78, 216, 0.25)',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        {isExecuting ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" /> Traspasando Sede...
+                            </>
+                        ) : (
+                            <>
+                                <CopyPlus size={16} /> Confirmar Traspaso y Generar Nuevo ID Fiscal
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
         </div>
