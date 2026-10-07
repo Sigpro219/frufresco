@@ -109,6 +109,18 @@ export default function CheckoutPage() {
     const [recipientPhone, setRecipientPhone] = useState('');
     const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
     const [selectedBeneficiaryIdx, setSelectedBeneficiaryIdx] = useState<number | 'new' | null>(null);
+    const [checkoutNotice, setCheckoutNotice] = useState<{ message: string; type: 'error' | 'success' | 'warning' | 'info' } | null>(null);
+
+    const notify = (message: string, type: 'error' | 'success' | 'warning' | 'info' = 'info') => {
+        setCheckoutNotice({ message, type });
+        if (typeof window !== 'undefined' && (window as any).showToast) {
+            const toastType = type === 'warning' ? 'info' : type;
+            (window as any).showToast(message, toastType);
+        }
+        setTimeout(() => {
+            setCheckoutNotice(prev => (prev?.message === message ? null : prev));
+        }, 8000);
+    };
 
     const itemBreakdownSummary = useMemo(() => {
         if (!items || items.length === 0) return '';
@@ -301,9 +313,10 @@ export default function CheckoutPage() {
 
     const handlePaymentMethodChange = (val: 'wompi' | 'contra_entrega') => {
         if (val === 'contra_entrega' && !isB2B && totalPrice > maxOrderHogarCod) {
-            alert(locale === 'es' 
+            notify(locale === 'es' 
                 ? `Por políticas de seguridad, los pedidos para Hogar con pago contra entrega tienen un límite máximo de $${maxOrderHogarCod.toLocaleString('es-CO')}. Para pedidos superiores, por favor selecciona pago en línea con Wompi (PSE, Tarjeta o Nequi).`
-                : `For security reasons, Cash on Delivery for Household orders has a limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please select online payment via Wompi.`
+                : `For security reasons, Cash on Delivery for Household orders has a limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please select online payment via Wompi.`,
+                'warning'
             );
             return;
         }
@@ -573,9 +586,12 @@ export default function CheckoutPage() {
 
     const handleConfirmLocationFromMap = () => {
         if (outOfZone && !isB2B) {
-            return alert(locale === 'es' 
+            notify(locale === 'es' 
                 ? '📍 El punto seleccionado está fuera de nuestra zona de cobertura activa (Zona Norte / Centro). Por favor ubica el marcador dentro del área verde o solicita notificación para avisarte cuando habilitemos tu sector.' 
-                : '📍 The selected location is outside our active delivery zone. Please move the pin inside the green zone or request notification when available.');
+                : '📍 The selected location is outside our active delivery zone. Please move the pin inside the green zone or request notification when available.',
+                'warning'
+            );
+            return;
         }
 
         if (resolvedAddressPreview && resolvedAddressPreview.trim()) {
@@ -593,7 +609,8 @@ export default function CheckoutPage() {
 
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
-            return alert(locale === 'es' ? 'Tu navegador no soporta geolocalización.' : 'Your browser does not support geolocation.');
+            notify(locale === 'es' ? 'Tu navegador no soporta geolocalización.' : 'Your browser does not support geolocation.', 'error');
+            return;
         }
 
         setIsGettingLocation(true);
@@ -612,12 +629,12 @@ export default function CheckoutPage() {
                     setAddressSyncNotice(resolved);
                     setTimeout(() => setAddressSyncNotice(null), 6000);
                 }
-                alert(locale === 'es' ? '📍 Ubicación capturada con éxito. Ahora tu entrega será más precisa.' : '📍 Location captured successfully. Your delivery will now be more precise.');
+                notify(locale === 'es' ? '📍 Ubicación capturada con éxito. Ahora tu entrega será más precisa.' : '📍 Location captured successfully. Your delivery will now be more precise.', 'success');
             },
             (error) => {
                 console.error('Error getting location:', error);
                 setIsGettingLocation(false);
-                alert(locale === 'es' ? 'No pudimos obtener tu ubicación. Por favor asegúrate de dar permisos en tu navegador.' : 'We could not get your location. Please ensure you grant permissions in your browser.');
+                notify(locale === 'es' ? 'No pudimos obtener tu ubicación. Por favor asegúrate de dar permisos en tu navegador.' : 'We could not get your location. Please ensure you grant permissions in your browser.', 'error');
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
@@ -773,9 +790,11 @@ export default function CheckoutPage() {
                     municipality: 'Fuera de Cobertura'
                 })
             });
-            alert(locale === 'es' 
+            notify(locale === 'es' 
                 ? '¡Muchas gracias por tu interés! Hemos registrado tu ubicación exitosamente en nuestra base de demanda. Te avisaremos tan pronto habilitemos entregas en tu sector.' 
-                : 'Thank you for your interest! We have recorded your location in our demand database. We will notify you as soon as we expand to your area.');
+                : 'Thank you for your interest! We have recorded your location in our demand database. We will notify you as soon as we expand to your area.',
+                'success'
+            );
             if (typeof window !== 'undefined') {
                 localStorage.removeItem('checkout_specialNotes');
             }
@@ -795,20 +814,41 @@ export default function CheckoutPage() {
         if (!date || date === '' || date === 'dd/mm/aaaa') {
             const recoveryDate = getSafeBogotaDate(1);
             setDate(recoveryDate);
-            return alert(locale === 'es' ? 'Hubo un problema con la fecha. Se ha corregido, por favor intenta de nuevo.' : 'There was a problem with the date. It has been fixed, please try again.');
+            notify(locale === 'es' ? 'Hubo un problema con la fecha. Se ha corregido automáticamente, por favor confirma de nuevo.' : 'There was a problem with the date. It has been fixed, please confirm again.', 'warning');
+            return;
         }
 
-        if (items.length === 0) return alert(t.emptyCart);
-        if (!name || !name.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Nombre Completo.' : 'Please enter your Full Name.');
-        if (!identification || !identification.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Identificación.' : 'Please enter your ID Number.');
-        if (!phone || !phone.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.');
-        if (!email || !email.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
-        if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
+        if (items.length === 0) {
+            notify(t.emptyCart, 'error');
+            return;
+        }
+        if (!name || !name.trim()) {
+            notify(locale === 'es' ? 'Por favor ingresa tu Nombre Completo.' : 'Please enter your Full Name.', 'error');
+            return;
+        }
+        if (!identification || !identification.trim()) {
+            notify(locale === 'es' ? 'Por favor ingresa tu Número de Identificación.' : 'Please enter your ID Number.', 'error');
+            return;
+        }
+        if (!phone || !phone.trim()) {
+            notify(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.', 'error');
+            return;
+        }
+        if (!email || !email.trim()) {
+            notify(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.', 'error');
+            return;
+        }
+        if (!isMinOrderMet) {
+            notify(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`, 'error');
+            return;
+        }
         if (!isB2B && paymentMethod === 'contra_entrega' && totalPrice > maxOrderHogarCod) {
-            return alert(locale === 'es' 
+            notify(locale === 'es' 
                 ? `Por políticas de seguridad, los pedidos para Hogar con pago contra entrega tienen un límite máximo de $${maxOrderHogarCod.toLocaleString('es-CO')}. Para este pedido de $${totalPrice.toLocaleString('es-CO')}, por favor selecciona el método Wompi (pago seguro online).`
-                : `For security reasons, Cash on Delivery for Household orders has a limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please select online payment via Wompi.`
+                : `For security reasons, Cash on Delivery for Household orders has a limit of $${maxOrderHogarCod.toLocaleString('en-US')}. Please select online payment via Wompi.`,
+                'warning'
             );
+            return;
         }
         if (outOfZone) {
             fetch('/api/coverage/out-of-bounds', {
@@ -824,18 +864,27 @@ export default function CheckoutPage() {
                     channel: isB2B ? 'b2b' : 'b2c'
                 })
             }).catch(e => console.warn('Silent log error:', e));
-            return alert(t.outOfZoneMsg);
+            notify(t.outOfZoneMsg, 'error');
+            return;
         }
         if (date < minDeliveryDate) {
-            return alert(locale === 'es' 
+            notify(locale === 'es' 
                 ? `La fecha de entrega seleccionada no es válida. La fecha mínima de entrega permitida es ${minDeliveryDate}.`
-                : `The selected delivery date is not valid. The minimum allowed delivery date is ${minDeliveryDate}.`
+                : `The selected delivery date is not valid. The minimum allowed delivery date is ${minDeliveryDate}.`,
+                'error'
             );
+            return;
         }
 
         if (isGiftForRecipient) {
-            if (!recipientName.trim()) return alert(locale === 'es' ? 'Por favor ingresa el Nombre Completo de quien recibe.' : 'Please enter the Recipient Full Name.');
-            if (!recipientPhone.trim()) return alert(locale === 'es' ? 'Por favor ingresa el Número de Celular de quien recibe.' : 'Please enter the Recipient Phone Number.');
+            if (!recipientName.trim()) {
+                notify(locale === 'es' ? 'Por favor ingresa el Nombre Completo de quien recibe.' : 'Please enter the Recipient Full Name.', 'error');
+                return;
+            }
+            if (!recipientPhone.trim()) {
+                notify(locale === 'es' ? 'Por favor ingresa el Número de Celular de quien recibe.' : 'Please enter the Recipient Phone Number.', 'error');
+                return;
+            }
         }
 
         setShowConfirmationModal(true);
@@ -1023,7 +1072,7 @@ export default function CheckoutPage() {
                 userMsg = err.message;
             }
             
-            alert(userMsg);
+            notify(userMsg, 'error');
         } finally {
             setLoading(false);
         }
@@ -1073,9 +1122,11 @@ export default function CheckoutPage() {
             const targetProfileId = profile?.id || matchedProfileId || '';
 
             if (!targetProfileId && !cleanEmail && !cleanPhone && !cleanId) {
-                alert(locale === 'es' 
+                notify(locale === 'es' 
                     ? 'Por favor ingresa tu correo, teléfono o cédula en el formulario para buscar tu última compra.' 
-                    : 'Please enter your email, phone, or ID in the form to search for your last order.');
+                    : 'Please enter your email, phone, or ID in the form to search for your last order.',
+                    'info'
+                );
                 return;
             }
 
@@ -1089,14 +1140,16 @@ export default function CheckoutPage() {
             const data = await res.json();
 
             if (!res.ok) {
-                alert(data.error || (locale === 'es' ? 'No se pudo cargar la última compra.' : 'Could not load last order.'));
+                notify(data.error || (locale === 'es' ? 'No se pudo cargar la última compra.' : 'Could not load last order.'), 'error');
                 return;
             }
 
             if (!data.items || data.items.length === 0) {
-                alert(locale === 'es' 
+                notify(locale === 'es' 
                     ? 'Los productos de tu última compra no están disponibles en el catálogo de hoy.' 
-                    : 'Products from your last purchase are not available in today\'s catalog.');
+                    : 'Products from your last purchase are not available in today\'s catalog.',
+                    'warning'
+                );
                 return;
             }
 
@@ -1107,14 +1160,16 @@ export default function CheckoutPage() {
             }
 
             if (importedCount > 0) {
-                alert(locale === 'es' 
+                notify(locale === 'es' 
                     ? `✅ ¡Se agregaron ${importedCount} producto(s) de tu última compra al carrito con el precio de HOY!` 
-                    : `✅ Added ${importedCount} product(s) from your last purchase to cart at TODAY'S price!`);
+                    : `✅ Added ${importedCount} product(s) from your last purchase to cart at TODAY'S price!`,
+                    'success'
+                );
             }
 
         } catch (err: any) {
             console.error('Error loading last order:', err);
-            alert(locale === 'es' ? 'Error al traer la última compra.' : 'Error loading last order.');
+            notify(locale === 'es' ? 'Error al traer la última compra.' : 'Error loading last order.', 'error');
         } finally {
             setLoadingLastOrder(false);
         }
@@ -2758,6 +2813,36 @@ export default function CheckoutPage() {
                                     })()}
                                 </div>
                             </div>
+
+                            {checkoutNotice && (
+                                <div style={{
+                                    padding: '0.85rem 1rem',
+                                    borderRadius: '14px',
+                                    marginBottom: '1rem',
+                                    backgroundColor: checkoutNotice.type === 'error' ? '#FEF2F2' : checkoutNotice.type === 'success' ? '#ECFDF5' : checkoutNotice.type === 'warning' ? '#FFFBEB' : '#EFF6FF',
+                                    border: `1.5px solid ${checkoutNotice.type === 'error' ? '#FCA5A5' : checkoutNotice.type === 'success' ? '#A7F3D0' : checkoutNotice.type === 'warning' ? '#FDE68A' : '#BFDBFE'}`,
+                                    color: checkoutNotice.type === 'error' ? '#991B1B' : checkoutNotice.type === 'success' ? '#065F46' : checkoutNotice.type === 'warning' ? '#92400E' : '#1E40AF',
+                                    fontSize: '0.84rem',
+                                    fontWeight: '700',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                                }}>
+                                    {checkoutNotice.type === 'error' ? <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#DC2626' }} /> :
+                                     checkoutNotice.type === 'success' ? <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#059669' }} /> :
+                                     checkoutNotice.type === 'warning' ? <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#D97706' }} /> :
+                                     <Info size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#2563EB' }} />}
+                                    <div style={{ flex: 1, lineHeight: 1.4 }}>{checkoutNotice.message}</div>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setCheckoutNotice(null)} 
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit', opacity: 0.6 }}
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            )}
 
                             <button
                                 className="btn-premium"

@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.151 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.2 Ficha Técnica SKU)
+> **Versión:** 1.9.152 (Certificación Dominio 1: Tienda B2C, Catálogo Público y Checkout — Screen 1.3 Pasarela y Checkout)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8662,6 +8662,44 @@ La ficha técnica de SKU (`src/app/products/[id]/page.tsx` y su cliente `src/com
   3. Al seleccionar "Libra 500g", el subtotal reactivo calcula exactamente $3.400 COP ($6.800 $\times$ 0.5 kg).
   4. Si el cliente ya había añadido 2 libras al carrito, la interfaz muestra el banner preventivo *"Ya tienes 2 Libra 500g en tu pedido. Al adicionar 1 Libra 500g el nuevo total será 3 Libra 500g"*.
   5. Al presionar `[Agregar al Pedido]`, el carrito acumula la masa física real ($1.5 \text{ kg}$) y retorna al catálogo con notificación Toast de éxito.
+
+---
+
+### 40.4 Pasarela y Formulario de Checkout B2C/B2B (`/checkout` - `src/app/checkout/page.tsx`) (SDD v1.9.152)
+
+#### A. Misión y Alcance de la Pasarela de Checkout
+La pasarela y formulario de checkout (`src/app/checkout/page.tsx`) centraliza la captura de datos fiscales, georreferenciación satelital precisa, cálculo de impuestos IVA discriminados por producto, validación de polígonos de geocerca (Bogotá Norte/Centro), programación de ventanas de entrega con corte diario y selección de medios de pago (Wompi PSE/Tarjeta/Nequi vs Pago Contra Entrega).
+
+#### B. Arquitectura de Cobertura, Geocercas y Demanda Insatisfecha
+1. **Validación Satelital Poka-Yoke de Geocercas:**
+   - La pantalla proyecta un selector de mapa interactivo (`Google Maps / react-google-maps`) con dibujo de polígonos vectoriales (`Polygon`).
+   - Evalúa en cliente mediante `isInsidePolygon(point, geofence)` si las coordenadas (`latitude`, `longitude`) pertenecen a la zona activa B2C (`b2cGeofence`) o institucional (`b2bGeofence`).
+2. **Canalización Táctica de Demanda Insatisfecha:**
+   - Si la ubicación del cliente se sitúa fuera de la zona activa (`outOfZone = true`), el sistema bloquea la creación del pedido y habilita el botón *"Avísame cuando lleguen a mi sector"*.
+   - Al presionarlo, el evento se persiste en `/api/coverage/out-of-bounds` (con dirección, coordenadas, teléfono y correo), permitiendo a la Dirección Comercial priorizar la apertura de nuevas rutas logísticas.
+
+#### C. Reglas Financieras, Políticas de Empaque y Prevención de Fraude
+1. **Tope de Seguridad para Pago Contra Entrega (COD):**
+   - Para clientes B2C (Hogar), las compras con pago contra entrega (`contra_entrega`) están limitadas a un monto máximo de **$400.000 COP** (`maxOrderHogarCod`).
+   - Si el total del pedido excede este valor, el selector bloquea la opción y exige el pago en línea con Wompi para mitigar el riesgo de cartera y seguridad física de los conductores.
+2. **Tarifa de Empaque e Inocuidad Alimentaria (`packaging_fee`):**
+   - Cálculo transparente de una cuota de empaque (3% o parametrizable en `app_settings`), garantizando la preservación térmica y bioseguridad en canastillas y bolsas plásticas grado alimenticio.
+   - Redondeo financiero hacia abajo al múltiplo de $50 inferior (`finalOrderTotal`), asegurando que cualquier fracción beneficie al comprador.
+3. **Cero-Alert Dogma Militar:**
+   - Erradicación militar total de 24 llamadas a `alert()` nativo en el flujo de validaciones, sustituidas por el bus de notificaciones Toast (`showToast`) y el banner reactivo in-UI `checkoutNotice` con iconos Lucide y cierre automático tras 8 segundos.
+
+---
+
+#### Escenario 188: Checkout Transaccional, Validación de Geocercas y Poka-Yoke de Pago Contra Entrega (SDD v1.9.152)
+- **Given** un consumidor final B2C con un carrito de compras valorizado en $480.000 COP en `/checkout`.
+- **When** intenta seleccionar la opción *"Pago Contra Entrega (Pagar al Recibir)"*:
+- **Then**:
+  1. El sistema detecta que el monto supera el tope de seguridad de $400.000 COP para pedidos Hogar.
+  2. Despliega inmediatamente la notificación reactiva in-UI informando que los pedidos superiores a $400.000 COP deben pagarse en línea con Wompi (PSE, Tarjeta o Nequi) por políticas de seguridad de flota.
+  3. Mantiene seleccionado el método Wompi e inhabilita el avance en contra entrega.
+  4. Tras verificar que las coordenadas GPS caen dentro de la geocerca activa y que la fecha de entrega respeta el corte de las 17:00, el cliente pulsa `[Confirmar y Pagar Online]`.
+  5. El sistema genera la orden en base de datos, calcula el hash criptográfico SHA-256 para Wompi y redirige fluidamente a la pasarela de pagos.
+
 
 
 
