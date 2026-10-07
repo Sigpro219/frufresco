@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.159 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.3 Acuerdos de Precios Institucionales & Golden Print)
+> **Versión:** 1.9.160 (Certificación Dominio 2: Portal Corporativo B2B e Institucional — Screen 2.4 Consumo, Canastillas & CIERRE TOTAL DOMINIO 2)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8957,6 +8957,48 @@ La pestaña de convenios (`/b2b/dashboard?tab=agreements`) y el visor documental
   2. En la tabla de insumos, el usuario digita 10 unidades en "Cebolla Cabezona Limpia" y pulsa `[Agregar al Pedido]`.
   3. El insumo se adiciona de inmediato al carrito corporativo aplicando la tarifa congelada del acuerdo ($2.800 COP/kg en lugar de $3.400 COP/kg base) con notificación Toast verde.
   4. Al pulsar `[Ver / Descargar Documento Formal]`, se abre el visor `AgreementDocumentModal` con desglose legal, porcentaje de ahorro promedio del 17.6% y botón de impresión en formato Letterhead.
+
+---
+
+### 41.4 Control de Consumo, Balance de Canastillas Retornables y Portal de Registro B2B (`/b2b/dashboard?tab=consumption` & `tab=crates` & `/b2b/register` - `src/app/b2b/register/page.tsx`) (SDD v1.9.160)
+
+#### A. Misión y Alcance de la Inteligencia Operativa y Captura B2B
+La consolidación de métricas de consumo (`tab=consumption`), balance de activos de transporte (`tab=crates`) y la fachada pública de registro (`/b2b/register`) integran la capa analítica y de captación del ecosistema B2B de FruFresco. Ofrecen a la dirección financiera de los clientes corporativos visibilidad sobre el retorno de inversión y ahorros acumulados, garantizan la custodia de canastillas plásticas reutilizables mediante logística inversa y canalizan la prospección de nuevos compradores institucionales mediante IA conversacional.
+
+#### B. Arquitectura de Telemetría, Custodia de Activos & Onboarding
+1. **Business Intelligence de Consumo y Ahorro Corporativo:**
+   - Panel de 4 KPIs nucleares calculados reactivamente:
+     - **Inversión Total Acumulada (COP):** Facturación histórica neta de pedidos entregados.
+     - **Volumen Total Abastecido (Kg):** Kilogramos netos despachados para control de masa.
+     - **Ahorro Bruto por Convenio (COP):** Diferencial acumulado entre la tarifa de lista base y el precio pactado en el acuerdo.
+     - **Precio Promedio Ponderado por Kg:** Indicador clave de eficiencia de compras institucionales.
+   - Selector temporal dinámico: `30days`, `3months` o `all`.
+   - Gráfico de barras SVG interactivo con tooltips de inspección (`activeHoverPoint`), visualizando la relación entre volumen facturado y ahorro generado por jornada.
+2. **Logística Inversa & Balance de Canastillas Plásticas (`tab=crates`):**
+   - Trazabilidad de activos retornables entregados en comodato a los puntos de entrega del cliente.
+   - Cálculo reactivo del saldo vivo en custodia:
+     $$\text{Saldo Custodia} = \sum \text{Canastillas Entregadas} - \sum \text{Canastillas Recogidas}$$
+   - Modal interactivo de Solicitud de Recogida (`isPickupModalOpen`):
+     - Selector numérico de canastillas vacías listas para retiro y campo de observaciones operativas.
+     - Inserción transaccional de petición logística en `customer_service_pqrs` (`type = 'peticion'`, `category = 'logistica'`, prioridad automática `urgent` si cantidad > 20).
+     - Notificación Toast no bloqueante al radicar sin alterar la sesión de trabajo.
+3. **Portal de Afiliación y Captación de Clientes Corporativos (`/b2b/register`):**
+   - Interfaz institucional moderna con fondo estilizado y contenedor 50/50.
+   - Gobernanza remota desde `app_settings` (`enable_b2b_lead_capture`, `b2b_page_content`, `b2b_page_content_en`), permitiendo habilitar o suspender la prospección con redirección automática a la raíz (`/`).
+   - Integración con el bot de cotización interactiva `LeadGenBotV2` para capturar requerimientos de cocina y generar cotizaciones preliminares automatizadas.
+4. **Erradicación Militar de Diálogos Bloqueantes (Zero-Alert Dogma):**
+   - Ausencia total de `alert()`, `confirm()` o modales de bloqueo en todo el subsistema.
+
+---
+
+#### Escenario 196: Auditoría de Ahorro y Solicitud de Logística Inversa de Canastillas (SDD v1.9.160)
+- **Given** el director de compras de un operador de casinos industriales autenticado en `/b2b/dashboard`.
+- **When** accede a `tab=consumption` para la junta mensual y luego a `tab=crates` para despacho de activos vacíos:
+- **Then**:
+  1. El sistema calcula en milisegundos su ahorro trimestral ($14.850.000 COP) y proyecta el gráfico interactivo de barras.
+  2. En la pestaña de canastillas, el sistema indica un saldo vivo de 35 canastillas en su bodega.
+  3. El usuario pulsa `[Solicitar Recogida de Canastillas]`, digita 30 canastillas con la nota *"Listas en muelle de recepción torre B"* y pulsa `[Confirmar Solicitud]`.
+  4. El sistema radica la solicitud en `customer_service_pqrs` con prioridad `urgent`, emite la notificación Toast verde *"Solicitud de recogida radicada exitosamente"* y cierra el modal sin bloquear la pantalla.
 
 
 
