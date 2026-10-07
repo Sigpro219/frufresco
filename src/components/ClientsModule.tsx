@@ -5446,6 +5446,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [potentialParents, setPotentialParents] = useState<Profile[]>([]);
     const [parentSearch, setParentSearch] = useState('');
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
+    const parentDropdownRef = useRef<HTMLDivElement>(null);
+    const parentInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const handleOutsideClick = (e: MouseEvent) => {
+            if (parentDropdownRef.current && !parentDropdownRef.current.contains(e.target as Node)) {
+                setIsParentDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
     const [isExceptionsModalOpen, setIsExceptionsModalOpen] = useState(false);
     const [exceptionCount, setExceptionCount] = useState(0);
     const [applyConfigToBranches, setApplyConfigToBranches] = useState(true);
@@ -6947,40 +6959,189 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </div>
                             ) : b2bStructureType === 'sucursal' ? (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
-                                    <div style={{ position: 'relative' }}>
+                                    <div ref={parentDropdownRef} style={{ position: 'relative' }}>
                                         <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ *</label>
                                         <div style={{ position: 'relative' }}>
-                                            <input 
-                                                type="text"
-                                                placeholder="Buscar Matriz por NIT o Nombre..."
-                                                value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
-                                                onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
-                                                onChange={(e) => {
-                                                    if (isReadOnly) return;
-                                                    setParentSearch(e.target.value);
-                                                    if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
-                                                    setIsParentDropdownOpen(true);
-                                                }}
-                                                readOnly={isEdit || isReadOnly}
-                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
-                                            />
-                                            {isParentDropdownOpen && !formData.parent_id && (
-                                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
-                                                    {potentialParents.filter(p => 
-                                                        p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
-                                                        p.nit?.includes(parentSearch) ||
-                                                        p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
-                                                    ).map(p => (
-                                                        <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
-                                                            <div style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E3A8A' }}>👑 {p.company_name}</div>
-                                                            <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
-                                                                <span>NIT: {p.nit}</span>
-                                                                <span>•</span>
-                                                                <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
+                                            {formData.parent_id ? (
+                                                (() => {
+                                                    const parent = potentialParents.find(p => p.id === formData.parent_id);
+                                                    return (
+                                                        <div style={{
+                                                            height: '34px',
+                                                            padding: '0 0.5rem 0 0.75rem',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #BFDBFE',
+                                                            backgroundColor: '#EFF6FF',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            gap: '6px'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                                                <span style={{ fontSize: '0.85rem' }}>👑</span>
+                                                                <span style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E40AF', overflow: 'hidden', textOverflow: 'ellipsis' }} title={parent?.company_name || 'Casa Matriz'}>
+                                                                    {parent?.company_name || 'Casa Matriz Seleccionada'}
+                                                                </span>
+                                                                {parent?.nit && (
+                                                                    <span style={{ fontSize: '0.68rem', color: '#3B82F6', fontWeight: '600', flexShrink: 0 }}>
+                                                                        • NIT: {parent.nit}
+                                                                    </span>
+                                                                )}
                                                             </div>
+                                                            {!isReadOnly && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleParentSelection('');
+                                                                        setParentSearch('');
+                                                                        setIsParentDropdownOpen(true);
+                                                                        setTimeout(() => parentInputRef.current?.focus(), 50);
+                                                                    }}
+                                                                    style={{
+                                                                        border: 'none',
+                                                                        background: '#DBEAFE',
+                                                                        color: '#1E40AF',
+                                                                        borderRadius: '6px',
+                                                                        padding: '3px 8px',
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: '800',
+                                                                        cursor: 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px',
+                                                                        flexShrink: 0,
+                                                                        transition: 'all 0.15s ease'
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#BFDBFE'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                                                    title="Cambiar o desvincular de esta Casa Matriz"
+                                                                >
+                                                                    <X size={12} /> Cambiar
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                    ))}
-                                                </div>
+                                                    );
+                                                })()
+                                            ) : (
+                                                <>
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <input 
+                                                            ref={parentInputRef}
+                                                            type="text"
+                                                            placeholder="Buscar Matriz por NIT o Nombre..."
+                                                            value={parentSearch}
+                                                            onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
+                                                            onChange={(e) => {
+                                                                if (isReadOnly) return;
+                                                                setParentSearch(e.target.value);
+                                                                setIsParentDropdownOpen(true);
+                                                            }}
+                                                            readOnly={isReadOnly}
+                                                            style={{
+                                                                height: '34px',
+                                                                padding: '0 2rem 0 0.8rem',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #E2E8F0',
+                                                                fontWeight: '700',
+                                                                width: '100%',
+                                                                outline: 'none',
+                                                                backgroundColor: isReadOnly ? '#F8FAFC' : 'white',
+                                                                fontSize: '0.8rem',
+                                                                cursor: isReadOnly ? 'default' : 'text'
+                                                            }}
+                                                        />
+                                                        {parentSearch && !isReadOnly ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setParentSearch('');
+                                                                    setIsParentDropdownOpen(true);
+                                                                    parentInputRef.current?.focus();
+                                                                }}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    right: '8px',
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer',
+                                                                    color: '#94A3B8',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    padding: 0
+                                                                }}
+                                                                title="Limpiar búsqueda"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        ) : (
+                                                            <Search size={14} style={{ position: 'absolute', right: '10px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                        )}
+                                                    </div>
+                                                    {isParentDropdownOpen && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '100%',
+                                                            left: 0,
+                                                            right: 0,
+                                                            zIndex: 100,
+                                                            backgroundColor: 'white',
+                                                            borderRadius: '12px',
+                                                            boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                                                            border: '1px solid #E2E8F0',
+                                                            marginTop: '6px',
+                                                            maxHeight: '220px',
+                                                            overflowY: 'auto'
+                                                        }}>
+                                                            {(() => {
+                                                                const filtered = potentialParents
+                                                                    .filter(p => p.id !== editData?.id)
+                                                                    .filter(p => 
+                                                                        searchIncludes(p.company_name, parentSearch) || 
+                                                                        searchIncludes(p.nit, parentSearch) ||
+                                                                        searchIncludes(p.razon_social, parentSearch)
+                                                                    );
+                                                                if (filtered.length === 0) {
+                                                                    return (
+                                                                        <div style={{ padding: '0.9rem', fontSize: '0.75rem', color: '#94A3B8', textAlign: 'center', fontStyle: 'italic' }}>
+                                                                            {parentSearch ? `No se encontraron matrices para "${parentSearch}"` : 'No hay matrices disponibles'}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return filtered.map(p => (
+                                                                    <div 
+                                                                        key={p.id} 
+                                                                        onClick={() => {
+                                                                            handleParentSelection(p.id);
+                                                                            setIsParentDropdownOpen(false);
+                                                                            setParentSearch('');
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '0.75rem 0.9rem',
+                                                                            cursor: 'pointer',
+                                                                            borderBottom: '1px solid #F1F5F9',
+                                                                            transition: 'background-color 0.15s'
+                                                                        }}
+                                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                                    >
+                                                                        <div style={{ fontWeight: '800', fontSize: '0.8rem', color: '#1E3A8A' }}>
+                                                                            👑 {p.company_name}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                                                                            <span>NIT: {p.nit}</span>
+                                                                            {p.razon_social && p.razon_social !== p.company_name && (
+                                                                                <>
+                                                                                    <span>•</span>
+                                                                                    <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                ));
+                                                            })()}
+                                                        </div>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </div>

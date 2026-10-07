@@ -50,17 +50,19 @@ export async function POST(req: Request) {
 
       const isPdf = fileName.endsWith('.pdf') || fileType.includes('pdf');
 
-      if (isExcelOrCsv && mode === 'standard') {
-        // Modo Standard: Parser programático de Excel rápido
+      if (isExcelOrCsv) {
+        // Modo Rápido: Parser programático de Excel/CSV en <10ms
         try {
           const parsed = parseExcelPriceProposal(buffer);
-          rawExtractedItems = parsed.map(it => ({
-            client_product_name: it.client_product_name,
-            accounting_id: it.accounting_id,
-            client_proposed_price: it.client_proposed_price,
-            unit: it.unit || 'Kg',
-          }));
-          modelUsed = 'Standard XLSX Parser';
+          if (parsed && parsed.length > 0) {
+            rawExtractedItems = parsed.map(it => ({
+              client_product_name: it.client_product_name,
+              accounting_id: it.accounting_id,
+              client_proposed_price: it.client_proposed_price,
+              unit: it.unit || 'Kg',
+            }));
+            modelUsed = mode === 'standard' ? 'Directo Excel' : 'Asistente IA (Pre-procesado XLSX Rápido)';
+          }
         } catch (err: any) {
           console.warn('[Digest Agreement File] Standard parser error, falling back to AI:', err);
         }
@@ -240,7 +242,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Helper de Normalización Robusta (Tildes, Diacríticos, Mayúsculas, Puntuación)
+    // 5. Helper de Normalización Robusta y Pre-indexación O(1)
     const normalizeFruFresco = (str: string): string => {
       return (str || '')
         .normalize('NFD')
@@ -250,6 +252,37 @@ export async function POST(req: Request) {
         .replace(/\s+/g, ' ')
         .trim();
     };
+
+    const stripUnits = (s: string) =>
+      s
+        .replace(/\b\d+(?:[\.,]\d+)?\s*(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+        .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Mapas O(1) para resolución instantánea sin escaneo cuadrático
+    const normMap = new Map<string, any>();
+    const strippedMap = new Map<string, any>();
+    const accIdMap = new Map<string, any>();
+    const skuMap = new Map<string, any>();
+
+    const indexedCatalog = catalog.map((p: any) => {
+      const pNorm = normalizeFruFresco(p.name);
+      const pStripped = stripUnits(pNorm);
+      const pAccStr = p.accounting_id !== null && p.accounting_id !== undefined ? String(p.accounting_id).trim() : '';
+      const pSkuStr = (p.sku || '').toLowerCase().trim();
+
+      if (pNorm && !normMap.has(pNorm)) normMap.set(pNorm, p);
+      if (pStripped && pStripped.length >= 3 && !strippedMap.has(pStripped)) strippedMap.set(pStripped, p);
+      if (pAccStr && !accIdMap.has(pAccStr)) accIdMap.set(pAccStr, p);
+      if (pSkuStr && !skuMap.has(pSkuStr)) skuMap.set(pSkuStr, p);
+
+      return {
+        ...p,
+        _norm: pNorm,
+        _stripped: pStripped
+      };
+    });
 
     // 6. Emparejamiento Semántico y Cálculo Financiero Fila por Fila (Paridad SDD Módulo de Pedidos)
     let matchedCount = 0;
@@ -275,19 +308,10 @@ export async function POST(req: Request) {
         if (matchedProd) matchConfidence = 'high';
       }
 
-      // Capa 2: Coincidencia por Código Contable (#ID) o SKU explícito
+      // Capa 2: Coincidencia O(1) por Código Contable (#ID) o SKU explícito
       if (!matchedProd && rawAccId) {
         const cleanAccId = rawAccId.replace(/[^0-9a-zA-Z_-]/g, '').trim();
-        const numAccId = parseInt(cleanAccId, 10);
-        matchedProd = catalog.find((p: any) => {
-          const pAccStr = p.accounting_id !== null && p.accounting_id !== undefined ? String(p.accounting_id).trim() : '';
-          const pSkuStr = (p.sku || '').toLowerCase().trim();
-          return (
-            (pAccStr && pAccStr === cleanAccId) ||
-            (!isNaN(numAccId) && Number(p.accounting_id) === numAccId) ||
-            (pSkuStr && pSkuStr === cleanAccId.toLowerCase())
-          );
-        });
+        matchedProd = accIdMap.get(cleanAccId) || skuMap.get(cleanAccId.toLowerCase());
         if (matchedProd) matchConfidence = 'high';
       }
 
@@ -295,53 +319,40 @@ export async function POST(req: Request) {
       if (!matchedProd && rawName) {
         const embeddedIdMatch = rawName.match(/(?:#|id[:\s]*|c[oó]d(?:igo)?[:\s]*)(\d+)/i);
         if (embeddedIdMatch && embeddedIdMatch[1]) {
-          const embId = parseInt(embeddedIdMatch[1], 10);
-          matchedProd = catalog.find((p: any) => Number(p.accounting_id) === embId);
+          const embId = embeddedIdMatch[1];
+          matchedProd = accIdMap.get(embId);
           if (matchedProd) matchConfidence = 'high';
         }
       }
 
-      // Capa 4: Coincidencia EXACTA Normalizada (insensible a tildes, mayúsculas, signos)
+      // Capa 4: Coincidencia EXACTA O(1) Normalizada (insensible a tildes, mayúsculas, signos)
       if (!matchedProd && normalizedName) {
-        matchedProd = catalog.find((p: any) => {
-          const pNorm = normalizeFruFresco(p.name);
-          return pNorm === normalizedName;
-        });
+        matchedProd = normMap.get(normalizedName);
         if (matchedProd) matchConfidence = 'high';
       }
 
-      // Capa 5: Coincidencia exacta sin unidades ni presentaciones (ej. "kg", "gr", "1000g", "und", "paquete")
+      // Capa 5: Coincidencia O(1) sin unidades ni presentaciones (ej. "kg", "gr", "1000g", "und", "paquete")
       if (!matchedProd && normalizedName) {
-        const stripUnits = (s: string) =>
-          s
-            .replace(/\b\d+(?:[\.,]\d+)?\s*(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
-            .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-
         const strippedDoc = stripUnits(normalizedName);
         if (strippedDoc && strippedDoc.length >= 3) {
-          matchedProd = catalog.find((p: any) => {
-            const strippedCat = stripUnits(normalizeFruFresco(p.name));
-            return strippedCat === strippedDoc;
-          });
+          matchedProd = strippedMap.get(strippedDoc);
           if (matchedProd) matchConfidence = 'high';
         }
       }
 
-      // Capa 6: Coincidencia por Tokens (Fuzzy / Token Inclusivity) & Motor Central
+      // Capa 6: Coincidencia por Tokens (Fuzzy / Token Inclusivity) & Motor Central (solo para productos no resueltos)
       if (!matchedProd && rawName) {
-        const matchDetails = findBestProductMatchDetails(rawName, catalog);
+        const matchDetails = findBestProductMatchDetails(rawName, indexedCatalog);
         if (matchDetails.product && (matchDetails.confidenceScore >= 70 || matchDetails.confidenceScore >= 0.7)) {
           matchedProd = matchDetails.product;
           matchConfidence = matchDetails.confidence === 'HIGH' ? 'high' : 'medium';
         }
       }
 
-      // Capa 7: Coincidencia por Inclusión de Frase Completa (Substring Match)
+      // Capa 7: Coincidencia por Inclusión de Frase Completa (Substring Match usando _norm precalculado)
       if (!matchedProd && normalizedName && normalizedName.length >= 4) {
-        matchedProd = catalog.find((p: any) => {
-          const pNorm = normalizeFruFresco(p.name);
+        matchedProd = indexedCatalog.find((p: any) => {
+          const pNorm = p._norm || '';
           return pNorm.includes(normalizedName) || normalizedName.includes(pNorm);
         });
         if (matchedProd) matchConfidence = 'medium';

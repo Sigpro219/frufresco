@@ -441,7 +441,7 @@ export default function CommercialAgreementsModule() {
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
     const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-    const [durationValue, setDurationValue] = useState<number>(2);
+    const [durationValue, setDurationValue] = useState<number | string>(2);
     const [durationUnit, setDurationUnit] = useState<string>('weeks');
     const [uploadedItems, setUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
     const [excelPreviewData, setExcelPreviewData] = useState<{
@@ -495,7 +495,7 @@ export default function CommercialAgreementsModule() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingAgreement, setEditingAgreement] = useState<Agreement | null>(null);
     const [editStartDate, setEditStartDate] = useState('');
-    const [editDurationValue, setEditDurationValue] = useState<number>(2);
+    const [editDurationValue, setEditDurationValue] = useState<number | string>(2);
     const [editDurationUnit, setEditDurationUnit] = useState<string>('weeks');
     const [editUploadedItems, setEditUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
     const [editExcelPreviewData, setEditExcelPreviewData] = useState<{
@@ -2531,15 +2531,16 @@ export default function CommercialAgreementsModule() {
 
             if (targetClients.length === 0) throw new Error('No se encontraron clientes seleccionados');
             
+            const numDuration = Math.max(1, Number(durationValue) || 1);
             const expiry = new Date(startDate + 'T12:00:00');
             if (durationUnit === 'days') {
-                expiry.setDate(expiry.getDate() + durationValue);
+                expiry.setDate(expiry.getDate() + numDuration);
             } else if (durationUnit === 'weeks') {
-                expiry.setDate(expiry.getDate() + durationValue * 7);
+                expiry.setDate(expiry.getDate() + numDuration * 7);
             } else if (durationUnit === 'months') {
-                expiry.setMonth(expiry.getMonth() + durationValue);
+                expiry.setMonth(expiry.getMonth() + numDuration);
             } else if (durationUnit === 'years') {
-                expiry.setFullYear(expiry.getFullYear() + durationValue);
+                expiry.setFullYear(expiry.getFullYear() + numDuration);
             }
             const calculatedValidUntil = expiry.toISOString();
             
@@ -2905,15 +2906,16 @@ export default function CommercialAgreementsModule() {
         
         setEditSaving(true);
         try {
+            const numEditDuration = Math.max(1, Number(editDurationValue) || 1);
             const expiry = new Date(editStartDate + 'T12:00:00');
             if (editDurationUnit === 'days') {
-                expiry.setDate(expiry.getDate() + editDurationValue);
+                expiry.setDate(expiry.getDate() + numEditDuration);
             } else if (editDurationUnit === 'weeks') {
-                expiry.setDate(expiry.getDate() + editDurationValue * 7);
+                expiry.setDate(expiry.getDate() + numEditDuration * 7);
             } else if (editDurationUnit === 'months') {
-                expiry.setMonth(expiry.getMonth() + editDurationValue);
+                expiry.setMonth(expiry.getMonth() + numEditDuration);
             } else if (editDurationUnit === 'years') {
-                expiry.setFullYear(expiry.getFullYear() + editDurationValue);
+                expiry.setFullYear(expiry.getFullYear() + numEditDuration);
             }
             const calculatedValidUntil = expiry.toISOString();
             
@@ -6851,7 +6853,20 @@ export default function CommercialAgreementsModule() {
                                                     min="1"
                                                     required
                                                     value={durationValue}
-                                                    onChange={(e) => setDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val === '') {
+                                                            setDurationValue('');
+                                                        } else {
+                                                            const parsed = parseInt(val, 10);
+                                                            setDurationValue(isNaN(parsed) ? '' : Math.max(1, parsed));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        if (!durationValue || Number(durationValue) < 1) {
+                                                            setDurationValue(1);
+                                                        }
+                                                    }}
                                                     style={{ 
                                                         width: '100px', 
                                                         padding: '12px', 
@@ -6888,28 +6903,28 @@ export default function CommercialAgreementsModule() {
                                                 <button
                                                     type="button"
                                                     onClick={() => { setDurationValue(1); setDurationUnit('months'); }}
-                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 1 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 1 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 1 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 1 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 1 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 1 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
                                                     ⚡ 1 Mes (Mensual)
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => { setDurationValue(15); setDurationUnit('days'); }}
-                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 15 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 15 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 1 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 15 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 15 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 15 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
                                                     15 Días (Quincenal)
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => { setDurationValue(8); setDurationUnit('days'); }}
-                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 8 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 8 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 8 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 8 && durationUnit === 'days' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 8 && durationUnit === 'days' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 8 && durationUnit === 'days' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
                                                     8 Días (Semanal)
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => { setDurationValue(3); setDurationUnit('months'); }}
-                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: durationValue === 3 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: durationValue === 3 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: durationValue === 3 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: Number(durationValue) === 3 && durationUnit === 'months' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: Number(durationValue) === 3 && durationUnit === 'months' ? '#ECFDF5' : '#F8FAFC', fontSize: '0.72rem', color: Number(durationValue) === 3 && durationUnit === 'months' ? '#065F46' : '#334155', fontWeight: 'bold', cursor: 'pointer' }}
                                                 >
                                                     3 Meses (Trimestral)
                                                 </button>
@@ -6918,15 +6933,16 @@ export default function CommercialAgreementsModule() {
                                     </div>
 
                                     {(() => {
+                                        const numDuration = Math.max(1, Number(durationValue) || 1);
                                         const expiry = new Date(startDate + 'T12:00:00');
                                         if (durationUnit === 'days') {
-                                            expiry.setDate(expiry.getDate() + durationValue);
+                                            expiry.setDate(expiry.getDate() + numDuration);
                                         } else if (durationUnit === 'weeks') {
-                                            expiry.setDate(expiry.getDate() + durationValue * 7);
+                                            expiry.setDate(expiry.getDate() + numDuration * 7);
                                         } else if (durationUnit === 'months') {
-                                            expiry.setMonth(expiry.getMonth() + durationValue);
+                                            expiry.setMonth(expiry.getMonth() + numDuration);
                                         } else if (durationUnit === 'years') {
-                                            expiry.setFullYear(expiry.getFullYear() + durationValue);
+                                            expiry.setFullYear(expiry.getFullYear() + numDuration);
                                         }
                                         const formattedExpiry = expiry.toLocaleDateString('es-CO', {
                                             weekday: 'long',
@@ -8131,7 +8147,20 @@ export default function CommercialAgreementsModule() {
                                                     min="1" 
                                                     required
                                                     value={editDurationValue}
-                                                    onChange={(e) => setEditDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val === '') {
+                                                            setEditDurationValue('');
+                                                        } else {
+                                                            const parsed = parseInt(val, 10);
+                                                            setEditDurationValue(isNaN(parsed) ? '' : Math.max(1, parsed));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        if (!editDurationValue || Number(editDurationValue) < 1) {
+                                                            setEditDurationValue(1);
+                                                        }
+                                                    }}
                                                     style={{ 
                                                         width: '90px', 
                                                         padding: '12px', 
@@ -8169,15 +8198,16 @@ export default function CommercialAgreementsModule() {
 
                                     {/* Dynamic Expiration Card */}
                                     {(() => {
+                                        const numEditDuration = Math.max(1, Number(editDurationValue) || 1);
                                         const expiry = new Date(editStartDate + 'T12:00:00');
                                         if (editDurationUnit === 'days') {
-                                            expiry.setDate(expiry.getDate() + editDurationValue);
+                                            expiry.setDate(expiry.getDate() + numEditDuration);
                                         } else if (editDurationUnit === 'weeks') {
-                                            expiry.setDate(expiry.getDate() + editDurationValue * 7);
+                                            expiry.setDate(expiry.getDate() + numEditDuration * 7);
                                         } else if (editDurationUnit === 'months') {
-                                            expiry.setMonth(expiry.getMonth() + editDurationValue);
+                                            expiry.setMonth(expiry.getMonth() + numEditDuration);
                                         } else if (editDurationUnit === 'years') {
-                                            expiry.setFullYear(expiry.getFullYear() + editDurationValue);
+                                            expiry.setFullYear(expiry.getFullYear() + numEditDuration);
                                         }
                                         const formattedExpiry = expiry.toLocaleDateString('es-CO', {
                                             weekday: 'long',
@@ -8707,7 +8737,7 @@ export default function CommercialAgreementsModule() {
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                                             <span style={{ color: '#64748B' }}>Duración Contractual:</span>
-                                            <strong>{editDurationValue} {editDurationUnit === 'days' ? 'Días' : editDurationUnit === 'weeks' ? 'Semanas' : editDurationUnit === 'months' ? 'Meses' : 'Años'}</strong>
+                                            <strong>{editDurationValue || 1} {editDurationUnit === 'days' ? 'Días' : editDurationUnit === 'weeks' ? 'Semanas' : editDurationUnit === 'months' ? 'Meses' : 'Años'}</strong>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                                             <span style={{ color: '#64748B' }}>Actualización de Precios:</span>
