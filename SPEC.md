@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.164 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.4 Directorio de Colaboradores, Turnos y Gestión Humana)
+> **Versión:** 1.9.165 (Certificación Dominio 10: Gobernanza Central, Command Center y RRHH — Screen 10.5 Centro de Parámetros Globales, Geocercas y Horas de Corte)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -9132,6 +9132,38 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
   2. Si el colaborador ingresado ya existía en estado archivado, la interfaz despliega la tarjeta de reactivación contextual; al confirmar, el perfil se actualiza a `is_active: true` y notifica mediante Toast verde.
   3. En el visor de etiqueta QR, al presionar el botón de regeneración, este muta a `¿CONFIRMAR NUEVO QR?`; al confirmar, genera un nuevo UUID criptográfico, registra el evento en `audit_logs` y refresca la vista sin cuadros modales nativos.
   4. En la pestaña de Deducciones de Nómina, el sistema exporta el libro Excel consolidado con HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
+
+---
+
+### §42.5 Pantalla 10.5: Centro de Parámetros Globales, Geocercas y Horas de Corte (`/admin/settings`)
+
+1. **Propósito Operativo & Arquitectura:**
+   - La pantalla `/admin/settings` (`src/app/admin/settings/page.tsx`) es el panel de control maestro para la configuración centralizada de la plataforma FruFresco en `app_settings`.
+   - Organiza la gobernanza operativa en 6 secciones colapsables:
+     - **Operación & Logística (`operation`):** Tarifas de envío (`delivery_fee`), límites mínimos de compra para Hogar (`min_order_hogar`) e Institucional (`min_order_institucional`), tope máximo contra entrega (`max_order_hogar_cod`), activación de reglas de corte (`enable_cutoff_rules`), hora límite para toma de pedidos institucional (`cutoff_hour_admin = 20`) y público B2C (`cutoff_hour_public = 17`), y habilitación de entregas dominicales (`allow_sunday_deliveries`) y festivos en Colombia (`allow_holiday_deliveries`).
+     - **Gestión de Variantes & Atributos (`variants`):** Acceso al modal maestro `ManageAttributesModal` para categorías y opciones dinámicas.
+     - **Diseño, Branding & SEO (`design`):** Logotipo principal de la aplicación (`app_logo_url`), logosímbolo para pantallas operativas de bodega (`app_logosymbol_url`), nombres SEO (`app_name`, `app_short_name`), banners globales de anuncios y títulos de portada.
+     - **Canal Institucional B2B & Captura de Leads (`b2b`):** Interruptor de captura de clientes institucionales (`enable_b2b_lead_capture`), correos de ingesta asistida por IA (`inbox_email_orders`, `inbox_email_commercial`), propuesta de valor y beneficios dinámicos.
+     - **Información de Contacto & Canales de Soporte (`contact`):** Teléfono móvil, correo electrónico y dirección física en Corabastos Bogotá.
+     - **Datos Corporativos & Golden Print (`corporate`):** Razón social (`provider_legal_name`), NIT oficial (`provider_nit`), logo de alta resolución para facturación (`provider_logo_url`) y paleta cromática para documentos oficiales (`primary_color`, `secondary_color`).
+2. **Pipeline de Datos, Persistencia y Sincronización con Flota SaaS:**
+   - **Upsert Dinámico por Clave:** Al modificar cualquier parámetro, la mutación se persiste en `app_settings` mediante `upsert` atómico sin recargar la página.
+   - **Sincronización Proactiva en Red SaaS:** Al mutar claves de marca e identidad corporativa (`brandingKeys`), el sistema sincroniza automáticamente el registro de `fleet_tenants` del Core Multitenant (`branding_config`), garantizando consistencia visual en todas las instancias satélite.
+   - **Telemetría de Conectividad & Storage:** Componente interactivo de diagnóstico que evalúa en tiempo real el enlace con PostgreSQL (`verifyConnectivity`) y el estado del bucket Supabase Storage, reportando latencia exacta en milisegundos y alertando anomalías de red.
+3. **Control de Acceso RBAC & Zero-Alert Dogma:**
+   - Doble nivel de permisos: `admin.dashboard.settings.view` (modo lectura con acordeones forzados a expandidos y banners de advertencia) y `admin.dashboard.settings.edit` (modo edición plena).
+   - Ausencia total de `alert()`, `confirm()` y `prompt()` nativos. Todas las transacciones, cargas de archivos e inspecciones de salud se comunican al usuario a través del componente `<Toast />`.
+
+---
+
+#### Escenario 201: Parametrización de Horas de Corte, Branding Corporativo y Telemetría de Enlace (SDD v1.9.165)
+- **Given** el Administrador de Plataforma con credencial `admin.dashboard.settings.edit` autenticado en `/admin/settings`.
+- **When** modifica las horas de corte y prueba el enlace con los servidores:
+- **Then**:
+  1. Al cambiar la hora de corte de toma de pedidos a las 20:00h y las entregas festivas a falso, el cambio se persiste inmediatamente en `app_settings` notificando con Toast verde `Cambio guardado ✓`.
+  2. Al presionar "Probar Conexión", el sistema mide la latencia de red, verifica el acceso a Supabase Storage y actualiza el indicador visual a "Sistemas en Línea" con latencia exacta.
+  3. Si un usuario con credenciales limitadas ingresa, la interfaz desactiva los controles de edición y despliega el banner informativo "Modo Vista", protegiendo los parámetros globales contra modificaciones no autorizadas.
+  4. La ruta responde con código HTTP 200 OK y TypeScript compila con 0 errores (`exit 0`).
 
 
 
