@@ -1,7 +1,7 @@
 # FruFresco - Especificación de Arquitectura & Contrato de Negocio (SDD)
 ## Módulo de Pedidos: Pipeline Unificado de Ingesta (Manual vs Automático)
 
-> **Versión:** 1.9.138 (Certificación Dominio 6.3: Planeación Algorítmica de Rutas, Despachos & Manifiestos LIFO - TMS-03)
+> **Versión:** 1.9.139 (Certificación Dominio 6.4: Gestión de Parque Automotor, Odómetros & Asignación de Conductores - TMS-04)
 > **Fecha:** 07 de Octubre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Área:** Gerencia General, Dirección Comercial, Mesa de Facturación & Operaciones B2B
@@ -8316,6 +8316,38 @@ La consola de planeación de rutas (`RoutePlanner`) constituye el motor cerebral
   4. Al pulsar "Confirmar y Lanzar", se invoca `/api/transport/confirm`, persistiendo atómicamente las rutas en `routes` y paradas en `route_stops`.
   5. En el modal de Manifiesto Confirmado, el botón "Copiar WhatsApp" formatea el texto estructurado con placas, conductores y secuencias, copiándolo al portapapeles y mostrando retroalimentación visual inmediata (`¡Copiado para WhatsApp!`).
   6. Si el navegador bloquea la apertura de la ventana de impresión, un aviso no intrusivo alerta sobre habilitar popups sin congelar la aplicación.
+
+---
+
+### 38.5 Gestión de Parque Automotor, Odómetros & Asignación de Conductores (`/admin/transport?tab=fleet`) (SDD v1.9.139)
+
+#### A. Misión y Principio Rector de Flota
+La consola de gestión de parque automotor (`FleetManagement`) administra los activos móviles de transporte de FruFresco. Asegura la disponibilidad operativa de furgones y camiones, el control de capacidad de carga en masa (kg) y volumen (canastillas), la trazabilidad inmutable de odómetros y la vinculación nominal con conductores autorizados.
+
+#### B. Arquitectura de Flota & Lógica Poka-Yoke
+1. **Gobierno de la Tabla `fleet_vehicles` & API `/api/transport/vehicles`:**
+   - Creación, actualización y desactivación de vehículos gobernada por endpoint transaccional administrativo (`createAdminClient`) con verificación de permisos `admin.transport.edit`.
+   - Control de unicidad de placa vehicular: rechaza de inmediato cualquier intento de duplicar placas en el parque automotor.
+   - Registro cronológico de variaciones en el odómetro (`last_odometer_update`) para cálculos de desgaste y alertas de mantenimiento preventivo.
+2. **Asignación Nominal de Conductores:**
+   - Vinculación directa con colaboradores de rol `CONDUCTOR` (`collaborators`).
+   - Sincronización bidireccional con el panel móvil del transportador (`/ops/driver`), asegurando que solo el conductor asignado visualice la hoja de ruta y manifiesto de carga del furgón.
+3. **Poka-Yoke de Eliminación & Retroalimentación Reactiva In-UI:**
+   - Erradicación de diálogos bloqueantes de navegador (`window.confirm`, `window.alert`).
+   - Flujo de eliminación física en dos pasos: activación del botón de advertencia `¿Confirmar Eliminación?` (`confirmDelete`) con opción de cancelación, protegiendo contra borrados accidentales de vehículos con rutas activas.
+   - Notificaciones reactivas temporales (`actionFeedback`) con cierre automático en 6 segundos para confirmación de altas, cambios de estado y actualizaciones de kilometraje.
+
+---
+
+#### Escenario 180: Administración de Vehículos, Odómetros y Poka-Yoke de Eliminación en Flota (SDD v1.9.139)
+- **Given** el Jefe de Flota y Mantenimiento en `/admin/transport?tab=fleet`.
+- **When** edita los datos de un vehículo (placa, capacidad de canastillas, odómetro actual) o asigna un nuevo conductor:
+- **Then**:
+  1. Los cambios se envían a `/api/transport/vehicles` con el token de sesión o cookie autenticada.
+  2. Al completarse la operación, un banner verde no bloqueante (`actionFeedback`) confirma la actualización en la parte superior del tablero.
+  3. Si el usuario intenta registrar una placa ya existente, el sistema despliega un banner de advertencia descriptivo sin congelar la pantalla.
+  4. Si el operador decide eliminar un vehículo del inventario, la interfaz no invoca un diálogo modal nativo del navegador, sino que transforma el botón de eliminación en una compuerta de dos pasos (`¿Confirmar Eliminación?`), requiriendo una confirmación deliberada antes de ejecutar el borrado en base de datos.
+
 
 
 

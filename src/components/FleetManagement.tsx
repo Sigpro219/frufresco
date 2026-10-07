@@ -95,6 +95,13 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         current_odometer: number;
     } | null>(null);
     const [isSavingVehicle, setIsSavingVehicle] = useState(false);
+    const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+
+    const showFeedback = (type: 'success' | 'error', message: string) => {
+        setActionFeedback({ type, message });
+        setTimeout(() => setActionFeedback(null), 6000);
+    };
 
     const fetchDrivers = useCallback(async () => {
         try {
@@ -235,9 +242,10 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
             });
             setEditingKm(null);
             fetchVehicles();
+            showFeedback('success', 'Kilometraje actualizado correctamente.');
         } catch (err: any) {
             console.error('Error updating odometer:', err);
-            alert(err?.message || 'Error al actualizar kilometraje.');
+            showFeedback('error', err?.message || 'Error al actualizar kilometraje.');
         }
     };
 
@@ -250,9 +258,10 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                 driverId: driverId || null
             });
             fetchVehicles();
+            showFeedback('success', 'Conductor asignado correctamente.');
         } catch (err: any) {
             console.error('Error assigning driver:', err);
-            alert(err?.message || 'Error al asignar conductor.');
+            showFeedback('error', err?.message || 'Error al asignar conductor.');
         }
     };
 
@@ -265,9 +274,10 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                 status: newStatus
             });
             fetchVehicles();
+            showFeedback('success', 'Estado del vehículo actualizado.');
         } catch (err: any) {
             console.error('Error updating status:', err);
-            alert(err?.message || 'Error al actualizar el estado del vehículo.');
+            showFeedback('error', err?.message || 'Error al actualizar el estado del vehículo.');
         }
     };
 
@@ -282,14 +292,16 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
             setShowAdd(false);
             fetchVehicles();
             setNewVehicle({ plate: '', brand: '', model: '', vehicle_type: 'Furgón', capacity_kg: 1000, max_crates_capacity: 0, current_odometer: 0 });
+            showFeedback('success', 'Vehículo agregado exitosamente a la flota.');
         } catch (err: any) {
             console.error('Error adding vehicle:', err);
-            alert(err?.message || 'Error al agregar vehículo.');
+            showFeedback('error', err?.message || 'Error al agregar vehículo.');
         }
     };
 
     const openEditVehicle = (v: Vehicle) => {
         if (readOnly) return;
+        setConfirmDelete(false);
         setEditingVehicle(v);
         setEditForm({
             plate: v.plate,
@@ -315,10 +327,12 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
             });
             setEditingVehicle(null);
             setEditForm(null);
+            setConfirmDelete(false);
             fetchVehicles();
+            showFeedback('success', 'Vehículo actualizado correctamente.');
         } catch (err: any) {
             console.error('Error al actualizar vehículo:', err);
-            alert(err?.message || 'Error al guardar los cambios.');
+            showFeedback('error', err?.message || 'Error al guardar los cambios.');
         } finally {
             setIsSavingVehicle(false);
         }
@@ -326,9 +340,6 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
 
     const handleDeleteVehicle = async (vehicle: Vehicle) => {
         if (readOnly) return;
-        const confirmMsg = `¿Estás seguro de que deseas eliminar permanentemente el vehículo ${vehicle.plate} (${vehicle.brand} ${vehicle.model})?\n\nEsta acción borrará el vehículo de la flota y de la base de datos de forma irreversible.`;
-        if (!window.confirm(confirmMsg)) return;
-
         setIsSavingVehicle(true);
         try {
             await callVehiclesApi({
@@ -337,10 +348,12 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
             });
             setEditingVehicle(null);
             setEditForm(null);
+            setConfirmDelete(false);
             fetchVehicles();
+            showFeedback('success', `Vehículo ${vehicle.plate} eliminado de la flota.`);
         } catch (err: any) {
             console.error('Error al eliminar vehículo:', err);
-            alert(err?.message || 'Error al eliminar el vehículo.');
+            showFeedback('error', err?.message || 'Error al eliminar el vehículo.');
         } finally {
             setIsSavingVehicle(false);
         }
@@ -390,6 +403,34 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
 
     return (
         <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
+            {actionFeedback && (
+                <div style={{
+                    marginBottom: '1rem',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '12px',
+                    backgroundColor: actionFeedback.type === 'success' ? '#ECFDF5' : '#FEE2E2',
+                    border: `1px solid ${actionFeedback.type === 'success' ? '#A7F3D0' : '#FCA5A5'}`,
+                    color: actionFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {actionFeedback.type === 'success' ? <Truck size={16} /> : <AlertTriangle size={16} />}
+                        <span>{actionFeedback.message}</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setActionFeedback(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Control de <span style={{ color: '#0891B2' }}>Activos Logísticos</span></h2>
@@ -708,25 +749,66 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                 </div>
                             </div>
                             <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                                <button 
-                                    type="button" 
-                                    onClick={() => editingVehicle && handleDeleteVehicle(editingVehicle)} 
-                                    disabled={isSavingVehicle}
-                                    style={{ 
-                                        padding: '0.9rem 1.4rem', 
-                                        borderRadius: '14px', 
-                                        border: '1px solid #FECACA', 
-                                        background: '#FEF2F2', 
-                                        color: '#DC2626', 
-                                        fontWeight: '700', 
-                                        cursor: isSavingVehicle ? 'not-allowed' : 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <Trash2 size={16} /> Eliminar Vehículo
-                                </button>
+                                {confirmDelete ? (
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => editingVehicle && handleDeleteVehicle(editingVehicle)} 
+                                            disabled={isSavingVehicle}
+                                            style={{ 
+                                                padding: '0.85rem 1.25rem', 
+                                                borderRadius: '12px', 
+                                                border: 'none', 
+                                                background: '#DC2626', 
+                                                color: 'white', 
+                                                fontWeight: '800', 
+                                                cursor: isSavingVehicle ? 'not-allowed' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                fontSize: '0.8rem'
+                                            }}
+                                        >
+                                            <AlertTriangle size={15} /> ¿Confirmar Eliminación?
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmDelete(false)}
+                                            style={{
+                                                padding: '0.85rem 1rem',
+                                                borderRadius: '12px',
+                                                border: '1px solid #D1D5DB',
+                                                background: 'white',
+                                                color: '#4B5563',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem'
+                                            }}
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setConfirmDelete(true)} 
+                                        disabled={isSavingVehicle}
+                                        style={{ 
+                                            padding: '0.9rem 1.4rem', 
+                                            borderRadius: '14px', 
+                                            border: '1px solid #FECACA', 
+                                            background: '#FEF2F2', 
+                                            color: '#DC2626', 
+                                            fontWeight: '700', 
+                                            cursor: isSavingVehicle ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <Trash2 size={16} /> Eliminar Vehículo
+                                    </button>
+                                )}
                                 <div style={{ display: 'flex', gap: '1rem' }}>
                                     <button type="button" onClick={() => { setEditingVehicle(null); setEditForm(null); }} style={{ padding: '0.9rem 2rem', borderRadius: '14px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '700', cursor: 'pointer', color: '#374151' }}>
                                         Cancelar
